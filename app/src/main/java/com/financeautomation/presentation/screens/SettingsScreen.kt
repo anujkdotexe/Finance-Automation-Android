@@ -46,16 +46,12 @@ import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import com.financeautomation.presentation.ui.EntryActivity
 import com.financeautomation.service.QuickLogWidgetProvider
-import androidx.compose.material.icons.rounded.CloudDone
-import androidx.compose.material.icons.rounded.CloudDownload
-import androidx.compose.material.icons.rounded.CloudSync
-import androidx.compose.material.icons.rounded.CloudUpload
-import androidx.compose.material.icons.rounded.FlightTakeoff
-import androidx.compose.material.icons.rounded.People
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -363,31 +359,36 @@ fun SettingsContent(
                     Text("Pin 1x1 Widget")
                 }
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
                     Button(
                         onClick = {
-                            val shortcutManager = context.getSystemService(android.content.pm.ShortcutManager::class.java)
-                            if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported) {
-                                val pinIntent = Intent(context, com.financeautomation.presentation.ui.ModalBottomSheetActivity::class.java).apply {
-                                    action = Intent.ACTION_VIEW
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                }
-                                val shortcut = android.content.pm.ShortcutInfo.Builder(context, "quick_log_shortcut")
-                                    .setShortLabel("Quick Log")
-                                    .setLongLabel("Quick Log Expense")
-                                    .setIcon(android.graphics.drawable.Icon.createWithResource(context, com.financeautomation.R.drawable.ic_quick_log_symbol))
-                                    .setIntent(pinIntent)
-                                    .build()
-                                shortcutManager.requestPinShortcut(shortcut, null)
+                            val pinIntent = Intent(context, EntryActivity::class.java).apply {
+                                action = Intent.ACTION_VIEW
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                             }
+                            val icon = IconCompat.createWithResource(context, com.financeautomation.R.drawable.ic_quick_log_symbol)
+                            val info = ShortcutInfoCompat.Builder(context, "quick_log")
+                                .setShortLabel(context.getString(com.financeautomation.R.string.quick_log_shortcut_short_label))
+                                .setLongLabel(context.getString(com.financeautomation.R.string.quick_log_shortcut_long_label))
+                                .setIcon(icon)
+                                .setIntent(pinIntent)
+                                .build()
+                            ShortcutManagerCompat.requestPinShortcut(context, info, null)
                         },
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Pin App Icon")
+                        Text(stringResource(com.financeautomation.R.string.add_as_app_icon_button))
                     }
+                } else {
+                    Text(
+                        text = stringResource(com.financeautomation.R.string.pin_shortcut_not_supported_explanation),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }

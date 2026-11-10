@@ -21,4 +21,8 @@
     <string name="category_uncategorized">Uncategorized</string>
     <string name="quick_log_widget_label">Quick Log</string>
     <string name="quick_log_widget_desc">Tap to log an expense immediately</string>
+    <string name="add_as_app_icon_button">Add as app icon</string>
+    <string name="pin_shortcut_not_supported_explanation">Pinned shortcuts are not supported by your current launcher</string>
+    <string name="quick_log_shortcut_short_label">Quick log</string>
+    <string name="quick_log_shortcut_long_label">Quick log expense</string>
 </resources>
