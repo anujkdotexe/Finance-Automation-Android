@@ -1,0 +1,55 @@
+package com.financeautomation.data.remote
+
+/**
+ * Snapshot representation of all historical and current month tabs across a workbook.
+ * Consumed by the accounting engine for waterfalls, bilateral netting, settlements, and carry-forward.
+ */
+data class LedgerWorkbookSnapshot(
+    val spreadsheetId: String,
+    val monthTabs: List<MonthTabSnapshot>
+)
+
+/**
+ * Snapshot of a single fiscal month tab (e.g. "Nov26") containing Table 1 Debits and Table 3 Payables.
+ */
+data class MonthTabSnapshot(
+    val tabName: String,
+    val sheetId: Int,
+    val debits: List<LedgerDebitRow>,
+    val payables: List<LedgerPayableRow>
+)
+
+/**
+ * A row from Table 1 (Cols A to K plus AC hidden UUID) carrying its 1-based sheet row coordinate.
+ */
+data class LedgerDebitRow(
+    val rowNumber: Int,
+    val dateSerial: Int?,
+    val timeSerial: Double?,
+    val account: String,
+    val description: String,
+    val tripTag: String?,
+    val category: String,
+    val totalAmount: Double,
+    val companions: String,
+    val myShare: Double,
+    val owedToMe: Double,
+    val status: String,
+    val uuid: String?
+)
+
+/**
+ * A row from Table 3 (Cols V to AB plus AE hidden UUID) carrying its 1-based sheet row coordinate.
+ */
+data class LedgerPayableRow(
+    val rowNumber: Int,
+    val dateIncurredSerial: Int?,
+    val timeSerial: Double?,
+    val paidBy: String,
+    val whatFor: String,
+    val amountIOwe: Double,
+    val dateRepaidSerial: Int?,
+    val repaymentStatus: String,
+    val uuid: String?
+)
+

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Finance Automation</string>
+    <string name="quick_add_tile_label">Log Expense</string>
+    <string name="notification_channel_heads_up_name">Expense Alerts</string>
+    <string name="notification_channel_heads_up_desc">Interactive alerts for intercepted UPI expenses</string>
+    <string name="notification_channel_sync_name">Cloud Sync Status</string>
+    <string name="notification_channel_sync_desc">Background Google Sheets synchronization updates</string>
+    <string name="notification_channel_auth_name">Authentication Alerts</string>
+    <string name="notification_channel_auth_desc">Google authorization alerts and reconnect prompts</string>
+    <string name="action_split">Details / Split</string>
+    <string name="status_settled">Settled</string>
+    <string name="status_pending">Pending</string>
+    <string name="status_void">Void</string>
+    <string name="status_carried">Carried</string>
+    <string name="category_savings">Savings</string>
+    <string name="category_food">Food &amp; Drink</string>
+    <string name="category_groceries">Groceries</string>
+    <string name="category_travel">Travel</string>
+    <string name="category_shopping">Shopping</string>
+    <string name="category_uncategorized">Uncategorized</string>
+    <string name="quick_log_widget_label">Quick Log</string>
+    <string name="quick_log_widget_desc">Tap to log an expense immediately</string>
+</resources>

@@ -1,0 +1,298 @@
+package com.financeautomation.presentation.ui
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.ReceiptLong
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.financeautomation.FinanceApplication
+import com.financeautomation.presentation.components.ExpenseBottomSheet
+import com.financeautomation.presentation.screens.DashboardScreen
+import com.financeautomation.presentation.screens.OnboardingScreen
+import com.financeautomation.presentation.screens.ReviewInboxScreen
+import com.financeautomation.presentation.screens.SettingsScreen
+import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.viewmodel.DashboardViewModel
+import com.financeautomation.presentation.viewmodel.ExpenseViewModel
+import com.financeautomation.presentation.viewmodel.OnboardingViewModel
+import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
+import com.financeautomation.presentation.viewmodel.SettingsViewModel
+import androidx.compose.runtime.collectAsState
+import java.time.ZoneId
+import java.time.ZonedDateTime
+
+enum class MainNavDestination(val label: String) {
+    INBOX("Needs Review"),
+    DASHBOARD("Dashboard"),
+    SETTINGS("Settings & Sync")
+}
+
+/**
+ * Main launcher Activity for Finance Automation.
+ * Hosts navigation between ReviewInboxScreen, DashboardScreen, and SettingsScreen.
+ */
+class MainActivity : ComponentActivity() {
+
+    private val reviewInboxViewModel: ReviewInboxViewModel by viewModels {
+        val app = application as FinanceApplication
+        ReviewInboxViewModel.provideFactory(
+            transactionRepository = app.appContainer.transactionRepository,
+            ioDispatcher = app.appContainer.ioDispatcher
+        )
+    }
+
+    private val dashboardViewModel: DashboardViewModel by viewModels {
+        val app = application as FinanceApplication
+        DashboardViewModel.provideFactory(
+            transactionRepository = app.appContainer.transactionRepository,
+            syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
+            categoryRepository = app.appContainer.categoryRepository,
+            ioDispatcher = app.appContainer.ioDispatcher
+        )
+    }
+
+    private val expenseViewModel: ExpenseViewModel by viewModels {
+        val app = application as FinanceApplication
+        ExpenseViewModel.provideFactory(
+            transactionRepository = app.appContainer.transactionRepository,
+            peopleRepository = app.appContainer.peopleRepository,
+            categoryRepository = app.appContainer.categoryRepository,
+            accountRepository = app.appContainer.accountRepository,
+            pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
+            ioDispatcher = app.appContainer.ioDispatcher
+        )
+    }
+
+    private val settingsViewModel: SettingsViewModel by viewModels {
+        val app = application as FinanceApplication
+        SettingsViewModel.provideFactory(
+            preferencesRepository = app.appContainer.preferencesRepository,
+            peopleRepository = app.appContainer.peopleRepository,
+            transactionRepository = app.appContainer.transactionRepository,
+            accountRepository = app.appContainer.accountRepository,
+            categoryRepository = app.appContainer.categoryRepository,
+            tripTagRepository = app.appContainer.tripTagRepository,
+            syncConfigUseCase = app.appContainer.syncConfigUseCase,
+            regenerateDashboardUseCase = app.appContainer.regenerateDashboardUseCase,
+            googleDriveClient = app.appContainer.googleDriveClient,
+            googleSheetsClient = app.appContainer.googleSheetsClient,
+            googleAuthTokenProvider = app.appContainer.googleAuthTokenProvider,
+            workbookResolver = app.appContainer.workbookResolver,
+            ioDispatcher = app.appContainer.ioDispatcher
+        )
+    }
+
+    private val onboardingViewModel: OnboardingViewModel by viewModels {
+        val app = application as FinanceApplication
+        OnboardingViewModel.provideFactory(
+            googleAuthTokenProvider = app.appContainer.googleAuthTokenProvider,
+            workbookResolver = app.appContainer.workbookResolver,
+            preferencesRepository = app.appContainer.preferencesRepository,
+            ioDispatcher = app.appContainer.ioDispatcher
+        )
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            val app = application as FinanceApplication
+            val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+            val googleEmail by app.appContainer.preferencesRepository.getGoogleAccountEmail().collectAsState(initial = null)
+            val spreadsheetId by app.appContainer.preferencesRepository.getSpreadsheetIdForYear(currentYear).collectAsState(initial = null)
+            var forceOnboarding by remember { mutableStateOf(false) }
+
+            val needsOnboarding = forceOnboarding || googleEmail.isNullOrBlank() || spreadsheetId.isNullOrBlank()
+
+            FinanceAutomationTheme(darkTheme = false, dynamicColor = false) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    if (needsOnboarding) {
+                        OnboardingScreen(
+                            viewModel = onboardingViewModel,
+                            onOnboardingFinished = { forceOnboarding = false }
+                        )
+                    } else {
+                        MainScreen(
+                            reviewInboxViewModel = reviewInboxViewModel,
+                            dashboardViewModel = dashboardViewModel,
+                            expenseViewModel = expenseViewModel,
+                            settingsViewModel = settingsViewModel,
+                            onReRunSetup = { forceOnboarding = true }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainScreen(
+    reviewInboxViewModel: ReviewInboxViewModel,
+    dashboardViewModel: DashboardViewModel,
+    expenseViewModel: ExpenseViewModel,
+    settingsViewModel: SettingsViewModel,
+    onReRunSetup: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    var currentDestination by remember { mutableStateOf(MainNavDestination.INBOX) }
+    var showManualAddSheet by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = when (currentDestination) {
+                                MainNavDestination.INBOX -> "Needs Review"
+                                MainNavDestination.DASHBOARD -> "Dashboard & Queue"
+                                MainNavDestination.SETTINGS -> "Settings & Sync"
+                            },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            text = when (currentDestination) {
+                                MainNavDestination.INBOX -> "Automated UPI & Card Interceptions"
+                                MainNavDestination.DASHBOARD -> "Live Monthly KPIs & Sync Status"
+                                MainNavDestination.SETTINGS -> "Google Sheets & Split Configuration"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
+        },
+        bottomBar = {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
+                MainNavDestination.values().forEach { destination ->
+                    val isSelected = currentDestination == destination
+                    NavigationBarItem(
+                        selected = isSelected,
+                        onClick = { currentDestination = destination },
+                        label = {
+                            Text(
+                                text = destination.label,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = when (destination) {
+                                    MainNavDestination.INBOX -> Icons.Rounded.ReceiptLong
+                                    MainNavDestination.DASHBOARD -> Icons.Rounded.Dashboard
+                                    MainNavDestination.SETTINGS -> Icons.Rounded.Tune
+                                },
+                                contentDescription = destination.label,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+            }
+        },
+        floatingActionButton = {
+            if (currentDestination == MainNavDestination.INBOX) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        expenseViewModel.clearState()
+                        showManualAddSheet = true
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Log Expense"
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Log Expense",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                )
+            }
+        },
+        modifier = modifier
+    ) { innerPadding ->
+        when (currentDestination) {
+            MainNavDestination.INBOX -> {
+                ReviewInboxScreen(
+                    reviewInboxViewModel = reviewInboxViewModel,
+                    expenseViewModel = expenseViewModel,
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+            MainNavDestination.DASHBOARD -> {
+                DashboardScreen(
+                    viewModel = dashboardViewModel,
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+            MainNavDestination.SETTINGS -> {
+                SettingsScreen(
+                    viewModel = settingsViewModel,
+                    onReRunSetup = onReRunSetup,
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+        }
+    }
+
+    if (showManualAddSheet) {
+        ExpenseBottomSheet(
+            viewModel = expenseViewModel,
+            onDismiss = { showManualAddSheet = false }
+        )
+    }
+}
