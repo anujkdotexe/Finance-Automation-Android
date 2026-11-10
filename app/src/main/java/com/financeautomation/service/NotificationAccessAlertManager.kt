@@ -88,10 +88,10 @@ object NotificationAccessAlertManager {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
             val channel = NotificationChannel(
                 CHANNEL_ID_HEALTH_ALERT,
-                "Health & Setup Alerts",
+                context.getString(R.string.health_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Alerts regarding required background permissions and listener status"
+                description = context.getString(R.string.health_channel_desc)
                 setShowBadge(false)
             }
             nm.createNotificationChannel(channel)
