@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.util.TypedValue
 import android.widget.RemoteViews
 import com.financeautomation.R
+import com.financeautomation.presentation.ui.EntryActivity
 import com.financeautomation.presentation.ui.ModalBottomSheetActivity
 
 /**
@@ -46,7 +47,7 @@ class QuickLogWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
         ) {
-            val intent = Intent(context, ModalBottomSheetActivity::class.java).apply {
+            val intent = Intent(context, EntryActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
 

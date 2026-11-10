@@ -38,6 +38,14 @@
             android:exported="true" />
 
         <activity
+            android:name=".presentation.ui.EntryActivity"
+            android:exported="true"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.FinanceAutomation.TransparentEntry" />
+
+        <activity
             android:name=".presentation.ui.ModalBottomSheetActivity"
             android:exported="true"
             android:taskAffinity=""

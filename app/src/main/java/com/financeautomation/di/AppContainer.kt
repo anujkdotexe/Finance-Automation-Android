@@ -22,6 +22,7 @@ import com.financeautomation.data.repository.TripTagRepositoryImpl
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.service.ForegroundWatcher
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -33,6 +34,7 @@ import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
 import com.financeautomation.domain.usecase.CarryForwardUseCase
+import com.financeautomation.domain.usecase.LogExpenseUseCase
 import com.financeautomation.domain.usecase.NettingUseCase
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.domain.usecase.RegenerateDashboardUseCase
@@ -84,6 +86,7 @@ interface AppContainer {
     val syncConfigUseCase: SyncConfigUseCase
     val regenerateDashboardUseCase: RegenerateDashboardUseCase
     val calculateSplitUseCase: CalculateSplitUseCase
+    val logExpenseUseCase: LogExpenseUseCase
     val nettingUseCase: NettingUseCase
     val settlementWaterfallUseCase: SettlementWaterfallUseCase
     val repaymentWaterfallUseCase: RepaymentWaterfallUseCase
@@ -92,6 +95,7 @@ interface AppContainer {
     val yearCloseUseCase: YearCloseUseCase
     val accountingSyncExecutor: AccountingSyncExecutor
     val foregroundWatcher: ForegroundWatcher
+    val overlayController: OverlayController
 }
 
 /**
@@ -293,6 +297,13 @@ class DefaultAppContainer(
         CalculateSplitUseCase()
     }
 
+    override val logExpenseUseCase: LogExpenseUseCase by lazy {
+        LogExpenseUseCase(
+            transactionRepository = transactionRepository,
+            calculateSplitUseCase = calculateSplitUseCase
+        )
+    }
+
     override val nettingUseCase: NettingUseCase by lazy {
         NettingUseCase()
     }
@@ -331,10 +342,26 @@ class DefaultAppContainer(
         )
     }
 
+    override val overlayController: OverlayController by lazy {
+        OverlayController(
+            context = applicationContext,
+            transactionRepository = transactionRepository,
+            peopleRepository = peopleRepository,
+            categoryRepository = categoryRepository,
+            accountRepository = accountRepository,
+            tripTagRepository = tripTagRepository,
+            pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
+            syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            ioDispatcher = ioDispatcher,
+            mainDispatcher = mainDispatcher
+        )
+    }
+
     override val foregroundWatcher: ForegroundWatcher by lazy {
         ForegroundWatcher(
             context = applicationContext,
-            pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() }
+            pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
+            overlayControllerProvider = { overlayController }
         )
     }
 }
