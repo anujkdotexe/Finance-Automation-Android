@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "routes": [
+    {
+      "id": "samsung_battery",
+      "match": {
+        "manufacturer": ["samsung"],
+        "brand": ["samsung"],
+        "minSdk": 28
+      },
+      "candidates": [
+        { "component": "com.samsung.android.lool/com.samsung.android.sm.battery.ui.BatteryActivity" },
+        { "component": "com.samsung.android.lool/com.samsung.android.sm.ui.battery.BatteryActivity" },
+        { "component": "com.samsung.android.lool/com.samsung.android.sm.battery.ui.BatteryAppDetailActivity", "packageExtra": "package_name" },
+        { "action": "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" }
+      ],
+      "instructionsKey": "oem_instructions_samsung"
+    },
+    {
+      "id": "xiaomi_autostart",
+      "match": {
+        "manufacturer": ["xiaomi", "redmi", "poco"],
+        "brand": ["xiaomi", "redmi", "poco"],
+        "minSdk": 28
+      },
+      "candidates": [
+        { "component": "com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity" },
+        { "action": "miui.intent.action.APP_PERM_EDITOR", "packageExtra": "extra_pkgname" },
+        { "component": "com.miui.securitycenter/com.miui.permcenter.permissions.PermissionsEditorActivity", "packageExtra": "extra_pkgname" },
+        { "action": "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" }
+      ],
+      "instructionsKey": "oem_instructions_xiaomi"
+    },
+    {
+      "id": "realme_oplus_battery",
+      "match": {
+        "manufacturer": ["realme", "oppo", "oneplus"],
+        "brand": ["realme", "oppo", "oneplus"],
+        "minSdk": 28
+      },
+      "candidates": [
+        { "component": "com.oplus.battery/com.oplus.startupapp.view.AssociateStartActivity" },
+        { "component": "com.oplus.battery/com.oplus.powermanager.fuelgaue.PowerUsageModelActivity" },
+        { "component": "com.oplus.securitypermission/com.oplusos.securitypermission.appcontrolcenter.view.AppControlCenterActivity" },
+        { "component": "com.oplus.safecenter/com.oplus.safecenter.permission.AppPermissionControlActivity" },
+        { "component": "com.coloros.safecenter/com.coloros.safecenter.permission.startup.StartupAppListActivity" },
+        { "component": "com.oppo.safe/com.oppo.safe.permission.startup.StartupAppListActivity" },
+        { "component": "com.coloros.safecenter/com.coloros.safecenter.startupapp.StartupAppListActivity" },
+        { "component": "com.oneplus.security/com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity" },
+        { "action": "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" }
+      ],
+      "instructionsKey": "oem_instructions_oppo"
+    },
+    {
+      "id": "vivo_iqoo_autostart",
+      "match": {
+        "manufacturer": ["vivo", "iqoo"],
+        "brand": ["vivo", "iqoo"],
+        "minSdk": 28
+      },
+      "candidates": [
+        { "component": "com.vivo.permissionmanager/com.vivo.permissionmanager.activity.BgStartUpManagerActivity" },
+        { "component": "com.iqoo.secure/com.iqoo.secure.ui.phoneoptimize.BgStartUpManager" },
+        { "component": "com.vivo.permissionmanager/com.vivo.permissionmanager.activity.PurviewTabActivity" },
+        { "action": "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" }
+      ],
+      "instructionsKey": "oem_instructions_vivo"
+    },
+    {
+      "id": "generic_fallback",
+      "match": {
+        "manufacturer": [],
+        "brand": [],
+        "minSdk": 28
+      },
+      "candidates": [
+        { "action": "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" }
+      ],
+      "instructionsKey": "oem_instructions_default"
+    }
+  ]
+}
+

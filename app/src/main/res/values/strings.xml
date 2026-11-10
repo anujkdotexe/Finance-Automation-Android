@@ -338,6 +338,32 @@
     <string name="placeholder_friend_name">Friend name</string>
     <string name="placeholder_amount_zero">0.00</string>
 
+    <!-- Background Notifications & Channels -->
+    <string name="notif_auth_reconnect_title">Reconnect Google Drive sync</string>
+    <string name="notif_auth_reconnect_text">Tap to authorize Google Drive sync and resume queued operations</string>
+    <string name="notif_payment_detected_title">Payment Detected</string>
+    <string name="notif_expense_tracking_disabled_title">Expense Tracking Disabled</string>
+    <string name="notif_expense_tracking_disabled_text">Notification access was turned off. Tap to re-enable automated capture.</string>
+
+    <!-- Compatibility & Failure Telemetry (Phase 9) -->
+    <string name="report_title">Compatibility Report</string>
+    <string name="report_missed_payment_title">Report Missed Payment</string>
+    <string name="report_user_note_label">Optional Note</string>
+    <string name="report_user_note_placeholder">Describe what payment alert or app failed...</string>
+    <string name="report_action_share">Share Report</string>
+    <string name="report_missed_payment_button">A payment did not show a prompt</string>
+    <string name="health_generate_report_button">Share Compatibility Report</string>
+    <string name="oem_feedback_prompt">Did this open the right screen?</string>
+    <string name="action_yes">Yes</string>
+    <string name="action_no">No</string>
+    <string name="report_capture_health_title">Capture Health &amp; Trail</string>
+    <string name="report_capture_health_subtitle">Inspect daily capture funnel and pipeline trail events</string>
+    <string name="crashlytics_card_title">Reliability &amp; Diagnostics</string>
+    <string name="crashlytics_card_desc">Anonymous technical telemetry to fix crashes and background freezes</string>
+    <string name="crashlytics_opt_in_title">Help improve reliability</string>
+    <string name="crashlytics_opt_in_desc">Sends crash and freeze reports (app version, phone model, Android version, error location). Never amounts, names or messages.</string>
+    <string name="btn_test_crash">Test Crash (Debug/Beta)</string>
+
     <!-- Plurals -->
     <plurals name="review_pending_count">
         <item quantity="one">%d transaction needs review</item>

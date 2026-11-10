@@ -4,7 +4,13 @@ import android.app.Activity
 import android.app.Application
 import android.content.res.Configuration
 import android.os.Bundle
+import com.financeautomation.core.utils.CrashlyticsManager
+import com.financeautomation.core.utils.DeviceSnapshot
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.LocalCrashRecorder
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.di.AppContainer
 import com.financeautomation.service.QuickLogWidgetProvider
 import kotlinx.coroutines.CancellationException
@@ -26,14 +32,22 @@ class FinanceApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        LocalCrashRecorder.install(this, BuildConfig.VERSION_NAME)
+        CrashlyticsManager.initAtAppStart(this)
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
 
-        // 1. Pre-warm database on background thread and resume foreground watcher
+        PipelineTrail.initialize(applicationContext, Dispatchers.IO) {
+            appContainer.awaitDatabase().pipelineEventDao()
+        }
+        // 1. Pre-warm database on background thread, record device snapshot, and resume foreground watcher
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val (snapshotA, snapshotB) = DeviceSnapshot.capture(applicationContext)
+                PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
                 val db = appContainer.awaitDatabase()
                 db.openHelper.writableDatabase
+                DeviceSnapshot.updateCrashlyticsSummaries(applicationContext, snapshotA, db.pipelineEventDao())
                 // Reset incomplete SHOWN captures to WAITING
                 try {
                     db.pendingCaptureDao().resetShownToWaiting()
@@ -82,6 +96,7 @@ class FinanceApplication : Application() {
         // 3. Schedule daily periodic monthly rollover check and 6-hour listener health worker
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
+        com.financeautomation.service.worker.CapturePipelineHealthWorker.schedule(applicationContext)
 
         // 3b. Verify notification listener health and update persistent alert if access missing (Phase 7.4)
         com.financeautomation.service.NotificationAccessAlertManager.checkAndSyncAlert(applicationContext)

@@ -265,5 +265,8 @@ fun SettingsCaptureSection(
                 }
             }
         }
+
+        // 4. Capture Health & Pipeline Trail
+        CaptureHealthCard(modifier = Modifier.fillMaxWidth())
     }
 }
