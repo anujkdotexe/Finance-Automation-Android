@@ -55,6 +55,16 @@ class FinanceApplication : Application() {
             }
         }
 
+        // 2b. Rebuild people ranking from ledger snapshot in background (Phase 5.7)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                appContainer.peopleListRebuilder.refresh()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: startup people refresh")
+            }
+        }
+
         // 3. Schedule daily periodic monthly rollover check and 6-hour listener health worker
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)

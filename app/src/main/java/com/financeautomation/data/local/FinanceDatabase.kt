@@ -11,6 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.CategoryDao
+import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.LineageDao
@@ -21,6 +22,7 @@ import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.dao.TripTagDao
 import com.financeautomation.data.local.entity.AccountEntity
 import com.financeautomation.data.local.entity.CategoryEntity
+import com.financeautomation.data.local.entity.CategoryStatEntity
 import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.LineageEntity
@@ -61,9 +63,10 @@ import java.io.File
         PreferenceEntity::class,
         LineageEntity::class,
         PendingCaptureEntity::class,
-        HandledNotificationEntity::class
+        HandledNotificationEntity::class,
+        CategoryStatEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -80,6 +83,7 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun lineageDao(): LineageDao
     abstract fun pendingCaptureDao(): PendingCaptureDao
     abstract fun handledNotificationDao(): HandledNotificationDao
+    abstract fun categoryStatDao(): CategoryStatDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -134,6 +138,14 @@ abstract class FinanceDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS `handled_notifications` (`key` TEXT NOT NULL, `postTime` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `handledAt` INTEGER NOT NULL, PRIMARY KEY(`key`, `postTime`))"
+                )
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `category_stats` (`payeeKey` TEXT NOT NULL, `category` TEXT NOT NULL, `count` INTEGER NOT NULL, `lastUsed` INTEGER NOT NULL, PRIMARY KEY(`payeeKey`, `category`))"
                 )
             }
         }
@@ -259,7 +271,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .openHelperFactory(openHelperFactory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .addCallback(DatabasePrepopulateCallback())
                 .build()
 
@@ -280,7 +292,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 context.applicationContext,
                 FinanceDatabase::class.java
             )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .allowMainThreadQueries()
                 .build()
         }

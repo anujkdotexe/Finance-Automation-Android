@@ -52,6 +52,17 @@ Source documents (read them first, they define the behaviour):
     container, or called from somewhere).
 16. Never claim behaviour the code does not have. If something could not be checked without a device, say
     "not verified on a device".
+17. Replacing a flow means deleting the old one. When a phase introduces a new path for something that already had a path
+    (for example captures instead of direct transaction inserts), remove the old path in the same phase, then prove with a
+    search (`grep -n` of its symbols) that nothing reachable still uses it. Check the production wiring too: read the place
+    where the class is constructed in production and list the arguments it really receives, not the ones tests pass.
+18. Traces and evidence must be copied from the tools, not recalled. Every file, line number, class and function you cite in a
+    report must come from a command you ran (`grep -n`, a file read) in this round. Paste the raw output next to the claim. A
+    trace that names code that does not exist is a failed report even if the code itself is right.
+19. Done-when traces include a negative check. For each flow, also show what must NOT happen (for example "no transaction row
+    exists before Confirm and Save") and the search or call path that proves it.
+20. Tests that no longer compile are not left behind. When a change breaks an existing test file, update it in the same
+    commit or delete it with a note in the report; never leave test sources that fail to compile.
 
 ### Report format after each phase
 
@@ -714,7 +725,11 @@ How:
 2. `contentHash` is a SHA-256 of the lower-cased title plus text, truncated to 16 hex characters, computed in memory. It is
    the only thing derived from the alert text that is stored. Raw title and text are never stored or logged.
 3. Processing order inside `NotificationProcessor` (keep the existing checks, in this order): own package, blacklist,
-   whitelist, OTP, handled-notification check, parse, decide capture.
+   whitelist, OTP, handled-notification check, parse, decide capture. A payment alert must only create or update a
+   `PendingCapture`; `NotificationProcessor` does not receive a `TransactionRepository` in production and never inserts a
+   transaction, shows an overlay or posts a prompt itself. Delete any existing direct transaction insert, the outcome type
+   that carried it and the listener branch that handled it. No transaction row exists until the user confirms in the sheet
+   (Phase 5) or taps a category button in the fallback notification.
 4. Handled-notification check: look up `(sbn.key, postTime)`. If present and the hash is identical, drop (repeat or reconnect
    replay). If the key exists with a different hash, it is an update of the same payment (4.2). Prune rows older than 24 hours
    whenever a row is added.
@@ -800,7 +815,8 @@ listener. Debug builds additionally allow the shell package and a test companion
 
 Done when: the build passes and your trace shows (a) alert to pending capture, (b) the foreground wait with two-poll
 confirmation, (c) credit capture, (d) processing then success on one key, (e) reconnect replay not duplicating, (f) an unreadable
-alert opening with the amount missing.
+alert opening with the amount missing, and (g) a negative check: after an alert is processed, no transaction exists (show that
+`NotificationProcessor` has no repository dependency and that nothing in the listener path calls an insert).
 
 ---
 
