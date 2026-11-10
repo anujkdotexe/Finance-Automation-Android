@@ -88,6 +88,7 @@ class ForegroundWatcher(
     private val mutex = Mutex()
     private var watcherJob: Job? = null
     private val pollCounters = ConcurrentHashMap<String, Int>()
+    private val failedRetryDelays = ConcurrentHashMap<String, Long>()
     private val wakeChannel = Channel<Unit>(Channel.CONFLATED)
 
     @Volatile
@@ -224,20 +225,44 @@ class ForegroundWatcher(
                     }
 
                     val hasAccess = hasUsageAccess()
+                    val now = System.currentTimeMillis()
 
                     for (capture in waitingList) {
+                        val nextAllowedTime = failedRetryDelays[capture.id] ?: 0L
+                        if (now < nextAllowedTime) {
+                            continue
+                        }
+
+                        if (overlayControllerProvider?.invoke()?.isShowing == true) {
+                            break
+                        }
+
                         if (!hasAccess) {
                             // Spec 4.3 Fallback: trigger immediately if usage access is absent
-                            triggerPrompt(capture)
-                            pollCounters.remove(capture.id)
+                            val shown = triggerPrompt(capture)
+                            if (shown) {
+                                pollCounters.remove(capture.id)
+                                failedRetryDelays.remove(capture.id)
+                                break
+                            } else {
+                                failedRetryDelays[capture.id] = now + FAILURE_BACKOFF_MS
+                                Diagnostics.record("ForegroundWatcher", "triggerPrompt deferred: backoff capture ${capture.id}")
+                            }
                         } else {
                             val inForeground = isInForeground(capture.sourcePackage)
                             if (!inForeground) {
                                 val currentCount = (pollCounters[capture.id] ?: 0) + 1
                                 pollCounters[capture.id] = currentCount
                                 if (currentCount >= REQUIRED_CONSECUTIVE_POLLS) {
-                                    triggerPrompt(capture)
-                                    pollCounters.remove(capture.id)
+                                    val shown = triggerPrompt(capture)
+                                    if (shown) {
+                                        pollCounters.remove(capture.id)
+                                        failedRetryDelays.remove(capture.id)
+                                        break
+                                    } else {
+                                        failedRetryDelays[capture.id] = now + FAILURE_BACKOFF_MS
+                                        Diagnostics.record("ForegroundWatcher", "triggerPrompt deferred: backoff capture ${capture.id}")
+                                    }
                                 }
                             } else {
                                 // Reset poll count if the app re-entered foreground
@@ -260,22 +285,26 @@ class ForegroundWatcher(
         }
     }
 
-    private suspend fun triggerPrompt(capture: PendingCaptureEntity) {
+    private suspend fun triggerPrompt(capture: PendingCaptureEntity): Boolean {
         val dao = resolveDao()
         try {
             dao.updateState(capture.id, PendingCaptureEntity.STATE_SHOWN)
             if (onTriggerPrompt != null) {
                 onTriggerPrompt.invoke(capture)
+                return true
             } else {
                 val controller = if (Settings.canDrawOverlays(context)) overlayControllerProvider?.invoke() else null
                 if (controller != null) {
                     val shown = controller.show(OverlayRequest.Capture(capture.id))
                     if (!shown) {
                         dao.updateState(capture.id, PendingCaptureEntity.STATE_WAITING)
+                        return false
                     }
+                    return true
                 } else {
                     // Spec 5.5 point 2: Heads-up notification fallback when overlay permission or controller is absent
                     postHeadsUpFallback(capture)
+                    return true
                 }
             }
         } catch (e: Exception) {
@@ -286,6 +315,7 @@ class ForegroundWatcher(
             }
             if (e is CancellationException) throw e
             Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: triggerPrompt failed")
+            return false
         }
     }
 
@@ -332,5 +362,6 @@ class ForegroundWatcher(
     companion object {
         const val POLL_INTERVAL_MS: Long = 700L
         const val REQUIRED_CONSECUTIVE_POLLS: Int = 2
+        const val FAILURE_BACKOFF_MS: Long = 5000L
     }
 }

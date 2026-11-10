@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Application-scoped controller managing the system alert overlay window for transaction review and flows.
@@ -86,8 +87,10 @@ class OverlayController(
         ioDispatcher = ioDispatcher
     )
 
+    private val showRequested = AtomicBoolean(false)
+
     val isShowing: Boolean
-        get() = currentView != null
+        get() = showRequested.get() || currentView != null
 
     private val _isShowingFlow = MutableStateFlow(false)
     val isShowingFlow: StateFlow<Boolean> = _isShowingFlow.asStateFlow()
@@ -114,6 +117,10 @@ class OverlayController(
         if (request is OverlayRequest.Capture && isShowing) {
             return false
         }
+
+        // Reserve the overlay synchronously to prevent simultaneous capture prompt collisions
+        showRequested.set(true)
+        _isShowingFlow.value = true
 
         // Explicit user action replacing an active capture reverts the old capture back to WAITING
         val replacedCaptureId = currentCaptureId
@@ -264,6 +271,7 @@ class OverlayController(
                 currentView = composeView
                 _isShowingFlow.value = true
             } catch (e: Exception) {
+                showRequested.set(false)
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: show failed")
                 val failedCaptureId = currentCaptureId
@@ -273,6 +281,7 @@ class OverlayController(
                             pendingCaptureDaoProvider().updateState(failedCaptureId, PendingCaptureEntity.STATE_WAITING)
                         } catch (ex: Exception) {
                             if (ex is CancellationException) throw ex
+                            Diagnostics.record("OverlayController", "${ex.javaClass.simpleName}: revertFailedCapture")
                         }
                     }
                 }
@@ -317,6 +326,7 @@ class OverlayController(
      * Dismisses the currently displayed overlay window and recycles resources.
      */
     fun dismiss() {
+        showRequested.set(false)
         blurHelper.teardownWindowBlur()
         currentView?.let { view ->
             try {
