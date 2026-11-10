@@ -6,8 +6,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -81,8 +79,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
+import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
 
 /**
  * Modernized Settings and Configuration screen supporting 100% config-driven customization.
@@ -91,6 +91,8 @@ import com.financeautomation.presentation.viewmodel.SettingsViewModel
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    setupHealthViewModel: SetupHealthViewModel? = null,
+    overlayControllerProvider: (() -> OverlayController)? = null,
     onReRunSetup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -116,6 +118,8 @@ fun SettingsScreen(
     ) { innerPadding ->
         SettingsContent(
             state = state,
+            setupHealthViewModel = setupHealthViewModel,
+            overlayControllerProvider = overlayControllerProvider,
             onReRunSetup = onReRunSetup,
             onSignOut = viewModel::onGoogleSignOut,
             onSpreadsheetIdChanged = viewModel::onSpreadsheetIdChanged,
@@ -147,6 +151,8 @@ fun SettingsScreen(
 @Composable
 fun SettingsContent(
     state: SettingsUiState,
+    setupHealthViewModel: SetupHealthViewModel? = null,
+    overlayControllerProvider: (() -> OverlayController)? = null,
     onReRunSetup: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onSpreadsheetIdChanged: (String) -> Unit,
@@ -194,6 +200,9 @@ fun SettingsContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // --- Setup Health & Advanced Diagnostics (Phase 7.1 - 7.4) ---
+        SetupSection(setupHealthViewModel, overlayControllerProvider, onReRunSetup)
+
         // --- Card 0: Google Sign-In & Automated Drive Provisioning ---
         SettingsCard(
             title = "Google Identity & Master Ledger",
@@ -762,55 +771,29 @@ fun SettingsCard(
     content: @Composable () -> Unit
 ) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = CircleShape
-                        ),
+                    modifier = Modifier.size(36.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = title,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(imageVector = icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-
             content()
         }
     }

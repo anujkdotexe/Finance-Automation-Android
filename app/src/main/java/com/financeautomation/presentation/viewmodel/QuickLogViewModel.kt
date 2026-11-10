@@ -82,14 +82,12 @@ class QuickLogViewModel(
         viewModelScope.launch(ioDispatcher) {
             accountRepository.getAccounts().collect { accounts ->
                 _uiState.update { current ->
-                    current.copy(
-                        availableAccounts = accounts,
-                        selectedAccount = if (accounts.any { it.name.equals(current.selectedAccount, ignoreCase = true) }) {
-                            current.selectedAccount
-                        } else {
-                            accounts.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_SBI
-                        }
-                    )
+                    val acc = if (accounts.any { it.name.equals(current.selectedAccount, ignoreCase = true) }) {
+                        current.selectedAccount
+                    } else {
+                        accounts.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_SBI
+                    }
+                    current.copy(availableAccounts = accounts, selectedAccount = acc)
                 }
             }
         }
@@ -193,6 +191,15 @@ class QuickLogViewModel(
         refreshPredictedCategories("")
     }
 
+    /**
+     * Initializes self-test mode with sample expense data and no pending capture (Spec 7.4).
+     * Does not reference any whitelisted package or write to persistent storage.
+     */
+    fun setSelfTestMode(samplePayee: String? = null) {
+        _uiState.update { SelfTestSampleData.createSelfTestState(it, samplePayee) }
+        recalculateSplit()
+    }
+
     fun onAmountChanged(text: String) {
         val sanitized = text.filter { it.isDigit() || it == '.' }
         val parsed = sanitized.toDoubleOrNull() ?: 0.0
@@ -271,19 +278,9 @@ class QuickLogViewModel(
         val calculation = when (state.splitMode) {
             SplitMode.JUST_ME -> calculateSplitUseCase.calculateJustMe(total)
             SplitMode.SPLIT_EQUALLY -> calculateSplitUseCase.calculateSplitEqually(total, selectedCompanions)
-            SplitMode.CUSTOM -> calculateSplitUseCase.calculateCustomSplit(
-                totalAmount = total,
-                myShare = state.customShare ?: total,
-                companions = selectedCompanions
-            )
+            SplitMode.CUSTOM -> calculateSplitUseCase.calculateCustomSplit(total, state.customShare ?: total, selectedCompanions)
         }
-
-        _uiState.update {
-            it.copy(
-                myShare = calculation.myShare,
-                owedToMe = calculation.owedToMe
-            )
-        }
+        _uiState.update { it.copy(myShare = calculation.myShare, owedToMe = calculation.owedToMe) }
     }
 
     /**

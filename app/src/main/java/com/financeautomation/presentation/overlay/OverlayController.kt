@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.ViewModelProvider
+import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -38,6 +39,8 @@ import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.flows.OpenDebtItem
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
@@ -102,20 +105,32 @@ class OverlayController(
     private var currentView: ComposeView? = null
     private var currentTreeOwners: ComposeOverlayTreeOwners? = null
     private var currentLayoutParams: WindowManager.LayoutParams? = null
+    private var pendingSelfTestCompletion: CompletableDeferred<Boolean>? = null
 
     /**
      * Shows an overlay window for the given request.
      * Returns true if displayed or queued, false if blocked by missing permissions or active presentation.
      */
     fun show(request: OverlayRequest): Boolean {
+        return showInternal(request, null)
+    }
+
+    private fun showInternal(request: OverlayRequest, completion: CompletableDeferred<Boolean>?): Boolean {
+        pendingSelfTestCompletion?.complete(false)
+        pendingSelfTestCompletion = completion
+
         if (!Settings.canDrawOverlays(appContext)) {
             Diagnostics.record("OverlayController", "show: SYSTEM_ALERT_WINDOW permission missing")
+            completion?.complete(false)
+            if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
             return false
         }
 
         // Automatic capture while sheet is already open is deferred; atomic check-and-reserve
         if (request is OverlayRequest.Capture) {
             if (currentView != null || !showRequested.compareAndSet(false, true)) {
+                completion?.complete(false)
+                if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
                 return false
             }
         } else {
@@ -150,9 +165,7 @@ class OverlayController(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                        WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                     PixelFormat.TRANSLUCENT
                 ).apply {
                     @Suppress("DEPRECATION")
@@ -183,25 +196,15 @@ class OverlayController(
 
                 val initialScreen = when (request) {
                     is OverlayRequest.ChooseAction -> OverlayFlowScreen.MENU
-                    is OverlayRequest.Capture -> {
-                        viewModel.loadCapture(request.captureId)
-                        OverlayFlowScreen.EXPENSE
-                    }
-                    is OverlayRequest.ManualExpense, is OverlayRequest.SelfTest -> {
-                        viewModel.setManualMode()
-                        OverlayFlowScreen.EXPENSE
-                    }
-                    is OverlayRequest.SpecificFlow -> {
-                        when (request.flowType.uppercase()) {
-                            "INCOME_RETURN" -> OverlayFlowScreen.INCOME_RETURN
-                            "FRIEND_PAID" -> OverlayFlowScreen.FRIEND_PAID
-                            "REPAID_FRIEND" -> OverlayFlowScreen.REPAID_FRIEND
-                            "TRIP_MODE" -> OverlayFlowScreen.TRIP_MODE
-                            else -> {
-                                viewModel.setManualMode()
-                                OverlayFlowScreen.EXPENSE
-                            }
-                        }
+                    is OverlayRequest.Capture -> { viewModel.loadCapture(request.captureId); OverlayFlowScreen.EXPENSE }
+                    is OverlayRequest.ManualExpense -> { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE }
+                    is OverlayRequest.SelfTest -> { viewModel.setSelfTestMode(); OverlayFlowScreen.EXPENSE }
+                    is OverlayRequest.SpecificFlow -> when (request.flowType.uppercase()) {
+                        "INCOME_RETURN" -> OverlayFlowScreen.INCOME_RETURN
+                        "FRIEND_PAID" -> OverlayFlowScreen.FRIEND_PAID
+                        "REPAID_FRIEND" -> OverlayFlowScreen.REPAID_FRIEND
+                        "TRIP_MODE" -> OverlayFlowScreen.TRIP_MODE
+                        else -> { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE }
                     }
                 }
 
@@ -243,9 +246,14 @@ class OverlayController(
                                         openDebts = openDebtsState.value,
                                         onPersonChanged = ::loadOpenDebtsForPerson,
                                         onConfirmExpense = {
-                                            viewModel.onConfirmAndSave { message ->
+                                            if (request is OverlayRequest.SelfTest) {
                                                 dismiss()
-                                                resultPill.show(message)
+                                                resultPill.show(appContext.getString(R.string.self_test_completed_pill))
+                                            } else {
+                                                viewModel.onConfirmAndSave { message ->
+                                                    dismiss()
+                                                    resultPill.show(message)
+                                                }
                                             }
                                         },
                                         onConfirmIncome = actionDispatcher::confirmIncome,
@@ -259,7 +267,8 @@ class OverlayController(
                                         },
                                         onKeyboardFocusChanged = { hasFocus ->
                                             setKeyboardFocus(hasFocus)
-                                        }
+                                        },
+                                        isTestMode = (request is OverlayRequest.SelfTest)
                                     )
                                 }
                             }
@@ -271,8 +280,12 @@ class OverlayController(
                 windowManager.addView(composeView, layoutParams)
                 currentView = composeView
                 _isShowingFlow.value = true
+                completion?.complete(true)
+                if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
             } catch (e: Exception) {
                 showRequested.set(false)
+                completion?.complete(false)
+                if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: show failed")
                 val failedCaptureId = currentCaptureId
@@ -342,6 +355,8 @@ class OverlayController(
      * Dismisses the currently displayed overlay window and recycles resources.
      */
     fun dismiss() {
+        pendingSelfTestCompletion?.complete(false)
+        pendingSelfTestCompletion = null
         clearCurrentWindow()
         currentCaptureId = null
         showRequested.set(false)
@@ -357,12 +372,21 @@ class OverlayController(
 
     /**
      * Self-test simulation of the Quick Log sheet (Spec 7.4).
-     * Returns true if addView succeeded.
+     * Awaits addView completion and returns true if window was successfully added.
      */
-    fun showSelfTest(): Boolean {
+    suspend fun showSelfTest(): Boolean {
         if (!Settings.canDrawOverlays(appContext)) return false
-        show(OverlayRequest.SelfTest)
-        return true
+        val deferred = CompletableDeferred<Boolean>()
+        val initiated = showInternal(OverlayRequest.SelfTest, deferred)
+        if (!initiated) return false
+        return try {
+            withTimeoutOrNull(5000L) {
+                deferred.await()
+            } ?: false
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            false
+        }
     }
 
     companion object {
