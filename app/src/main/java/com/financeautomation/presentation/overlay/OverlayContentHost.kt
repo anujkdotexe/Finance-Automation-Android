@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,7 +23,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.TripTag
@@ -66,6 +72,7 @@ fun OverlayContentHost(
     onEndTrip: () -> Unit,
     onDismiss: () -> Unit,
     onKeyboardFocusChanged: (Boolean) -> Unit,
+    isTestMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var currentScreen by remember { mutableStateOf(initialScreen) }
@@ -87,11 +94,29 @@ fun OverlayContentHost(
         tonalElevation = 6.dp,
         shadowElevation = 24.dp
     ) {
-        AnimatedContent(
-            targetState = currentScreen,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "OverlayFlowAnimation"
-        ) { screen ->
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (isTestMode) {
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = stringResource(R.string.health_self_test_banner),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+            }
+
+            AnimatedContent(
+                targetState = currentScreen,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "OverlayFlowAnimation"
+            ) { screen ->
             when (screen) {
                 OverlayFlowScreen.MENU -> {
                     ChooseActionMenu(
@@ -184,5 +209,6 @@ fun OverlayContentHost(
             }
         }
     }
+}
 }
 

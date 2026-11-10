@@ -29,4 +29,54 @@
     <string name="pin_shortcut_not_supported_explanation">Pinned shortcuts are not supported by your current launcher</string>
     <string name="quick_log_shortcut_short_label">Quick log</string>
     <string name="quick_log_shortcut_long_label">Quick log expense</string>
+
+    <!-- Phase 7: Setup Health Checks & Warnings -->
+    <string name="health_notification_access_title">Notification access</string>
+    <string name="health_notification_access_desc">Intercept UPI transaction alerts to automatically log expenses</string>
+    <string name="health_overlay_title">Display over other apps</string>
+    <string name="health_overlay_desc">Display the Quick Log bottom sheet over wallpaper or third-party apps</string>
+    <string name="health_usage_access_title">Usage access</string>
+    <string name="health_usage_access_desc">Detect when UPI payment screens finish to prompt for categorization</string>
+    <string name="health_post_notifications_title">Notification alerts</string>
+    <string name="health_post_notifications_desc">Post interactive categorization alerts and synchronization status</string>
+    <string name="health_battery_title">Battery optimization</string>
+    <string name="health_battery_desc">Allow unrestricted background execution so transaction alerts are not missed</string>
+    <string name="health_oem_title">OEM background autostart</string>
+    <string name="health_oem_desc">Configure vendor-specific background management and autostart policies</string>
+    <string name="health_google_title">Google account &amp; ledger</string>
+    <string name="health_google_desc">Connect Google Drive and verify Master Ledger workbook for the current year</string>
+
+    <string name="health_status_ok">OK</string>
+    <string name="health_status_missing">Missing</string>
+    <string name="health_status_unknown">Manual check</string>
+    <string name="health_fix_button">Fix</string>
+    <string name="health_listener_connected">Connected</string>
+    <string name="health_listener_disconnected">Disconnected</string>
+    <string name="health_force_stop_warning">If you force-stop the app, Android turns capture off until you open the app</string>
+    <string name="health_persistent_notification_title">Capture is off - tap to fix</string>
+    <string name="health_persistent_notification_text">Notification access is disabled. Tap to enable transaction interception.</string>
+    <string name="health_self_test_button">Run self-test</string>
+    <string name="health_self_test_banner">TEST MODE - Verification Prompt (Not Saved)</string>
+    <string name="health_self_test_success">Self-test passed: Quick Log sheet rendered successfully</string>
+    <string name="health_self_test_failed">Self-test failed: Overlay permission missing or window failed to attach</string>
+    <string name="self_test_completed_pill">Self-test completed (not saved)</string>
+    <string name="self_test_sample_payee">Coffee House (Self-Test)</string>
+    <string name="health_channel_name">Health &amp; Setup Alerts</string>
+    <string name="health_channel_desc">Alerts regarding required background permissions and listener status</string>
+    <string name="health_advanced_title">Advanced Diagnostics</string>
+    <string name="health_advanced_subtitle">In-memory lifecycle and error diagnostic events</string>
+
+    <!-- OEM Hardening Instructions (Phase 7.3) -->
+    <string name="oem_brand_samsung">Samsung</string>
+    <string name="oem_brand_xiaomi">Xiaomi / Redmi / Poco</string>
+    <string name="oem_brand_oppo">Oppo / Realme</string>
+    <string name="oem_brand_vivo">Vivo / iQOO</string>
+    <string name="oem_brand_oneplus">OnePlus</string>
+    <string name="oem_brand_default">Standard Android</string>
+    <string name="oem_instructions_samsung">Remove the app from sleeping and deep-sleeping apps; set battery to Unrestricted</string>
+    <string name="oem_instructions_xiaomi">Turn on Autostart; allow \"Display pop-up windows while running in the background\"; battery saver No restrictions; lock the app in Recents</string>
+    <string name="oem_instructions_oppo">Allow auto-start and background activity; allow in the battery manager</string>
+    <string name="oem_instructions_vivo">Allow auto-start; allow background pop-up; turn off high background power consumption restriction</string>
+    <string name="oem_instructions_oneplus">Battery optimisation set to Don\'t optimise; allow auto-launch</string>
+    <string name="oem_instructions_default">Standard permissions only. Ensure battery optimization is disabled for reliable expense interception.</string>
 </resources>

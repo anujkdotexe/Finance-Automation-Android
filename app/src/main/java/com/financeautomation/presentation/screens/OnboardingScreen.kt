@@ -1,14 +1,17 @@
 package com.financeautomation.presentation.screens
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -77,6 +80,12 @@ fun OnboardingScreen(
     ) { result ->
         val granted = result.resultCode == Activity.RESULT_OK
         viewModel.onConsentResult(granted)
+    }
+
+    val postNotificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        onOnboardingFinished()
     }
 
     LaunchedEffect(viewModel) {
@@ -226,7 +235,14 @@ fun OnboardingScreen(
                 action = {
                     AnimatedVisibility(visible = state.step4State == StepState.COMPLETED) {
                         Button(
-                            onClick = onOnboardingFinished,
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                    postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    onOnboardingFinished()
+                                }
+                            },
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary

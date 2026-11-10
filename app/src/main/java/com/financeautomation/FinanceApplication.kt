@@ -83,6 +83,9 @@ class FinanceApplication : Application() {
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
 
+        // 3b. Verify notification listener health and update persistent alert if access missing (Phase 7.4)
+        com.financeautomation.service.NotificationAccessAlertManager.checkAndSyncAlert(applicationContext)
+
         // 4. Register process lifecycle observer via ActivityLifecycleCallbacks for foreground pull
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
