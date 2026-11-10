@@ -24,8 +24,6 @@ import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.overlay.OverlayRequest
-import com.financeautomation.presentation.ui.EntryActivity
-import com.financeautomation.presentation.ui.ModalBottomSheetActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -217,6 +215,14 @@ class ForegroundWatcher(
                         continue
                     }
 
+                    val isOverlayOpen = overlayControllerProvider?.invoke()?.isShowing == true
+                    if (isOverlayOpen) {
+                        withTimeoutOrNull(POLL_INTERVAL_MS) {
+                            wakeChannel.receive()
+                        }
+                        continue
+                    }
+
                     val hasAccess = hasUsageAccess()
 
                     for (capture in waitingList) {
@@ -261,19 +267,14 @@ class ForegroundWatcher(
             if (onTriggerPrompt != null) {
                 onTriggerPrompt.invoke(capture)
             } else {
-                if (Settings.canDrawOverlays(context)) {
-                    val controller = overlayControllerProvider?.invoke()
-                    if (controller != null) {
-                        controller.show(OverlayRequest.Capture(capture.id))
-                    } else {
-                        val intent = Intent(context, EntryActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            putExtra(EntryActivity.EXTRA_CAPTURE_ID, capture.id)
-                        }
-                        context.startActivity(intent)
+                val controller = if (Settings.canDrawOverlays(context)) overlayControllerProvider?.invoke() else null
+                if (controller != null) {
+                    val shown = controller.show(OverlayRequest.Capture(capture.id))
+                    if (!shown) {
+                        dao.updateState(capture.id, PendingCaptureEntity.STATE_WAITING)
                     }
                 } else {
-                    // Spec 5.5 point 2: Heads-up notification fallback when overlay permission missing
+                    // Spec 5.5 point 2: Heads-up notification fallback when overlay permission or controller is absent
                     postHeadsUpFallback(capture)
                 }
             }
@@ -283,6 +284,7 @@ class ForegroundWatcher(
             } catch (revertEx: Exception) {
                 Diagnostics.record("ForegroundWatcher", "${revertEx.javaClass.simpleName}: revertStateToWaiting")
             }
+            if (e is CancellationException) throw e
             Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: triggerPrompt failed")
         }
     }

@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.financeautomation.domain.model.Companion
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 /**
  * Flow sheet for recording debt repayments to friends (Phase 5.6 point 4).
@@ -217,7 +218,7 @@ fun RepaidFriendFlowSheet(
             onClick = {
                 val timestamp = try {
                     LocalDate.parse(dateText).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-                } catch (_: Exception) {
+                } catch (_: DateTimeParseException) {
                     System.currentTimeMillis()
                 }
                 onConfirm(parsedAmount, personName.trim(), timestamp)
