@@ -98,10 +98,14 @@ fun SetupHealthCard(
         viewModel.refreshChecks()
         if (!isGranted) {
             val activity = context as? Activity
-            val permanentlyDenied = activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(
-                activity,
-                Manifest.permission.POST_NOTIFICATIONS
-            )
+            val permanentlyDenied = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(
+                    activity,
+                    Manifest.permission.POST_NOTIFICATIONS
+                )
+            } else {
+                false
+            }
             if (permanentlyDenied) {
                 SetupHealthIntents.launchAppNotificationSettings(context)
             }
