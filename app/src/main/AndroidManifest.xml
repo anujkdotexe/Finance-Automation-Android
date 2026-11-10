@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application
+        android:name=".FinanceApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@android:drawable/sym_def_app_icon"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name=".presentation.ui.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".MainActivity"
+            android:targetActivity=".presentation.ui.MainActivity"
+            android:exported="true" />
+
+        <activity
+            android:name=".presentation.ui.ModalBottomSheetActivity"
+            android:exported="true"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleInstance"
+            android:theme="@style/Theme.FinanceAutomation.TranslucentSheet" />
+
+        <activity-alias
+            android:name=".ModalBottomSheetActivity"
+            android:targetActivity=".presentation.ui.ModalBottomSheetActivity"
+            android:exported="true" />
+
+        <service
+            android:name=".service.NotificationListenerServiceImpl"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".service.QuickSettingsTileService"
+            android:icon="@android:drawable/ic_input_add"
+            android:label="@string/quick_add_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".service.QuickActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.financeautomation.ACTION_QUICK_CATEGORIZE" />
+                <action android:name="com.financeautomation.ACTION_QUICK_CONFIRM" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".service.QuickLogWidgetProvider"
+            android:exported="true"
+            android:label="@string/quick_log_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_log_widget_info" />
+        </receiver>
+
+    </application>
+
+</manifest>

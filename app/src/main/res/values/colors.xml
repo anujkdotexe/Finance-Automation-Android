@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand & Master Sheet Section Colors -->
+    <color name="sheet_navy_banner">#1A237E</color>
+    <color name="sheet_debit_crimson">#C62828</color>
+    <color name="sheet_credit_green">#2E7D32</color>
+    <color name="sheet_payable_amber">#F57F17</color>
+    <color name="sheet_slate_header">#37474F</color>
+    <color name="sheet_spacer_gray">#ECEFF1</color>
+
+    <!-- UI Theme Colors -->
+    <color name="primary">#1A237E</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="primary_container">#DDE1FF</color>
+    <color name="on_primary_container">#001453</color>
+
+    <color name="secondary">#37474F</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="secondary_container">#CFD8DC</color>
+    <color name="on_secondary_container">#212121</color>
+
+    <color name="tertiary">#2E7D32</color>
+    <color name="on_tertiary">#FFFFFF</color>
+    <color name="tertiary_container">#C8E6C9</color>
+    <color name="on_tertiary_container">#1B5E20</color>
+
+    <color name="error">#C62828</color>
+    <color name="on_error">#FFFFFF</color>
+    <color name="error_container">#FFCDD2</color>
+    <color name="on_error_container">#B71C1C</color>
+
+    <color name="background_light">#F8F9FA</color>
+    <color name="on_background_light">#1A1C1E</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="on_surface_light">#1A1C1E</color>
+
+    <color name="background_dark">#121212</color>
+    <color name="on_background_dark">#E0E0E0</color>
+    <color name="surface_dark">#1E1E1E</color>
+    <color name="on_surface_dark">#E0E0E0</color>
+</resources>
