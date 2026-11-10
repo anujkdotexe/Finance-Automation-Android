@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Finance Automation</string>
-    <string name="quick_add_tile_label">Log Expense</string>
+    <string name="quick_add_tile_label">Quick log</string>
     <string name="notification_channel_heads_up_name">Expense Alerts</string>
     <string name="notification_channel_heads_up_desc">Interactive alerts for intercepted UPI expenses</string>
     <string name="notification_channel_sync_name">Cloud Sync Status</string>
