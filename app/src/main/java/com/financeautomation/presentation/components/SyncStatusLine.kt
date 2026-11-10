@@ -25,6 +25,28 @@ import com.financeautomation.presentation.theme.FinanceTheme
  */
 @Composable
 fun SyncStatusLine(
+    pendingCount: Int,
+    isSyncing: Boolean,
+    modifier: Modifier = Modifier,
+    isOffline: Boolean = false,
+    lastSyncedText: String = "Synced just now"
+) {
+    val statusText = when {
+        isSyncing -> "Syncing..."
+        isOffline -> "Offline"
+        pendingCount > 0 -> "$pendingCount waiting to sync"
+        else -> lastSyncedText
+    }
+    SyncStatusLine(
+        statusText = statusText,
+        modifier = modifier,
+        isOffline = isOffline,
+        hasPending = pendingCount > 0 || isSyncing
+    )
+}
+
+@Composable
+fun SyncStatusLine(
     statusText: String,
     modifier: Modifier = Modifier,
     isOffline: Boolean = false,

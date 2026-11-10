@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.SyncQueueDao
@@ -22,16 +23,45 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 /**
- * UI state for the Live Dashboard and Offline Sync Queue destination.
+ * Summary item for friend debts shown on the dashboard cards (Design Guide 5.1).
+ */
+data class DebtSummary(
+    val name: String,
+    val amount: Double
+)
+
+/**
+ * Summary item for category breakdown bars (Design Guide 5.1).
+ */
+data class CategorySpend(
+    val category: String,
+    val amount: Double,
+    val percentage: Float
+)
+
+/**
+ * UI state for the Calm Utility Home Dashboard (Design Guide 5.1).
  */
 data class DashboardUiState(
+    val selectedMonthLabel: String = "",
     val currentBurn: Double = 0.0,
+    val dailyAverage: Double = 0.0,
+    val lastMonthBurn: Double = 0.0,
     val owedToMe: Double = 0.0,
+    val topOwedToMe: List<DebtSummary> = emptyList(),
     val iOwePeople: Double = 0.0,
+    val topIOwe: List<DebtSummary> = emptyList(),
+    val needsReviewCount: Int = 0,
+    val topCategories: List<CategorySpend> = emptyList(),
+    val allCategories: List<CategorySpend> = emptyList(),
+    val recentTransactions: List<Transaction> = emptyList(),
     val savings: Double = 0.0,
+    val income: Double = 0.0,
     val transactionCount: Int = 0,
     val syncQueueItems: List<SyncQueueEntity> = emptyList(),
     val isSyncing: Boolean = false,
@@ -40,8 +70,7 @@ data class DashboardUiState(
 )
 
 /**
- * ViewModel aggregating real-time monthly financial KPIs and observing
- * Room sync_queue entries for reactive offline sync status.
+ * ViewModel aggregating calm utility financial KPIs and reactive offline sync status.
  */
 class DashboardViewModel(
     private val transactionRepository: TransactionRepository,
@@ -77,6 +106,7 @@ class DashboardViewModel(
         ioDispatcher = ioDispatcher
     )
 
+    private val monthOffsetFlow = MutableStateFlow(0)
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
@@ -94,9 +124,10 @@ class DashboardViewModel(
             val syncQueueDao = resolveSyncQueueDao()
             combine(
                 transactionRepository.getTransactions(),
-                syncQueueDao.getAllQueueFlow()
-            ) { transactions, queueItems ->
-                calculateDashboardMetrics(transactions, queueItems)
+                syncQueueDao.getAllQueueFlow(),
+                monthOffsetFlow
+            ) { transactions, queueItems, monthOffset ->
+                calculateDashboardMetrics(transactions, queueItems, monthOffset)
             }.collect { calculatedState ->
                 _uiState.update { current ->
                     calculatedState.copy(
@@ -109,55 +140,141 @@ class DashboardViewModel(
         }
     }
 
+    fun nextMonth() {
+        monthOffsetFlow.update { it + 1 }
+    }
+
+    fun previousMonth() {
+        monthOffsetFlow.update { it - 1 }
+    }
+
+    fun currentMonth() {
+        monthOffsetFlow.value = 0
+    }
+
     private fun calculateDashboardMetrics(
         transactions: List<Transaction>,
-        queueItems: List<SyncQueueEntity>
+        queueItems: List<SyncQueueEntity>,
+        monthOffset: Int
     ): DashboardUiState {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
+        val nowCal = Calendar.getInstance()
+        val cal = Calendar.getInstance().apply {
+            add(Calendar.MONTH, monthOffset)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
         val startOfMonth = cal.timeInMillis
+
+        val monthLabelFormat = SimpleDateFormat("MMMM yyyy", Locale.US)
+        val selectedMonthLabel = monthLabelFormat.format(cal.time)
+
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val daysElapsed = if (monthOffset == 0) {
+            nowCal.get(Calendar.DAY_OF_MONTH).coerceIn(1, daysInMonth)
+        } else if (monthOffset < 0) {
+            daysInMonth
+        } else {
+            1
+        }
 
         cal.add(Calendar.MONTH, 1)
         val endOfMonth = cal.timeInMillis
 
+        // Prior month window for "Last month" comparison
+        val priorCal = Calendar.getInstance().apply {
+            timeInMillis = startOfMonth
+            add(Calendar.MONTH, -1)
+        }
+        val startOfPriorMonth = priorCal.timeInMillis
+        val endOfPriorMonth = startOfMonth
+
         var currentBurn = 0.0
-        var owedToMe = 0.0
-        val iOwePeople = 0.0
+        var lastMonthBurn = 0.0
         var savings = 0.0
+        var income = 0.0
         var txnCount = 0
+        var needsReviewCount = 0
+
+        val categorySums = mutableMapOf<String, Double>()
+        val monthTransactions = mutableListOf<Transaction>()
+        val receivablesByFriend = mutableMapOf<String, Double>()
 
         for (txn in transactions) {
-            // Unsettled receivables
-            if (txn.status == TransactionStatus.PENDING) {
-                owedToMe += txn.owedToMe
+            if (txn.reviewState == ReviewState.NEEDS_REVIEW && txn.status != TransactionStatus.VOID) {
+                needsReviewCount++
             }
 
-            // Monthly KPIs
+            // Global unsettled receivables
+            if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
+                val friend = txn.companions.ifBlank { "Others" }
+                receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + txn.owedToMe
+            }
+
+            // Prior month burn
+            if (txn.timestamp in startOfPriorMonth until endOfPriorMonth && txn.status != TransactionStatus.VOID) {
+                val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
+                val isXfer = txn.category.equals("Transfer", ignoreCase = true)
+                if (!isSav && !isXfer) {
+                    lastMonthBurn += txn.myShare
+                }
+            }
+
+            // Selected month transactions
             if (txn.timestamp in startOfMonth until endOfMonth && txn.status != TransactionStatus.VOID) {
                 txnCount++
+                monthTransactions.add(txn)
 
-                val isSavings = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
-                val isTransfer = txn.category.equals("Transfer", ignoreCase = true)
+                val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
+                val isXfer = txn.category.equals("Transfer", ignoreCase = true)
 
-                if (isSavings) {
+                if (isSav) {
                     savings += txn.myShare
-                }
-
-                if (!isSavings && !isTransfer) {
+                } else if (!isXfer) {
                     currentBurn += txn.myShare
+                    categorySums[txn.category] = (categorySums[txn.category] ?: 0.0) + txn.myShare
                 }
             }
         }
 
+        val dailyAverage = if (daysElapsed > 0 && currentBurn > 0.0) currentBurn / daysElapsed else 0.0
+
+        val allCategories = categorySums.entries
+            .map { (cat, sum) ->
+                val pct = if (currentBurn > 0.0) (sum / currentBurn).toFloat().coerceIn(0f, 1f) else 0f
+                CategorySpend(category = cat, amount = sum, percentage = pct)
+            }
+            .sortedByDescending { it.amount }
+
+        val topCategories = allCategories.take(5)
+
+        val totalOwedToMe = receivablesByFriend.values.sum()
+        val topOwedToMe = receivablesByFriend.entries
+            .map { DebtSummary(name = it.key, amount = it.value) }
+            .sortedByDescending { it.amount }
+            .take(3)
+
+        val recentTransactions = monthTransactions
+            .sortedByDescending { it.timestamp }
+            .take(5)
+
         return DashboardUiState(
+            selectedMonthLabel = selectedMonthLabel,
             currentBurn = currentBurn,
-            owedToMe = owedToMe,
-            iOwePeople = iOwePeople,
+            dailyAverage = dailyAverage,
+            lastMonthBurn = lastMonthBurn,
+            owedToMe = totalOwedToMe,
+            topOwedToMe = topOwedToMe,
+            iOwePeople = 0.0,
+            topIOwe = emptyList(),
+            needsReviewCount = needsReviewCount,
+            topCategories = topCategories,
+            allCategories = allCategories,
+            recentTransactions = recentTransactions,
             savings = savings,
+            income = income,
             transactionCount = txnCount,
             syncQueueItems = queueItems
         )
@@ -241,4 +358,3 @@ class DashboardViewModel(
         }
     }
 }
-

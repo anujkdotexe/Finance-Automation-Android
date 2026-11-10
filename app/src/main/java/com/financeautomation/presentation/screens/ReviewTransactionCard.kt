@@ -314,3 +314,4 @@ private fun formatTimestamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
     return formatter.format(Date(timestamp))
 }
+
