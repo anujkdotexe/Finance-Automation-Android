@@ -16,7 +16,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.financeautomation.FinanceApplication
 import com.financeautomation.R
+import com.financeautomation.core.constants.PackageWhitelist
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.presentation.ui.EntryActivity
@@ -45,10 +49,17 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
+        PipelineTrail.recordHeartbeat()
         if (sbn == null || sbn.notification == null) return
 
         val sourcePackage = sbn.packageName ?: return
         if (sourcePackage == packageName) return
+
+        if (!PackageWhitelist.isWhitelisted(sourcePackage)) {
+            PipelineTrail.recordDroppedNotWhitelisted()
+            return
+        }
+        PipelineTrail.record(PipelineStage.ALERT, PipelineCode.WHITELISTED_SEEN)
 
         val extras = sbn.notification.extras ?: Bundle.EMPTY
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
@@ -68,6 +79,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         isConnected = true
+        PipelineTrail.record(PipelineStage.LISTENER, PipelineCode.CONNECTED)
         val app = applicationContext as? FinanceApplication
         val watcher = app?.appContainer?.foregroundWatcher
 
@@ -94,9 +106,12 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         isConnected = false
+        PipelineTrail.record(PipelineStage.LISTENER, PipelineCode.DISCONNECTED)
         // Self-healing rebind on listener disconnection
         try {
+            PipelineTrail.record(PipelineStage.LISTENER, PipelineCode.REBIND_REQUESTED)
             rebindService(this)
+            PipelineTrail.record(PipelineStage.LISTENER, PipelineCode.REBIND_OK)
         } catch (e: Exception) {
             Diagnostics.record(TAG, "${e.javaClass.simpleName}: onListenerDisconnected rebind")
         }

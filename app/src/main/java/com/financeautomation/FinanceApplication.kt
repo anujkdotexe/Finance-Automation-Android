@@ -5,6 +5,10 @@ import android.app.Application
 import android.content.res.Configuration
 import android.os.Bundle
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.LocalCrashRecorder
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.di.AppContainer
 import com.financeautomation.service.QuickLogWidgetProvider
 import kotlinx.coroutines.CancellationException
@@ -26,8 +30,14 @@ class FinanceApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        LocalCrashRecorder.install(this, BuildConfig.VERSION_NAME)
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
+
+        PipelineTrail.initialize(Dispatchers.IO) {
+            appContainer.awaitDatabase().pipelineEventDao()
+        }
+        PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT)
 
         // 1. Pre-warm database on background thread and resume foreground watcher
         CoroutineScope(Dispatchers.IO).launch {
@@ -82,6 +92,7 @@ class FinanceApplication : Application() {
         // 3. Schedule daily periodic monthly rollover check and 6-hour listener health worker
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
+        com.financeautomation.service.worker.CapturePipelineHealthWorker.schedule(applicationContext)
 
         // 3b. Verify notification listener health and update persistent alert if access missing (Phase 7.4)
         com.financeautomation.service.NotificationAccessAlertManager.checkAndSyncAlert(applicationContext)

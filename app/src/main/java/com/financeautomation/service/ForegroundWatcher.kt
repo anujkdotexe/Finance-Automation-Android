@@ -18,6 +18,9 @@ import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
@@ -98,6 +101,7 @@ class ForegroundWatcher(
         override fun onReceive(c: Context?, intent: Intent?) {
             val action = intent?.action ?: return
             if (action == Intent.ACTION_SCREEN_ON || action == Intent.ACTION_USER_PRESENT) {
+                PipelineTrail.record(PipelineStage.WATCHER, PipelineCode.UNLOCKED_RESUME)
                 wakeChannel.trySend(Unit)
             }
         }
@@ -210,6 +214,7 @@ class ForegroundWatcher(
                     }
 
                     if (!isScreenInteractiveAndUnlocked()) {
+                        PipelineTrail.record(PipelineStage.WATCHER, PipelineCode.SCREEN_LOCKED_WAIT)
                         withTimeoutOrNull(POLL_INTERVAL_MS) {
                             wakeChannel.receive()
                         }
@@ -239,6 +244,7 @@ class ForegroundWatcher(
 
                         if (!hasAccess) {
                             // Spec 4.3 Fallback: trigger immediately if usage access is absent
+                            PipelineTrail.record(PipelineStage.WATCHER, PipelineCode.USAGE_ACCESS_MISSING_SHOW_NOW)
                             val shown = triggerPrompt(capture)
                             if (shown) {
                                 pollCounters.remove(capture.id)
@@ -246,6 +252,7 @@ class ForegroundWatcher(
                                 break
                             } else {
                                 failedRetryDelays[capture.id] = now + FAILURE_BACKOFF_MS
+                                PipelineTrail.record(PipelineStage.WATCHER, PipelineCode.BACKOFF)
                                 Diagnostics.record("ForegroundWatcher", "triggerPrompt deferred: backoff capture ${capture.id}")
                             }
                         } else {
@@ -254,6 +261,7 @@ class ForegroundWatcher(
                                 val currentCount = (pollCounters[capture.id] ?: 0) + 1
                                 pollCounters[capture.id] = currentCount
                                 if (currentCount >= REQUIRED_CONSECUTIVE_POLLS) {
+                                    PipelineTrail.record(PipelineStage.WATCHER, PipelineCode.TWO_POLLS_OK)
                                     val shown = triggerPrompt(capture)
                                     if (shown) {
                                         pollCounters.remove(capture.id)
@@ -261,12 +269,14 @@ class ForegroundWatcher(
                                         break
                                     } else {
                                         failedRetryDelays[capture.id] = now + FAILURE_BACKOFF_MS
+                                        PipelineTrail.record(PipelineStage.WATCHER, PipelineCode.BACKOFF)
                                         Diagnostics.record("ForegroundWatcher", "triggerPrompt deferred: backoff capture ${capture.id}")
                                     }
                                 }
                             } else {
                                 // Reset poll count if the app re-entered foreground
                                 pollCounters[capture.id] = 0
+                                PipelineTrail.record(PipelineStage.WATCHER, PipelineCode.SOURCE_APP_FOREGROUND)
                             }
                         }
                     }

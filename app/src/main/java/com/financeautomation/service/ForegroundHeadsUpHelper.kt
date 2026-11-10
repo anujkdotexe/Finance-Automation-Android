@@ -7,8 +7,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
@@ -117,7 +121,13 @@ object ForegroundHeadsUpHelper {
             .setContentIntent(pendingDetails)
             .addAction(0, cat1, pendingCat1)
             .addAction(0, cat2, pendingCat2)
-            .addAction(0, "Details", pendingDetails)
+            .addAction(0, context.getString(R.string.label_details), pendingDetails)
+
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.HEADS_UP_BLOCKED_NOTIFICATIONS_OFF)
+        } else {
+            PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.HEADS_UP_POSTED)
+        }
 
         notificationManager.notify(notificationId, builder.build())
     }

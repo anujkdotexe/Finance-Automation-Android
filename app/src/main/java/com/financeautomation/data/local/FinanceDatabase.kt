@@ -16,6 +16,7 @@ import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.data.local.dao.PipelineEventDao
 import com.financeautomation.data.local.dao.PreferenceDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
@@ -27,6 +28,7 @@ import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.data.local.entity.PipelineEventEntity
 import com.financeautomation.data.local.entity.PreferenceEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
@@ -64,9 +66,10 @@ import java.io.File
         LineageEntity::class,
         PendingCaptureEntity::class,
         HandledNotificationEntity::class,
-        CategoryStatEntity::class
+        CategoryStatEntity::class,
+        PipelineEventEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -84,6 +87,7 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun pendingCaptureDao(): PendingCaptureDao
     abstract fun handledNotificationDao(): HandledNotificationDao
     abstract fun categoryStatDao(): CategoryStatDao
+    abstract fun pipelineEventDao(): PipelineEventDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -96,59 +100,11 @@ abstract class FinanceDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: FinanceDatabase? = null
 
-        val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                // 1. accounts table
-                db.execSQL("ALTER TABLE accounts ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE accounts ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0")
-
-                // 2. categories table
-                db.execSQL("ALTER TABLE categories ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE categories ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0")
-
-                // 3. companions table (add isArchived, updatedAt, dirty)
-                db.execSQL("ALTER TABLE companions ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE companions ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE companions ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0")
-
-                // 4. trip_tags table (trip_tags already has isArchived; add updatedAt, dirty)
-                db.execSQL("ALTER TABLE trip_tags ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE trip_tags ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0")
-
-                // 5. preferences_table table
-                db.execSQL("ALTER TABLE preferences_table ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE preferences_table ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0")
-
-                // 6. Data fix for 2.2 status: Just Me transactions with owedToMe == 0 migrated from 'Settled' to 'Personal'
-                db.execSQL("UPDATE transactions SET status = 'Personal' WHERE status = 'Settled' AND owedToMe = 0")
-            }
-        }
-
-        val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("CREATE TABLE IF NOT EXISTS `lineage` (`uuid` TEXT NOT NULL, `carried_from_uuid` TEXT NOT NULL, `root_uuid` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`uuid`))")
-                db.execSQL("ALTER TABLE sync_queue ADD COLUMN planJson TEXT")
-            }
-        }
-
-        val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS `pending_captures` (`id` TEXT NOT NULL, `sourcePackage` TEXT NOT NULL, `amount` REAL, `payee` TEXT NOT NULL, `inferredAccount` TEXT, `timestamp` INTEGER NOT NULL, `kind` TEXT NOT NULL, `flags` TEXT NOT NULL DEFAULT '', `state` TEXT NOT NULL, `notificationKey` TEXT, `contentHash` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
-                )
-                db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS `handled_notifications` (`key` TEXT NOT NULL, `postTime` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `handledAt` INTEGER NOT NULL, PRIMARY KEY(`key`, `postTime`))"
-                )
-            }
-        }
-
-        val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS `category_stats` (`payeeKey` TEXT NOT NULL, `category` TEXT NOT NULL, `count` INTEGER NOT NULL, `lastUsed` INTEGER NOT NULL, PRIMARY KEY(`payeeKey`, `category`))"
-                )
-            }
-        }
+        val MIGRATION_2_3 = DatabaseMigrations.MIGRATION_2_3
+        val MIGRATION_3_4 = DatabaseMigrations.MIGRATION_3_4
+        val MIGRATION_4_5 = DatabaseMigrations.MIGRATION_4_5
+        val MIGRATION_5_6 = DatabaseMigrations.MIGRATION_5_6
+        val MIGRATION_6_7 = DatabaseMigrations.MIGRATION_6_7
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -271,7 +227,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .openHelperFactory(openHelperFactory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .addCallback(DatabasePrepopulateCallback())
                 .build()
 
@@ -292,7 +248,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 context.applicationContext,
                 FinanceDatabase::class.java
             )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .allowMainThreadQueries()
                 .build()
         }
