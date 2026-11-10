@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CloudSync
@@ -22,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,9 +31,13 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import com.financeautomation.BuildConfig
 import com.financeautomation.R
+import com.financeautomation.core.utils.CrashlyticsManager
 import com.financeautomation.presentation.screens.SettingsCard
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
@@ -51,8 +57,10 @@ fun SettingsSyncSection(
     onRegenerateDashboard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var spreadsheetInput by remember(state.spreadsheetId) { mutableStateOf(state.spreadsheetId) }
     var sliderValue by remember(state.settleDelaySeconds) { mutableFloatStateOf(state.settleDelaySeconds.toFloat()) }
+    var isCrashlyticsOptedIn by remember { mutableStateOf(CrashlyticsManager.isOptedIn(context)) }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)) {
         // 1. Google Sheets Connection & Cloud Sync
@@ -161,6 +169,52 @@ fun SettingsSyncSection(
                 valueRange = 30f..300f,
                 steps = 8
             )
+        }
+
+        // 3. Reliability & Diagnostics (Crashlytics Opt-In)
+        SettingsCard(
+            title = stringResource(R.string.crashlytics_card_title),
+            subtitle = stringResource(R.string.crashlytics_card_desc),
+            icon = Icons.Rounded.BugReport
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.crashlytics_opt_in_title),
+                        style = FinanceTheme.typography.bodyMedium,
+                        color = FinanceTheme.colors.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.crashlytics_opt_in_desc),
+                        style = FinanceTheme.typography.labelSmall,
+                        color = FinanceTheme.colors.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(FinanceTheme.spacing.m))
+                Switch(
+                    checked = isCrashlyticsOptedIn,
+                    onCheckedChange = { checked ->
+                        isCrashlyticsOptedIn = checked
+                        CrashlyticsManager.setOptIn(context, checked)
+                    }
+                )
+            }
+
+            if (BuildConfig.DEBUG || BuildConfig.BUILD_TYPE == "beta") {
+                OutlinedButton(
+                    onClick = { CrashlyticsManager.triggerTestCrash() },
+                    shape = FinanceTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                    Text(stringResource(R.string.btn_test_crash))
+                }
+            }
         }
     }
 }
