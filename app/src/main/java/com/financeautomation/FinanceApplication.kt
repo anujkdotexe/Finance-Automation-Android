@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.res.Configuration
 import android.os.Bundle
 import com.financeautomation.core.utils.CrashlyticsManager
+import com.financeautomation.core.utils.DeviceSnapshot
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.LocalCrashRecorder
 import com.financeautomation.core.utils.PipelineCode
@@ -39,13 +40,15 @@ class FinanceApplication : Application() {
         PipelineTrail.initialize(applicationContext, Dispatchers.IO) {
             appContainer.awaitDatabase().pipelineEventDao()
         }
-        PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT)
+        val (snapshotA, snapshotB) = DeviceSnapshot.capture(applicationContext)
+        PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
 
         // 1. Pre-warm database on background thread and resume foreground watcher
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val db = appContainer.awaitDatabase()
                 db.openHelper.writableDatabase
+                DeviceSnapshot.updateCrashlyticsSummaries(applicationContext, snapshotA, db.pipelineEventDao())
                 // Reset incomplete SHOWN captures to WAITING
                 try {
                     db.pendingCaptureDao().resetShownToWaiting()
