@@ -109,3 +109,11 @@ data class LineageRecord(
     val createdAt: Long
 )
 
+/**
+ * Snapshot of ledger entries extracted from workbook tabs for waterfall and ranking processing.
+ */
+data class LedgerSnapshot(
+    val debits: List<LedgerDebit> = emptyList(),
+    val payables: List<LedgerPayable> = emptyList()
+)
+

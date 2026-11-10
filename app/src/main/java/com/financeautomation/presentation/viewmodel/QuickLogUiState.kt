@@ -1,0 +1,39 @@
+package com.financeautomation.presentation.viewmodel
+
+import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.model.SplitMode
+import com.financeautomation.domain.model.Account
+import com.financeautomation.domain.model.Category
+import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.TripTag
+
+/**
+ * UI state for Quick Log Bottom Sheet (Phase 5.3).
+ */
+data class QuickLogUiState(
+    val captureId: String? = null,
+    val sourcePackage: String = "manual",
+    val amountText: String = "",
+    val amount: Double = 0.0,
+    val payee: String = "",
+    val selectedAccount: String = CategoryConstants.ACCOUNT_SBI,
+    val selectedCategory: String = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
+    val splitMode: SplitMode = SplitMode.JUST_ME,
+    val availableAccounts: List<Account> = emptyList(),
+    val availableCategories: List<Category> = emptyList(),
+    val availableCompanions: List<Companion> = emptyList(),
+    val selectedCompanionIds: Set<String> = emptySet(),
+    val customShareText: String = "",
+    val customShare: Double? = null,
+    val myShare: Double = 0.0,
+    val owedToMe: Double = 0.0,
+    val activeTripTag: TripTag? = null,
+    val isNeedsAmount: Boolean = false,
+    val isPossibleDuplicate: Boolean = false,
+    val isSaving: Boolean = false,
+    val isSaved: Boolean = false,
+    val isDismissed: Boolean = false,
+    val resultMessage: String? = null,
+    val errorMessage: String? = null
+)
+

@@ -45,10 +45,16 @@ class QuickActionReceiver : BroadcastReceiver() {
             return
         }
 
+        val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
+            ?: intent.getStringExtra("capture_id")
+
         val txnId = intent.getStringExtra(EXTRA_TRANSACTION_ID)
             ?: intent.getStringExtra("txn_id")
             ?: intent.getStringExtra("txn_uuid")
-            ?: return
+
+        if (captureId.isNullOrBlank() && txnId.isNullOrBlank()) {
+            return
+        }
 
         val category = intent.getStringExtra(EXTRA_CATEGORY)
             ?: intent.getStringExtra("category_name")
@@ -65,19 +71,58 @@ class QuickActionReceiver : BroadcastReceiver() {
 
         CoroutineScope(SupervisorJob() + dispatcher).launch {
             try {
-                val repository = testRepository ?: app?.appContainer?.transactionRepository
-                if (repository != null) {
-                    val outcome = handleAction(
-                        action = action,
-                        txnId = txnId,
-                        category = category,
-                        repository = repository
-                    )
-                    if (outcome is QuickActionResult.Success) {
-                        try {
-                            SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
-                        } catch (e: Exception) {
-                            Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: enqueueExpedited")
+                val container = app?.appContainer
+                if (!captureId.isNullOrBlank() && container != null) {
+                    val db = container.awaitDatabase()
+                    val captureDao = db.pendingCaptureDao()
+                    val capture = captureDao.getById(captureId)
+                    if (capture != null) {
+                        val amount = capture.amount ?: 0.0
+                        val resolvedCategory = category ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
+                        val account = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: CategoryConstants.ACCOUNT_SBI
+
+                        if (amount > 0.0) {
+                            val logResult = container.logExpenseUseCase(
+                                amount = amount,
+                                merchant = capture.payee.ifBlank { "Expense" },
+                                category = resolvedCategory,
+                                account = account,
+                                sourcePackage = capture.sourcePackage,
+                                timestamp = capture.timestamp,
+                                reviewState = ReviewState.CONFIRMED
+                            )
+                            if (logResult is com.financeautomation.core.model.Result.Success<*>) {
+                                captureDao.updateState(capture.id, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+                                try {
+                                    val statDao = db.categoryStatDao()
+                                    val key = container.predictCategoryUseCase.computePayeeKey(capture.payee)
+                                    statDao.incrementStat(key, resolvedCategory, System.currentTimeMillis())
+                                } catch (statEx: Exception) {
+                                    Diagnostics.record("QuickActionReceiver", "${statEx.javaClass.simpleName}: incrementStat")
+                                }
+                                try {
+                                    SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
+                                } catch (e: Exception) {
+                                    Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: enqueueExpedited")
+                                }
+                            }
+                        }
+                    }
+                } else if (!txnId.isNullOrBlank()) {
+                    val repository = testRepository ?: container?.transactionRepository
+                    if (repository != null) {
+                        val outcome = handleAction(
+                            action = action,
+                            txnId = txnId,
+                            category = category,
+                            repository = repository
+                        )
+                        if (outcome is QuickActionResult.Success) {
+                            try {
+                                SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
+                            } catch (e: Exception) {
+                                Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: enqueueExpedited")
+                            }
                         }
                     }
                 }
@@ -92,6 +137,7 @@ class QuickActionReceiver : BroadcastReceiver() {
         const val ACTION_QUICK_CONFIRM: String = "com.financeautomation.ACTION_QUICK_CONFIRM"
 
         const val EXTRA_TRANSACTION_ID: String = "com.financeautomation.extra.TRANSACTION_ID"
+        const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
         const val EXTRA_CATEGORY: String = "com.financeautomation.extra.CATEGORY"
         const val EXTRA_NOTIFICATION_ID: String = "com.financeautomation.extra.NOTIFICATION_ID"
 

@@ -11,10 +11,19 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.PowerManager
 import android.os.Process
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.provider.Settings
+import androidx.core.app.NotificationCompat
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
-import com.financeautomation.presentation.ui.ModalBottomSheetActivity
+import com.financeautomation.domain.usecase.PredictCategoryUseCase
+import com.financeautomation.presentation.overlay.OverlayController
+import com.financeautomation.presentation.overlay.OverlayRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +45,9 @@ class ForegroundWatcher(
     private val context: Context,
     private val directPendingCaptureDao: PendingCaptureDao? = null,
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
+    private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
+    private val predictCategoryUseCase: PredictCategoryUseCase? = null,
+    private val overlayControllerProvider: (() -> OverlayController)? = null,
     private val onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
 ) {
 
@@ -47,17 +59,24 @@ class ForegroundWatcher(
         context = context,
         directPendingCaptureDao = pendingCaptureDao,
         pendingCaptureDaoProvider = null,
+        categoryStatDaoProvider = null,
+        predictCategoryUseCase = null,
+        overlayControllerProvider = null,
         onTriggerPrompt = onTriggerPrompt
     )
 
     constructor(
         context: Context,
         pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
+        overlayControllerProvider: (() -> OverlayController)? = null,
         onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
     ) : this(
         context = context,
         directPendingCaptureDao = null,
         pendingCaptureDaoProvider = pendingCaptureDaoProvider,
+        categoryStatDaoProvider = null,
+        predictCategoryUseCase = null,
+        overlayControllerProvider = overlayControllerProvider,
         onTriggerPrompt = onTriggerPrompt
     )
 
@@ -69,6 +88,7 @@ class ForegroundWatcher(
     private val mutex = Mutex()
     private var watcherJob: Job? = null
     private val pollCounters = ConcurrentHashMap<String, Int>()
+    private val failedRetryDelays = ConcurrentHashMap<String, Long>()
     private val wakeChannel = Channel<Unit>(Channel.CONFLATED)
 
     @Volatile
@@ -196,21 +216,53 @@ class ForegroundWatcher(
                         continue
                     }
 
+                    val isOverlayOpen = overlayControllerProvider?.invoke()?.isShowing == true
+                    if (isOverlayOpen) {
+                        withTimeoutOrNull(POLL_INTERVAL_MS) {
+                            wakeChannel.receive()
+                        }
+                        continue
+                    }
+
                     val hasAccess = hasUsageAccess()
+                    val now = System.currentTimeMillis()
 
                     for (capture in waitingList) {
+                        val nextAllowedTime = failedRetryDelays[capture.id] ?: 0L
+                        if (now < nextAllowedTime) {
+                            continue
+                        }
+
+                        if (overlayControllerProvider?.invoke()?.isShowing == true) {
+                            break
+                        }
+
                         if (!hasAccess) {
                             // Spec 4.3 Fallback: trigger immediately if usage access is absent
-                            triggerPrompt(capture)
-                            pollCounters.remove(capture.id)
+                            val shown = triggerPrompt(capture)
+                            if (shown) {
+                                pollCounters.remove(capture.id)
+                                failedRetryDelays.remove(capture.id)
+                                break
+                            } else {
+                                failedRetryDelays[capture.id] = now + FAILURE_BACKOFF_MS
+                                Diagnostics.record("ForegroundWatcher", "triggerPrompt deferred: backoff capture ${capture.id}")
+                            }
                         } else {
                             val inForeground = isInForeground(capture.sourcePackage)
                             if (!inForeground) {
                                 val currentCount = (pollCounters[capture.id] ?: 0) + 1
                                 pollCounters[capture.id] = currentCount
                                 if (currentCount >= REQUIRED_CONSECUTIVE_POLLS) {
-                                    triggerPrompt(capture)
-                                    pollCounters.remove(capture.id)
+                                    val shown = triggerPrompt(capture)
+                                    if (shown) {
+                                        pollCounters.remove(capture.id)
+                                        failedRetryDelays.remove(capture.id)
+                                        break
+                                    } else {
+                                        failedRetryDelays[capture.id] = now + FAILURE_BACKOFF_MS
+                                        Diagnostics.record("ForegroundWatcher", "triggerPrompt deferred: backoff capture ${capture.id}")
+                                    }
                                 }
                             } else {
                                 // Reset poll count if the app re-entered foreground
@@ -233,19 +285,27 @@ class ForegroundWatcher(
         }
     }
 
-    private suspend fun triggerPrompt(capture: PendingCaptureEntity) {
+    private suspend fun triggerPrompt(capture: PendingCaptureEntity): Boolean {
         val dao = resolveDao()
         try {
             dao.updateState(capture.id, PendingCaptureEntity.STATE_SHOWN)
             if (onTriggerPrompt != null) {
                 onTriggerPrompt.invoke(capture)
+                return true
             } else {
-                // Default launcher: start ModalBottomSheetActivity with EXTRA_CAPTURE_ID only
-                val intent = Intent(context, ModalBottomSheetActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra(ModalBottomSheetActivity.EXTRA_CAPTURE_ID, capture.id)
+                val controller = if (Settings.canDrawOverlays(context)) overlayControllerProvider?.invoke() else null
+                if (controller != null) {
+                    val shown = controller.show(OverlayRequest.Capture(capture.id))
+                    if (!shown) {
+                        dao.updateState(capture.id, PendingCaptureEntity.STATE_WAITING)
+                        return false
+                    }
+                    return true
+                } else {
+                    // Spec 5.5 point 2: Heads-up notification fallback when overlay permission or controller is absent
+                    postHeadsUpFallback(capture)
+                    return true
                 }
-                context.startActivity(intent)
             }
         } catch (e: Exception) {
             try {
@@ -253,8 +313,19 @@ class ForegroundWatcher(
             } catch (revertEx: Exception) {
                 Diagnostics.record("ForegroundWatcher", "${revertEx.javaClass.simpleName}: revertStateToWaiting")
             }
+            if (e is CancellationException) throw e
             Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: triggerPrompt failed")
+            return false
         }
+    }
+
+    private suspend fun postHeadsUpFallback(capture: PendingCaptureEntity) {
+        ForegroundHeadsUpHelper.postHeadsUpNotification(
+            context = context,
+            capture = capture,
+            categoryStatDaoProvider = categoryStatDaoProvider,
+            predictCategoryUseCase = predictCategoryUseCase
+        )
     }
 
     private fun registerScreenReceiver() {
@@ -291,5 +362,6 @@ class ForegroundWatcher(
     companion object {
         const val POLL_INTERVAL_MS: Long = 700L
         const val REQUIRED_CONSECUTIVE_POLLS: Int = 2
+        const val FAILURE_BACKOFF_MS: Long = 5000L
     }
 }

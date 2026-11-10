@@ -15,6 +15,7 @@ import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.data.repository.AccountRepositoryImpl
 import com.financeautomation.data.repository.CategoryRepositoryImpl
 import com.financeautomation.data.repository.ConfigRepositoryImpl
+import com.financeautomation.data.repository.PeopleListRebuilder
 import com.financeautomation.data.repository.PeopleRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
 import com.financeautomation.data.repository.TransactionRepositoryImpl
@@ -22,6 +23,7 @@ import com.financeautomation.data.repository.TripTagRepositoryImpl
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.service.ForegroundWatcher
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -33,8 +35,11 @@ import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
 import com.financeautomation.domain.usecase.CarryForwardUseCase
+import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
+import com.financeautomation.domain.usecase.LogExpenseUseCase
 import com.financeautomation.domain.usecase.NettingUseCase
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
+import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.domain.usecase.RegenerateDashboardUseCase
 import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
@@ -84,6 +89,8 @@ interface AppContainer {
     val syncConfigUseCase: SyncConfigUseCase
     val regenerateDashboardUseCase: RegenerateDashboardUseCase
     val calculateSplitUseCase: CalculateSplitUseCase
+    val logExpenseUseCase: LogExpenseUseCase
+    val predictCategoryUseCase: PredictCategoryUseCase
     val nettingUseCase: NettingUseCase
     val settlementWaterfallUseCase: SettlementWaterfallUseCase
     val repaymentWaterfallUseCase: RepaymentWaterfallUseCase
@@ -92,6 +99,9 @@ interface AppContainer {
     val yearCloseUseCase: YearCloseUseCase
     val accountingSyncExecutor: AccountingSyncExecutor
     val foregroundWatcher: ForegroundWatcher
+    val overlayController: OverlayController
+    val peopleListRebuilder: PeopleListRebuilder
+    val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase
 }
 
 /**
@@ -293,6 +303,17 @@ class DefaultAppContainer(
         CalculateSplitUseCase()
     }
 
+    override val logExpenseUseCase: LogExpenseUseCase by lazy {
+        LogExpenseUseCase(
+            transactionRepository = transactionRepository,
+            calculateSplitUseCase = calculateSplitUseCase
+        )
+    }
+
+    override val predictCategoryUseCase: PredictCategoryUseCase by lazy {
+        PredictCategoryUseCase()
+    }
+
     override val nettingUseCase: NettingUseCase by lazy {
         NettingUseCase()
     }
@@ -331,10 +352,48 @@ class DefaultAppContainer(
         )
     }
 
+    override val overlayController: OverlayController by lazy {
+        OverlayController(
+            context = applicationContext,
+            transactionRepository = transactionRepository,
+            peopleRepository = peopleRepository,
+            categoryRepository = categoryRepository,
+            accountRepository = accountRepository,
+            tripTagRepository = tripTagRepository,
+            pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
+            syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
+            predictCategoryUseCase = predictCategoryUseCase,
+            getOpenDebtsForPersonUseCase = getOpenDebtsForPersonUseCase,
+            ioDispatcher = ioDispatcher,
+            mainDispatcher = mainDispatcher
+        )
+    }
+
     override val foregroundWatcher: ForegroundWatcher by lazy {
         ForegroundWatcher(
             context = applicationContext,
-            pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() }
+            pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
+            categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
+            predictCategoryUseCase = predictCategoryUseCase,
+            overlayControllerProvider = { overlayController }
+        )
+    }
+
+    override val peopleListRebuilder: PeopleListRebuilder by lazy {
+        PeopleListRebuilder(
+            preferencesRepository = preferencesRepository,
+            googleSheetsClient = googleSheetsClient,
+            peopleRepository = peopleRepository,
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase by lazy {
+        GetOpenDebtsForPersonUseCase(
+            preferencesRepository = preferencesRepository,
+            googleSheetsClient = googleSheetsClient,
+            ioDispatcher = ioDispatcher
         )
     }
 }
