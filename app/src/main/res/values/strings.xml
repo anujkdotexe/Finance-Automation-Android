@@ -61,4 +61,18 @@
     <string name="health_self_test_failed">Self-test failed: Overlay permission missing or window failed to attach</string>
     <string name="health_advanced_title">Advanced Diagnostics</string>
     <string name="health_advanced_subtitle">In-memory lifecycle and error diagnostic events</string>
+
+    <!-- OEM Hardening Instructions (Phase 7.3) -->
+    <string name="oem_brand_samsung">Samsung</string>
+    <string name="oem_brand_xiaomi">Xiaomi / Redmi / Poco</string>
+    <string name="oem_brand_oppo">Oppo / Realme</string>
+    <string name="oem_brand_vivo">Vivo / iQOO</string>
+    <string name="oem_brand_oneplus">OnePlus</string>
+    <string name="oem_brand_default">Standard Android</string>
+    <string name="oem_instructions_samsung">Remove the app from sleeping and deep-sleeping apps; set battery to Unrestricted</string>
+    <string name="oem_instructions_xiaomi">Turn on Autostart; allow \"Display pop-up windows while running in the background\"; battery saver No restrictions; lock the app in Recents</string>
+    <string name="oem_instructions_oppo">Allow auto-start and background activity; allow in the battery manager</string>
+    <string name="oem_instructions_vivo">Allow auto-start; allow background pop-up; turn off high background power consumption restriction</string>
+    <string name="oem_instructions_oneplus">Battery optimisation set to Don\'t optimise; allow auto-launch</string>
+    <string name="oem_instructions_default">Standard permissions only. Ensure battery optimization is disabled for reliable expense interception.</string>
 </resources>
