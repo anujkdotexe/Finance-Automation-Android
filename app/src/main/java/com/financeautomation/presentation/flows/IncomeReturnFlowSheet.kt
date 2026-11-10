@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -41,12 +39,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
  * Open debit row representation for the Friend Settlement bill picker.
@@ -85,8 +85,14 @@ fun IncomeReturnFlowSheet(
     val defaultAccount = accounts.firstOrNull { it.isDefault }?.name ?: accounts.firstOrNull()?.name ?: "Cash"
     var selectedAccount by remember { mutableStateOf(defaultAccount) }
 
-    val inflowTypes = listOf("Friend Settlement", "Salary/Stipend", "Allowance", "Other")
-    var selectedInflowType by remember { mutableStateOf(inflowTypes[0]) }
+    val friendSettlement = stringResource(R.string.inflow_type_friend)
+    val salaryStipend = stringResource(R.string.inflow_type_income)
+    val refundReturn = stringResource(R.string.inflow_type_return)
+    val transfer = stringResource(R.string.inflow_type_transfer)
+    val inflowTypes = remember(friendSettlement, salaryStipend, refundReturn, transfer) {
+        listOf(friendSettlement, salaryStipend, refundReturn, transfer)
+    }
+    var selectedInflowType by remember { mutableStateOf(friendSettlement) }
 
     var settlerName by remember { mutableStateOf("") }
     var reasonText by remember { mutableStateOf("") }
@@ -100,20 +106,20 @@ fun IncomeReturnFlowSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Grabber Pill
         Box(
             modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
+                .width(FinanceTheme.sizes.grabberWidth)
+                .height(FinanceTheme.sizes.grabberHeight)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                .background(FinanceTheme.colors.outline.copy(alpha = 0.4f))
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Header Row
         Row(
@@ -125,45 +131,45 @@ fun IncomeReturnFlowSheet(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(FinanceTheme.sizes.icon28)
                     .clickable { onBack() }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(R.string.cd_back),
+                        tint = FinanceTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
                 }
             }
 
             Text(
-                text = "Income / Return",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.action_menu_income_title),
+                style = FinanceTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = FinanceTheme.colors.onSurface
             )
 
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(FinanceTheme.sizes.icon28)
                     .clickable { onDismiss() }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(R.string.cd_close),
+                        tint = FinanceTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Amount Input Field
         OutlinedTextField(
@@ -173,31 +179,30 @@ fun IncomeReturnFlowSheet(
                     amountText = input
                 }
             },
-            label = { Text("Amount (Rs.)") },
-            placeholder = { Text("0.00") },
+            label = { Text(stringResource(R.string.prompt_amount_received)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = RoundedCornerShape(16.dp)
+            shape = FinanceTheme.shapes.large
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Inflow Type Filter Chips
         Text(
-            text = "Inflow Type",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = stringResource(R.string.prompt_inflow_type),
+            style = FinanceTheme.typography.labelMedium,
+            color = FinanceTheme.colors.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             inflowTypes.forEach { type ->
                 FilterChip(
@@ -205,28 +210,28 @@ fun IncomeReturnFlowSheet(
                     onClick = { selectedInflowType = type },
                     label = { Text(type) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedContainerColor = FinanceTheme.colors.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Account Chips
         Text(
-            text = "Receiving Account",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = stringResource(R.string.prompt_receiving_account),
+            style = FinanceTheme.typography.labelMedium,
+            color = FinanceTheme.colors.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             accounts.forEach { account ->
                 FilterChip(
@@ -234,29 +239,33 @@ fun IncomeReturnFlowSheet(
                     onClick = { selectedAccount = account.name },
                     label = { Text(account.name) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedContainerColor = FinanceTheme.colors.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Who Sent It (Companion chips + text input)
         Text(
-            text = if (selectedInflowType == "Friend Settlement") "Who Settled (Friend)" else "Sender / Source",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = if (selectedInflowType == friendSettlement) {
+                stringResource(R.string.prompt_who_settled)
+            } else {
+                stringResource(R.string.prompt_sender_source)
+            },
+            style = FinanceTheme.typography.labelMedium,
+            color = FinanceTheme.colors.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         if (companions.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 companions.take(6).forEach { companion ->
                     FilterChip(
@@ -269,7 +278,7 @@ fun IncomeReturnFlowSheet(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         }
 
         OutlinedTextField(
@@ -278,20 +287,19 @@ fun IncomeReturnFlowSheet(
                 settlerName = it
                 onPersonChanged(it)
             },
-            label = { Text("Name") },
-            placeholder = { Text("e.g. Rohit, Rohit Kumar, Employer") },
+            label = { Text(stringResource(R.string.prompt_who_sent_this)) },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = RoundedCornerShape(16.dp)
+            shape = FinanceTheme.shapes.large
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Bill Picker for Friend Settlement (if open debts exist for this person)
-        if (selectedInflowType == "Friend Settlement" && openDebts.isNotEmpty()) {
+        if (selectedInflowType == friendSettlement && openDebts.isNotEmpty()) {
             OpenDebtPickerSection(
                 openDebts = openDebts,
                 autoSettleAll = autoSettleAll,
@@ -307,27 +315,26 @@ fun IncomeReturnFlowSheet(
         OutlinedTextField(
             value = reasonText,
             onValueChange = { reasonText = it },
-            label = { Text("Reason / Note") },
-            placeholder = { Text("e.g. Dinner settlement, October salary") },
+            label = { Text(stringResource(R.string.prompt_reason_note)) },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = RoundedCornerShape(16.dp)
+            shape = FinanceTheme.shapes.large
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
         // Confirm & Save Button
         val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
-        val isValid = parsedAmount > 0.0 && (selectedInflowType != "Friend Settlement" || settlerName.isNotBlank())
+        val isValid = parsedAmount > 0.0 && (selectedInflowType != friendSettlement || settlerName.isNotBlank())
 
         Button(
             onClick = {
                 val refs = if (autoSettleAll) emptyList() else selectedDebtIds.toList()
                 val effectiveReason = reasonText.ifBlank {
-                    if (selectedInflowType == "Friend Settlement") "Settlement from $settlerName" else selectedInflowType
+                    if (selectedInflowType == friendSettlement) "Settlement from $settlerName" else selectedInflowType
                 }
                 onConfirm(
                     parsedAmount,
@@ -341,23 +348,22 @@ fun IncomeReturnFlowSheet(
             enabled = isValid,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
+                .height(FinanceTheme.sizes.buttonHeightLarge),
+            shape = FinanceTheme.shapes.large
         ) {
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(FinanceTheme.sizes.icon18)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
             Text(
-                text = "Record Income",
-                style = MaterialTheme.typography.labelLarge,
+                text = stringResource(R.string.btn_record_inflow),
+                style = FinanceTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
     }
 }
-

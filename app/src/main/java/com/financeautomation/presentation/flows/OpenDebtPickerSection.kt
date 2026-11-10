@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import com.financeautomation.R
+import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
  * Picker section for selecting open debits to reconcile in Friend Settlement (Phase 5.6 point 2).
@@ -31,30 +33,30 @@ fun OpenDebtPickerSection(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Select Open Debits to Reconcile",
-            style = MaterialTheme.typography.labelMedium,
+            text = stringResource(R.string.prompt_select_bill_to_settle),
+            style = FinanceTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = FinanceTheme.colors.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
         // Auto-Settle All option
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onToggleAutoSettle(true) }
-                .padding(vertical = 4.dp),
+                .padding(vertical = FinanceTheme.spacing.xs),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
                 checked = autoSettleAll,
                 onCheckedChange = { onToggleAutoSettle(it) }
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
             Text(
-                text = "Auto-Settle (All / Oldest First)",
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.prompt_auto_settle),
+                style = FinanceTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -69,7 +71,7 @@ fun OpenDebtPickerSection(
                         if (isSelected) selectedDebtIds.remove(debt.uuid) else selectedDebtIds.add(debt.uuid)
                         if (selectedDebtIds.isEmpty()) onToggleAutoSettle(true) else onToggleAutoSettle(false)
                     }
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = FinanceTheme.spacing.xs),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
@@ -79,15 +81,14 @@ fun OpenDebtPickerSection(
                         if (selectedDebtIds.isEmpty()) onToggleAutoSettle(true) else onToggleAutoSettle(false)
                     }
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                 Text(
                     text = debt.displayLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = FinanceTheme.typography.bodySmall,
+                    color = FinanceTheme.colors.onSurface
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
     }
 }
-

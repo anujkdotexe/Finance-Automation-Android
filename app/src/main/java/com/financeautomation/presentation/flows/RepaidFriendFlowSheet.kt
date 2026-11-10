@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -38,11 +37,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.presentation.theme.FinanceTheme
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -70,20 +71,20 @@ fun RepaidFriendFlowSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Grabber Pill
         Box(
             modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
+                .width(FinanceTheme.sizes.grabberWidth)
+                .height(FinanceTheme.sizes.grabberHeight)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                .background(FinanceTheme.colors.outline.copy(alpha = 0.4f))
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Header Row
         Row(
@@ -95,60 +96,60 @@ fun RepaidFriendFlowSheet(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(FinanceTheme.sizes.icon28)
                     .clickable { onBack() }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(R.string.cd_back),
+                        tint = FinanceTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
                 }
             }
 
             Text(
-                text = "Repaid a Friend",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.action_menu_repaid_friend_title),
+                style = FinanceTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = FinanceTheme.colors.onSurface
             )
 
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(FinanceTheme.sizes.icon28)
                     .clickable { onDismiss() }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(R.string.cd_close),
+                        tint = FinanceTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Who Did You Repay (Companion chips + text input)
         Text(
-            text = "Who Did You Repay",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = stringResource(R.string.prompt_who_did_you_repay),
+            style = FinanceTheme.typography.labelMedium,
+            color = FinanceTheme.colors.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         if (companions.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 companions.take(6).forEach { companion ->
                     FilterChip(
@@ -158,23 +159,22 @@ fun RepaidFriendFlowSheet(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         }
 
         OutlinedTextField(
             value = personName,
             onValueChange = { personName = it },
-            label = { Text("Friend's Name") },
-            placeholder = { Text("e.g. Rohit") },
+            label = { Text(stringResource(R.string.hint_friends_name)) },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = RoundedCornerShape(16.dp)
+            shape = FinanceTheme.shapes.large
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Amount Input Field (Mandatory)
         OutlinedTextField(
@@ -184,31 +184,30 @@ fun RepaidFriendFlowSheet(
                     amountText = input
                 }
             },
-            label = { Text("Amount Repaid (Rs.) *") },
-            placeholder = { Text("0.00") },
+            label = { Text(stringResource(R.string.prompt_enter_amount)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = RoundedCornerShape(16.dp)
+            shape = FinanceTheme.shapes.large
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Date Field (Defaults to today)
         OutlinedTextField(
             value = dateText,
             onValueChange = { dateText = it },
-            label = { Text("Date (YYYY-MM-DD)") },
+            label = { Text(stringResource(R.string.prompt_date_repaid)) },
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = RoundedCornerShape(16.dp)
+            shape = FinanceTheme.shapes.large
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
         // Confirm Button
         val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
@@ -226,23 +225,22 @@ fun RepaidFriendFlowSheet(
             enabled = isValid,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
+                .height(FinanceTheme.sizes.buttonHeightLarge),
+            shape = FinanceTheme.shapes.large
         ) {
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(FinanceTheme.sizes.icon18)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
             Text(
-                text = "Record Repayment",
-                style = MaterialTheme.typography.labelLarge,
+                text = stringResource(R.string.btn_record_repayment),
+                style = FinanceTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
     }
 }
-

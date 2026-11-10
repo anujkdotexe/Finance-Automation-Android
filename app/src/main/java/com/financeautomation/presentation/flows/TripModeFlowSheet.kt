@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,10 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.domain.model.TripTag
+import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
  * Flow sheet for managing Trip Mode (Phase 5.6 point 5).
@@ -64,20 +65,20 @@ fun TripModeFlowSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Grabber Pill
         Box(
             modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
+                .width(FinanceTheme.sizes.grabberWidth)
+                .height(FinanceTheme.sizes.grabberHeight)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                .background(FinanceTheme.colors.outline.copy(alpha = 0.4f))
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Header Row
         Row(
@@ -89,187 +90,185 @@ fun TripModeFlowSheet(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(FinanceTheme.sizes.icon28)
                     .clickable { onBack() }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(R.string.cd_back),
+                        tint = FinanceTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
                 }
             }
 
             Text(
-                text = "Trip Mode",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.action_menu_trip_mode_title),
+                style = FinanceTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = FinanceTheme.colors.onSurface
             )
 
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(FinanceTheme.sizes.icon28)
                     .clickable { onDismiss() }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(R.string.cd_close),
+                        tint = FinanceTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         if (activeTag != null) {
             // Active Trip Display
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                shape = FinanceTheme.shapes.dialog,
+                color = FinanceTheme.colors.primaryContainer.copy(alpha = 0.4f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(FinanceTheme.spacing.l),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Flight,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
+                        tint = FinanceTheme.colors.primary,
+                        modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
                     Text(
-                        text = "Active Trip",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.prompt_active_trip_tag),
+                        style = FinanceTheme.typography.labelLarge,
+                        color = FinanceTheme.colors.onSurfaceVariant
                     )
                     Text(
                         text = activeTag.name,
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = FinanceTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = FinanceTheme.colors.onSurface
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
                     Text(
-                        text = "All newly logged expenses will be tagged automatically with this trip.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.trip_active_desc),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = FinanceTheme.colors.onSurfaceVariant
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xl))
 
             // Action Buttons for Active Trip
             Button(
                 onClick = onEndTrip,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
+                    containerColor = FinanceTheme.colors.error,
                     contentColor = MaterialTheme.colorScheme.onError
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .height(FinanceTheme.sizes.buttonHeightLarge),
+                shape = FinanceTheme.shapes.large
             ) {
                 Text(
-                    text = "End Trip",
-                    style = MaterialTheme.typography.labelLarge,
+                    text = stringResource(R.string.btn_end_trip),
+                    style = FinanceTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
             OutlinedButton(
                 onClick = onDismiss,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .height(FinanceTheme.sizes.buttonHeightLarge),
+                shape = FinanceTheme.shapes.large
             ) {
                 Text(
-                    text = "Keep Active",
-                    style = MaterialTheme.typography.labelLarge,
+                    text = stringResource(R.string.action_cancel),
+                    style = FinanceTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium
                 )
             }
         } else {
             // No Active Trip - Start Trip Prompt
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = FinanceTheme.shapes.dialog,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(FinanceTheme.spacing.l),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.FlightTakeoff,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
+                        tint = FinanceTheme.colors.primary,
+                        modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
                     Text(
-                        text = "Start Trip Mode",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = stringResource(R.string.btn_start_trip),
+                        style = FinanceTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = FinanceTheme.colors.onSurface
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
                     Text(
-                        text = "Tag every expense on vacation or group travel with a shared trip identifier.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.trip_active_desc),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = FinanceTheme.colors.onSurfaceVariant
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
             OutlinedTextField(
                 value = tagNameText,
                 onValueChange = { tagNameText = it },
-                label = { Text("Trip Name") },
-                placeholder = { Text("e.g. Goa 2026, Ladakh, Offsite") },
+                label = { Text(stringResource(R.string.prompt_enter_trip_tag)) },
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-                shape = RoundedCornerShape(16.dp)
+                shape = FinanceTheme.shapes.large
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
             Button(
                 onClick = { onStartTrip(tagNameText.trim()) },
                 enabled = tagNameText.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .height(FinanceTheme.sizes.buttonHeightLarge),
+                shape = FinanceTheme.shapes.large
             ) {
                 Text(
-                    text = "Start Trip",
-                    style = MaterialTheme.typography.labelLarge,
+                    text = stringResource(R.string.btn_start_trip),
+                    style = FinanceTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
     }
 }
-

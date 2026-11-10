@@ -14,12 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,28 +22,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import com.financeautomation.FinanceApplication
-import com.financeautomation.presentation.components.AppleExpensePromptSheet
+import com.financeautomation.R
+import com.financeautomation.presentation.components.QuickLogSheet
+import com.financeautomation.presentation.components.SheetScaffold
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
-import com.financeautomation.presentation.viewmodel.ExpenseViewModel
+import com.financeautomation.presentation.theme.FinanceTheme
+import com.financeautomation.presentation.viewmodel.QuickLogViewModel
+import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
 
 /**
  * Transparent Activity hosting the interactive Floating Modal Bottom Sheet for expense splitting and categorization.
- * Floats directly over the home screen or third-party UPI apps (Dynamic Island / Apple Shortcuts style)
+ * Floats directly over the home screen or third-party UPI apps
  * with a dimmed translucent backdrop and 1-tap outside dismissal.
  */
 class ModalBottomSheetActivity : ComponentActivity() {
 
-    private val expenseViewModel: ExpenseViewModel by viewModels {
+    private val quickLogViewModel: QuickLogViewModel by viewModels {
         val app = application as FinanceApplication
-        ExpenseViewModel.provideFactory(
+        QuickLogViewModelFactory(
             transactionRepository = app.appContainer.transactionRepository,
             peopleRepository = app.appContainer.peopleRepository,
             categoryRepository = app.appContainer.categoryRepository,
             accountRepository = app.appContainer.accountRepository,
+            tripTagRepository = app.appContainer.tripTagRepository,
             pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
+            syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
+            categoryStatDaoProvider = { app.appContainer.awaitDatabase().categoryStatDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -69,7 +71,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
 
         setContent {
             FinanceAutomationTheme(transparentSystemBars = true) {
-                val state by expenseViewModel.uiState.collectAsState()
+                val state by quickLogViewModel.uiState.collectAsState()
 
                 LaunchedEffect(state.isSaved, state.isVoided) {
                     if (state.isSaved || state.isVoided) {
@@ -88,34 +90,32 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         ) { dismissSafely() },
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    // Floating Bottom Sheet Island (Apple Shortcuts & Dynamic Island Style)
-                    Surface(
+                    // Floating Bottom Sheet using unified SheetScaffold
+                    SheetScaffold(
+                        title = when {
+                            state.transactionId != null -> stringResource(R.string.prompt_enter_amount)
+                            state.captureId != null -> stringResource(R.string.badge_payment_intercepted)
+                            else -> stringResource(R.string.prompt_enter_amount)
+                        },
+                        onDismiss = { dismissSafely() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 14.dp, vertical = 14.dp)
-                            .heightIn(max = 540.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { /* consume click to prevent backdrop dismissal */ },
-                        shape = RoundedCornerShape(32.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 6.dp,
-                        shadowElevation = 24.dp
+                            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m)
                     ) {
-                        AppleExpensePromptSheet(
+                        QuickLogSheet(
                             state = state,
-                            onAmountChanged = expenseViewModel::onAmountChanged,
-                            onMerchantChanged = expenseViewModel::onMerchantChanged,
-                            onCategorySelected = expenseViewModel::onCategorySelected,
-                            onSplitModeChanged = expenseViewModel::onSplitModeChanged,
-                            onCompanionToggled = expenseViewModel::onCompanionToggled,
-                            onAddCompanion = expenseViewModel::onAddNewCompanion,
-                            onCustomShareChanged = expenseViewModel::onCustomShareChanged,
-                            onConfirmAndSave = expenseViewModel::onConfirmAndSave,
-                            onVoid = expenseViewModel::onVoid,
-                            onCancel = { dismissSafely() }
+                            onAmountChanged = quickLogViewModel::onAmountChanged,
+                            onPayeeChanged = quickLogViewModel::onPayeeChanged,
+                            onAccountSelected = quickLogViewModel::onAccountSelected,
+                            onCategorySelected = quickLogViewModel::onCategorySelected,
+                            onSplitModeChanged = quickLogViewModel::onSplitModeChanged,
+                            onCompanionToggled = quickLogViewModel::onCompanionToggled,
+                            onAddCompanion = quickLogViewModel::onAddNewCompanion,
+                            onCustomShareChanged = quickLogViewModel::onCustomShareChanged,
+                            onEndTrip = quickLogViewModel::onEndTrip,
+                            onConfirmAndSave = { quickLogViewModel.onConfirmAndSave { dismissSafely() } },
+                            onDismiss = { dismissSafely() },
+                            onVoid = { quickLogViewModel.onVoid { dismissSafely() } }
                         )
                     }
                 }
@@ -124,7 +124,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
     }
 
     private fun dismissSafely() {
-        expenseViewModel.onDismissCapture()
+        quickLogViewModel.onDismiss()
         finish()
         overridePendingTransition(0, 0)
     }
@@ -148,13 +148,13 @@ class ModalBottomSheetActivity : ComponentActivity() {
 
         when {
             !captureId.isNullOrBlank() -> {
-                expenseViewModel.loadCapture(captureId)
+                quickLogViewModel.loadCapture(captureId)
             }
             !txnId.isNullOrBlank() -> {
-                expenseViewModel.loadTransaction(txnId)
+                quickLogViewModel.loadTransaction(txnId)
             }
             else -> {
-                expenseViewModel.clearState()
+                quickLogViewModel.setManualMode()
             }
         }
     }

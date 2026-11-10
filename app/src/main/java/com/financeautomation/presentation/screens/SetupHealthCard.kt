@@ -27,10 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HealthAndSafety
-import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,7 @@ import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.presentation.health.OemHardeningHelper
 import com.financeautomation.presentation.overlay.OverlayController
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.HealthCheckId
 import com.financeautomation.presentation.viewmodel.HealthCheckItem
 import com.financeautomation.presentation.viewmodel.HealthStatus
@@ -77,7 +79,7 @@ fun SetupHealthCard(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val state = viewModel.uiState.value
+    val state by viewModel.uiState.collectAsState()
 
     var selfTestResultText by remember { mutableStateOf<String?>(null) }
     var selfTestSucceeded by remember { mutableStateOf<Boolean?>(null) }
@@ -103,28 +105,28 @@ fun SetupHealthCard(
     val oemInfo = remember { OemHardeningHelper.getOemInfo() }
 
     SettingsCard(
-        title = "Setup Health & System Hardening",
-        subtitle = "Verify all 7 background capture dependencies and permissions",
+        title = stringResource(R.string.health_setup_title),
+        subtitle = stringResource(R.string.health_setup_subtitle),
         icon = Icons.Rounded.HealthAndSafety,
         modifier = modifier
     ) {
         // 1. Force-stop warning text required by Spec 7.4
         Surface(
             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(12.dp),
+            shape = FinanceTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(FinanceTheme.spacing.m),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Warning,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                 Text(
                     text = stringResource(R.string.health_force_stop_warning),
                     style = MaterialTheme.typography.bodySmall,
@@ -134,22 +136,22 @@ fun SetupHealthCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
         AnimatedVisibility(visible = fallbackInstructionText != null) {
             fallbackInstructionText?.let { text ->
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = FinanceTheme.shapes.small,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp)
+                        .padding(bottom = FinanceTheme.spacing.s)
                 ) {
                     Text(
                         text = text,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(10.dp)
+                        modifier = Modifier.padding(FinanceTheme.spacing.s)
                     )
                 }
             }
@@ -191,10 +193,10 @@ fun SetupHealthCard(
                     stringResource(oemInfo.instructionRes)
                 } else null
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
         // 3. Self-Test Simulation Section
         Row(
@@ -220,14 +222,14 @@ fun SetupHealthCard(
                         }
                     }
                 },
-                shape = RoundedCornerShape(10.dp)
+                shape = FinanceTheme.shapes.card
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
                 Text(stringResource(R.string.health_self_test_button))
             }
         }
@@ -237,14 +239,14 @@ fun SetupHealthCard(
                 val isSuccess = selfTestSucceeded == true
                 Surface(
                     color = if (isSuccess) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    shape = FinanceTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth().padding(top = FinanceTheme.spacing.s)
                 ) {
                     Text(
                         text = text,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isSuccess) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(10.dp)
+                        modifier = Modifier.padding(FinanceTheme.spacing.s)
                     )
                 }
             }
@@ -261,34 +263,34 @@ private fun HealthCheckRow(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        shape = RoundedCornerShape(12.dp),
+        shape = FinanceTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(FinanceTheme.spacing.m)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 val (statusBg, statusTint, statusIcon) = when (item.status) {
                     HealthStatus.OK -> Triple(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, Icons.Rounded.CheckCircle)
                     HealthStatus.MISSING -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer, Icons.Rounded.ErrorOutline)
-                    HealthStatus.UNKNOWN -> Triple(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, Icons.Rounded.HelpOutline)
+                    HealthStatus.UNKNOWN -> Triple(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, Icons.AutoMirrored.Rounded.HelpOutline)
                 }
-                Box(modifier = Modifier.size(24.dp).background(statusBg, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(statusIcon, contentDescription = null, tint = statusTint, modifier = Modifier.size(16.dp))
+                Box(modifier = Modifier.size(FinanceTheme.sizes.iconLarge).background(statusBg, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(statusIcon, contentDescription = null, tint = statusTint, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                 }
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = stringResource(item.titleRes), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Text(text = stringResource(item.descriptionRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!item.detailText.isNullOrBlank()) {
-                        Text(text = "Status: ${item.detailText}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                        Text(text = stringResource(R.string.health_status_format, item.detailText), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                     }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                 if (item.status == HealthStatus.MISSING && item.canFix) {
                     Button(
                         onClick = onFix,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(34.dp)
+                        shape = FinanceTheme.shapes.small,
+                        modifier = Modifier.height(FinanceTheme.sizes.buttonHeightSmall)
                     ) {
                         Text(text = stringResource(R.string.health_fix_button), style = MaterialTheme.typography.labelMedium)
                     }
@@ -298,16 +300,16 @@ private fun HealthCheckRow(
             }
 
             if (item.id == HealthCheckId.OEM_BACKGROUND) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
                 if (!oemInstruction.isNullOrBlank()) {
-                    Text(text = oemInstruction, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 34.dp))
+                    Text(text = oemInstruction, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = FinanceTheme.sizes.buttonHeightSmall))
                 }
-                Row(modifier = Modifier.fillMaxWidth().padding(start = 24.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().padding(start = FinanceTheme.sizes.iconLarge, top = FinanceTheme.sizes.badgeOffset), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = item.isOemToggleDone, onCheckedChange = onToggleOemDone, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
-                    Text(text = "Configured on this device", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                    Text(text = stringResource(R.string.health_oem_configured), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = onFix, shape = RoundedCornerShape(8.dp), modifier = Modifier.height(32.dp)) {
-                        Text(text = "Open OEM settings", style = MaterialTheme.typography.labelSmall)
+                    OutlinedButton(onClick = onFix, shape = FinanceTheme.shapes.small, modifier = Modifier.height(FinanceTheme.sizes.buttonHeightSmall)) {
+                        Text(text = stringResource(R.string.health_oem_open_settings), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
@@ -102,7 +103,7 @@ object ForegroundHeadsUpHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val amountStr = capture.amount?.let { "₹" + String.format(java.util.Locale.US, "%.2f", it) } ?: "Pending review"
+        val amountStr = capture.amount?.let { formatRupees(it, includeDecimals = true) } ?: "Pending review"
         val titleText = if (capture.payee.isNotBlank()) capture.payee else "Payment Detected"
 
         val builder = NotificationCompat.Builder(context, NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS)

@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,9 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -28,29 +29,31 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.FinanceApplication
-import com.financeautomation.presentation.components.ExpenseBottomSheet
+import com.financeautomation.R
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.screens.DashboardScreen
 import com.financeautomation.presentation.screens.OnboardingScreen
 import com.financeautomation.presentation.screens.ReviewInboxScreen
 import com.financeautomation.presentation.screens.SettingsScreen
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
-import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModelFactory
-import androidx.compose.runtime.collectAsState
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
@@ -80,18 +83,6 @@ class MainActivity : ComponentActivity() {
             transactionRepository = app.appContainer.transactionRepository,
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
             categoryRepository = app.appContainer.categoryRepository,
-            ioDispatcher = app.appContainer.ioDispatcher
-        )
-    }
-
-    private val expenseViewModel: ExpenseViewModel by viewModels {
-        val app = application as FinanceApplication
-        ExpenseViewModel.provideFactory(
-            transactionRepository = app.appContainer.transactionRepository,
-            peopleRepository = app.appContainer.peopleRepository,
-            categoryRepository = app.appContainer.categoryRepository,
-            accountRepository = app.appContainer.accountRepository,
-            pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -164,7 +155,6 @@ class MainActivity : ComponentActivity() {
                         MainScreen(
                             reviewInboxViewModel = reviewInboxViewModel,
                             dashboardViewModel = dashboardViewModel,
-                            expenseViewModel = expenseViewModel,
                             settingsViewModel = settingsViewModel,
                             setupHealthViewModel = setupHealthViewModel,
                             overlayControllerProvider = { app.appContainer.overlayController },
@@ -182,15 +172,14 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(
     reviewInboxViewModel: ReviewInboxViewModel,
     dashboardViewModel: DashboardViewModel,
-    expenseViewModel: ExpenseViewModel,
     settingsViewModel: SettingsViewModel,
     setupHealthViewModel: SetupHealthViewModel,
     overlayControllerProvider: () -> OverlayController,
     onReRunSetup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var currentDestination by remember { mutableStateOf(MainNavDestination.INBOX) }
-    var showManualAddSheet by remember { mutableStateOf(false) }
     val healthState by setupHealthViewModel.uiState.collectAsState()
 
     Scaffold(
@@ -200,9 +189,9 @@ fun MainScreen(
                     Column {
                         Text(
                             text = when (currentDestination) {
-                                MainNavDestination.INBOX -> "Needs Review"
-                                MainNavDestination.DASHBOARD -> "Dashboard & Queue"
-                                MainNavDestination.SETTINGS -> "Settings & Sync"
+                                MainNavDestination.INBOX -> stringResource(R.string.nav_inbox_title)
+                                MainNavDestination.DASHBOARD -> stringResource(R.string.nav_dashboard_title)
+                                MainNavDestination.SETTINGS -> stringResource(R.string.nav_settings_title)
                             },
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
@@ -210,9 +199,9 @@ fun MainScreen(
                         )
                         Text(
                             text = when (currentDestination) {
-                                MainNavDestination.INBOX -> "Automated UPI & Card Interceptions"
-                                MainNavDestination.DASHBOARD -> "Live Monthly KPIs & Sync Status"
-                                MainNavDestination.SETTINGS -> "Google Sheets & Split Configuration"
+                                MainNavDestination.INBOX -> stringResource(R.string.nav_inbox_subtitle)
+                                MainNavDestination.DASHBOARD -> stringResource(R.string.nav_dashboard_subtitle)
+                                MainNavDestination.SETTINGS -> stringResource(R.string.nav_settings_subtitle)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -228,7 +217,7 @@ fun MainScreen(
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp
+                tonalElevation = FinanceTheme.spacing.xs
             ) {
                 MainNavDestination.values().forEach { destination ->
                     val isSelected = currentDestination == destination
@@ -247,18 +236,18 @@ fun MainScreen(
                                     Icon(
                                         imageVector = Icons.Rounded.Tune,
                                         contentDescription = destination.label,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                                     )
                                 }
                             } else {
                                 Icon(
                                     imageVector = when (destination) {
-                                        MainNavDestination.INBOX -> Icons.Rounded.ReceiptLong
+                                        MainNavDestination.INBOX -> Icons.AutoMirrored.Rounded.ReceiptLong
                                         MainNavDestination.DASHBOARD -> Icons.Rounded.Dashboard
                                         MainNavDestination.SETTINGS -> Icons.Rounded.Tune
                                     },
                                     contentDescription = destination.label,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                                 )
                             }
                         },
@@ -277,20 +266,19 @@ fun MainScreen(
             if (currentDestination == MainNavDestination.INBOX) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        expenseViewModel.clearState()
-                        showManualAddSheet = true
+                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java))
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     icon = {
                         Icon(
                             imageVector = Icons.Rounded.Add,
-                            contentDescription = "Log Expense"
+                            contentDescription = stringResource(R.string.quick_add_tile_label)
                         )
                     },
                     text = {
                         Text(
-                            text = "Log Expense",
+                            text = stringResource(R.string.quick_add_tile_label),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -303,13 +291,21 @@ fun MainScreen(
             MainNavDestination.INBOX -> {
                 ReviewInboxScreen(
                     reviewInboxViewModel = reviewInboxViewModel,
-                    expenseViewModel = expenseViewModel,
+                    onEditTransaction = { txn ->
+                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java).apply {
+                            putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, txn.id)
+                        })
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
             MainNavDestination.DASHBOARD -> {
                 DashboardScreen(
                     viewModel = dashboardViewModel,
+                    onNavigateToReview = { currentDestination = MainNavDestination.INBOX },
+                    onAddExpense = {
+                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java))
+                    },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -323,12 +319,5 @@ fun MainScreen(
                 )
             }
         }
-    }
-
-    if (showManualAddSheet) {
-        ExpenseBottomSheet(
-            viewModel = expenseViewModel,
-            onDismiss = { showManualAddSheet = false }
-        )
     }
 }

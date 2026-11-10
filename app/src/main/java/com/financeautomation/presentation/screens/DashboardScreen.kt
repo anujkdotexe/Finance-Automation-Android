@@ -1,67 +1,59 @@
 package com.financeautomation.presentation.screens
 
-import androidx.compose.foundation.background
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CallMade
-import androidx.compose.material.icons.rounded.CallReceived
-import androidx.compose.material.icons.rounded.CloudDone
-import androidx.compose.material.icons.rounded.CloudSync
-import androidx.compose.material.icons.rounded.Receipt
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Savings
-import androidx.compose.material.icons.rounded.SyncProblem
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import com.financeautomation.data.local.entity.SyncQueueEntity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
+import com.financeautomation.R
+import com.financeautomation.presentation.components.AmountTone
+import com.financeautomation.presentation.components.EmptyState
+import com.financeautomation.presentation.components.KpiCard
+import com.financeautomation.presentation.components.SectionHeader
+import com.financeautomation.presentation.components.TransactionRow
+import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceTheme
+import com.financeautomation.presentation.viewmodel.CategorySpend
 import com.financeautomation.presentation.viewmodel.DashboardUiState
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
+import com.financeautomation.presentation.viewmodel.DebtSummary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Screen rendering live monthly financial KPIs and reactive offline sync queue status.
+ * Rebuilt Calm Utility Home Screen per Design Guide 5.1.
+ * Stateless composable displaying living burn, receivables/payables, category bars, and recent transactions.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToReview: () -> Unit = {},
+    onNavigateToSettlements: () -> Unit = {},
+    onAddExpense: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
@@ -80,393 +72,240 @@ fun DashboardScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = FinanceTheme.colors.surface,
         modifier = modifier
     ) { innerPadding ->
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = state.isSyncing,
+            onRefresh = { viewModel.syncNow(context) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
-                DashboardHeader()
-            }
-
-            // Monthly Financial KPI Grid
-            item {
-                KpiOverviewSection(state = state)
-            }
-
-            // Offline Sync Queue Section
-            item {
-                SyncQueueHeader(
-                    pendingCount = state.syncQueueItems.count { it.status == SyncQueueEntity.STATUS_PENDING },
-                    isSyncing = state.isSyncing,
-                    onSyncNow = { viewModel.syncNow(context) }
-                )
-            }
-
-            if (state.syncQueueItems.isEmpty()) {
-                item {
-                    EmptySyncQueueCard()
-                }
-            } else {
-                items(state.syncQueueItems, key = { it.id }) { item ->
-                    SyncQueueItemCard(item = item)
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun DashboardHeader() {
-    val monthFormat = SimpleDateFormat("MMMM yyyy", Locale.US)
-    val currentMonthText = monthFormat.format(Date())
-
-    Column {
-        Text(
-            text = currentMonthText,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = "Personal Burn & Outbound Queue",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun KpiOverviewSection(state: DashboardUiState) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Primary Highlight Card: Current Living Burn
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Current Living Burn",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = String.format(Locale.US, "₹%.2f", state.currentBurn),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Excludes savings, SIPs, and loan transfers",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
-            }
-        }
-
-        // Secondary Cards Row 1: Receivables and Payables
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            KpiMetricCard(
-                title = "Owed To Me",
-                value = String.format(Locale.US, "₹%.2f", state.owedToMe),
-                subtitle = "Split receivables",
-                icon = Icons.Rounded.CallReceived,
-                modifier = Modifier.weight(1f)
-            )
-
-            KpiMetricCard(
-                title = "I Owe People",
-                value = String.format(Locale.US, "₹%.2f", state.iOwePeople),
-                subtitle = "Active payables",
-                icon = Icons.Rounded.CallMade,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // Secondary Cards Row 2: Savings and Total Transactions
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            KpiMetricCard(
-                title = "Savings",
-                value = String.format(Locale.US, "₹%.2f", state.savings),
-                subtitle = "SIPs & investments",
-                icon = Icons.Rounded.Savings,
-                modifier = Modifier.weight(1f)
-            )
-
-            KpiMetricCard(
-                title = "Transactions",
-                value = "${state.transactionCount}",
-                subtitle = "Logged this month",
-                icon = Icons.Rounded.Receipt,
-                modifier = Modifier.weight(1f)
+            DashboardContent(
+                state = state,
+                onPreviousMonth = viewModel::previousMonth,
+                onNextMonth = viewModel::nextMonth,
+                onNavigateToReview = onNavigateToReview,
+                onNavigateToSettlements = onNavigateToSettlements,
+                onAddExpense = onAddExpense,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
 }
 
+/**
+ * Pure stateless layout for Dashboard content.
+ */
 @Composable
-private fun KpiMetricCard(
-    title: String,
-    value: String,
-    subtitle: String,
-    icon: ImageVector,
+fun DashboardContent(
+    state: DashboardUiState,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onNavigateToReview: () -> Unit,
+    onNavigateToSettlements: () -> Unit,
+    onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = modifier
+    var showAllCategories by remember { mutableStateOf(false) }
+    val showLessText = stringResource(R.string.action_show_less)
+    val seeAllText = stringResource(R.string.action_see_all)
+
+    LazyColumn(
+        modifier = modifier.padding(horizontal = FinanceTheme.spacing.l),
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        item {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+            MonthHeader(
+                monthLabel = state.selectedMonthLabel,
+                onPreviousMonth = onPreviousMonth,
+                onNextMonth = onNextMonth,
+                syncQueueCount = state.syncQueueItems.size,
+                isSyncing = state.isSyncing
             )
         }
-    }
-}
 
-@Composable
-private fun SyncQueueHeader(
-    pendingCount: Int,
-    isSyncing: Boolean,
-    onSyncNow: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "Offline Sync Queue",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            if (pendingCount > 0) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.errorContainer
-                ) {
-                    Text(
-                        text = "$pendingCount",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-        }
-
-        Button(
-            onClick = onSyncNow,
-            enabled = !isSyncing,
-            shape = RoundedCornerShape(10.dp)
-        ) {
-            if (isSyncing) {
-                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Syncing...")
-            } else {
-                Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Sync Now")
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptySyncQueueCard() {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.CloudDone,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
-            )
-            Column {
-                Text(
-                    text = "Queue Clean • Zero Outbound Backlog",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "All local transactions are synchronized with Google Sheets.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        if (state.transactionCount == 0 && state.currentBurn == 0.0) {
+            item {
+                EmptyState(
+                    message = stringResource(R.string.dashboard_empty_message),
+                    actionText = stringResource(R.string.dashboard_empty_action),
+                    onActionClick = onAddExpense,
+                    modifier = Modifier.padding(vertical = FinanceTheme.spacing.xxl)
                 )
             }
-        }
-    }
-}
+        } else {
+            // 1. Hero Living Burn Card
+            item {
+                HeroBurnCard(
+                    currentBurn = state.currentBurn,
+                    dailyAverage = state.dailyAverage,
+                    lastMonthBurn = state.lastMonthBurn
+                )
+            }
 
-@Composable
-private fun SyncQueueItemCard(item: SyncQueueEntity) {
-    val dateFormat = SimpleDateFormat("dd MMM, hh:mm a", Locale.US)
-    val formattedTime = dateFormat.format(Date(item.createdAt))
-
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+            // 2. Side-by-Side Owed Cards
+            item {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
-                    Text(
-                        text = "Txn: ${item.transactionId.take(8)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                    OwedSummaryCard(
+                        title = stringResource(R.string.dashboard_owed_to_me),
+                        amount = state.owedToMe,
+                        tone = AmountTone.MONEY_IN,
+                        topFriends = state.topOwedToMe,
+                        onClick = onNavigateToSettlements,
+                        modifier = Modifier.weight(1f)
                     )
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Text(
-                            text = item.operationType,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
+                    OwedSummaryCard(
+                        title = stringResource(R.string.dashboard_i_owe),
+                        amount = state.iOwePeople,
+                        tone = AmountTone.MONEY_OWED,
+                        topFriends = state.topIOwe,
+                        onClick = onNavigateToSettlements,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = formattedTime,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
 
-            Column(horizontalAlignment = Alignment.End) {
-                SyncStatusPill(status = item.status)
-                if (item.retryCount > 0) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Retries: ${item.retryCount}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
+            // 3. Needs Review Chip Row
+            if (state.needsReviewCount > 0) {
+                item {
+                    NeedsReviewBanner(
+                        count = state.needsReviewCount,
+                        onClick = onNavigateToReview
+                    )
+                }
+            }
+
+            // 4. Where It Went (Category Proportional Bars)
+            val displayedCategories = if (showAllCategories) state.allCategories else state.topCategories
+            if (displayedCategories.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = stringResource(R.string.dashboard_where_it_went),
+                        actionText = if (state.allCategories.size > 5) {
+                            if (showAllCategories) showLessText else seeAllText
+                        } else null,
+                        onActionClick = { showAllCategories = !showAllCategories }
+                    )
+                }
+
+                items(displayedCategories) { item ->
+                    CategoryBarRow(item = item)
+                }
+            }
+
+            // 5. Recent Transactions
+            if (state.recentTransactions.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = stringResource(R.string.dashboard_recent),
+                        actionText = stringResource(R.string.action_see_all),
+                        onActionClick = onNavigateToReview
+                    )
+                }
+
+                items(state.recentTransactions) { txn ->
+                    TransactionRow(
+                        description = txn.merchant.ifBlank { txn.category },
+                        dateText = SimpleDateFormat("dd MMM", Locale.getDefault()).format(Date(txn.timestamp)),
+                        account = txn.account,
+                        amount = txn.totalAmount,
+                        status = txn.status.value
+                    )
+                }
+            }
+
+            // 6. Below the Fold: Savings and Income
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    KpiCard(
+                        label = stringResource(R.string.dashboard_savings),
+                        amount = state.savings,
+                        tone = AmountTone.INFO,
+                        caption = stringResource(R.string.dashboard_savings_caption),
+                        modifier = Modifier.weight(1f)
+                    )
+                    KpiCard(
+                        label = stringResource(R.string.dashboard_income),
+                        amount = state.income,
+                        tone = AmountTone.MONEY_IN,
+                        caption = stringResource(R.string.dashboard_income_caption),
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
+
+        item {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
+        }
     }
 }
 
+@Preview(name = "Light", showBackground = true)
 @Composable
-private fun SyncStatusPill(status: String) {
-    val (bgColor, textColor, label) = when (status) {
-        SyncQueueEntity.STATUS_PENDING -> Triple(
-            MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,
-            "Pending"
-        )
-        SyncQueueEntity.STATUS_IN_PROGRESS -> Triple(
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            "Syncing"
-        )
-        SyncQueueEntity.STATUS_COMPLETED -> Triple(
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.onSecondaryContainer,
-            "Synced"
-        )
-        SyncQueueEntity.STATUS_FAILED -> Triple(
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer,
-            "Failed"
-        )
-        else -> Triple(
-            MaterialTheme.colorScheme.surfaceVariant,
-            MaterialTheme.colorScheme.onSurfaceVariant,
-            status
-        )
-    }
-
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = bgColor
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = textColor,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+private fun DashboardScreenPreviewLight() {
+    FinanceAutomationTheme(darkTheme = false) {
+        DashboardContent(
+            state = DashboardUiState(
+                selectedMonthLabel = "November 2026",
+                currentBurn = 42350.0,
+                dailyAverage = 1411.0,
+                lastMonthBurn = 38900.0,
+                owedToMe = 3200.0,
+                topOwedToMe = listOf(
+                    DebtSummary("Aditya", 1800.0),
+                    DebtSummary("Rohit", 1400.0)
+                ),
+                needsReviewCount = 2,
+                topCategories = listOf(
+                    CategorySpend("Food & Drink", 18500.0, 0.43f),
+                    CategorySpend("Groceries", 9200.0, 0.22f),
+                    CategorySpend("Transit", 4500.0, 0.11f)
+                ),
+                savings = 25000.0,
+                income = 120000.0,
+                transactionCount = 15
+            ),
+            onPreviousMonth = {},
+            onNextMonth = {},
+            onNavigateToReview = {},
+            onNavigateToSettlements = {},
+            onAddExpense = {}
         )
     }
 }
 
+@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Composable
+private fun DashboardScreenPreviewDark() {
+    FinanceAutomationTheme(darkTheme = true) {
+        DashboardContent(
+            state = DashboardUiState(
+                selectedMonthLabel = "November 2026",
+                currentBurn = 42350.0,
+                dailyAverage = 1411.0,
+                lastMonthBurn = 38900.0,
+                owedToMe = 3200.0,
+                needsReviewCount = 0,
+                topCategories = listOf(
+                    CategorySpend("Food & Drink", 18500.0, 0.43f)
+                ),
+                transactionCount = 5
+            ),
+            onPreviousMonth = {},
+            onNextMonth = {},
+            onNavigateToReview = {},
+            onNavigateToSettlements = {},
+            onAddExpense = {}
+        )
+    }
+}

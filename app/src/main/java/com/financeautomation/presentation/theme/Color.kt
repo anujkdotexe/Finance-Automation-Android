@@ -2,6 +2,7 @@ package com.financeautomation.presentation.theme
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 // Master Sheet Specification and Brand Palette Tokens
@@ -123,3 +124,57 @@ val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = DarkOnSurfaceVariant,
     outline = DarkOutline
 )
+
+const val OVERLAY_SCRIM_ARGB: Long = 0x73000000L
+val DefaultOverlayScrim: Color = Color(OVERLAY_SCRIM_ARGB)
+
+/**
+ * Cohesive visual tokens for Finance Automation (Design Guide 3.1).
+ * Carries financial and structural meaning across both light and dark themes.
+ */
+data class FinanceColors(
+    val moneyOut: Color,
+    val moneyIn: Color,
+    val moneyOwed: Color,
+    val brand: Color,
+    val info: Color,
+    val surface: Color,
+    val surfaceVariant: Color,
+    val outline: Color,
+    val onSurface: Color,
+    val onSurfaceVariant: Color,
+    val overlayScrim: Color = DefaultOverlayScrim,
+    val primary: Color = brand,
+    val primaryContainer: Color = surfaceVariant,
+    val error: Color = moneyOut
+)
+
+val LightFinanceColors = FinanceColors(
+    moneyOut = Color(0xFFC62828),
+    moneyIn = Color(0xFF2E7D32),
+    moneyOwed = Color(0xFFE65100),
+    brand = Color(0xFF19227E),
+    info = Color(0xFF1465BF),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFF1F5F9),
+    outline = Color(0xFFE2E8F0),
+    onSurface = Color(0xFF0F172A),
+    onSurfaceVariant = Color(0xFF64748B),
+    overlayScrim = Color(0x73000000)
+)
+
+val DarkFinanceColors = FinanceColors(
+    moneyOut = Color(0xFFEF9A9A),
+    moneyIn = Color(0xFFA5D6A7),
+    moneyOwed = Color(0xFFFFCC80),
+    brand = Color(0xFFC5CAE9),
+    info = Color(0xFF90CAF8),
+    surface = Color(0xFF121418),
+    surfaceVariant = Color(0xFF1C1F26),
+    outline = Color(0xFF2A2E37),
+    onSurface = Color(0xFFF8FAFC),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    overlayScrim = Color(0x99000000)
+)
+
+val LocalFinanceColors = staticCompositionLocalOf { LightFinanceColors }

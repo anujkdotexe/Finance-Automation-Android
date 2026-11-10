@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -100,3 +101,63 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     )
 )
+
+/**
+ * Standard typography roles specified by Design Guide 3.2.
+ * Amounts use tabular figures (tnum) for alignment across tables and sheets.
+ */
+data class FinanceTypography(
+    val amountHero: TextStyle,
+    val amountLarge: TextStyle,
+    val titleMedium: TextStyle,
+    val bodyMedium: TextStyle,
+    val labelMedium: TextStyle,
+    val labelLarge: TextStyle = Typography.labelLarge,
+    val headlineSmall: TextStyle = Typography.headlineSmall,
+    val titleSmall: TextStyle = Typography.titleSmall,
+    val bodySmall: TextStyle = Typography.bodySmall,
+    val labelSmall: TextStyle = Typography.labelSmall,
+    val titleLarge: TextStyle = Typography.titleLarge
+)
+
+val FinanceTypographyTokens = FinanceTypography(
+    amountHero = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 32.sp,
+        lineHeight = 40.sp,
+        letterSpacing = 0.sp,
+        fontFeatureSettings = "tnum"
+    ),
+    amountLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = 0.sp,
+        fontFeatureSettings = "tnum"
+    ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.15.sp
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.25.sp
+    ),
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.5.sp
+    )
+)
+
+val LocalFinanceTypography = staticCompositionLocalOf { FinanceTypographyTokens }

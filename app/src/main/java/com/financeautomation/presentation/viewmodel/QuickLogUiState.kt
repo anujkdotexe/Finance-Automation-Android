@@ -12,6 +12,7 @@ import com.financeautomation.domain.model.TripTag
  */
 data class QuickLogUiState(
     val captureId: String? = null,
+    val transactionId: String? = null,
     val sourcePackage: String = "manual",
     val amountText: String = "",
     val amount: Double = 0.0,
@@ -32,6 +33,7 @@ data class QuickLogUiState(
     val isPossibleDuplicate: Boolean = false,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
+    val isVoided: Boolean = false,
     val isDismissed: Boolean = false,
     val resultMessage: String? = null,
     val errorMessage: String? = null

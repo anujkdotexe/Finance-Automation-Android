@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.financeautomation.presentation.overlay.OverlayController
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
 
 /**
@@ -26,8 +26,7 @@ fun SetupSection(
             onNavigateGoogleSignIn = onNavigateGoogleSignIn,
             modifier = modifier
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
     }
     AdvancedDiagnosticsCard(modifier = modifier)
 }
-
