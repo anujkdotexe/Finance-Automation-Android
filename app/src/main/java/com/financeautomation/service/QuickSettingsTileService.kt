@@ -8,7 +8,6 @@ import android.service.quicksettings.TileService
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.presentation.ui.EntryActivity
-import com.financeautomation.presentation.ui.ModalBottomSheetActivity
 
 /**
  * Android Quick Settings Tile service enabling 1-tap manual expense logging.
@@ -24,28 +23,36 @@ class QuickSettingsTileService : TileService() {
             getString(R.string.quick_add_tile_label)
         } catch (e: Exception) {
             Diagnostics.record("QuickSettingsTileService", "${e.javaClass.simpleName}: getString label fallback")
-            "Log Expense"
+            "Quick log"
         }
         tile.updateTile()
     }
 
     override fun onClick() {
         super.onClick()
-        val intent = Intent(this, EntryActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val launchAction = Runnable {
+            val intent = Intent(this, EntryActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val pendingIntent = PendingIntent.getActivity(
+                    this,
+                    0,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                startActivityAndCollapse(pendingIntent)
+            } else {
+                @Suppress("DEPRECATION")
+                startActivityAndCollapse(intent)
+            }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            startActivityAndCollapse(pendingIntent)
+        if (isLocked) {
+            unlockAndRun(launchAction)
         } else {
-            @Suppress("DEPRECATION")
-            startActivityAndCollapse(intent)
+            launchAction.run()
         }
     }
 
