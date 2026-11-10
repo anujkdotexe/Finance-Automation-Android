@@ -38,6 +38,7 @@ import com.financeautomation.presentation.flows.IncomeReturnFlowSheet
 import com.financeautomation.presentation.flows.OpenDebtItem
 import com.financeautomation.presentation.flows.RepaidFriendFlowSheet
 import com.financeautomation.presentation.flows.TripModeFlowSheet
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 
 /**
@@ -89,8 +90,8 @@ fun OverlayContentHost(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { /* Consume clicks to prevent backdrop dismissal */ },
-        shape = RoundedCornerShape(32.dp),
-        color = MaterialTheme.colorScheme.surface,
+        shape = FinanceTheme.shapes.sheet,
+        color = FinanceTheme.colors.surface,
         tonalElevation = 6.dp,
         shadowElevation = 24.dp
     ) {

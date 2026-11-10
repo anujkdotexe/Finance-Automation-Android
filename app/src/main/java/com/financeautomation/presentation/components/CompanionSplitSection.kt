@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.financeautomation.core.model.SplitMode
+import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.presentation.viewmodel.QuickLogUiState
 
 /**
@@ -174,12 +175,12 @@ fun CompanionSplitSection(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "My Share: ₹${String.format(java.util.Locale.US, "%.2f", state.myShare)}",
+                    text = "My Share: ${formatRupees(state.myShare, includeDecimals = true)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Owed To Me: ₹${String.format(java.util.Locale.US, "%.2f", state.owedToMe)}",
+                    text = "Owed To Me: ${formatRupees(state.owedToMe, includeDecimals = true)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold

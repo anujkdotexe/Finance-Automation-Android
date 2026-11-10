@@ -36,7 +36,7 @@ import com.financeautomation.presentation.viewmodel.ExpenseUiState
 
 /**
  * Unified bottom sheet content for adding, reviewing, and editing expenses (Design Guide 4 and 5.3).
- * Stateless composable replacing legacy AppleExpensePromptSheet and ExpenseBottomSheet.
+ * Stateless composable built with SheetScaffold.
  */
 @Composable
 fun ExpenseSheet(

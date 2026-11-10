@@ -45,7 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.presentation.components.AmountText
+import com.financeautomation.presentation.components.AmountTone
 import com.financeautomation.presentation.components.StatusChip
+import com.financeautomation.presentation.theme.FinanceTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -149,11 +152,10 @@ fun ReviewTransactionCard(
                     }
                 }
 
-                Text(
-                    text = String.format(Locale.getDefault(), "Rs. %.2f", transaction.totalAmount),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                AmountText(
+                    amount = transaction.totalAmount,
+                    tone = AmountTone.MONEY_OUT,
+                    style = FinanceTheme.typography.amountLarge
                 )
             }
 

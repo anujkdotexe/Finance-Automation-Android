@@ -184,7 +184,7 @@ fun RepaidFriendFlowSheet(
                     amountText = input
                 }
             },
-            label = { Text("Amount Repaid (Rs.) *") },
+            label = { Text("Amount Repaid (₹) *") },
             placeholder = { Text("0.00") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,

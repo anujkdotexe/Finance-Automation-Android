@@ -31,7 +31,7 @@ import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 
 /**
  * Transparent Activity hosting the interactive Floating Modal Bottom Sheet for expense splitting and categorization.
- * Floats directly over the home screen or third-party UPI apps (Dynamic Island / Apple Shortcuts style)
+ * Floats directly over the home screen or third-party UPI apps
  * with a dimmed translucent backdrop and 1-tap outside dismissal.
  */
 class ModalBottomSheetActivity : ComponentActivity() {
