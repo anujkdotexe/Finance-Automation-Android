@@ -32,6 +32,7 @@ import com.financeautomation.data.local.entity.TripTagEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
@@ -140,15 +141,21 @@ abstract class FinanceDatabase : RoomDatabase() {
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                    val db = if (Looper.myLooper() == Looper.getMainLooper()) {
-                        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-                            buildDatabase(context.applicationContext)
-                        }
-                    } else {
-                        buildDatabase(context.applicationContext)
+                    if (Looper.myLooper() == Looper.getMainLooper()) {
+                        throw IllegalStateException(
+                            "FinanceDatabase must not be initialized synchronously on the main thread. " +
+                            "Pre-warm in FinanceApplication.onCreate on Dispatchers.IO or initialize from a background dispatcher."
+                        )
                     }
+                    val db = buildDatabase(context.applicationContext)
                     db.also { INSTANCE = it }
                 }
+            }
+        }
+
+        suspend fun getInstanceAsync(context: Context): FinanceDatabase {
+            return INSTANCE ?: withContext(Dispatchers.IO) {
+                getInstance(context)
             }
         }
 

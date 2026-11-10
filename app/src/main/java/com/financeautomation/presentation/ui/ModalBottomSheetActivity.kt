@@ -48,6 +48,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
             peopleRepository = app.appContainer.peopleRepository,
             categoryRepository = app.appContainer.categoryRepository,
             accountRepository = app.appContainer.accountRepository,
+            pendingCaptureDao = app.appContainer.database.pendingCaptureDao(),
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -123,6 +124,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
     }
 
     private fun dismissSafely() {
+        expenseViewModel.onDismissCapture()
         finish()
         overridePendingTransition(0, 0)
     }
@@ -139,18 +141,27 @@ class ModalBottomSheetActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent) {
+        val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
+            ?: intent.getStringExtra("capture_id")
         val txnId = intent.getStringExtra(EXTRA_TRANSACTION_ID)
             ?: intent.getStringExtra("txn_id")
             ?: intent.getStringExtra("txn_uuid")
 
-        if (!txnId.isNullOrBlank()) {
-            expenseViewModel.loadTransaction(txnId)
-        } else {
-            expenseViewModel.clearState()
+        when {
+            !captureId.isNullOrBlank() -> {
+                expenseViewModel.loadCapture(captureId)
+            }
+            !txnId.isNullOrBlank() -> {
+                expenseViewModel.loadTransaction(txnId)
+            }
+            else -> {
+                expenseViewModel.clearState()
+            }
         }
     }
 
     companion object {
         const val EXTRA_TRANSACTION_ID: String = "com.financeautomation.extra.TRANSACTION_ID"
+        const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
     }
 }

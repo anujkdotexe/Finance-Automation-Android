@@ -44,6 +44,9 @@ interface PendingCaptureDao {
     @Query("UPDATE pending_captures SET state = :state, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateState(id: String, state: String, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE pending_captures SET state = 'WAITING', updatedAt = :updatedAt WHERE state = 'SHOWN'")
+    suspend fun resetShownToWaiting(updatedAt: Long = System.currentTimeMillis()): Int
+
     @Query("DELETE FROM pending_captures WHERE id = :id")
     suspend fun deleteById(id: String)
 
