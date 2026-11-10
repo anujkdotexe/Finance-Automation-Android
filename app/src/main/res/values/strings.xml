@@ -19,8 +19,12 @@
     <string name="category_travel">Travel</string>
     <string name="category_shopping">Shopping</string>
     <string name="category_uncategorized">Uncategorized</string>
-    <string name="quick_log_widget_label">Quick Log</string>
+    <string name="quick_log_widget_label">Quick log</string>
     <string name="quick_log_widget_desc">Tap to log an expense immediately</string>
+    <string name="home_screen_widget_card_title">Home Screen 1-Tap Widget</string>
+    <string name="home_screen_widget_card_subtitle">1x1 app icon sized widget for instant manual expense logging</string>
+    <string name="home_screen_widget_card_desc">Add a 1x1 Quick Log icon to your Home Screen. Tapping it opens the Quick Log sheet over your current screen.</string>
+    <string name="pin_1x1_widget_button">Pin 1x1 Widget</string>
     <string name="add_as_app_icon_button">Add as app icon</string>
     <string name="pin_shortcut_not_supported_explanation">Pinned shortcuts are not supported by your current launcher</string>
     <string name="quick_log_shortcut_short_label">Quick log</string>
