@@ -10,7 +10,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
@@ -18,11 +17,8 @@ import androidx.core.app.NotificationManagerCompat
 import com.financeautomation.FinanceApplication
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.entity.PendingCaptureEntity
-import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
-import com.financeautomation.presentation.overlay.OverlayRequest
 import com.financeautomation.presentation.ui.EntryActivity
-import com.financeautomation.presentation.ui.ModalBottomSheetActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +34,6 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)
 
-    internal var testRepository: TransactionRepository? = null
     internal var testProcessor: NotificationProcessor? = null
 
     override fun onDestroy() {
@@ -126,7 +121,6 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                         handledNotificationDao = db.handledNotificationDao(),
                         accountDao = db.accountDao(),
                         preferenceDao = db.preferenceDao(),
-                        repository = testRepository ?: it.transactionRepository,
                         parseUseCase = it.parseNotificationUseCase,
                         ownPackageName = packageName
                     )
@@ -142,14 +136,6 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                     is NotificationProcessingOutcome.Updated -> {
                         if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
                             watcher?.notifyCaptureWaiting(serviceScope)
-                        }
-                    }
-                    is NotificationProcessingOutcome.Created -> {
-                        val controller = container?.overlayController
-                        if (Settings.canDrawOverlays(this@NotificationListenerServiceImpl) && controller != null) {
-                            controller.show(OverlayRequest.ManualExpense)
-                        } else {
-                            showHeadsUpNotification(outcome.headsUpNotificationData)
                         }
                     }
                     is NotificationProcessingOutcome.FallbackPrompt -> {
@@ -170,35 +156,6 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                 Diagnostics.record(TAG, "${e.javaClass.simpleName}: handleNotification execution")
             }
         }
-    }
-
-    private fun showHeadsUpNotification(data: HeadsUpData) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-        createNotificationChannel(notificationManager)
-
-        val intentDetails = Intent(this, ModalBottomSheetActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, data.transactionId)
-            putExtra("notification_id", data.notificationId)
-        }
-        val pendingIntentDetails = PendingIntent.getActivity(
-            this,
-            data.notificationId * 10 + 3,
-            intentDetails,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_FINANCIAL_ALERTS)
-            .setSmallIcon(android.R.drawable.stat_notify_more)
-            .setContentTitle(data.title)
-            .setContentText(data.text)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntentDetails)
-            .addAction(0, data.detailsActionTitle, pendingIntentDetails)
-
-        notificationManager.notify(data.notificationId, builder.build())
     }
 
     private fun showFallbackNotification(message: String, sourcePackage: String) {

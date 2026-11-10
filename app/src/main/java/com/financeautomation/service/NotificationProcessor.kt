@@ -2,9 +2,6 @@ package com.financeautomation.service
 
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.PackageWhitelist
-import com.financeautomation.core.model.ReviewState
-import com.financeautomation.core.model.SyncState
-import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
@@ -12,15 +9,12 @@ import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PreferenceDao
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
-import com.financeautomation.domain.model.Transaction
-import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.domain.usecase.WordingClass
 import kotlinx.coroutines.CancellationException
 import java.security.MessageDigest
-import java.util.Locale
 import java.util.UUID
 
 /**
@@ -29,12 +23,6 @@ import java.util.UUID
 sealed interface NotificationProcessingOutcome {
     data class Captured(
         val capture: PendingCaptureEntity
-    ) : NotificationProcessingOutcome
-
-    data class Created(
-        val transaction: Transaction,
-        val isPossibleDuplicate: Boolean,
-        val headsUpNotificationData: HeadsUpData
     ) : NotificationProcessingOutcome
 
     data class Updated(
@@ -61,19 +49,6 @@ sealed interface NotificationProcessingOutcome {
 }
 
 /**
- * Data needed to construct a Heads-Up notification for review or fallback.
- */
-data class HeadsUpData(
-    val notificationId: Int,
-    val title: String,
-    val text: String,
-    val category1: String,
-    val category2: String,
-    val detailsActionTitle: String,
-    val transactionId: String
-)
-
-/**
  * Background notification parsing and capture engine.
  * Filters notifications, enforces deduplication, maintains pending_captures and handled_notifications.
  */
@@ -82,27 +57,9 @@ class NotificationProcessor(
     private val handledNotificationDao: HandledNotificationDao? = null,
     private val accountDao: AccountDao? = null,
     private val preferenceDao: PreferenceDao? = null,
-    private val repository: TransactionRepository? = null,
     private val parseUseCase: ParseNotificationUseCase = ParseNotificationUseCase(),
     private val ownPackageName: String = "com.financeautomation"
 ) {
-
-    /**
-     * Secondary constructor for tests and legacy callers.
-     */
-    constructor(
-        repository: TransactionRepository,
-        parseUseCase: ParseNotificationUseCase = ParseNotificationUseCase(),
-        ownPackageName: String = "com.financeautomation"
-    ) : this(
-        pendingCaptureDao = null,
-        handledNotificationDao = null,
-        accountDao = null,
-        preferenceDao = null,
-        repository = repository,
-        parseUseCase = parseUseCase,
-        ownPackageName = ownPackageName
-    )
 
     suspend fun process(
         sourcePackage: String,
@@ -213,8 +170,7 @@ class NotificationProcessor(
                     flags = PendingCaptureEntity.FLAG_NEEDS_AMOUNT,
                     postTime = postTime,
                     sbnKey = sbnKey,
-                    contentHash = contentHash,
-                    candidateTransaction = null
+                    contentHash = contentHash
                 )
             }
             is NotificationParseResult.Success -> {
@@ -229,8 +185,7 @@ class NotificationProcessor(
                     flags = "",
                     postTime = postTime,
                     sbnKey = sbnKey,
-                    contentHash = contentHash,
-                    candidateTransaction = parseResult.transaction
+                    contentHash = contentHash
                 )
             }
         }
@@ -246,8 +201,7 @@ class NotificationProcessor(
         flags: String,
         postTime: Long,
         sbnKey: String,
-        contentHash: String,
-        candidateTransaction: Transaction?
+        contentHash: String
     ): NotificationProcessingOutcome {
         val targetState = if (wording == WordingClass.PROCESSING) {
             PendingCaptureEntity.STATE_AWAITING_SUCCESS
@@ -326,35 +280,6 @@ class NotificationProcessor(
         )
 
         pendingCaptureDao?.insert(capture)
-
-        // Legacy / fallback repository support for direct transaction logging and tests
-        if (repository != null && candidateTransaction != null) {
-            val isPossibleDuplicate = activeFlags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
-            val finalTxn = candidateTransaction.copy(
-                account = inferredAccount,
-                merchant = payee,
-                isPossibleDuplicate = isPossibleDuplicate,
-                reviewState = ReviewState.NEEDS_REVIEW,
-                syncState = SyncState.PENDING
-            )
-            repository.insertTransaction(finalTxn)
-
-            val notificationId = (finalTxn.id.hashCode() and 0x7FFFFFFF)
-            val headsUpData = HeadsUpData(
-                notificationId = notificationId,
-                title = String.format(Locale.US, "Paid ₹%.2f to %s", finalTxn.totalAmount, finalTxn.merchant),
-                text = if (isPossibleDuplicate) "Possible duplicate • Tap to review" else "Tap Details / Split",
-                category1 = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
-                category2 = CategoryConstants.CATEGORY_GROCERIES,
-                detailsActionTitle = "Details / Split",
-                transactionId = finalTxn.id
-            )
-            return NotificationProcessingOutcome.Created(
-                transaction = finalTxn,
-                isPossibleDuplicate = isPossibleDuplicate,
-                headsUpNotificationData = headsUpData
-            )
-        }
 
         return NotificationProcessingOutcome.Captured(capture)
     }
