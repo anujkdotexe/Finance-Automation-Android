@@ -369,8 +369,4 @@
         <item quantity="one">%d transaction needs review</item>
         <item quantity="other">%d transactions need review</item>
     </plurals>
-    <plurals name="sync_queue_count">
-        <item quantity="one">%d waiting to sync</item>
-        <item quantity="other">%d waiting to sync</item>
-    </plurals>
 </resources>
