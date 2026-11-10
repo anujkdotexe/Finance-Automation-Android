@@ -293,7 +293,7 @@ class SetupHealthViewModel(
                     }
                 }
                 HealthCheckId.OEM_BACKGROUND -> {
-                    getAppDetailsSettingsIntent(context)
+                    return com.financeautomation.presentation.health.OemHardeningHelper.resolveCandidateIntent(context)
                 }
                 HealthCheckId.GOOGLE_CONNECTION -> {
                     getAppDetailsSettingsIntent(context)
