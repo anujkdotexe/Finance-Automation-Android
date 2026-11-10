@@ -27,7 +27,7 @@ class CalculateSplitUseCaseTest {
         assertEquals(540.00, split.myShare, 0.001)
         assertEquals(0.00, split.owedToMe, 0.001)
         assertEquals("Personal", split.companionsText)
-        assertEquals(TransactionStatus.SETTLED, split.status)
+        assertEquals(TransactionStatus.PERSONAL, split.status)
         assertEquals(SplitMode.JUST_ME, split.splitMode)
     }
 
@@ -51,7 +51,7 @@ class CalculateSplitUseCaseTest {
         assertEquals(450.00, split.myShare, 0.001)
         assertEquals(0.00, split.owedToMe, 0.001)
         assertEquals("Personal", split.companionsText)
-        assertEquals(TransactionStatus.SETTLED, split.status)
+        assertEquals(TransactionStatus.PERSONAL, split.status)
     }
 
     @Test
@@ -65,21 +65,25 @@ class CalculateSplitUseCaseTest {
     }
 
     @Test
-    fun testCustomSplitFullShareIsSettled() {
+    fun testCustomSplitFullShareIsPersonal() {
         val split = useCase.calculateCustomSplit(1000.00, 1000.00, listOf("Charlie"))
         assertEquals(1000.00, split.myShare, 0.001)
         assertEquals(0.00, split.owedToMe, 0.001)
-        assertEquals(TransactionStatus.SETTLED, split.status)
+        assertEquals(TransactionStatus.PERSONAL, split.status)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun testCustomSplitNegativeShareThrows() {
-        useCase.calculateCustomSplit(500.00, -50.00, listOf("Dave"))
+    @Test
+    fun testCustomSplitNegativeShareClamps() {
+        val split = useCase.calculateCustomSplit(500.00, -50.00, listOf("Dave"))
+        assertEquals(0.00, split.myShare, 0.001)
+        assertEquals(500.00, split.owedToMe, 0.001)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun testCustomSplitShareExceedingTotalThrows() {
-        useCase.calculateCustomSplit(500.00, 550.00, listOf("Dave"))
+    @Test
+    fun testCustomSplitShareExceedingTotalClamps() {
+        val split = useCase.calculateCustomSplit(500.00, 550.00, listOf("Dave"))
+        assertEquals(500.00, split.myShare, 0.001)
+        assertEquals(0.00, split.owedToMe, 0.001)
     }
 
     @Test

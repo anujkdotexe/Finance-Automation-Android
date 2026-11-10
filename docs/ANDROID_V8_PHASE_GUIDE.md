@@ -1199,7 +1199,7 @@ and message texts in the report builder (show the fields it can read).
 
 ## Phase 10 - MVP closure
 
-Status: not started.
+Status: Audit and closure items complete. PR opened against main for reviewer approval.
 
 1. Remove dead code: the `presentation/ui/*` placeholder files, `SettleWindowWorker` if still present, unused mappers and
    constants, the old fixed-grid config code once the new one is in use, unused imports. Confirm each deletion has no remaining
@@ -1248,3 +1248,27 @@ tidy-up). They are done after Phase 10 and before the live device test. Build ag
 | D13 | Failure visibility | Crashlytics opt in, a pipeline trail and a user-shared compatibility report |
 | D14 | Phone-brand routes | Data file in assets, resolve-then-fallback, discovery scan in debug and beta only |
 | D15 | Build types | debug, beta, release; same application id |
+
+---
+
+## Section 12 Engineering Plan Audit Status
+
+Status of all fifteen audit items from Section 12 of [ANDROID_V8_ENGINEERING_AND_TEST_PLAN.md](./ANDROID_V8_ENGINEERING_AND_TEST_PLAN.md):
+
+| # | Area | Description | Status | Evidence / Implementation Reference |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | Sheet writes | Appends must use `valueInputOption=RAW` to prevent formula injection (`=IMPORTXML(...)`) | Fixed | `GoogleSheetsClient.kt` sets `valueInputOption=RAW` on append (lines 203, 210), cell update (lines 319, 324), batch update (lines 721, 739), and void update (line 777). |
+| 2 | Offline queue | Failed items stranded; `getAllPending` only queried `PENDING`; repository returned success on all failures | Fixed | `SyncTransactionsWorker.kt` (lines 86, 95, 101) applies `Result.retry()` on transient network failures; `SyncQueueDao.kt` provides `getPendingAndFailedItems()` with retry limits; `TransactionRepositoryImpl.kt` coordinates error propagation. |
+| 3 | Month tabs | Dynamic month tab creation (`MMM26`), carry forward from previous month, dynamic year workbook (`FinanceYYYY`) | Fixed | `SheetProvisioner.kt` creates monthly tabs with 31 columns; `WorkbookResolver.kt` resolves dynamic year workbooks; `MonthlyRolloverWorker.kt` carries forward balances; `SettingsSyncCoordinator.kt` names workbook `FinanceYYYY`. |
+| 4 | UUIDs and row safety | Hidden UUID columns V-AB never populated; row mutation by index corrupts on manual sheet sort | Fixed | `SheetPayloadMapper.kt` writes UUIDs into columns K and AB; `LedgerSnapshotMapper.kt` reads typed rows with UUIDs; `AccountingSyncExecutor.kt` matches transactions by UUID before updating in-place cells. |
+| 5 | Accounting engine | Waterfall, repayments, netting, quotas, surplus routing, inflows/payables never executed | Fixed | `CalculateSplitUseCase.kt`, `LogExpenseUseCase.kt`, `SettlementWaterfallUseCase.kt`, `RepaymentWaterfallUseCase.kt`, and `AccountingSyncExecutor.kt` implement Code.gs v2.3.0 parity. |
+| 6 | Capture timing | Immediate launch during payment PIN entry; overlay exemption fragile on Android 14/15 | Fixed | `NotificationProcessor.kt` uses `ForegroundWatcher.kt` to defer prompt until payment app exits; `ForegroundHeadsUpHelper.kt` provides heads-up notification fallback; `ModalBottomSheetActivity.kt` handles user interaction. |
+| 7 | Credits | Credit alerts dropped by direction filter; Income / Return never captured | Fixed | `ParseNotificationUseCase.kt` detects credit patterns; `NotificationProcessor.kt` captures income and returns; `LogExpenseUseCase.kt` logs inflows. |
+| 8 | Duplicates | On listener reconnect, 5-minute alerts reprocessed but dedup window only 120 seconds | Fixed | `NotificationProcessor.kt` maintains in-memory deduplication hash set; `HandledNotificationDao.kt` persists processed notification keys to prevent duplicate captures across service rebinds. |
+| 9 | Auth | Deprecated `GoogleSignIn` / blocking token call; committed OAuth client ID; token logged in logcat | Fixed | `GoogleAuthTokenProvider.kt` uses `Identity.getAuthorizationClient` (AuthorizationClient) and `GoogleAuthUtil.clearToken` for cache invalidation with `drive.file` scope. Token logging removed. First-run onboarding in `OnboardingScreen.kt`. |
+| 10 | Test hook in release | `NotificationSimulatorReceiver` exported and registered in all build types | Fixed | `NotificationSimulatorReceiver` moved to `app/src/debug/AndroidManifest.xml`. Release merged manifest search verifies 0 occurrences. |
+| 11 | Listener resilience | Only `requestRebind` on disconnect; no boot receiver, toggle rebind, or setup health screen | Fixed | `BootReceiver.kt` handles rebind on device boot; `NotificationListenerHealthWorker.kt` runs periodic health checks; `SetupHealthCard.kt` provides OEM permission status; `oem_routes.json` guides vendor battery settings. |
+| 12 | Overlay look | Translucent activity with solid surface; no blur; Android default icon; hardcoded category chips | Fixed | `ModalBottomSheetActivity.kt` renders Material 3 bottom sheet with dim backdrop; `Theme.kt` supplies dynamic colors; `QuickLogCategoryRanker.kt` ranks categories dynamically based on usage recency. |
+| 13 | Menu and flows | No Choose Action menu; missing Income, Friend Paid For Me, Repaid flows; no category prediction or account inference | Fixed | `EntryActivity.kt` provides Choose Action menu with Income, Friend Paid, and Repaid flows; `PredictCategoryUseCase.kt` and `QuickLogCategoryRanker.kt` predict categories; account inference handled in `NotificationProcessor.kt`. |
+| 14 | Widget | 1x1 widget dynamic size only Android 12+; opens translucent sheet instead of menu | Fixed | `QuickLogWidgetProvider.kt` implements 1x1 widget using `AppWidgetProvider` and RemoteViews; layout declared in `quick_log_widget_info.xml` with dimension tokens in `dimens.xml`. |
+| 15 | Minor | Target SDK 36 vs 35; settle window mismatch; redundant settle worker; OTP regex over-matching; OEM SMS package coverage | Partially Fixed / Consciously Deferred | `targetSdk` is 36 in `build.gradle.kts`, consciously deferred to owner and reviewer per Decision D5. Settle window unified to 120s in `ConfigConstants.kt`; redundant settle worker eliminated; OTP regex tightened in `RegexPatterns.kt`; OEM SMS packages expanded in `PackageWhitelist.kt`. |
