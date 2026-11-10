@@ -139,7 +139,7 @@ fun FriendPaidFlowSheet(
                     amountText = input
                 }
             },
-            label = { Text("Amount Owed (Rs.)") },
+            label = { Text("Amount Owed (₹)") },
             placeholder = { Text("0.00") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,

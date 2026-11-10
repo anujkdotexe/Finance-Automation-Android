@@ -27,10 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HealthAndSafety
-import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
@@ -103,8 +103,8 @@ fun SetupHealthCard(
     val oemInfo = remember { OemHardeningHelper.getOemInfo() }
 
     SettingsCard(
-        title = "Setup Health & System Hardening",
-        subtitle = "Verify all 7 background capture dependencies and permissions",
+        title = stringResource(R.string.health_setup_title),
+        subtitle = stringResource(R.string.health_setup_subtitle),
         icon = Icons.Rounded.HealthAndSafety,
         modifier = modifier
     ) {
@@ -269,7 +269,7 @@ private fun HealthCheckRow(
                 val (statusBg, statusTint, statusIcon) = when (item.status) {
                     HealthStatus.OK -> Triple(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, Icons.Rounded.CheckCircle)
                     HealthStatus.MISSING -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer, Icons.Rounded.ErrorOutline)
-                    HealthStatus.UNKNOWN -> Triple(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, Icons.Rounded.HelpOutline)
+                    HealthStatus.UNKNOWN -> Triple(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, Icons.AutoMirrored.Rounded.HelpOutline)
                 }
                 Box(modifier = Modifier.size(24.dp).background(statusBg, CircleShape), contentAlignment = Alignment.Center) {
                     Icon(statusIcon, contentDescription = null, tint = statusTint, modifier = Modifier.size(16.dp))

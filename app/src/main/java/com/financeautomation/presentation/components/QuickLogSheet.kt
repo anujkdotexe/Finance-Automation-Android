@@ -62,8 +62,8 @@ import com.financeautomation.core.model.SplitMode
 import com.financeautomation.presentation.viewmodel.QuickLogUiState
 
 /**
- * Quick Log Bottom Sheet for expense review and logging (Phase 5.3).
- * Follows HIG / Dynamic Island styling with spring animations, Material 3 design tokens,
+ * Expense bottom sheet for review and logging (Phase 5.3).
+ * Follows calm utility styling with spring animations, Material 3 design tokens,
  * and adaptive keyboard focus management.
  */
 @Composable

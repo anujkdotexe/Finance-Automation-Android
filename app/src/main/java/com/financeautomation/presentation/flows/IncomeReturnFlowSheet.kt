@@ -173,7 +173,7 @@ fun IncomeReturnFlowSheet(
                     amountText = input
                 }
             },
-            label = { Text("Amount (Rs.)") },
+            label = { Text("Amount (₹)") },
             placeholder = { Text("0.00") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
