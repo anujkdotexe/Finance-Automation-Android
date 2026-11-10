@@ -9,12 +9,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.LocalDate
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 enum class PipelineStage {
     LISTENER,
@@ -85,6 +84,7 @@ object PipelineTrail {
     private val heartbeatTime = AtomicLong(0L)
     private val droppedCount = AtomicLong(0L)
     private val lastPersistedAt = AtomicLong(0L)
+    private val currentDayKey = AtomicReference<String>("")
 
     private var appContext: Context? = null
     private var daoProvider: (suspend () -> PipelineEventDao)? = null
@@ -106,13 +106,15 @@ object PipelineTrail {
                 heartbeatTime.set(prefs.getLong(KEY_HEARTBEAT_TIME, 0L))
                 val savedDay = prefs.getString(KEY_DAY, "") ?: ""
                 val today = getTodayKey()
+                currentDayKey.set(today)
                 if (savedDay == today) {
                     droppedCount.set(prefs.getLong(KEY_DROPPED_COUNT, 0L))
                 } else {
                     droppedCount.set(0L)
                 }
             }
-        } catch (ignored: Exception) {
+        } catch (e: Exception) {
+            Diagnostics.record("PipelineTrail", "initialize prefs: ${e.javaClass.simpleName}")
         }
     }
 
@@ -142,16 +144,27 @@ object PipelineTrail {
     }
 
     fun recordDroppedNotWhitelisted() {
+        ensureDayRollover()
         droppedCount.incrementAndGet()
         maybePersistHeartbeatAsync()
     }
 
     fun getLastHeartbeatTime(): Long = heartbeatTime.get()
 
-    fun getTodayDroppedNonWhitelistedCount(): Long = droppedCount.get()
+    fun getTodayDroppedNonWhitelistedCount(): Long {
+        ensureDayRollover()
+        return droppedCount.get()
+    }
 
-    private fun getTodayKey(): String {
-        return SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+    private fun getTodayKey(): String = LocalDate.now().toString()
+
+    private fun ensureDayRollover(today: String = getTodayKey()) {
+        val current = currentDayKey.get()
+        if (current != today) {
+            if (currentDayKey.compareAndSet(current, today)) {
+                droppedCount.set(0L)
+            }
+        }
     }
 
     private fun maybePersistHeartbeatAsync() {
@@ -167,9 +180,11 @@ object PipelineTrail {
                 prefs.edit()
                     .putLong(KEY_HEARTBEAT_TIME, heartbeatTime.get())
                     .putLong(KEY_DROPPED_COUNT, droppedCount.get())
-                    .putString(KEY_DAY, getTodayKey())
+                    .putString(KEY_DAY, currentDayKey.get())
                     .apply()
-            } catch (ignored: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("PipelineTrail", "persistHeartbeat: ${e.javaClass.simpleName}")
             }
         }
     }

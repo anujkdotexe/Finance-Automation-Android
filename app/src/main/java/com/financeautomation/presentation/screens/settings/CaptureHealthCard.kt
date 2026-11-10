@@ -25,9 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.financeautomation.R
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.FinanceDatabase
 import com.financeautomation.data.local.dao.StageCodeCount
 import com.financeautomation.data.local.entity.PipelineEventEntity
+import kotlinx.coroutines.CancellationException
 import com.financeautomation.presentation.components.SecondaryButton
 import com.financeautomation.presentation.components.TextAction
 import com.financeautomation.presentation.screens.SettingsCard
@@ -63,7 +65,9 @@ fun CaptureHealthCard(
                 }
                 funnelCounts = dao.getFunnelCounts(cal.timeInMillis, now)
                 recentEvents = dao.getRecentEvents(50)
-            } catch (ignored: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("CaptureHealthCard", "loadTrailData: ${e.javaClass.simpleName}")
             }
         }
     }
