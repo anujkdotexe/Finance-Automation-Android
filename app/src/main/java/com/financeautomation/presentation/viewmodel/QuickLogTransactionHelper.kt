@@ -4,6 +4,7 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
@@ -56,6 +57,59 @@ object QuickLogTransactionHelper {
             }
             else -> SplitMode.JUST_ME
         }
+    }
+
+    suspend fun dismissCapture(
+        captureId: String,
+        pendingCaptureDaoProvider: suspend () -> PendingCaptureDao
+    ) {
+        try {
+            pendingCaptureDaoProvider.invoke().updateState(
+                captureId,
+                PendingCaptureEntity.STATE_DISMISSED
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Diagnostics.record("QuickLogTransactionHelper", "${e.javaClass.simpleName}: onDismiss updateState DISMISSED")
+        }
+    }
+
+    suspend fun loadExistingTransaction(
+        txnId: String,
+        currentState: QuickLogUiState,
+        transactionRepository: TransactionRepository,
+        peopleRepository: PeopleRepository
+    ): QuickLogUiState? {
+        val txn = transactionRepository.getTransactionById(txnId) ?: return null
+        val companionsList = if (txn.companions.isNotBlank() && txn.companions != "Personal") {
+            txn.companions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        } else emptyList()
+
+        val matchedIds = matchOrInsertCompanions(
+            companionsList, currentState.availableCompanions, peopleRepository
+        )
+        val determinedMode = determineSplitMode(
+            txn.companions, txn.owedToMe, txn.totalAmount, txn.myShare, companionsList
+        )
+
+        return currentState.copy(
+            transactionId = txn.id,
+            amount = txn.totalAmount,
+            amountText = formatAmountInput(txn.totalAmount),
+            payee = txn.merchant,
+            selectedCategory = txn.category,
+            selectedAccount = txn.account,
+            splitMode = determinedMode,
+            selectedCompanionIds = matchedIds,
+            customShare = if (determinedMode == SplitMode.CUSTOM) txn.myShare else null,
+            customShareText = if (determinedMode == SplitMode.CUSTOM) formatAmountInput(txn.myShare) else "",
+            myShare = txn.myShare,
+            owedToMe = txn.owedToMe,
+            isPossibleDuplicate = txn.isPossibleDuplicate,
+            isSaved = false,
+            isVoided = false,
+            errorMessage = null
+        )
     }
 
     suspend fun updateExisting(

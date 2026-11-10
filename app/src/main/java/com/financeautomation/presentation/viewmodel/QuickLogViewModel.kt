@@ -317,37 +317,14 @@ class QuickLogViewModel(
         if (txnId.isBlank()) return
         viewModelScope.launch(ioDispatcher) {
             try {
-                val txn = transactionRepository.getTransactionById(txnId) ?: return@launch
-                val companionsList = if (txn.companions.isNotBlank() && txn.companions != "Personal") {
-                    txn.companions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                } else emptyList()
-
-                val matchedIds = QuickLogTransactionHelper.matchOrInsertCompanions(
-                    companionsList, _uiState.value.availableCompanions, peopleRepository
+                val updatedState = QuickLogTransactionHelper.loadExistingTransaction(
+                    txnId = txnId,
+                    currentState = _uiState.value,
+                    transactionRepository = transactionRepository,
+                    peopleRepository = peopleRepository
                 )
-                val determinedMode = QuickLogTransactionHelper.determineSplitMode(
-                    txn.companions, txn.owedToMe, txn.totalAmount, txn.myShare, companionsList
-                )
-
-                _uiState.update { current ->
-                    current.copy(
-                        transactionId = txn.id,
-                        amount = txn.totalAmount,
-                        amountText = formatAmountInput(txn.totalAmount),
-                        payee = txn.merchant,
-                        selectedCategory = txn.category,
-                        selectedAccount = txn.account,
-                        splitMode = determinedMode,
-                        selectedCompanionIds = matchedIds,
-                        customShare = if (determinedMode == SplitMode.CUSTOM) txn.myShare else null,
-                        customShareText = if (determinedMode == SplitMode.CUSTOM) formatAmountInput(txn.myShare) else "",
-                        myShare = txn.myShare,
-                        owedToMe = txn.owedToMe,
-                        isPossibleDuplicate = txn.isPossibleDuplicate,
-                        isSaved = false,
-                        isVoided = false,
-                        errorMessage = null
-                    )
+                if (updatedState != null) {
+                    _uiState.value = updatedState
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -401,15 +378,7 @@ class QuickLogViewModel(
         val cid = state.captureId ?: return
 
         viewModelScope.launch(ioDispatcher) {
-            try {
-                pendingCaptureDaoProvider.invoke().updateState(
-                    cid,
-                    PendingCaptureEntity.STATE_DISMISSED
-                )
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onDismiss updateState DISMISSED")
-            }
+            QuickLogTransactionHelper.dismissCapture(cid, pendingCaptureDaoProvider)
         }
     }
 }

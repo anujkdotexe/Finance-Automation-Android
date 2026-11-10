@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,7 +79,7 @@ fun SetupHealthCard(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val state = viewModel.uiState.value
+    val state by viewModel.uiState.collectAsState()
 
     var selfTestResultText by remember { mutableStateOf<String?>(null) }
     var selfTestSucceeded by remember { mutableStateOf<Boolean?>(null) }
