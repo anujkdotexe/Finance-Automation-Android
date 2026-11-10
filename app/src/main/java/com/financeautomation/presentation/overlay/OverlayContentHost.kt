@@ -57,6 +57,7 @@ fun OverlayContentHost(
     companions: List<Companion>,
     activeTripTag: TripTag?,
     openDebts: List<OpenDebtItem>,
+    onPersonChanged: (String) -> Unit = {},
     onConfirmExpense: () -> Unit,
     onConfirmIncome: (amount: Double, account: String, inflowType: String, settler: String, reason: String, explicitRefs: List<String>) -> Unit,
     onConfirmFriendPaid: (amount: Double, creditor: String, whatFor: String) -> Unit,
@@ -134,6 +135,7 @@ fun OverlayContentHost(
                         accounts = accounts,
                         companions = companions,
                         openDebts = openDebts,
+                        onPersonChanged = onPersonChanged,
                         onBack = {
                             if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
                         },
