@@ -1,0 +1,68 @@
+# Gradle and build outputs
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+*.aar
+*.dex
+bin/
+gen/
+out/
+
+# Kotlin and native builds
+.kotlin/
+.cxx/
+.externalNativeBuild/
+captures/
+
+# Local configuration and credentials
+local.properties
+*.jks
+*.keystore
+google-services.json
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+*.suo
+*.user
+*.swp
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and crash dumps
+*.log
+logs/
+hs_err_pid*
+*.hprof
+
+# Temporary folders
+tmp/
+temp/
+
+# Claude local settings
+.claude/settings.local.json
+
+# Transient handoff files (keep docs/handoff/README.md)
+docs/handoff/TO_AGENT.md
+docs/handoff/FROM_AGENT.md
+docs/handoff/STATUS.md
+docs/handoff/history/
+
+# Untracked reference templates
+Finance2026_Template_v2.xlsx
+
+# Agent private rules
+.gemini/
