@@ -7,6 +7,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -52,9 +54,49 @@ fun FinanceAutomationTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    val financeColors = if (darkTheme) DarkFinanceColors else LightFinanceColors
+
+    CompositionLocalProvider(
+        LocalFinanceColors provides financeColors,
+        LocalFinanceTypography provides FinanceTypographyTokens,
+        LocalSpacing provides Spacing,
+        LocalShapes provides FinanceShapes,
+        LocalSizes provides FinanceSizes
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
+}
+
+/**
+ * Direct accessor for token values in the active theme (Design Guide 3).
+ */
+object FinanceTheme {
+    val colors: FinanceColors
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalFinanceColors.current
+
+    val typography: FinanceTypography
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalFinanceTypography.current
+
+    val spacing: Spacing
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalSpacing.current
+
+    val shapes: FinanceShapes
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalShapes.current
+
+    val sizes: FinanceSizes
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalSizes.current
 }

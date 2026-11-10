@@ -54,16 +54,19 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.core.model.SplitMode
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogUiState
 
 /**
- * Quick Log Bottom Sheet for expense review and logging (Phase 5.3).
- * Follows HIG / Dynamic Island styling with spring animations, Material 3 design tokens,
+ * Expense bottom sheet for review and logging (Phase 5.3).
+ * Follows calm utility styling with spring animations, Material 3 design tokens,
  * and adaptive keyboard focus management.
  */
 @Composable
@@ -80,6 +83,7 @@ fun QuickLogSheet(
     onEndTrip: () -> Unit,
     onConfirmAndSave: () -> Unit,
     onDismiss: () -> Unit,
+    onVoid: (() -> Unit)? = null,
     onKeyboardFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -119,11 +123,15 @@ fun QuickLogSheet(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = FinanceTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
             ) {
                 Text(
-                    text = if (state.captureId != null) "Payment Intercepted" else "Quick Expense",
+                    text = if (state.captureId != null) {
+                        stringResource(R.string.badge_payment_intercepted)
+                    } else {
+                        stringResource(R.string.badge_quick_expense)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
@@ -141,7 +149,7 @@ fun QuickLogSheet(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
-                        contentDescription = "Dismiss",
+                        contentDescription = stringResource(R.string.cd_close),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
@@ -159,9 +167,9 @@ fun QuickLogSheet(
             OutlinedTextField(
                 value = state.amountText,
                 onValueChange = onAmountChanged,
-                label = { Text("Amount ₹") },
+                label = { Text(stringResource(R.string.prompt_enter_amount)) },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = FinanceTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Decimal,
                     imeAction = ImeAction.Next
@@ -174,9 +182,9 @@ fun QuickLogSheet(
             OutlinedTextField(
                 value = state.payee,
                 onValueChange = onPayeeChanged,
-                label = { Text("Paid To") },
+                label = { Text(stringResource(R.string.prompt_what_was_this_for)) },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = FinanceTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.Done
@@ -201,7 +209,7 @@ fun QuickLogSheet(
             state.availableAccounts.forEach { account ->
                 val isSelected = account.name.equals(state.selectedAccount, ignoreCase = true)
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = FinanceTheme.shapes.medium,
                     color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     border = BorderStroke(
                         1.dp,
@@ -233,7 +241,7 @@ fun QuickLogSheet(
             state.availableCategories.forEach { category ->
                 val isSelected = category.name.equals(state.selectedCategory, ignoreCase = true)
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = FinanceTheme.shapes.medium,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     border = BorderStroke(
                         1.dp,
@@ -256,7 +264,7 @@ fun QuickLogSheet(
 
         // 5. Split Control (Segmented Bar)
         Surface(
-            shape = RoundedCornerShape(14.dp),
+            shape = FinanceTheme.shapes.medium,
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -266,14 +274,18 @@ fun QuickLogSheet(
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                listOf(
-                    SplitMode.JUST_ME to "Just Me",
-                    SplitMode.SPLIT_EQUALLY to "Split Equally",
-                    SplitMode.CUSTOM to "Custom Split"
-                ).forEach { (mode, label) ->
+                val justMeLabel = stringResource(R.string.split_just_me)
+                val splitEquallyLabel = stringResource(R.string.split_equally)
+                val customSplitLabel = stringResource(R.string.split_custom)
+                val splitModes: List<Pair<SplitMode, String>> = listOf(
+                    SplitMode.JUST_ME to justMeLabel,
+                    SplitMode.SPLIT_EQUALLY to splitEquallyLabel,
+                    SplitMode.CUSTOM to customSplitLabel
+                )
+                splitModes.forEach { (mode, label) ->
                     val isSelected = state.splitMode == mode
                     Surface(
-                        shape = RoundedCornerShape(11.dp),
+                        shape = FinanceTheme.shapes.card,
                         color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
                         shadowElevation = if (isSelected) 2.dp else 0.dp,
                         modifier = Modifier
@@ -328,7 +340,7 @@ fun QuickLogSheet(
                 onConfirmAndSave()
             },
             enabled = !state.isSaving && state.amount > 0.0,
-            shape = RoundedCornerShape(16.dp),
+            shape = FinanceTheme.shapes.large,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -353,12 +365,21 @@ fun QuickLogSheet(
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "Confirm & Save",
+                        text = stringResource(R.string.btn_save_expense),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
+        }
+
+        if (state.transactionId != null && onVoid != null) {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
+            SecondaryButton(
+                text = stringResource(R.string.action_void),
+                onClick = onVoid,
+                enabled = !state.isSaving
+            )
         }
 
         state.errorMessage?.let { errorMsg ->

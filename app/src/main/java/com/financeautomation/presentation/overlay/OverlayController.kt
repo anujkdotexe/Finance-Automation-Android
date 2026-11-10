@@ -41,6 +41,7 @@ import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.flows.OpenDebtItem
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
+import com.financeautomation.presentation.theme.DefaultOverlayScrim
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
@@ -390,6 +391,6 @@ class OverlayController(
     }
 
     companion object {
-        val SCRIM_COLOR = Color.Black.copy(alpha = 0.45f)
+        val SCRIM_COLOR = DefaultOverlayScrim
     }
 }

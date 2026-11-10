@@ -32,12 +32,14 @@ import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.presentation.components.QuickLogSheet
+import com.financeautomation.presentation.components.SheetScaffold
 import com.financeautomation.presentation.flows.ChooseActionMenu
 import com.financeautomation.presentation.flows.FriendPaidFlowSheet
 import com.financeautomation.presentation.flows.IncomeReturnFlowSheet
 import com.financeautomation.presentation.flows.OpenDebtItem
 import com.financeautomation.presentation.flows.RepaidFriendFlowSheet
 import com.financeautomation.presentation.flows.TripModeFlowSheet
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 
 /**
@@ -77,28 +79,36 @@ fun OverlayContentHost(
 ) {
     var currentScreen by remember { mutableStateOf(initialScreen) }
     val openedFromMenu = remember { initialScreen == OverlayFlowScreen.MENU }
+    val quickLogState by quickLogViewModel.uiState.collectAsState()
 
-    Surface(
+    val sheetTitle = when (currentScreen) {
+        OverlayFlowScreen.MENU -> stringResource(R.string.prompt_choose_action)
+        OverlayFlowScreen.EXPENSE -> if (quickLogState.captureId != null) {
+            stringResource(R.string.badge_payment_intercepted)
+        } else {
+            stringResource(R.string.prompt_enter_amount)
+        }
+        OverlayFlowScreen.INCOME_RETURN -> stringResource(R.string.prompt_amount_received)
+        OverlayFlowScreen.FRIEND_PAID -> stringResource(R.string.action_menu_friend_paid_title)
+        OverlayFlowScreen.REPAID_FRIEND -> stringResource(R.string.action_menu_repaid_friend_title)
+        OverlayFlowScreen.TRIP_MODE -> stringResource(R.string.action_menu_trip_mode_title)
+    }
+
+    SheetScaffold(
+        title = sheetTitle,
+        onDismiss = onDismiss,
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .displayCutoutPadding()
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-            .heightIn(max = 620.dp)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { /* Consume clicks to prevent backdrop dismissal */ },
-        shape = RoundedCornerShape(32.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 6.dp,
-        shadowElevation = 24.dp
+            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m)
+            .heightIn(max = FinanceTheme.sizes.maxOverlayHeight)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (isTestMode) {
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    shape = FinanceTheme.shapes.sheet,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -107,7 +117,7 @@ fun OverlayContentHost(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(vertical = FinanceTheme.spacing.s)
                     )
                 }
             }
@@ -115,7 +125,7 @@ fun OverlayContentHost(
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "OverlayFlowAnimation"
+                label = ""
             ) { screen ->
             when (screen) {
                 OverlayFlowScreen.MENU -> {

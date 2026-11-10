@@ -1,7 +1,8 @@
 # Finance Automation Android - Phase Guide for Build Agents
 
-Status: Draft v8.0.0, detailed edition. Work the phases in order. Each action is written as Do, How, Watch out and
-Check, so that nothing has to be guessed. Phases 0 to 1.5 are finished and summarised in "Completed work".
+Status: Draft v8.1.0, detailed edition. Work the phases in order. Each action is written as Do, How, Watch out and
+Check, so that nothing has to be guessed. Phases 0 to 7 are finished and merged into `main`. Phase 8 (UI and UX), Phase 9
+(beta tooling and failure visibility) and Phase 10 (MVP closure) remain.
 
 Source documents (read them first, they define the behaviour):
 
@@ -11,6 +12,9 @@ Source documents (read them first, they define the behaviour):
 - `docs/ios_reference/Code.gs` (v2.3.0) and `docs/ios_reference/Finance2026_Template.xlsx` - the verified iOS
   engine and the master workbook. Port behaviour from these, do not reinvent it.
 - `AGENTS.md` - repository rules
+- [ANDROID_V8_UI_UX_DESIGN.md](./ANDROID_V8_UI_UX_DESIGN.md) - look, components, screens and copy (Phase 8)
+- [ANDROID_V8_BETA_AND_RELEASE_PLAN.md](./ANDROID_V8_BETA_AND_RELEASE_PLAN.md) - beta distribution, failure visibility and the
+  owner checklist (Phase 9 and the owner action items)
 
 ---
 
@@ -207,6 +211,19 @@ later. Where existing code breaks a standard, fix it when you touch that functio
   non-ASCII characters are the rupee sign and the dash and bullet characters already used in sheet text. A function that
   is meant to override a framework method (for example `onReceive`) must carry the exact framework name; the build
   reports "overrides nothing" otherwise.
+- Imports are at the top of every file; regular expressions are compiled once as top-level or companion constants, never
+  inside functions or loops.
+- No global mutable state for request-scoped data. Independent suspend calls that do not depend on each other run together
+  with `async` and `awaitAll`, not one after another.
+- Databases and their settings are initialised once; do not write transient data to disk just to read it back, pass models in
+  memory.
+- Move, copy and rename files with `git mv` or native commands; never regenerate a file's contents to relocate it. Do not
+  overwrite an existing major file wholesale: edit it in place or add a new file.
+- Comments only where the intent is not obvious; keep documentation current with the code.
+- Zero-cost static checks before every report: `assembleDebug`, `compileDebugUnitTestSources` and `lintDebug`; paste the lint
+  summary counts. Do not run tests unless the owner asks.
+- Pull requests are opened and then left open. The reviewer inspects the pull request on GitHub and tells the agent when to
+  squash-merge. Do not merge on your own unless the instruction says so.
 
 ---
 
@@ -487,7 +504,7 @@ Done when (Phase 2): the build passes and the checks in 2.1 to 2.4 are written i
 
 ## Phase 3 - Accounting engine (Room version 4)
 
-Status: not started. Goal: the iOS waterfall, netting, carry-forward and void as pure Kotlin in `domain`, applied through
+Status: Complete (merged into main). Goal: the iOS waterfall, netting, carry-forward and void as pure Kotlin in `domain`, applied through
 the gateway. Port from `docs/ios_reference/Code.gs`. Spec section 9 is authoritative.
 
 ### 3.0 Preparation
@@ -701,7 +718,7 @@ Done when: the build passes, the `domain` package has no Android imports, and ea
 
 ## Phase 4 - Capture pipeline (Room version 5)
 
-Status: not started. Goal: parse in the background, keep a pending capture, and show the prompt when the payment app is
+Status: Complete (merged into main). Goal: parse in the background, keep a pending capture, and show the prompt when the payment app is
 closed. Spec section 4. Audit items 6, 7, 8, 11.
 
 ### 4.0 Preparation
@@ -822,7 +839,7 @@ alert opening with the amount missing, and (g) a negative check: after an alert 
 
 ## Phase 5 - Overlay and flows (Room version 6)
 
-Status: not started. Goal: the iOS-Shortcuts-style overlay and every flow behind it. Spec section 3. Audit items 12, 13.
+Status: Complete (merged into main). Goal: the iOS-Shortcuts-style overlay and every flow behind it. Spec section 3. Audit items 12, 13.
 
 ### 5.0 Preparation
 
@@ -940,7 +957,7 @@ fallback paths; the pill; and the predicted chip order.
 
 ## Phase 6 - Launcher widget and shortcut
 
-Status: not started. Spec section 5. Audit item 14.
+Status: Complete (merged into main). Spec section 5. Audit item 14.
 
 ### 6.0 Preparation
 
@@ -1005,7 +1022,7 @@ and later.
 
 ## Phase 7 - Setup health screen and OEM hardening
 
-Status: not started. Engineering plan sections 2 and 3.
+Status: Complete (merged into main). Engineering plan sections 2 and 3.
 
 ### 7.0 Preparation
 
@@ -1069,7 +1086,118 @@ the release-safe self-test.
 
 ---
 
-## Phase 8 - MVP closure
+## Phase 8 - UI and UX (design system, home screen, copy)
+
+Status: not started. Authority: [ANDROID_V8_UI_UX_DESIGN.md](./ANDROID_V8_UI_UX_DESIGN.md). Goal: the app looks and reads like a
+calm utility, every screen uses one token set and one component set, and a later redesign only touches `theme/` and
+`components/`. Open a pull request for this phase and leave it open for review (rule in section 0b).
+
+### 8.0 Preparation
+
+Read the design guide completely, then `theme/Color.kt`, `Theme.kt`, `Type.kt`, `DashboardScreen.kt`, `ReviewInboxScreen.kt`,
+`SettingsScreen.kt`, `OnboardingScreen.kt`, `QuickLogSheet.kt`, the flows and the overlay files, and `strings.xml`. The setup health
+card still has some hard-coded titles and subtitles; they move to `strings.xml` in this phase.
+
+### 8.1 Tokens
+
+1. Add `FinanceColors` (light and dark values from design guide 3.1) provided through `LocalFinanceColors`; keep the existing
+   semantic constants as the source.
+2. Add the type roles of 3.2 (amount styles use tabular figures), the spacing scale, the shape set and the motion constants of 3.3
+   in `theme/`.
+3. Add `formatRupees` (Indian grouping, `en-IN`) in one utility and make it the only money formatter.
+
+### 8.2 Components
+
+Build the components of design guide section 4 in `presentation/components/` as stateless composables with previews for light,
+dark and 200 percent font scale. One `SheetScaffold` replaces `AppleExpensePromptSheet` and `ExpenseBottomSheet`; the overlay and
+`ModalBottomSheetActivity` both use it. Delete the replaced files and the placeholder files under `presentation/ui/components` and
+`presentation/ui/screens`, and show by search that nothing references them (rule 17).
+
+### 8.3 Home screen
+
+Rebuild `DashboardScreen` per design guide 5.1: month selector, sync status line, hero living-burn card with the daily average,
+Owed to me and I owe cards with the top three names, the needs-review chip, a category list with proportional bars, recent
+transactions, savings and income below the fold, pull to refresh and the empty state. The ViewModel exposes one immutable UI state;
+no formatting in the composable except through `formatRupees` and `AmountText`.
+
+### 8.4 Other screens and the sheet
+
+Apply the components to Review, Settings (grouped rows), Setup health, Onboarding and every overlay step. Copy comes from design
+guide section 6; the widget, tile and shortcut labels become "Add expense". Remove the words Apple, Island, Shortcuts and
+Quick log from user-visible text. Settings is large (about 800 lines): split it into one file per group while you restyle it.
+
+### 8.5 String review list
+
+Write every user-visible string of the app into the report, grouped by screen (key and text), so the owner can review the copy once.
+
+Done when: the build passes and compiles test sources; a search shows no colour literal, no `sp` or corner-radius literal and no
+user-visible string literal outside `theme/` and `strings.xml` in `presentation/`; no money is formatted outside `formatRupees`; the
+report lists each screen with the components it uses. Negative check: no reference to a deleted component remains.
+
+## Phase 9 - Beta tooling and failure visibility
+
+Status: not started. Authority: [ANDROID_V8_BETA_AND_RELEASE_PLAN.md](./ANDROID_V8_BETA_AND_RELEASE_PLAN.md) sections 3 to 5. Goal:
+the owner can see where the system breaks on friends' phones (silent pipeline failures, brand-specific behaviour and crashes)
+without seeing any financial data.
+
+### 9.0 Preparation
+
+Read the plan, the `build.gradle.kts` files, `OemHardeningHelper.kt`, `Diagnostics.kt`, `SetupHealthViewModel.kt`,
+`FinanceApplication.kt`, `NotificationListenerServiceImpl.kt`, `ForegroundWatcher.kt`, `OverlayController.kt` and `AGENTS.md`.
+
+### 9.1 Build types
+
+Add `beta` (signed from `keystore.properties` if present, otherwise the debug key; never commit that file) next to `debug` and
+`release`. Same `applicationId`. `QUERY_ALL_PACKAGES` only in the `debug` and `beta` manifests. `BuildConfig` flags for the discovery
+scan and the simulator. Apply the Google services and Crashlytics plugins only if `app/google-services.json` exists, so the project
+builds without it. Add `keystore.properties`, `google-services.json` and keystores to `.gitignore` if they are missing.
+
+### 9.2 Routes as data
+
+Move the candidate lists into `assets/oem_routes.json` (plan section 5) with a repository that parses and validates it and falls
+back to the generic battery settings. `OemHardeningHelper` reads the routes; instruction text stays in `strings.xml`. Every route
+stays resolve-then-fallback and every launch stays guarded.
+
+### 9.3 Local crash and exit record
+
+An uncaught exception handler that stores class, our own frames, time and version (never the message) and chains to the previous
+handler; at start, read the last five `ApplicationExitInfo` entries (API 30 and later). Store both locally (capped) and expose them
+to the report.
+
+### 9.3b Pipeline trail (Room version 7)
+
+Add the capped event trail of plan section 4.5: `Migration(6, 7)` creating `pipeline_events(id INTEGER PRIMARY KEY AUTOINCREMENT NOT
+NULL, time INTEGER NOT NULL, stage TEXT NOT NULL, code TEXT NOT NULL, a INTEGER, b INTEGER)` with an index on `time`, exported
+`7.json`, an in-memory buffered writer that flushes in batches on `Dispatchers.IO` (never one disk write per event on a hot path),
+and pruning to 500 rows or 7 days. One small `PipelineTrail.record(stage, code, a, b)` API in `core`, used at every stage of the
+capture pipeline (listener, `NotificationProcessor`, `ForegroundWatcher`, `OverlayController`, the heads-up helper, the sync loop).
+Codes are enums, never strings built from alert content; the type system must not allow text. Record the device snapshot at app
+start and every six hours (WorkManager). Add a local "Capture health" view in Settings, Advanced: the daily funnel and the last 50
+events. Also record a listener heartbeat time (last callback of any notification, no package name, no content). Rule: nothing from a
+non-whitelisted app is recorded except the heartbeat time and a counter.
+
+### 9.4 Compatibility report
+
+A builder in `domain` (pure formatting) and a data collector, a preview screen and the share action (`ACTION_SEND`). Content per plan
+4.3; the discovery scan per 4.4 only when the build flag is on. Add the per-candidate "Did this open the right screen? Yes / No"
+feedback to the OEM fix flow and include the answers. Include the daily funnel, the last 30 minutes of the pipeline trail and the
+device snapshot. Add the "A payment did not show a prompt" button (home screen and setup health) that opens this report pre-filled for
+the last 30 minutes, with one optional note.
+
+### 9.5 Crashlytics, opt in
+
+Manifest meta-data disables collection; a Settings switch "Help improve reliability" with the disclosure sentence enables it at
+runtime; allow-listed custom keys only; non-fatal recording with class and place only; a test-crash button in `debug` and `beta`
+builds. The build must succeed when `google-services.json` is absent (the integration code is then inert). Add the one-sentence
+exception to `AGENTS.md` section 2B (crash reports without financial data may go to Firebase Crashlytics when the user has opted in).
+
+Done when: all three build types assemble; the release manifest does not contain `QUERY_ALL_PACKAGES` (show the merged-manifest
+search); collection is disabled by default (show the manifest line and the code that enables it only after the switch); no free text
+reaches a custom key (show the key allow-list); the report preview shows exactly what is shared; the routes file drives
+`OemHardeningHelper` (trace); the trail has no field that can hold alert text (show the types); negative checks for amounts, payees
+and message texts in the report builder (show the fields it can read).
+
+## Phase 10 - MVP closure
 
 Status: not started.
 
@@ -1084,27 +1212,20 @@ Status: not started.
    `armeabi-v7a`, record the APK size.
 4. Confirm every audit item in section 12 of the engineering plan is fixed or consciously deferred, and write the result at the end
    of this file.
-5. Then, and only then, the test phase begins (engineering plan section 8). Do not start it from this guide.
+5. `assembleBeta` succeeds and installs over a previous beta build; record the beta APK size.
+6. Confirm the owner checklist in [ANDROID_V8_BETA_AND_RELEASE_PLAN.md](./ANDROID_V8_BETA_AND_RELEASE_PLAN.md) section 2 matches
+   reality: tell the owner which file names the build expects (`keystore.properties`, `app/google-services.json`) and what each
+   build type needs.
+7. Then, and only then, the test phase begins (engineering plan section 8). Do not start it from this guide.
 
 ---
 
 ## Owner action items after development (not for build agents)
 
-These are tasks for the project owner, to be done once coding and development are finished and before any friend installs the app.
-Build agents must not start them.
-
-1. **Release signing key.** Create a release keystore. Keep it out of git (the `.gitignore` already excludes `*.jks` and
-   `*.keystore`), store its passwords outside the repository, and make at least two backups in different places. If the keystore is
-   lost, updates can no longer install over earlier builds.
-2. **Second OAuth client.** In Google Cloud, create another Android OAuth client for package `com.financeautomation` with the SHA-1
-   of the release keystore. The current client covers only the debug key on the owner's PC; a signed APK sent to friends will fail
-   to sign in without this.
-3. **Test users.** While the OAuth consent screen is in testing status, add each friend's Google account as a test user before they
-   install (a small fixed limit applies). Check Google's current rules on consent expiry for testing apps.
-4. **Consent screen.** Decide when to publish the consent screen so testers are not asked to reconnect periodically.
-5. **Signed build and distribution.** Build `assembleRelease`, sign it, and share by sideload or GitHub Releases. Do a first install
-   on a clean phone with a test account to confirm sign-in works with the release key.
-6. **Tidy-up.** Confirm `.env` is not committed, and remove any credential values from it that the app no longer uses.
+The owner action items now live in [ANDROID_V8_BETA_AND_RELEASE_PLAN.md](./ANDROID_V8_BETA_AND_RELEASE_PLAN.md), section 2, as an
+ordered checklist of twelve steps with the evidence for each (release keystore, `keystore.properties`, release SHA-1, second OAuth
+client, consent screen status, Firebase project, `google-services.json`, tester group, first beta install, crash test, distribution,
+tidy-up). They are done after Phase 10 and before the live device test. Build agents must not start them.
 
 ---
 
@@ -1122,3 +1243,8 @@ Build agents must not start them.
 | D8 | Local database encryption | Yes, SQLCipher with a Keystore-wrapped key |
 | D9 | Cross-platform workbook | Keep the contract in spec section 13 true; do not add Android-only conventions to the sheet |
 | D10 | Overlay host | `OverlayController` in the application process, entered through `EntryActivity`; no started service |
+| D11 | Look and copy | Calm utility, workbook palette, iOS prompt wording where it exists (`ANDROID_V8_UI_UX_DESIGN.md`) |
+| D12 | Beta audience and distribution | At most ten friends; Firebase App Distribution by console upload; no paid account |
+| D13 | Failure visibility | Crashlytics opt in, a pipeline trail and a user-shared compatibility report |
+| D14 | Phone-brand routes | Data file in assets, resolve-then-fallback, discovery scan in debug and beta only |
+| D15 | Build types | debug, beta, release; same application id |

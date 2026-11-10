@@ -55,13 +55,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Transaction
-import com.financeautomation.presentation.components.ExpenseBottomSheet
-import com.financeautomation.presentation.components.StatusBadge
-import com.financeautomation.presentation.viewmodel.ExpenseViewModel
+import com.financeautomation.presentation.components.StatusChip
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.ReviewInboxUiState
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
 import java.text.SimpleDateFormat
@@ -76,7 +77,7 @@ import java.util.Locale
 @Composable
 fun ReviewInboxScreen(
     reviewInboxViewModel: ReviewInboxViewModel,
-    expenseViewModel: ExpenseViewModel? = null,
+    onEditTransaction: ((Transaction) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val state by reviewInboxViewModel.uiState.collectAsState()
@@ -106,19 +107,9 @@ fun ReviewInboxScreen(
             },
             onSelectTransaction = { txn ->
                 reviewInboxViewModel.selectTransaction(txn)
-                expenseViewModel?.loadTransaction(txn.id)
+                onEditTransaction?.invoke(txn)
             },
             modifier = Modifier.padding(innerPadding)
-        )
-    }
-
-    // Modal Bottom Sheet for detailed review and split editing
-    if (state.selectedTransaction != null && expenseViewModel != null) {
-        ExpenseBottomSheet(
-            viewModel = expenseViewModel,
-            onDismiss = {
-                reviewInboxViewModel.clearSelection()
-            }
         )
     }
 }
@@ -150,28 +141,28 @@ fun ReviewInboxContent(
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    contentPadding = PaddingValues(FinanceTheme.spacing.l),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
                     item {
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = FinanceTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Receipt,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(FinanceTheme.sizes.icon18)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                                 Text(
-                                    text = "${state.items.size} transaction${if (state.items.size > 1) "s" else ""} awaiting confirmation",
+                                    text = stringResource(R.string.review_awaiting_confirmation, state.items.size),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -197,269 +188,3 @@ fun ReviewInboxContent(
     }
 }
 
-/**
- * Individual Transaction Card within Review Inbox.
- * Styled with fintech surface contrast, category icons, and clear typography hierarchy.
- */
-@Composable
-fun ReviewTransactionCard(
-    transaction: Transaction,
-    onConfirm: () -> Unit,
-    onVoid: () -> Unit,
-    onEdit: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // Duplicate Warning Banner
-            if (transaction.isPossibleDuplicate) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.WarningAmber,
-                            contentDescription = "Warning",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Possible duplicate detected. Please verify before confirming.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            // Top Row: Category Avatar, Merchant Info, and Amount
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    // Category Icon Avatar
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = resolveCategoryIcon(transaction.category),
-                            contentDescription = transaction.category,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Text(
-                            text = transaction.merchant.ifBlank { "Unknown Merchant" },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = formatTimestamp(transaction.timestamp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Text(
-                    text = String.format(Locale.getDefault(), "Rs. %.2f", transaction.totalAmount),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Metadata Row: Category Pill, Status Badge, and Split Details
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = transaction.category.ifBlank { CategoryConstants.CATEGORY_FOOD_AND_DRINK },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                StatusBadge(status = transaction.status)
-
-                if (transaction.companions.isNotBlank() && transaction.companions != "Personal") {
-                    Text(
-                        text = "Split with ${transaction.companions}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Action Buttons: 1-Tap Confirm, Edit/Split, Void
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onConfirm,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    modifier = Modifier.weight(1.2f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Confirm",
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = onEdit,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Edit",
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                TextButton(
-                    onClick = onVoid,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.DeleteOutline,
-                        contentDescription = "Void",
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Empty inbox illustration and prompt with clean icon and friendly fintech typography.
- */
-@Composable
-fun EmptyInboxState(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = "All Caught Up",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(38.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "All Caught Up",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "No pending transactions needing review. New UPI & card alerts will appear here in real-time.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-    }
-}
-
-private fun resolveCategoryIcon(category: String): ImageVector {
-    return when (category.lowercase()) {
-        "food & drink", "dining", "food" -> Icons.Rounded.Restaurant
-        "commute", "travel", "cab", "uber", "fuel" -> Icons.Rounded.DirectionsCar
-        "shopping", "clothing", "electronics" -> Icons.Rounded.ShoppingBag
-        "groceries", "supermarket" -> Icons.Rounded.LocalGroceryStore
-        "utilities", "recharge", "electricity", "bills" -> Icons.Rounded.Receipt
-        "savings", "investment", "sip", "stocks" -> Icons.Rounded.Savings
-        else -> Icons.Rounded.Payments
-    }
-}
-
-private fun formatTimestamp(timestamp: Long): String {
-    if (timestamp <= 0L) return ""
-    val formatter = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
-    return formatter.format(Date(timestamp))
-}

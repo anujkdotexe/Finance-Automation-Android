@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material3.MaterialTheme
@@ -27,9 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.presentation.theme.FinanceTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,7 +55,7 @@ fun AdvancedDiagnosticsCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "${records.size} event(s) recorded",
+                text = stringResource(R.string.diagnostics_events_count, records.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -65,48 +64,48 @@ fun AdvancedDiagnosticsCard(
                     onClick = {
                         records = Diagnostics.getRecords()
                     },
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(32.dp)
+                    shape = FinanceTheme.shapes.small,
+                    modifier = Modifier.height(FinanceTheme.sizes.buttonHeightSmall)
                 ) {
-                    Text("Refresh", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.action_refresh), style = MaterialTheme.typography.labelSmall)
                 }
-                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                Spacer(modifier = Modifier.padding(horizontal = FinanceTheme.spacing.xs))
                 OutlinedButton(
                     onClick = {
                         Diagnostics.clear()
                         records = emptyList()
                     },
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(32.dp)
+                    shape = FinanceTheme.shapes.small,
+                    modifier = Modifier.height(FinanceTheme.sizes.buttonHeightSmall)
                 ) {
-                    Text("Clear", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.action_clear), style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
         if (records.isEmpty()) {
             Text(
-                text = "No diagnostic events recorded. System running nominally.",
+                text = stringResource(R.string.diagnostics_empty),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier.padding(vertical = FinanceTheme.spacing.s)
             )
         } else {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(10.dp),
+                shape = FinanceTheme.shapes.card,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 240.dp)
+                    .heightIn(max = FinanceTheme.sizes.diagnosticsHeight)
             ) {
-                LazyColumn(modifier = Modifier.padding(8.dp)) {
+                LazyColumn(modifier = Modifier.padding(FinanceTheme.spacing.s)) {
                     items(records.reversed()) { record ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
+                                .padding(vertical = FinanceTheme.spacing.xs)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
@@ -115,7 +114,7 @@ fun AdvancedDiagnosticsCard(
                                     fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                                Spacer(modifier = Modifier.padding(horizontal = FinanceTheme.spacing.xs))
                                 Text(
                                     text = record.tag,
                                     style = MaterialTheme.typography.labelSmall,
@@ -136,4 +135,3 @@ fun AdvancedDiagnosticsCard(
         }
     }
 }
-
