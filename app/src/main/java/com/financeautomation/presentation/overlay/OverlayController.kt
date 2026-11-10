@@ -113,13 +113,14 @@ class OverlayController(
             return false
         }
 
-        // Automatic capture while sheet is already open is deferred; remains in WAITING
-        if (request is OverlayRequest.Capture && isShowing) {
-            return false
+        // Automatic capture while sheet is already open is deferred; atomic check-and-reserve
+        if (request is OverlayRequest.Capture) {
+            if (currentView != null || !showRequested.compareAndSet(false, true)) {
+                return false
+            }
+        } else {
+            showRequested.set(true)
         }
-
-        // Reserve the overlay synchronously to prevent simultaneous capture prompt collisions
-        showRequested.set(true)
         _isShowingFlow.value = true
 
         // Explicit user action replacing an active capture reverts the old capture back to WAITING
@@ -140,7 +141,7 @@ class OverlayController(
 
         mainScope.launch {
             try {
-                dismiss()
+                clearCurrentWindow()
 
                 val treeOwners = ComposeOverlayTreeOwners()
                 currentTreeOwners = treeOwners
@@ -322,24 +323,28 @@ class OverlayController(
         }
     }
 
-    /**
-     * Dismisses the currently displayed overlay window and recycles resources.
-     */
-    fun dismiss() {
-        showRequested.set(false)
+    private fun clearCurrentWindow() {
         blurHelper.teardownWindowBlur()
         currentView?.let { view ->
             try {
                 currentTreeOwners?.destroy()
                 windowManager.removeView(view)
             } catch (e: Exception) {
-                Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: dismiss")
+                Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: clearCurrentWindow")
             }
         }
         currentView = null
         currentTreeOwners = null
         currentLayoutParams = null
+    }
+
+    /**
+     * Dismisses the currently displayed overlay window and recycles resources.
+     */
+    fun dismiss() {
+        clearCurrentWindow()
         currentCaptureId = null
+        showRequested.set(false)
         _isShowingFlow.value = false
     }
 
