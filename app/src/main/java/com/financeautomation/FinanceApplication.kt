@@ -3,7 +3,9 @@ package com.financeautomation
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.di.AppContainer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,39 +25,53 @@ class FinanceApplication : Application() {
         super.onCreate()
         appContainer = AppContainer(applicationContext)
 
-        // 1. Pre-warm database on background thread before main thread touches it
+        // 1. Pre-warm database on background thread and resume foreground watcher
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                appContainer.database.openHelper.writableDatabase
-            } catch (_: Exception) {}
+                val db = appContainer.awaitDatabase()
+                db.openHelper.writableDatabase
+                // Reset incomplete SHOWN captures to WAITING
+                try {
+                    db.pendingCaptureDao().resetShownToWaiting()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: resetShownToWaiting")
+                }
+                appContainer.foregroundWatcher.checkAndResume(this)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: db pre-warm error")
+            }
         }
 
         // 2. Enqueue durable push if dirty rows exist, and pull latest config on startup
         CoroutineScope(Dispatchers.IO).launch {
-            appContainer.configSyncCoordinator.checkAndEnqueueDirtyPushOnStartup()
-            appContainer.configSyncCoordinator.pullOnForeground(force = false)
+            try {
+                appContainer.configSyncCoordinator.checkAndEnqueueDirtyPushOnStartup()
+                appContainer.configSyncCoordinator.pullOnForeground(force = false)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: startup config sync")
+            }
         }
 
         // 3. Schedule daily periodic monthly rollover check and 6-hour listener health worker
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
 
-        // 4. Reset incomplete SHOWN captures to WAITING and resume foreground watcher
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                appContainer.database.pendingCaptureDao().resetShownToWaiting()
-            } catch (_: Exception) {}
-            appContainer.foregroundWatcher.checkAndResume(this)
-        }
-
-        // 5. Register process lifecycle observer via ActivityLifecycleCallbacks for foreground pull
+        // 4. Register process lifecycle observer via ActivityLifecycleCallbacks for foreground pull
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
                 startedActivityCount++
                 if (startedActivityCount == 1) {
                     // App transitioned to foreground
                     CoroutineScope(Dispatchers.IO).launch {
-                        appContainer.configSyncCoordinator.pullOnForeground(force = false)
+                        try {
+                            appContainer.configSyncCoordinator.pullOnForeground(force = false)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: pullOnForeground")
+                        }
                     }
                 }
             }

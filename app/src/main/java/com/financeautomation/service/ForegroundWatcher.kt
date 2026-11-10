@@ -34,9 +34,37 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ForegroundWatcher(
     private val context: Context,
-    private val pendingCaptureDao: PendingCaptureDao,
+    private val directPendingCaptureDao: PendingCaptureDao? = null,
+    private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
     private val onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
 ) {
+
+    constructor(
+        context: Context,
+        pendingCaptureDao: PendingCaptureDao,
+        onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
+    ) : this(
+        context = context,
+        directPendingCaptureDao = pendingCaptureDao,
+        pendingCaptureDaoProvider = null,
+        onTriggerPrompt = onTriggerPrompt
+    )
+
+    constructor(
+        context: Context,
+        pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
+        onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
+    ) : this(
+        context = context,
+        directPendingCaptureDao = null,
+        pendingCaptureDaoProvider = pendingCaptureDaoProvider,
+        onTriggerPrompt = onTriggerPrompt
+    )
+
+    private suspend fun resolveDao(): PendingCaptureDao {
+        return directPendingCaptureDao ?: pendingCaptureDaoProvider?.invoke()
+            ?: throw IllegalStateException("PendingCaptureDao not available")
+    }
 
     private val mutex = Mutex()
     private var watcherJob: Job? = null
@@ -129,7 +157,7 @@ class ForegroundWatcher(
     fun checkAndResume(scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             mutex.withLock {
-                val waiting = pendingCaptureDao.getWaitingCaptures()
+                val waiting = resolveDao().getWaitingCaptures()
                 if (waiting.isNotEmpty() && watcherJob?.isActive != true) {
                     startWatcherLoop(scope)
                 }
@@ -155,7 +183,7 @@ class ForegroundWatcher(
         watcherJob = scope.launch(Dispatchers.IO) {
             try {
                 while (isActive) {
-                    val waitingList = pendingCaptureDao.getWaitingCaptures()
+                    val waitingList = resolveDao().getWaitingCaptures()
                     if (waitingList.isEmpty()) {
                         pollCounters.clear()
                         break
@@ -206,21 +234,25 @@ class ForegroundWatcher(
     }
 
     private suspend fun triggerPrompt(capture: PendingCaptureEntity) {
+        val dao = resolveDao()
         try {
-            pendingCaptureDao.updateState(capture.id, PendingCaptureEntity.STATE_SHOWN)
+            dao.updateState(capture.id, PendingCaptureEntity.STATE_SHOWN)
             if (onTriggerPrompt != null) {
                 onTriggerPrompt.invoke(capture)
             } else {
-                // Default launcher: start ModalBottomSheetActivity with capture ID
+                // Default launcher: start ModalBottomSheetActivity with EXTRA_CAPTURE_ID only
                 val intent = Intent(context, ModalBottomSheetActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra(ModalBottomSheetActivity.EXTRA_CAPTURE_ID, capture.id)
-                    putExtra("capture_id", capture.id)
-                    putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, capture.id)
                 }
                 context.startActivity(intent)
             }
         } catch (e: Exception) {
+            try {
+                dao.updateState(capture.id, PendingCaptureEntity.STATE_WAITING)
+            } catch (revertEx: Exception) {
+                Diagnostics.record("ForegroundWatcher", "${revertEx.javaClass.simpleName}: revertStateToWaiting")
+            }
             Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: triggerPrompt failed")
         }
     }
@@ -248,7 +280,8 @@ class ForegroundWatcher(
         if (screenReceiverRegistered) {
             try {
                 context.unregisterReceiver(screenReceiver)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: unregisterReceiver")
             } finally {
                 screenReceiverRegistered = false
             }

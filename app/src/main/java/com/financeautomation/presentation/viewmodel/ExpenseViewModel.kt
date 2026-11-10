@@ -9,6 +9,7 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.SplitCalculation
 import com.financeautomation.domain.model.Transaction
@@ -16,6 +17,7 @@ import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
 import com.financeautomation.domain.usecase.LogExpenseUseCase
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,10 +67,15 @@ class ExpenseViewModel(
     private val categoryRepository: com.financeautomation.domain.repository.CategoryRepository? = null,
     private val accountRepository: com.financeautomation.domain.repository.AccountRepository? = null,
     private val pendingCaptureDao: com.financeautomation.data.local.dao.PendingCaptureDao? = null,
+    private val pendingCaptureDaoProvider: (suspend () -> com.financeautomation.data.local.dao.PendingCaptureDao)? = null,
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
+
+    private suspend fun resolvePendingCaptureDao(): com.financeautomation.data.local.dao.PendingCaptureDao? {
+        return pendingCaptureDao ?: pendingCaptureDaoProvider?.invoke()
+    }
 
     private val _uiState = MutableStateFlow(ExpenseUiState())
     val uiState: StateFlow<ExpenseUiState> = _uiState.asStateFlow()
@@ -214,7 +221,8 @@ class ExpenseViewModel(
                     errorMessage = null
                 )
             }
-            val capture = pendingCaptureDao?.getById(captureId)
+            val dao = resolvePendingCaptureDao()
+            val capture = dao?.getById(captureId)
             if (capture != null) {
                 val amt = capture.amount ?: 0.0
                 val formatted = if (amt > 0.0) formatAmount(amt) else ""
@@ -252,8 +260,11 @@ class ExpenseViewModel(
         if (!cid.isNullOrBlank() && !_uiState.value.isSaved) {
             viewModelScope.launch(ioDispatcher) {
                 try {
-                    pendingCaptureDao?.updateState(cid, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DISMISSED)
-                } catch (_: Exception) {}
+                    resolvePendingCaptureDao()?.updateState(cid, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DISMISSED)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("ExpenseViewModel", "${e.javaClass.simpleName}: onDismissCapture")
+                }
             }
         }
     }
@@ -298,7 +309,8 @@ class ExpenseViewModel(
             } else {
                 CategoryConstants.normalizeCategory(categoryName)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Diagnostics.record("ExpenseViewModel", "${e.javaClass.simpleName}: normalizeCategory")
             categoryName.trim()
         }
         _uiState.update { it.copy(selectedCategory = normalized) }
@@ -511,8 +523,11 @@ class ExpenseViewModel(
         val cid = _uiState.value.captureId
         if (!cid.isNullOrBlank()) {
             try {
-                pendingCaptureDao?.updateState(cid, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
-            } catch (_: Exception) {}
+                resolvePendingCaptureDao()?.updateState(cid, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("ExpenseViewModel", "${e.javaClass.simpleName}: markCaptureDone")
+            }
         }
     }
 
@@ -574,6 +589,7 @@ class ExpenseViewModel(
             categoryRepository: com.financeautomation.domain.repository.CategoryRepository? = null,
             accountRepository: com.financeautomation.domain.repository.AccountRepository? = null,
             pendingCaptureDao: com.financeautomation.data.local.dao.PendingCaptureDao? = null,
+            pendingCaptureDaoProvider: (suspend () -> com.financeautomation.data.local.dao.PendingCaptureDao)? = null,
             calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
             logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -586,6 +602,7 @@ class ExpenseViewModel(
                     categoryRepository = categoryRepository,
                     accountRepository = accountRepository,
                     pendingCaptureDao = pendingCaptureDao,
+                    pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     calculateSplitUseCase = calculateSplitUseCase,
                     logExpenseUseCase = logExpenseUseCase,
                     ioDispatcher = ioDispatcher

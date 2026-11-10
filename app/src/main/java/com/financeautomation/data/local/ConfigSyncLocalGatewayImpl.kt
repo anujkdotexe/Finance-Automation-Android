@@ -21,18 +21,63 @@ import java.util.UUID
 
 /**
  * Implementation of [ConfigSyncLocalGateway] coordinating Room SQLite DAOs
- * for cloud configuration synchronization.
+ * for cloud configuration synchronization, supporting suspend DB provider for main-thread safety.
  */
 class ConfigSyncLocalGatewayImpl(
-    private val accountDao: AccountDao,
-    private val categoryDao: CategoryDao,
-    private val companionDao: CompanionDao,
-    private val tripTagDao: TripTagDao,
-    private val preferenceDao: PreferenceDao,
+    accountDao: AccountDao? = null,
+    categoryDao: CategoryDao? = null,
+    companionDao: CompanionDao? = null,
+    tripTagDao: TripTagDao? = null,
+    preferenceDao: PreferenceDao? = null,
+    private val dbProvider: (suspend () -> FinanceDatabase)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ConfigSyncLocalGateway {
 
+    private val directAccountDao = accountDao
+    private val directCategoryDao = categoryDao
+    private val directCompanionDao = companionDao
+    private val directTripTagDao = tripTagDao
+    private val directPreferenceDao = preferenceDao
+
+    constructor(
+        accountDao: AccountDao,
+        categoryDao: CategoryDao,
+        companionDao: CompanionDao,
+        tripTagDao: TripTagDao,
+        preferenceDao: PreferenceDao,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        accountDao = accountDao,
+        categoryDao = categoryDao,
+        companionDao = companionDao,
+        tripTagDao = tripTagDao,
+        preferenceDao = preferenceDao,
+        dbProvider = null,
+        ioDispatcher = ioDispatcher
+    )
+
+    private suspend fun resolveAccountDao(): AccountDao =
+        directAccountDao ?: dbProvider?.invoke()?.accountDao() ?: throw IllegalStateException("AccountDao or dbProvider required")
+
+    private suspend fun resolveCategoryDao(): CategoryDao =
+        directCategoryDao ?: dbProvider?.invoke()?.categoryDao() ?: throw IllegalStateException("CategoryDao or dbProvider required")
+
+    private suspend fun resolveCompanionDao(): CompanionDao =
+        directCompanionDao ?: dbProvider?.invoke()?.companionDao() ?: throw IllegalStateException("CompanionDao or dbProvider required")
+
+    private suspend fun resolveTripTagDao(): TripTagDao =
+        directTripTagDao ?: dbProvider?.invoke()?.tripTagDao() ?: throw IllegalStateException("TripTagDao or dbProvider required")
+
+    private suspend fun resolvePreferenceDao(): PreferenceDao =
+        directPreferenceDao ?: dbProvider?.invoke()?.preferenceDao() ?: throw IllegalStateException("PreferenceDao or dbProvider required")
+
     override suspend fun getDirtySnapshot(): DirtyConfigSnapshot = withContext(ioDispatcher) {
+        val accountDao = resolveAccountDao()
+        val categoryDao = resolveCategoryDao()
+        val companionDao = resolveCompanionDao()
+        val tripTagDao = resolveTripTagDao()
+        val preferenceDao = resolvePreferenceDao()
+
         val dirtyAccounts = accountDao.getDirtyAccounts().map { it.toDomain() }
         val dirtyCategories = categoryDao.getDirtyCategories().map { it.toDomain() }
         val dirtyCompanions = companionDao.getDirtyCompanions().map { it.toDomain() }
@@ -51,23 +96,23 @@ class ConfigSyncLocalGatewayImpl(
     }
 
     override suspend fun markAccountsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) accountDao.markClean(ids)
+        if (ids.isNotEmpty()) resolveAccountDao().markClean(ids)
     }
 
     override suspend fun markCategoriesClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) categoryDao.markClean(ids)
+        if (ids.isNotEmpty()) resolveCategoryDao().markClean(ids)
     }
 
     override suspend fun markCompanionsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) companionDao.markClean(ids)
+        if (ids.isNotEmpty()) resolveCompanionDao().markClean(ids)
     }
 
     override suspend fun markTripTagsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) tripTagDao.markClean(ids)
+        if (ids.isNotEmpty()) resolveTripTagDao().markClean(ids)
     }
 
     override suspend fun markPreferencesClean(keys: List<String>): Unit = withContext(ioDispatcher) {
-        if (keys.isNotEmpty()) preferenceDao.markClean(keys)
+        if (keys.isNotEmpty()) resolvePreferenceDao().markClean(keys)
     }
 
     override suspend fun applyRemoteAccount(
@@ -79,6 +124,7 @@ class ConfigSyncLocalGatewayImpl(
         updatedAt: Long,
         deleted: Boolean
     ): Unit = withContext(ioDispatcher) {
+        val accountDao = resolveAccountDao()
         val existing = accountDao.getByName(name)
         if (existing == null) {
             if (!deleted) {
@@ -133,6 +179,7 @@ class ConfigSyncLocalGatewayImpl(
         updatedAt: Long,
         deleted: Boolean
     ): Unit = withContext(ioDispatcher) {
+        val categoryDao = resolveCategoryDao()
         val existing = categoryDao.getByName(name)
         if (existing == null) {
             if (!deleted) {
@@ -183,6 +230,7 @@ class ConfigSyncLocalGatewayImpl(
         updatedAt: Long,
         deleted: Boolean
     ): Unit = withContext(ioDispatcher) {
+        val companionDao = resolveCompanionDao()
         val existing = companionDao.getByName(name)
         if (existing == null) {
             if (!deleted) {
@@ -230,6 +278,7 @@ class ConfigSyncLocalGatewayImpl(
         updatedAt: Long,
         deleted: Boolean
     ): Unit = withContext(ioDispatcher) {
+        val tripTagDao = resolveTripTagDao()
         val existing = tripTagDao.getByName(name)
         if (existing == null) {
             if (!deleted) {
@@ -279,6 +328,7 @@ class ConfigSyncLocalGatewayImpl(
         deleted: Boolean
     ): Unit = withContext(ioDispatcher) {
         if (ConfigConstants.isLocalOnlyPref(key)) return@withContext
+        val preferenceDao = resolvePreferenceDao()
 
         val allPrefs = preferenceDao.getAllPreferences()
         val existing = allPrefs.find { it.key == key }
@@ -301,6 +351,12 @@ class ConfigSyncLocalGatewayImpl(
     }
 
     override suspend fun markAllLocalItemsDirty(): Unit = withContext(ioDispatcher) {
+        val accountDao = resolveAccountDao()
+        val categoryDao = resolveCategoryDao()
+        val companionDao = resolveCompanionDao()
+        val tripTagDao = resolveTripTagDao()
+        val preferenceDao = resolvePreferenceDao()
+
         val now = System.currentTimeMillis()
         accountDao.getAllAccounts().forEach {
             accountDao.update(it.copy(updatedAt = now, dirty = 1))
@@ -321,4 +377,3 @@ class ConfigSyncLocalGatewayImpl(
             }
     }
 }
-

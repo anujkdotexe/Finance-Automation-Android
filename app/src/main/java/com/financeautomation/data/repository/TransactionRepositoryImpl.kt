@@ -39,7 +39,9 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -53,8 +55,10 @@ import java.util.Locale
  * [SyncQueueDao] for offline resilience, and [GoogleSheetsClient] for cloud synchronization.
  */
 class TransactionRepositoryImpl(
-    private val transactionDao: TransactionDao,
-    private val syncQueueDao: SyncQueueDao,
+    private val transactionDao: TransactionDao? = null,
+    private val syncQueueDao: SyncQueueDao? = null,
+    private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val preferencesRepository: PreferencesRepository? = null,
     private val workbookResolver: WorkbookResolver? = null,
@@ -69,26 +73,68 @@ class TransactionRepositoryImpl(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TransactionRepository {
 
-    override fun getTransactions(): Flow<List<Transaction>> {
-        return transactionDao.getTransactionsFlow()
-            .map { list -> list.map { it.toDomain() } }
-            .flowOn(ioDispatcher)
-    }
+    constructor(
+        transactionDao: TransactionDao,
+        syncQueueDao: SyncQueueDao,
+        googleSheetsClient: GoogleSheetsClient? = null,
+        preferencesRepository: PreferencesRepository? = null,
+        workbookResolver: WorkbookResolver? = null,
+        accountRepository: AccountRepository? = null,
+        categoryRepository: CategoryRepository? = null,
+        syncConfigUseCase: SyncConfigUseCase? = null,
+        calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
+        nettingUseCase: NettingUseCase = NettingUseCase(),
+        voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
+        accountingSyncExecutor: AccountingSyncExecutor? = null,
+        onTriggerSync: (() -> Unit)? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionDao = transactionDao,
+        syncQueueDao = syncQueueDao,
+        transactionDaoProvider = null,
+        syncQueueDaoProvider = null,
+        googleSheetsClient = googleSheetsClient,
+        preferencesRepository = preferencesRepository,
+        workbookResolver = workbookResolver,
+        accountRepository = accountRepository,
+        categoryRepository = categoryRepository,
+        syncConfigUseCase = syncConfigUseCase,
+        calculateSplitUseCase = calculateSplitUseCase,
+        nettingUseCase = nettingUseCase,
+        voidTransactionUseCase = voidTransactionUseCase,
+        accountingSyncExecutor = accountingSyncExecutor,
+        onTriggerSync = onTriggerSync,
+        ioDispatcher = ioDispatcher
+    )
 
-    override fun getNeedsReview(): Flow<List<Transaction>> {
-        return transactionDao.getNeedsReviewFlow()
-            .map { list -> list.map { it.toDomain() } }
-            .flowOn(ioDispatcher)
-    }
+    private suspend fun resolveTransactionDao(): TransactionDao =
+        transactionDao ?: transactionDaoProvider?.invoke()
+            ?: throw IllegalStateException("TransactionDao or provider must be supplied")
+
+    private suspend fun resolveSyncQueueDao(): SyncQueueDao =
+        syncQueueDao ?: syncQueueDaoProvider?.invoke()
+            ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")
+
+    override fun getTransactions(): Flow<List<Transaction>> = flow {
+        val dao = resolveTransactionDao()
+        emitAll(dao.getTransactionsFlow().map { list -> list.map { it.toDomain() } })
+    }.flowOn(ioDispatcher)
+
+    override fun getNeedsReview(): Flow<List<Transaction>> = flow {
+        val dao = resolveTransactionDao()
+        emitAll(dao.getNeedsReviewFlow().map { list -> list.map { it.toDomain() } })
+    }.flowOn(ioDispatcher)
 
     override suspend fun getTransactionById(id: String): Transaction? = withContext(ioDispatcher) {
-        transactionDao.getById(id)?.toDomain()
+        resolveTransactionDao().getById(id)?.toDomain()
     }
 
     override suspend fun insertTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
         try {
+            val tDao = resolveTransactionDao()
+            val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
-            transactionDao.insert(entity)
+            tDao.insert(entity)
 
             if (transaction.syncState == SyncState.PENDING) {
                 val queueItem = SyncQueueEntity(
@@ -96,7 +142,7 @@ class TransactionRepositoryImpl(
                     operationType = SyncQueueEntity.OP_INSERT,
                     payloadJson = transaction.id
                 )
-                syncQueueDao.insert(queueItem)
+                qDao.insert(queueItem)
             }
             Result.Success(Unit)
         } catch (e: Exception) {
@@ -106,15 +152,17 @@ class TransactionRepositoryImpl(
 
     override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
         try {
+            val tDao = resolveTransactionDao()
+            val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
-            transactionDao.update(entity)
+            tDao.update(entity)
 
             val queueItem = SyncQueueEntity(
                 transactionId = transaction.id,
                 operationType = SyncQueueEntity.OP_UPDATE,
                 payloadJson = transaction.id
             )
-            syncQueueDao.insert(queueItem)
+            qDao.insert(queueItem)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -147,7 +195,7 @@ class TransactionRepositoryImpl(
                 operationType = SyncQueueEntity.OP_LOG_CREDIT,
                 payloadJson = AccountingRequestJsonAdapter.creditRequestToJson(req)
             )
-            syncQueueDao.insert(queueItem)
+            resolveSyncQueueDao().insert(queueItem)
             onTriggerSync?.invoke()
             Result.Success(reqId)
         } catch (e: Exception) {
@@ -175,7 +223,7 @@ class TransactionRepositoryImpl(
                 operationType = SyncQueueEntity.OP_LOG_PAYABLE,
                 payloadJson = AccountingRequestJsonAdapter.payableRequestToJson(req)
             )
-            syncQueueDao.insert(queueItem)
+            resolveSyncQueueDao().insert(queueItem)
             onTriggerSync?.invoke()
             Result.Success(reqId)
         } catch (e: Exception) {
@@ -203,7 +251,7 @@ class TransactionRepositoryImpl(
                 operationType = SyncQueueEntity.OP_LOG_REPAYMENT,
                 payloadJson = AccountingRequestJsonAdapter.repaymentRequestToJson(req)
             )
-            syncQueueDao.insert(queueItem)
+            resolveSyncQueueDao().insert(queueItem)
             onTriggerSync?.invoke()
             Result.Success(reqId)
         } catch (e: Exception) {
@@ -223,7 +271,7 @@ class TransactionRepositoryImpl(
                 operationType = SyncQueueEntity.OP_CARRY_FORWARD,
                 payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(req)
             )
-            syncQueueDao.insert(queueItem)
+            resolveSyncQueueDao().insert(queueItem)
             onTriggerSync?.invoke()
             Result.Success(Unit)
         } catch (e: Exception) {
@@ -240,7 +288,7 @@ class TransactionRepositoryImpl(
                 operationType = SyncQueueEntity.OP_YEAR_CLOSE,
                 payloadJson = AccountingRequestJsonAdapter.yearCloseRequestToJson(req)
             )
-            syncQueueDao.insert(queueItem)
+            resolveSyncQueueDao().insert(queueItem)
             onTriggerSync?.invoke()
             Result.Success(Unit)
         } catch (e: Exception) {
@@ -250,7 +298,9 @@ class TransactionRepositoryImpl(
 
     override suspend fun voidTransaction(id: String): Result<Unit> = withContext(ioDispatcher) {
         try {
-            val existing = transactionDao.getById(id)
+            val tDao = resolveTransactionDao()
+            val qDao = resolveSyncQueueDao()
+            val existing = tDao.getById(id)
                 ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
 
             val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
@@ -259,14 +309,14 @@ class TransactionRepositoryImpl(
                 "[Void] ${existing.merchant}"
             }
 
-            transactionDao.voidTransaction(id, voidTitle)
+            tDao.voidTransaction(id, voidTitle)
 
             val queueItem = SyncQueueEntity(
                 transactionId = id,
                 operationType = SyncQueueEntity.OP_VOID,
                 payloadJson = id
             )
-            syncQueueDao.insert(queueItem)
+            qDao.insert(queueItem)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -283,7 +333,7 @@ class TransactionRepositoryImpl(
         val epsilon = 0.01
         val minAmount = amount - epsilon
         val maxAmount = amount + epsilon
-        transactionDao.getRecentSimilar(minTime, maxTime, minAmount, maxAmount).map { it.toDomain() }
+        resolveTransactionDao().getRecentSimilar(minTime, maxTime, minAmount, maxAmount).map { it.toDomain() }
     }
 
     private val sheetTimeZone: ZoneId = ZoneId.of("Asia/Kolkata")
@@ -303,12 +353,14 @@ class TransactionRepositoryImpl(
     }
 
     private suspend fun markTransportFailure(item: SyncQueueEntity, txn: Transaction) {
+        val tDao = resolveTransactionDao()
+        val qDao = resolveSyncQueueDao()
         val newRetry = item.retryCount + 1
         if (newRetry >= MAX_SYNC_RETRIES) {
-            syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetry)
-            transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
+            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetry)
+            tDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
         } else {
-            syncQueueDao.updateStatus(item.id, SyncQueueEntity.STATUS_FAILED, 1)
+            qDao.updateStatus(item.id, SyncQueueEntity.STATUS_FAILED, 1)
         }
     }
 
@@ -317,6 +369,9 @@ class TransactionRepositoryImpl(
             if (googleSheetsClient == null || preferencesRepository == null) {
                 return@withContext Result.Success(0)
             }
+
+            val transactionDao = resolveTransactionDao()
+            val syncQueueDao = resolveSyncQueueDao()
 
             val pendingItems = syncQueueDao.getPendingQueueFifo(maxRetries = MAX_SYNC_RETRIES)
             if (pendingItems.isEmpty()) {
@@ -892,11 +947,12 @@ class TransactionRepositoryImpl(
     }
 
     private suspend fun handleItemTransportFailure(item: SyncQueueEntity) {
+        val qDao = resolveSyncQueueDao()
         val newRetries = item.retryCount + 1
         if (newRetries >= MAX_SYNC_RETRIES) {
-            syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetries)
+            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetries)
         } else {
-            syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_PENDING, newRetries)
+            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_PENDING, newRetries)
         }
     }
 

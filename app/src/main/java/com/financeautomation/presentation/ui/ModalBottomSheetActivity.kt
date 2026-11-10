@@ -48,7 +48,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
             peopleRepository = app.appContainer.peopleRepository,
             categoryRepository = app.appContainer.categoryRepository,
             accountRepository = app.appContainer.accountRepository,
-            pendingCaptureDao = app.appContainer.database.pendingCaptureDao(),
+            pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -142,7 +142,6 @@ class ModalBottomSheetActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent) {
         val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
-            ?: intent.getStringExtra("capture_id")
         val txnId = intent.getStringExtra(EXTRA_TRANSACTION_ID)
             ?: intent.getStringExtra("txn_id")
             ?: intent.getStringExtra("txn_uuid")

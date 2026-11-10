@@ -8,6 +8,7 @@ import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.service.worker.MonthlyRolloverWorker
 import com.financeautomation.service.worker.NotificationListenerHealthWorker
 import com.financeautomation.service.worker.SyncTransactionsWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,8 +45,11 @@ class BootReceiver : BroadcastReceiver() {
             val app = context.applicationContext as? FinanceApplication
             receiverScope.launch {
                 try {
-                    app?.appContainer?.database?.pendingCaptureDao()?.resetShownToWaiting()
-                } catch (_: Exception) {}
+                    app?.appContainer?.awaitDatabase()?.pendingCaptureDao()?.resetShownToWaiting()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("BootReceiver", "${e.javaClass.simpleName}: resetShownToWaiting")
+                }
                 app?.appContainer?.foregroundWatcher?.checkAndResume(receiverScope)
             }
         } catch (e: Exception) {

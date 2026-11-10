@@ -7,6 +7,7 @@ import android.content.Intent
 import com.financeautomation.FinanceApplication
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.ReviewState
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.service.worker.SyncTransactionsWorker
@@ -60,11 +61,11 @@ class QuickActionReceiver : BroadcastReceiver() {
 
         val pendingResult = goAsync()
         val app = context.applicationContext as? FinanceApplication
-        val repository = testRepository ?: app?.appContainer?.transactionRepository
         val dispatcher = testDispatcher ?: Dispatchers.IO
 
         CoroutineScope(SupervisorJob() + dispatcher).launch {
             try {
+                val repository = testRepository ?: app?.appContainer?.transactionRepository
                 if (repository != null) {
                     val outcome = handleAction(
                         action = action,
@@ -75,8 +76,8 @@ class QuickActionReceiver : BroadcastReceiver() {
                     if (outcome is QuickActionResult.Success) {
                         try {
                             SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
-                        } catch (_: Exception) {
-                            // Non-fatal WorkManager enqueue failure in test/isolated environments
+                        } catch (e: Exception) {
+                            Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: enqueueExpedited")
                         }
                     }
                 }
@@ -114,7 +115,8 @@ class QuickActionReceiver : BroadcastReceiver() {
                     } else {
                         try {
                             CategoryConstants.normalizeCategory(trimmed)
-                        } catch (_: Exception) {
+                        } catch (e: Exception) {
+                            Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: normalizeCategory fallback")
                             trimmed
                         }
                     }

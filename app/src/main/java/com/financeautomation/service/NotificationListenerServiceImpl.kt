@@ -21,6 +21,7 @@ import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.presentation.ui.ModalBottomSheetActivity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -112,22 +113,23 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
     ) {
         val app = applicationContext as? FinanceApplication
         val container = app?.appContainer
-        val processor = testProcessor ?: container?.let {
-            NotificationProcessor(
-                pendingCaptureDao = it.database.pendingCaptureDao(),
-                handledNotificationDao = it.database.handledNotificationDao(),
-                accountDao = it.database.accountDao(),
-                preferenceDao = it.database.preferenceDao(),
-                repository = testRepository ?: it.transactionRepository,
-                parseUseCase = it.parseNotificationUseCase,
-                ownPackageName = packageName
-            )
-        } ?: return
-
         val watcher = container?.foregroundWatcher
 
         serviceScope.launch {
             try {
+                val processor = testProcessor ?: container?.let {
+                    val db = it.awaitDatabase()
+                    NotificationProcessor(
+                        pendingCaptureDao = db.pendingCaptureDao(),
+                        handledNotificationDao = db.handledNotificationDao(),
+                        accountDao = db.accountDao(),
+                        preferenceDao = db.preferenceDao(),
+                        repository = testRepository ?: it.transactionRepository,
+                        parseUseCase = it.parseNotificationUseCase,
+                        ownPackageName = packageName
+                    )
+                } ?: return@launch
+
                 val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey)
                 when (outcome) {
                     is NotificationProcessingOutcome.Captured -> {
@@ -166,6 +168,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 Diagnostics.record(TAG, "${e.javaClass.simpleName}: handleNotification execution")
             }
         }

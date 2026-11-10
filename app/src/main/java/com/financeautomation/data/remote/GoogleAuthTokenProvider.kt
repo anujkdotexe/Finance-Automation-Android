@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.financeautomation.core.utils.Diagnostics
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
@@ -136,8 +137,8 @@ class GoogleAuthTokenProvider(
                     // (v21.3.0) does not provide a clearToken method. GoogleAuthUtil.clearToken directly invalidates the cached
                     // OAuth token in Google Play Services, ensuring subsequent authorization requests fetch a fresh token.
                     GoogleAuthUtil.clearToken(context, staleToken)
-                } catch (_: Exception) {
-                    // Ignore transient clear failure
+                } catch (e: Exception) {
+                    Diagnostics.record("GoogleAuthTokenProvider", "${e.javaClass.simpleName}: clearToken")
                 }
             }
             when (val res = requestAuthorization(isForeground = false)) {
@@ -199,8 +200,8 @@ class GoogleAuthTokenProvider(
                 .build()
 
             notificationManager.notify(NOTIFICATION_ID_AUTH_RECONNECT, notification)
-        } catch (_: Exception) {
-            // Ignored
+        } catch (e: Exception) {
+            Diagnostics.record("GoogleAuthTokenProvider", "${e.javaClass.simpleName}: postReconnectNotification")
         }
     }
 
