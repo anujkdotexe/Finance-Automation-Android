@@ -32,7 +32,9 @@ object DatabaseEncryptionMigrator {
         "trip_tags",
         "preferences_table",
         "preferences",
-        "lineage"
+        "lineage",
+        "pending_captures",
+        "handled_notifications"
     )
 
     /**

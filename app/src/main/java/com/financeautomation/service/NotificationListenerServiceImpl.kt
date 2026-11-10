@@ -7,193 +7,28 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.financeautomation.FinanceApplication
-import com.financeautomation.core.constants.CategoryConstants
-import com.financeautomation.core.constants.PackageWhitelist
-import com.financeautomation.core.model.ReviewState
-import com.financeautomation.core.model.SyncState
-import com.financeautomation.domain.model.Transaction
+import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.repository.TransactionRepository
-import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.presentation.ui.ModalBottomSheetActivity
-import com.financeautomation.service.worker.SettleWindowWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.util.Locale
-
-/**
- * Outcome of processing an incoming system notification.
- */
-sealed interface NotificationProcessingOutcome {
-    data class Created(
-        val transaction: Transaction,
-        val isPossibleDuplicate: Boolean,
-        val headsUpNotificationData: HeadsUpData
-    ) : NotificationProcessingOutcome
-
-    data class Merged(
-        val existingTransactionId: String,
-        val enriched: Boolean
-    ) : NotificationProcessingOutcome
-
-    data class FallbackPrompt(
-        val message: String,
-        val sourcePackage: String
-    ) : NotificationProcessingOutcome
-
-    data class Ignored(
-        val reason: String
-    ) : NotificationProcessingOutcome
-}
-
-/**
- * Encapsulated data required to construct a 3-button Heads-Up notification.
- */
-data class HeadsUpData(
-    val notificationId: Int,
-    val title: String,
-    val text: String,
-    val category1: String,
-    val category2: String,
-    val detailsActionTitle: String,
-    val transactionId: String
-)
-
-/**
- * Processing engine decoupled from Android Service lifecycle for deterministic unit testing.
- */
-class NotificationProcessor(
-    private val repository: TransactionRepository,
-    private val parseUseCase: ParseNotificationUseCase = ParseNotificationUseCase(),
-    private val ownPackageName: String = "com.financeautomation"
-) {
-
-    suspend fun process(
-        sourcePackage: String,
-        title: String,
-        text: String,
-        postTime: Long = System.currentTimeMillis()
-    ): NotificationProcessingOutcome {
-        // 1. Self-notification check
-        if (sourcePackage.trim() == ownPackageName) {
-            return NotificationProcessingOutcome.Ignored("Self notification dropped")
-        }
-
-        // 2. Blacklist check
-        if (PackageWhitelist.isBlacklisted(sourcePackage)) {
-            return NotificationProcessingOutcome.Ignored("Blacklisted privacy package: $sourcePackage")
-        }
-
-        // 3. Whitelist check
-        if (!PackageWhitelist.isWhitelisted(sourcePackage)) {
-            return NotificationProcessingOutcome.Ignored("Non-whitelisted package: $sourcePackage")
-        }
-
-        // 4. OTP suppression check
-        val fullContent = "$title $text".trim()
-        if (PackageWhitelist.isOtpOrAuth(fullContent)) {
-            return NotificationProcessingOutcome.Ignored("OTP or auth alert suppressed")
-        }
-
-        // 5. Parse candidate via domain ParseNotificationUseCase
-        val parseResult = parseUseCase(
-            sourcePackage = sourcePackage,
-            title = title,
-            text = text,
-            appName = null,
-            timestamp = postTime
-        )
-
-        return when (parseResult) {
-            is NotificationParseResult.Dropped -> {
-                NotificationProcessingOutcome.Ignored("ParseUseCase dropped: ${parseResult.reason}")
-            }
-            is NotificationParseResult.FallbackPrompt -> {
-                NotificationProcessingOutcome.FallbackPrompt(
-                    message = parseResult.message,
-                    sourcePackage = parseResult.sourcePackage
-                )
-            }
-            is NotificationParseResult.FailureAlert -> {
-                NotificationProcessingOutcome.Ignored("Payment failed, declined or reversed")
-            }
-            is NotificationParseResult.Success -> {
-                if (!parseResult.isDebit) {
-                    return NotificationProcessingOutcome.Ignored("Non-debit transaction ignored for auto-expense logging")
-                }
-
-                val candidate = parseResult.transaction
-                val recentSimilar = repository.findRecentSimilar(candidate.totalAmount, windowMillis = 120_000L)
-
-                val exactMatch = recentSimilar.firstOrNull { existing ->
-                    (existing.merchant.equals(candidate.merchant, ignoreCase = true) && existing.sourcePackage == candidate.sourcePackage) ||
-                    (existing.merchant == "Unknown Payee" && candidate.merchant != "Unknown Payee") ||
-                    (candidate.merchant == "Unknown Payee" && existing.merchant != "Unknown Payee")
-                }
-
-                if (exactMatch != null) {
-                    var enriched = false
-                    var mergedTxn = exactMatch
-
-                    if (exactMatch.merchant == "Unknown Payee" && candidate.merchant != "Unknown Payee") {
-                        mergedTxn = mergedTxn.copy(merchant = candidate.merchant)
-                        enriched = true
-                    }
-                    if (exactMatch.account == CategoryConstants.ACCOUNT_OTHER && candidate.account != CategoryConstants.ACCOUNT_OTHER) {
-                        mergedTxn = mergedTxn.copy(account = candidate.account)
-                        enriched = true
-                    }
-                    if (enriched) {
-                        repository.updateTransaction(mergedTxn)
-                    }
-                    return NotificationProcessingOutcome.Merged(
-                        existingTransactionId = exactMatch.id,
-                        enriched = enriched
-                    )
-                }
-
-                val isPossibleDuplicate = recentSimilar.isNotEmpty()
-                val finalTransaction = candidate.copy(
-                    reviewState = ReviewState.NEEDS_REVIEW,
-                    syncState = SyncState.PENDING,
-                    isPossibleDuplicate = isPossibleDuplicate
-                )
-
-                repository.insertTransaction(finalTransaction)
-
-                val notificationId = (finalTransaction.id.hashCode() and 0x7FFFFFFF)
-                val headsUpData = HeadsUpData(
-                    notificationId = notificationId,
-                    title = String.format(Locale.US, "Paid ₹%.2f to %s", finalTransaction.totalAmount, finalTransaction.merchant),
-                    text = if (isPossibleDuplicate) "Possible duplicate • Tap to review" else "Tap Details / Split",
-                    category1 = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
-                    category2 = CategoryConstants.CATEGORY_GROCERIES,
-                    detailsActionTitle = "Details / Split",
-                    transactionId = finalTransaction.id
-                )
-
-                NotificationProcessingOutcome.Created(
-                    transaction = finalTransaction,
-                    isPossibleDuplicate = isPossibleDuplicate,
-                    headsUpNotificationData = headsUpData
-                )
-            }
-        }
-    }
-}
 
 /**
  * Android NotificationListenerService intercepting financial notifications from whitelisted package IDs.
- * Implements self-healing listener rebinds and multi-source deduplication.
+ * Implements self-healing listener rebinds, catch-up replay, and handoff to ForegroundWatcher.
  */
 class NotificationListenerServiceImpl : NotificationListenerService() {
 
@@ -205,6 +40,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isConnected = false
         serviceJob.cancel()
     }
 
@@ -221,8 +57,9 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
             ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
             ?: ""
         val postTime = if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()
+        val key = sbn.key ?: ""
 
-        handleNotification(sourcePackage, title, text, postTime)
+        handleNotification(sourcePackage, title, text, postTime, key)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
@@ -231,62 +68,84 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        isConnected = true
+        val app = applicationContext as? FinanceApplication
+        val watcher = app?.appContainer?.foregroundWatcher
+
+        // Resume watcher for any persisted WAITING captures
+        watcher?.checkAndResume(serviceScope)
+
         try {
             val notifications = activeNotifications ?: return
             val now = System.currentTimeMillis()
             for (sbn in notifications) {
                 if (sbn != null && sbn.notification != null) {
                     val postTime = sbn.postTime
+                    // Catch up only recent notifications within the last 5 minutes
                     if (now - postTime < 300_000L) {
                         onNotificationPosted(sbn)
                     }
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Diagnostics.record(TAG, "${e.javaClass.simpleName}: onListenerConnected catchup")
         }
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        isConnected = false
+        // Self-healing rebind on listener disconnection
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                requestRebind(ComponentName(this, NotificationListenerServiceImpl::class.java))
-            }
-        } catch (_: Exception) {
+            rebindService(this)
+        } catch (e: Exception) {
+            Diagnostics.record(TAG, "${e.javaClass.simpleName}: onListenerDisconnected rebind")
         }
     }
 
-    fun handleNotification(sourcePackage: String, title: String, text: String, postTime: Long) {
+    fun handleNotification(
+        sourcePackage: String,
+        title: String,
+        text: String,
+        postTime: Long,
+        sbnKey: String = ""
+    ) {
         val app = applicationContext as? FinanceApplication
-        val repository = testRepository ?: app?.appContainer?.transactionRepository ?: return
-        val processor = testProcessor ?: NotificationProcessor(
-            repository = repository,
-            parseUseCase = (applicationContext as? FinanceApplication)?.appContainer?.parseNotificationUseCase
-                ?: ParseNotificationUseCase(packageName),
-            ownPackageName = packageName
-        )
+        val container = app?.appContainer
+        val processor = testProcessor ?: container?.let {
+            NotificationProcessor(
+                pendingCaptureDao = it.database.pendingCaptureDao(),
+                handledNotificationDao = it.database.handledNotificationDao(),
+                accountDao = it.database.accountDao(),
+                preferenceDao = it.database.preferenceDao(),
+                repository = testRepository ?: it.transactionRepository,
+                parseUseCase = it.parseNotificationUseCase,
+                ownPackageName = packageName
+            )
+        } ?: return
+
+        val watcher = container?.foregroundWatcher
 
         serviceScope.launch {
             try {
-                val outcome = processor.process(sourcePackage, title, text, postTime)
+                val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey)
                 when (outcome) {
-                    is NotificationProcessingOutcome.Created -> {
-                        if (!outcome.isPossibleDuplicate) {
-                            try {
-                                SettleWindowWorker.scheduleSettleWindow(
-                                    context = applicationContext,
-                                    txnId = outcome.transaction.id,
-                                    delaySeconds = SettleWindowWorker.DEFAULT_SETTLE_WINDOW_SECONDS
-                                )
-                            } catch (_: Exception) {
-                            }
+                    is NotificationProcessingOutcome.Captured -> {
+                        if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
+                            watcher?.notifyCaptureWaiting(serviceScope)
                         }
-
+                    }
+                    is NotificationProcessingOutcome.Updated -> {
+                        if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
+                            watcher?.notifyCaptureWaiting(serviceScope)
+                        }
+                    }
+                    is NotificationProcessingOutcome.Created -> {
+                        // Compatibility path: show overlay or fallback alert
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this@NotificationListenerServiceImpl)) {
                             val intent = Intent(this@NotificationListenerServiceImpl, ModalBottomSheetActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                                 putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, outcome.transaction.id)
-                                putExtra(QuickActionReceiver.EXTRA_TRANSACTION_ID, outcome.transaction.id)
                             }
                             startActivity(intent)
                         } else {
@@ -297,11 +156,17 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                         showFallbackNotification(outcome.message, outcome.sourcePackage)
                     }
                     is NotificationProcessingOutcome.Merged -> {
+                        // Merged dual alert without posting duplicate notification
+                    }
+                    is NotificationProcessingOutcome.Dismissed -> {
+                        // Dismissed payment alert
                     }
                     is NotificationProcessingOutcome.Ignored -> {
+                        // Ignored by whitelist, blacklist, OTP suppression, or direction filter
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Diagnostics.record(TAG, "${e.javaClass.simpleName}: handleNotification execution")
             }
         }
     }
@@ -312,8 +177,8 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
         val intentDetails = Intent(this, ModalBottomSheetActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(QuickActionReceiver.EXTRA_TRANSACTION_ID, data.transactionId)
-            putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, data.notificationId)
+            putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, data.transactionId)
+            putExtra("notification_id", data.notificationId)
         }
         val pendingIntentDetails = PendingIntent.getActivity(
             this,
@@ -377,5 +242,41 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
     companion object {
         const val CHANNEL_FINANCIAL_ALERTS: String = "financial_alerts"
+        private const val TAG = "NotificationListener"
+
+        @Volatile
+        var isConnected: Boolean = false
+
+        /**
+         * Rebind routine: Disables and re-enables component setting and requests rebind.
+         */
+        fun rebindService(context: Context) {
+            try {
+                val component = ComponentName(context, NotificationListenerServiceImpl::class.java)
+                val pm = context.packageManager
+                pm.setComponentEnabledSetting(
+                    component,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                pm.setComponentEnabledSetting(
+                    component,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    requestRebind(component)
+                }
+            } catch (e: Exception) {
+                Diagnostics.record(TAG, "${e.javaClass.simpleName}: rebindService")
+            }
+        }
+
+        /**
+         * Checks whether notification listener access is currently enabled in system settings.
+         */
+        fun isAccessEnabled(context: Context): Boolean {
+            return NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+        }
     }
 }

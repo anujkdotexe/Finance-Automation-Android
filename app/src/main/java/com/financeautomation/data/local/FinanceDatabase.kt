@@ -12,7 +12,9 @@ import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.dao.CompanionDao
+import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PreferenceDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
@@ -20,7 +22,9 @@ import com.financeautomation.data.local.dao.TripTagDao
 import com.financeautomation.data.local.entity.AccountEntity
 import com.financeautomation.data.local.entity.CategoryEntity
 import com.financeautomation.data.local.entity.CompanionEntity
+import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.LineageEntity
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.PreferenceEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
@@ -54,9 +58,11 @@ import java.io.File
         AccountEntity::class,
         TripTagEntity::class,
         PreferenceEntity::class,
-        LineageEntity::class
+        LineageEntity::class,
+        PendingCaptureEntity::class,
+        HandledNotificationEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -71,6 +77,8 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun tripTagDao(): TripTagDao
     abstract fun preferenceDao(): PreferenceDao
     abstract fun lineageDao(): LineageDao
+    abstract fun pendingCaptureDao(): PendingCaptureDao
+    abstract fun handledNotificationDao(): HandledNotificationDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -115,6 +123,17 @@ abstract class FinanceDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `lineage` (`uuid` TEXT NOT NULL, `carried_from_uuid` TEXT NOT NULL, `root_uuid` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`uuid`))")
                 db.execSQL("ALTER TABLE sync_queue ADD COLUMN planJson TEXT")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pending_captures` (`id` TEXT NOT NULL, `sourcePackage` TEXT NOT NULL, `amount` REAL, `payee` TEXT NOT NULL, `inferredAccount` TEXT, `timestamp` INTEGER NOT NULL, `kind` TEXT NOT NULL, `flags` TEXT NOT NULL DEFAULT '', `state` TEXT NOT NULL, `notificationKey` TEXT, `contentHash` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `handled_notifications` (`key` TEXT NOT NULL, `postTime` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `handledAt` INTEGER NOT NULL, PRIMARY KEY(`key`, `postTime`))"
+                )
             }
         }
 
@@ -233,7 +252,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .openHelperFactory(openHelperFactory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .addCallback(DatabasePrepopulateCallback())
                 .build()
 
@@ -254,7 +273,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 context.applicationContext,
                 FinanceDatabase::class.java
             )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .allowMainThreadQueries()
                 .build()
         }
