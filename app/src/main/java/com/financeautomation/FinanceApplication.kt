@@ -36,7 +36,7 @@ class FinanceApplication : Application() {
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
 
-        PipelineTrail.initialize(Dispatchers.IO) {
+        PipelineTrail.initialize(applicationContext, Dispatchers.IO) {
             appContainer.awaitDatabase().pipelineEventDao()
         }
         PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT)

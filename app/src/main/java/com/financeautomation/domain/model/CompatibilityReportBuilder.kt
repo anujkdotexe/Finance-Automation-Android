@@ -1,5 +1,9 @@
 package com.financeautomation.domain.model
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 data class DeviceHeaderInfo(
     val appVersion: String,
     val buildType: String,
@@ -68,6 +72,8 @@ data class CompatibilityReportData(
     val funnelCounts: List<FunnelStageCount>,
     val recentTrail: List<TrailEventReportItem>,
     val discoveryScan: List<String>,
+    val lastHeartbeatTime: Long = 0L,
+    val todayDroppedNonWhitelistedCount: Long = 0L,
     val userNote: String? = null
 )
 
@@ -141,10 +147,17 @@ object CompatibilityReportBuilder {
         }
         sb.appendLine()
 
-        // 6. Daily Pipeline Funnel
-        sb.appendLine("## 6. Daily Pipeline Funnel")
+        // 6. Daily Pipeline Funnel & Heartbeat
+        sb.appendLine("## 6. Daily Pipeline Funnel & Heartbeat")
+        val heartbeatStr = if (data.lastHeartbeatTime > 0L) {
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(data.lastHeartbeatTime))
+        } else {
+            "Never"
+        }
+        sb.appendLine("- Last Listener Heartbeat: $heartbeatStr")
+        sb.appendLine("- Today Filtered Non-Whitelisted Count: ${data.todayDroppedNonWhitelistedCount}")
         if (data.funnelCounts.isEmpty()) {
-            sb.appendLine("No funnel events recorded for today.")
+            sb.appendLine("- No funnel events recorded for today.")
         } else {
             for (item in data.funnelCounts) {
                 sb.appendLine("- ${item.stage} / ${item.code}: ${item.count}")

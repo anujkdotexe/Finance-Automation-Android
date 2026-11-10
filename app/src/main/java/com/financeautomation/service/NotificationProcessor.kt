@@ -84,7 +84,7 @@ class NotificationProcessor(
 
         // 3. Whitelist check (financial applications and SMS alerts only, includes BuildConfig.DEBUG guard)
         if (!PackageWhitelist.isWhitelisted(sourcePackage)) {
-            PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_NOT_WHITELISTED_COUNT)
+            PipelineTrail.recordDroppedNotWhitelisted()
             return NotificationProcessingOutcome.Ignored("Non-whitelisted package: $sourcePackage")
         }
 
