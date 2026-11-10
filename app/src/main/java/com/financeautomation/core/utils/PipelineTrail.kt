@@ -86,6 +86,8 @@ object PipelineTrail {
     private val lastPersistedAt = AtomicLong(0L)
     private val currentDayKey = AtomicReference<String>("")
 
+    internal var todayProvider: () -> String = { LocalDate.now().toString() }
+
     private var appContext: Context? = null
     private var daoProvider: (suspend () -> PipelineEventDao)? = null
     private var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -103,18 +105,24 @@ object PipelineTrail {
         try {
             val prefs = this.appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             if (prefs != null) {
-                heartbeatTime.set(prefs.getLong(KEY_HEARTBEAT_TIME, 0L))
-                val savedDay = prefs.getString(KEY_DAY, "") ?: ""
-                val today = getTodayKey()
-                currentDayKey.set(today)
-                if (savedDay == today) {
-                    droppedCount.set(prefs.getLong(KEY_DROPPED_COUNT, 0L))
-                } else {
-                    droppedCount.set(0L)
-                }
+                initializeWithPrefs(prefs, getTodayKey())
             }
         } catch (e: Exception) {
             Diagnostics.record("PipelineTrail", "initialize prefs: ${e.javaClass.simpleName}")
+        }
+    }
+
+    internal fun initializeWithPrefs(
+        prefs: android.content.SharedPreferences,
+        today: String = getTodayKey()
+    ) {
+        heartbeatTime.set(prefs.getLong(KEY_HEARTBEAT_TIME, 0L))
+        val savedDay = prefs.getString(KEY_DAY, "") ?: ""
+        currentDayKey.set(today)
+        if (savedDay == today) {
+            droppedCount.set(prefs.getLong(KEY_DROPPED_COUNT, 0L))
+        } else {
+            droppedCount.set(0L)
         }
     }
 
@@ -156,7 +164,16 @@ object PipelineTrail {
         return droppedCount.get()
     }
 
-    private fun getTodayKey(): String = LocalDate.now().toString()
+    private fun getTodayKey(): String = todayProvider()
+
+    internal fun resetForTesting() {
+        buffer.clear()
+        heartbeatTime.set(0L)
+        droppedCount.set(0L)
+        lastPersistedAt.set(0L)
+        currentDayKey.set("")
+        todayProvider = { LocalDate.now().toString() }
+    }
 
     private fun ensureDayRollover(today: String = getTodayKey()) {
         val current = currentDayKey.get()

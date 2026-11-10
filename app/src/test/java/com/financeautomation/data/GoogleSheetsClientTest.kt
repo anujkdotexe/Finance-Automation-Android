@@ -60,13 +60,13 @@ class GoogleSheetsClientTest {
         val frozenReq = requests.firstOrNull { it.containsKey("updateSheetProperties") }
         assertNotNull(frozenReq)
 
-        // 2. Verify spacer columns pixelSize = 10
-        val spacerReqs = requests.filter { it.containsKey("updateDimensionProperties") }
-        assertTrue(spacerReqs.size >= 2)
+        // 2. Verify dimension properties (38 total: 2 initial spacer config + 1 UUID hide + 31 column widths + 4 row heights)
+        val dimPropsReqs = requests.filter { it.containsKey("updateDimensionProperties") }
+        assertEquals(38, dimPropsReqs.size)
 
-        // 3. Verify section merges (Debits, Inflows, Payables, Repayments)
+        // 3. Verify exactly 4 merges (Row 1 Title Banner + Table 1 Debits + Table 2 Inflows + Table 3 Payables)
         val mergeReqs = requests.filter { it.containsKey("mergeCells") }
-        assertTrue(mergeReqs.size >= 4)
+        assertEquals(4, mergeReqs.size)
 
         // 4. Verify Row 3 has 31 column headers
         val updateCellsReq = requests.firstOrNull { it.containsKey("updateCells") }
