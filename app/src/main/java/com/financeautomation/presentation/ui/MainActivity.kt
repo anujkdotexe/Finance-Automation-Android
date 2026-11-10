@@ -33,9 +33,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.FinanceApplication
+import com.financeautomation.R
 import com.financeautomation.presentation.components.ExpenseModalBottomSheet
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.screens.DashboardScreen
@@ -43,6 +45,7 @@ import com.financeautomation.presentation.screens.OnboardingScreen
 import com.financeautomation.presentation.screens.ReviewInboxScreen
 import com.financeautomation.presentation.screens.SettingsScreen
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
 import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
@@ -228,7 +231,7 @@ fun MainScreen(
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp
+                tonalElevation = FinanceTheme.spacing.xs
             ) {
                 MainNavDestination.values().forEach { destination ->
                     val isSelected = currentDestination == destination
@@ -247,7 +250,7 @@ fun MainScreen(
                                     Icon(
                                         imageVector = Icons.Rounded.Tune,
                                         contentDescription = destination.label,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                                     )
                                 }
                             } else {
@@ -258,7 +261,7 @@ fun MainScreen(
                                         MainNavDestination.SETTINGS -> Icons.Rounded.Tune
                                     },
                                     contentDescription = destination.label,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                                 )
                             }
                         },
@@ -285,12 +288,12 @@ fun MainScreen(
                     icon = {
                         Icon(
                             imageVector = Icons.Rounded.Add,
-                            contentDescription = "Log Expense"
+                            contentDescription = stringResource(R.string.quick_add_tile_label)
                         )
                     },
                     text = {
                         Text(
-                            text = "Log Expense",
+                            text = stringResource(R.string.quick_add_tile_label),
                             fontWeight = FontWeight.SemiBold
                         )
                     }

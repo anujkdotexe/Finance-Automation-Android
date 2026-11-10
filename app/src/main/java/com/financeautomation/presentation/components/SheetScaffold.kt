@@ -62,7 +62,7 @@ fun SheetScaffold(
             // Drag grabber handle
             Box(
                 modifier = Modifier
-                    .size(width = 36.dp, height = 4.dp)
+                    .size(width = FinanceTheme.sizes.grabberWidth, height = FinanceTheme.sizes.grabberHeight)
                     .background(FinanceTheme.colors.outline, FinanceTheme.shapes.chip)
             )
 
@@ -81,10 +81,10 @@ fun SheetScaffold(
                 )
 
                 if (onDismiss != null) {
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
-                            contentDescription = "Close",
+                            contentDescription = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.cd_close),
                             tint = FinanceTheme.colors.onSurfaceVariant
                         )
                     }
@@ -114,13 +114,13 @@ fun SheetScaffold(
 private fun SheetScaffoldPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
         SheetScaffold(
-            title = "Enter Amount ₹",
+            title = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.prompt_enter_amount),
             onDismiss = {},
             stickyAction = {
-                PrimaryButton(text = "Save", onClick = {})
+                PrimaryButton(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.action_save), onClick = {})
             }
         ) {
-            Text(text = "Sheet content slot", style = FinanceTheme.typography.bodyMedium)
+            Text(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_title), style = FinanceTheme.typography.bodyMedium)
         }
     }
 }
@@ -130,10 +130,10 @@ private fun SheetScaffoldPreviewLight() {
 private fun SheetScaffoldPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
         SheetScaffold(
-            title = "Choose Action",
+            title = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.prompt_choose_action),
             onDismiss = {}
         ) {
-            Text(text = "Action options", style = FinanceTheme.typography.bodyMedium)
+            Text(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_actions), style = FinanceTheme.typography.bodyMedium)
         }
     }
 }
@@ -143,10 +143,10 @@ private fun SheetScaffoldPreviewDark() {
 private fun SheetScaffoldPreviewLargeFont() {
     FinanceAutomationTheme(darkTheme = false) {
         SheetScaffold(
-            title = "Select Category",
+            title = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.prompt_select_category),
             onDismiss = {}
         ) {
-            Text(text = "Categories", style = FinanceTheme.typography.bodyMedium)
+            Text(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_categories), style = FinanceTheme.typography.bodyMedium)
         }
     }
 }

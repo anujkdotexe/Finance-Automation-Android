@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
@@ -38,7 +41,7 @@ fun HeroBurnCard(
     Card(
         shape = FinanceTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, FinanceTheme.colors.outline),
+        border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -47,7 +50,7 @@ fun HeroBurnCard(
                 .padding(FinanceTheme.spacing.l)
         ) {
             Text(
-                text = "Living burn this month",
+                text = stringResource(R.string.dashboard_hero_burn_title),
                 style = FinanceTheme.typography.labelMedium,
                 color = FinanceTheme.colors.onSurfaceVariant
             )
@@ -63,7 +66,11 @@ fun HeroBurnCard(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
             Text(
-                text = "Daily avg ${formatRupees(dailyAverage)} · Last month ${formatRupees(lastMonthBurn)}",
+                text = stringResource(
+                    R.string.dashboard_burn_subtitle,
+                    formatRupees(dailyAverage),
+                    formatRupees(lastMonthBurn)
+                ),
                 style = FinanceTheme.typography.labelMedium,
                 color = FinanceTheme.colors.onSurfaceVariant
             )
@@ -86,7 +93,7 @@ fun OwedSummaryCard(
     Card(
         shape = FinanceTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, FinanceTheme.colors.outline),
+        border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
         modifier = modifier.clickable(onClick = onClick)
     ) {
         Column(
@@ -121,7 +128,7 @@ fun OwedSummaryCard(
                 }
             } else {
                 Text(
-                    text = "None pending",
+                    text = stringResource(R.string.dashboard_none_pending),
                     style = FinanceTheme.typography.labelMedium,
                     color = FinanceTheme.colors.onSurfaceVariant
                 )
@@ -160,21 +167,20 @@ fun NeedsReviewBanner(
                     imageVector = Icons.Rounded.WarningAmber,
                     contentDescription = null,
                     tint = FinanceTheme.colors.moneyOwed,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                 )
                 Text(
-                    text = "$count transactions need review",
+                    text = pluralStringResource(R.plurals.review_pending_count, count, count),
                     style = FinanceTheme.typography.bodyMedium,
                     color = FinanceTheme.colors.moneyOwed
                 )
             }
 
             Text(
-                text = "Review",
+                text = stringResource(R.string.action_review),
                 style = FinanceTheme.typography.titleMedium,
                 color = FinanceTheme.colors.moneyOwed
             )
         }
     }
 }
-

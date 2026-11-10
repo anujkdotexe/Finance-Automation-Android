@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Widgets
@@ -21,11 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.financeautomation.R
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.ui.EntryActivity
 import com.financeautomation.service.QuickLogWidgetProvider
 
@@ -55,7 +54,7 @@ fun HomeScreenIconCard(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             Button(
                 onClick = {
@@ -66,11 +65,11 @@ fun HomeScreenIconCard(
                     }
                     onPinWidget()
                 },
-                shape = RoundedCornerShape(10.dp),
+                shape = FinanceTheme.shapes.card,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(imageVector = Icons.Rounded.Widgets, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
+                Icon(imageVector = Icons.Rounded.Widgets, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
                 Text(stringResource(R.string.pin_1x1_widget_button))
             }
 
@@ -91,11 +90,11 @@ fun HomeScreenIconCard(
                         ShortcutManagerCompat.requestPinShortcut(context, info, null)
                         onPinShortcut()
                     },
-                    shape = RoundedCornerShape(10.dp),
+                    shape = FinanceTheme.shapes.card,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                    Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
                     Text(stringResource(R.string.add_as_app_icon_button))
                 }
             } else {

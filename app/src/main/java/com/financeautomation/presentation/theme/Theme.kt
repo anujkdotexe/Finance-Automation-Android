@@ -60,7 +60,8 @@ fun FinanceAutomationTheme(
         LocalFinanceColors provides financeColors,
         LocalFinanceTypography provides FinanceTypographyTokens,
         LocalSpacing provides Spacing,
-        LocalShapes provides FinanceShapes
+        LocalShapes provides FinanceShapes,
+        LocalSizes provides FinanceSizes
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
@@ -93,4 +94,9 @@ object FinanceTheme {
         @Composable
         @ReadOnlyComposable
         get() = LocalShapes.current
+
+    val sizes: FinanceSizes
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalSizes.current
 }

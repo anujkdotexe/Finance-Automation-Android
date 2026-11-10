@@ -1,7 +1,5 @@
 package com.financeautomation.presentation.screens.settings
 
-import com.financeautomation.presentation.screens.SettingsCard
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -12,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.AccountCircle
@@ -23,9 +20,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -38,25 +33,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.financeautomation.R
+import com.financeautomation.presentation.screens.SettingsCard
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 
 /**
- * Account settings section managing Google Identity, funding accounts, and split companions (Design Guide 5.2).
+ * Settings section: Google Account & Ledger, Bank/Funding Accounts, Friends & Companions.
+ * Split from SettingsScreen to preserve the 400-line ceiling (Design Guide 4).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsAccountSection(
     state: SettingsUiState,
-    onReRunSetup: () -> Unit,
-    onSignOut: () -> Unit,
     onDefaultAccountChanged: (String) -> Unit,
     onAddAccount: (String, String?) -> Unit,
     onAddCompanion: (String) -> Unit,
     onRenameCompanion: (String, String) -> Unit,
     onRemoveCompanion: (String) -> Unit,
+    onReRunSetup: () -> Unit,
+    onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var newAccountInput by remember { mutableStateOf("") }
@@ -67,8 +64,8 @@ fun SettingsAccountSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)) {
         // 1. Google Identity & Drive Provisioning
         SettingsCard(
-            title = "Google account & ledger",
-            subtitle = "OAuth authentication and automatic Google Drive spreadsheet provisioning",
+            title = stringResource(R.string.settings_account_title),
+            subtitle = stringResource(R.string.settings_account_subtitle),
             icon = Icons.Rounded.AccountCircle
         ) {
             if (state.googleAccountEmail != null) {
@@ -86,11 +83,11 @@ fun SettingsAccountSection(
                             imageVector = Icons.Rounded.CheckCircle,
                             contentDescription = null,
                             tint = FinanceTheme.colors.brand,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Connected",
+                                text = stringResource(R.string.settings_account_connected),
                                 style = FinanceTheme.typography.labelMedium,
                                 color = FinanceTheme.colors.onSurfaceVariant
                             )
@@ -112,9 +109,9 @@ fun SettingsAccountSection(
                         shape = FinanceTheme.shapes.medium,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                         Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                        Text("Re-run setup")
+                        Text(stringResource(R.string.action_re_run_setup))
                     }
 
                     OutlinedButton(
@@ -122,12 +119,12 @@ fun SettingsAccountSection(
                         shape = FinanceTheme.shapes.medium,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Sign out")
+                        Text(stringResource(R.string.action_sign_out))
                     }
                 }
             } else {
                 Text(
-                    text = "Google Drive sync is not configured. Run the setup checklist to connect your account and workbook.",
+                    text = stringResource(R.string.settings_account_disconnected_desc),
                     style = FinanceTheme.typography.bodyMedium,
                     color = FinanceTheme.colors.onSurfaceVariant
                 )
@@ -137,17 +134,17 @@ fun SettingsAccountSection(
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.icon18))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
-                    Text("Start setup")
+                    Text(stringResource(R.string.action_start_setup))
                 }
             }
         }
 
         // 2. Bank & Funding Accounts
         SettingsCard(
-            title = "Bank and payment accounts",
-            subtitle = "Select an account to set default. Add custom accounts anytime.",
+            title = stringResource(R.string.settings_funding_accounts_title),
+            subtitle = stringResource(R.string.settings_funding_accounts_desc),
             icon = Icons.Rounded.AccountBalance
         ) {
             FlowRow(
@@ -160,15 +157,15 @@ fun SettingsAccountSection(
                         selected = isDefault,
                         onClick = { onDefaultAccountChanged(account.name) },
                         label = {
-                            Text(text = if (isDefault) "${account.name} (Default)" else account.name)
+                            Text(text = if (isDefault) stringResource(R.string.account_default_format, account.name) else account.name)
                         },
                         leadingIcon = if (isDefault) {
                             {
                                 Icon(
                                     imageVector = Icons.Rounded.CheckCircle,
-                                    contentDescription = "Default",
+                                    contentDescription = stringResource(R.string.account_default_label),
                                     tint = FinanceTheme.colors.brand,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                                 )
                             }
                         } else null,
@@ -185,7 +182,7 @@ fun SettingsAccountSection(
                 OutlinedTextField(
                     value = newAccountInput,
                     onValueChange = { newAccountInput = it },
-                    label = { Text("New account name") },
+                    label = { Text(stringResource(R.string.settings_new_account_label)) },
                     singleLine = true,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.weight(1f)
@@ -200,17 +197,17 @@ fun SettingsAccountSection(
                     },
                     shape = FinanceTheme.shapes.medium
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Add")
+                    Text(stringResource(R.string.action_add))
                 }
             }
         }
 
         // 3. Friends & Companions
         SettingsCard(
-            title = "Friends and companions",
-            subtitle = "Tap a friend chip to rename or delete. Used for 1-tap bill splitting.",
+            title = stringResource(R.string.settings_friends_title),
+            subtitle = stringResource(R.string.settings_friends_desc),
             icon = Icons.Rounded.People
         ) {
             FlowRow(
@@ -238,7 +235,7 @@ fun SettingsAccountSection(
                 OutlinedTextField(
                     value = newCompanionInput,
                     onValueChange = { newCompanionInput = it },
-                    label = { Text("New friend name") },
+                    label = { Text(stringResource(R.string.settings_new_friend_label)) },
                     singleLine = true,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.weight(1f)
@@ -253,9 +250,9 @@ fun SettingsAccountSection(
                     },
                     shape = FinanceTheme.shapes.medium
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Add")
+                    Text(stringResource(R.string.action_add))
                 }
             }
         }
@@ -265,12 +262,12 @@ fun SettingsAccountSection(
     renameCompanionTarget?.let { (id, _) ->
         AlertDialog(
             onDismissRequest = { renameCompanionTarget = null },
-            title = { Text("Manage friend") },
+            title = { Text(stringResource(R.string.settings_manage_friend_title)) },
             text = {
                 OutlinedTextField(
                     value = renameInput,
                     onValueChange = { renameInput = it },
-                    label = { Text("Friend name") },
+                    label = { Text(stringResource(R.string.settings_friend_name_label)) },
                     singleLine = true,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()
@@ -286,7 +283,7 @@ fun SettingsAccountSection(
                     },
                     shape = FinanceTheme.shapes.medium
                 ) {
-                    Text("Rename")
+                    Text(stringResource(R.string.action_rename))
                 }
             },
             dismissButton = {
@@ -298,11 +295,11 @@ fun SettingsAccountSection(
                         },
                         shape = FinanceTheme.shapes.medium
                     ) {
-                        Text("Remove")
+                        Text(stringResource(R.string.action_remove))
                     }
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                     TextButton(onClick = { renameCompanionTarget = null }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.action_cancel))
                     }
                 }
             }

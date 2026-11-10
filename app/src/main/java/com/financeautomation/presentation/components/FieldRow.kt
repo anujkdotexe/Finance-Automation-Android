@@ -48,8 +48,8 @@ fun FieldRow(
 @Composable
 private fun FieldRowPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        FieldRow(label = "What was this for?") {
-            Text(text = "Dinner at Toit", style = FinanceTheme.typography.bodyMedium)
+        FieldRow(label = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.prompt_what_was_this_for)) {
+            Text(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant), style = FinanceTheme.typography.bodyMedium)
         }
     }
 }
@@ -58,7 +58,7 @@ private fun FieldRowPreviewLight() {
 @Composable
 private fun FieldRowPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        FieldRow(label = "Amount", helperText = "Enter amount in ₹", isError = false) {
+        FieldRow(label = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.label_amount), isError = false) {
             AmountText(amount = 1250.0)
         }
     }
@@ -68,8 +68,8 @@ private fun FieldRowPreviewDark() {
 @Composable
 private fun FieldRowPreviewLargeFont() {
     FinanceAutomationTheme(darkTheme = false) {
-        FieldRow(label = "Select Account") {
-            Text(text = "State Bank of India (Primary)", style = FinanceTheme.typography.bodyMedium)
+        FieldRow(label = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.prompt_select_account)) {
+            Text(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant), style = FinanceTheme.typography.bodyMedium)
         }
     }
 }

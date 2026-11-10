@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
@@ -37,7 +36,7 @@ fun SettingsCard(
     Card(
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
         shape = FinanceTheme.shapes.large,
-        border = BorderStroke(1.dp, FinanceTheme.colors.outline),
+        border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -49,7 +48,7 @@ fun SettingsCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(FinanceTheme.sizes.avatarSmall)
                         .background(FinanceTheme.colors.brand.copy(alpha = 0.12f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -57,7 +56,7 @@ fun SettingsCard(
                         imageVector = icon,
                         contentDescription = title,
                         tint = FinanceTheme.colors.brand,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                     )
                 }
                 Spacer(modifier = Modifier.width(FinanceTheme.spacing.m))
@@ -78,4 +77,3 @@ fun SettingsCard(
         }
     }
 }
-

@@ -125,6 +125,9 @@ val DarkColorScheme = darkColorScheme(
     outline = DarkOutline
 )
 
+const val OVERLAY_SCRIM_ARGB: Long = 0x73000000L
+val DefaultOverlayScrim: Color = Color(OVERLAY_SCRIM_ARGB)
+
 /**
  * Cohesive visual tokens for Finance Automation (Design Guide 3.1).
  * Carries financial and structural meaning across both light and dark themes.
@@ -139,7 +142,11 @@ data class FinanceColors(
     val surfaceVariant: Color,
     val outline: Color,
     val onSurface: Color,
-    val onSurfaceVariant: Color
+    val onSurfaceVariant: Color,
+    val overlayScrim: Color = DefaultOverlayScrim,
+    val primary: Color = brand,
+    val primaryContainer: Color = surfaceVariant,
+    val error: Color = moneyOut
 )
 
 val LightFinanceColors = FinanceColors(
@@ -152,7 +159,8 @@ val LightFinanceColors = FinanceColors(
     surfaceVariant = Color(0xFFF1F5F9),
     outline = Color(0xFFE2E8F0),
     onSurface = Color(0xFF0F172A),
-    onSurfaceVariant = Color(0xFF64748B)
+    onSurfaceVariant = Color(0xFF64748B),
+    overlayScrim = Color(0x73000000)
 )
 
 val DarkFinanceColors = FinanceColors(
@@ -165,7 +173,8 @@ val DarkFinanceColors = FinanceColors(
     surfaceVariant = Color(0xFF1C1F26),
     outline = Color(0xFF2A2E37),
     onSurface = Color(0xFFF8FAFC),
-    onSurfaceVariant = Color(0xFF94A3B8)
+    onSurfaceVariant = Color(0xFF94A3B8),
+    overlayScrim = Color(0x99000000)
 )
 
 val LocalFinanceColors = staticCompositionLocalOf { LightFinanceColors }

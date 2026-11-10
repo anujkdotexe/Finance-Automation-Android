@@ -1,8 +1,5 @@
 package com.financeautomation.presentation.screens.settings
 
-import com.financeautomation.presentation.screens.SettingsCard
-
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -40,28 +37,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.financeautomation.R
+import com.financeautomation.presentation.screens.SettingsCard
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 
 /**
- * Capture settings section managing overlay popup permissions, categories, and trip tags (Design Guide 5.2).
+ * Settings section: Overlay Permission, Category Exclusions from Living Burn, Trip Tags.
+ * Split from SettingsScreen to preserve the 400-line ceiling (Design Guide 4).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsCaptureSection(
     state: SettingsUiState,
-    onAddCategory: (String, Boolean) -> Unit,
     onToggleCategoryLivingBurnExclusion: (String, Boolean) -> Unit,
+    onAddCategory: (String, Boolean) -> Unit,
     onAddTripTag: (String) -> Unit,
     onToggleTripTagActive: (String) -> Unit,
+    hasOverlayPermission: Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(LocalContext.current) else true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val hasOverlayPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        Settings.canDrawOverlays(context)
-    } else true
-
     var newCategoryInput by remember { mutableStateOf("") }
     var newCategoryBurnExclude by remember { mutableStateOf(false) }
     var newTagInput by remember { mutableStateOf("") }
@@ -69,8 +66,8 @@ fun SettingsCaptureSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)) {
         // 1. Overlay Permission
         SettingsCard(
-            title = "Display over other apps",
-            subtitle = "Automatic expense sheet popup after UPI payment completes",
+            title = stringResource(R.string.settings_capture_title),
+            subtitle = stringResource(R.string.settings_capture_desc),
             icon = Icons.Rounded.Layers
         ) {
             Row(
@@ -80,15 +77,19 @@ fun SettingsCaptureSection(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (hasOverlayPermission) "Overlay popup active" else "Overlay permission missing",
+                        text = if (hasOverlayPermission) {
+                            stringResource(R.string.settings_overlay_active)
+                        } else {
+                            stringResource(R.string.settings_overlay_missing)
+                        },
                         style = FinanceTheme.typography.bodyMedium,
                         color = if (hasOverlayPermission) FinanceTheme.colors.moneyIn else FinanceTheme.colors.moneyOut
                     )
                     Text(
                         text = if (hasOverlayPermission) {
-                            "Bottom sheet pops up automatically after payment"
+                            stringResource(R.string.settings_overlay_active_desc)
                         } else {
-                            "Falls back to high-priority notification"
+                            stringResource(R.string.settings_overlay_missing_desc)
                         },
                         style = FinanceTheme.typography.labelMedium,
                         color = FinanceTheme.colors.onSurfaceVariant
@@ -106,9 +107,9 @@ fun SettingsCaptureSection(
                         },
                         shape = FinanceTheme.shapes.medium
                     ) {
-                        Icon(imageVector = Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                         Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                        Text("Enable")
+                        Text(stringResource(R.string.action_enable))
                     }
                 }
             }
@@ -116,8 +117,8 @@ fun SettingsCaptureSection(
 
         // 2. Categories & Living Burn Exclusions
         SettingsCard(
-            title = "Expense categories and living burn",
-            subtitle = "Excluded categories are omitted from Monthly Living Burn KPIs (e.g. Savings, Transfers).",
+            title = stringResource(R.string.settings_categories_title),
+            subtitle = stringResource(R.string.settings_categories_desc),
             icon = Icons.Rounded.Category
         ) {
             Column(
@@ -144,7 +145,11 @@ fun SettingsCaptureSection(
                                     color = FinanceTheme.colors.onSurface
                                 )
                                 Text(
-                                    text = if (category.isExcludedFromLivingBurn) "Excluded from Living Burn" else "Included in Living Burn",
+                                    text = if (category.isExcludedFromLivingBurn) {
+                                        stringResource(R.string.settings_exclude_burn_label)
+                                    } else {
+                                        stringResource(R.string.settings_included_burn_label)
+                                    },
                                     style = FinanceTheme.typography.labelMedium,
                                     color = if (category.isExcludedFromLivingBurn) FinanceTheme.colors.moneyOut else FinanceTheme.colors.onSurfaceVariant
                                 )
@@ -169,7 +174,7 @@ fun SettingsCaptureSection(
                 OutlinedTextField(
                     value = newCategoryInput,
                     onValueChange = { newCategoryInput = it },
-                    label = { Text("New category name") },
+                    label = { Text(stringResource(R.string.settings_new_category_label)) },
                     singleLine = true,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.weight(1f)
@@ -185,9 +190,9 @@ fun SettingsCaptureSection(
                     },
                     shape = FinanceTheme.shapes.medium
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Add")
+                    Text(stringResource(R.string.action_add))
                 }
             }
 
@@ -200,7 +205,7 @@ fun SettingsCaptureSection(
                     onCheckedChange = { newCategoryBurnExclude = it }
                 )
                 Text(
-                    text = "Exclude from Living Burn",
+                    text = stringResource(R.string.settings_exclude_burn_label),
                     style = FinanceTheme.typography.labelMedium,
                     color = FinanceTheme.colors.onSurface
                 )
@@ -209,8 +214,12 @@ fun SettingsCaptureSection(
 
         // 3. Trip & Event Tags
         SettingsCard(
-            title = "Trip and event tags",
-            subtitle = if (state.activeTripTag.isNotBlank()) "Active tag: ${state.activeTripTag}" else "No trip tag active.",
+            title = stringResource(R.string.settings_trip_tags_title),
+            subtitle = if (state.activeTripTag.isNotBlank()) {
+                stringResource(R.string.settings_active_trip_format, state.activeTripTag)
+            } else {
+                stringResource(R.string.settings_no_trip_active)
+            },
             icon = Icons.Rounded.FlightTakeoff
         ) {
             FlowRow(
@@ -235,7 +244,7 @@ fun SettingsCaptureSection(
                 OutlinedTextField(
                     value = newTagInput,
                     onValueChange = { newTagInput = it },
-                    label = { Text("New trip tag (e.g. Goa 2026)") },
+                    label = { Text(stringResource(R.string.settings_new_trip_tag_label)) },
                     singleLine = true,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.weight(1f)
@@ -250,9 +259,9 @@ fun SettingsCaptureSection(
                     },
                     shape = FinanceTheme.shapes.medium
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Add")
+                    Text(stringResource(R.string.action_add))
                 }
             }
         }

@@ -54,7 +54,7 @@ fun PersonRow(
             )
             if (!oldestDateText.isNullOrBlank()) {
                 Text(
-                    text = "Since $oldestDateText",
+                    text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.format_since_date, oldestDateText),
                     style = FinanceTheme.typography.labelMedium,
                     color = FinanceTheme.colors.onSurfaceVariant
                 )

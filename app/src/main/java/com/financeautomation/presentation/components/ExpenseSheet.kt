@@ -22,9 +22,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.TransactionStatus
@@ -75,7 +76,7 @@ fun ExpenseSheet(
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 PrimaryButton(
-                    text = "Save",
+                    text = stringResource(R.string.action_save),
                     onClick = onConfirmAndSave,
                     enabled = state.amount > 0.0 && !state.isSaving,
                     isLoading = state.isSaving
@@ -83,14 +84,14 @@ fun ExpenseSheet(
 
                 if (state.transactionId != null) {
                     SecondaryButton(
-                        text = "Void",
+                        text = stringResource(R.string.action_void),
                         onClick = onVoid,
                         enabled = !state.isSaving
                     )
                 }
 
                 TextAction(
-                    text = "Cancel",
+                    text = stringResource(R.string.action_cancel),
                     onClick = onCancel,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
@@ -123,7 +124,7 @@ fun ExpenseSheet(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Possible duplicate from recent alert. Confirm details before saving.",
+                        text = stringResource(R.string.expense_duplicate_warning),
                         style = FinanceTheme.typography.bodyMedium,
                         color = FinanceTheme.colors.moneyOwed,
                         modifier = Modifier.padding(FinanceTheme.spacing.m)
@@ -147,12 +148,12 @@ fun ExpenseSheet(
             }
 
             // Amount Field
-            FieldRow(label = "Amount") {
+            FieldRow(label = stringResource(R.string.label_amount)) {
                 OutlinedTextField(
                     value = state.amountText,
                     onValueChange = onAmountChanged,
                     singleLine = true,
-                    placeholder = { Text("0.00") },
+                    placeholder = { Text(stringResource(R.string.placeholder_amount_zero)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = FinanceTheme.shapes.medium,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -164,12 +165,12 @@ fun ExpenseSheet(
             }
 
             // Paid To / Merchant
-            FieldRow(label = "Paid to") {
+            FieldRow(label = stringResource(R.string.label_paid_to)) {
                 OutlinedTextField(
                     value = state.merchant,
                     onValueChange = onMerchantChanged,
                     singleLine = true,
-                    placeholder = { Text("Merchant or purpose") },
+                    placeholder = { Text(stringResource(R.string.expense_merchant_placeholder)) },
                     shape = FinanceTheme.shapes.medium,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = FinanceTheme.colors.brand,
@@ -180,7 +181,7 @@ fun ExpenseSheet(
             }
 
             // Category Chips
-            FieldRow(label = "Category") {
+            FieldRow(label = stringResource(R.string.label_category)) {
                 ChoiceChips(
                     items = categories,
                     selectedItem = state.selectedCategory,
@@ -189,7 +190,7 @@ fun ExpenseSheet(
             }
 
             // Split Mode Chips
-            FieldRow(label = "Split") {
+            FieldRow(label = stringResource(R.string.label_split)) {
                 ChoiceChips(
                     items = listOf(SplitMode.JUST_ME, SplitMode.SPLIT_EQUALLY, SplitMode.CUSTOM),
                     selectedItem = state.splitMode,
@@ -210,7 +211,7 @@ fun ExpenseSheet(
                     // No companion row needed
                 }
                 SplitMode.SPLIT_EQUALLY -> {
-                    FieldRow(label = "Friends") {
+                    FieldRow(label = stringResource(R.string.label_friends)) {
                         Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
                             if (state.allCompanions.isNotEmpty()) {
                                 MultiChoiceChips(
@@ -223,7 +224,7 @@ fun ExpenseSheet(
 
                             if (!showNewFriendDialog) {
                                 TextAction(
-                                    text = "+ Add friend",
+                                    text = stringResource(R.string.action_add_friend),
                                     onClick = { showNewFriendDialog = true }
                                 )
                             } else {
@@ -235,13 +236,13 @@ fun ExpenseSheet(
                                     OutlinedTextField(
                                         value = newFriendName,
                                         onValueChange = { newFriendName = it },
-                                        placeholder = { Text("Friend name") },
+                                        placeholder = { Text(stringResource(R.string.placeholder_friend_name)) },
                                         singleLine = true,
                                         shape = FinanceTheme.shapes.small,
                                         modifier = Modifier.weight(1f)
                                     )
                                     PrimaryButton(
-                                        text = "Add",
+                                        text = stringResource(R.string.action_add),
                                         onClick = {
                                             if (newFriendName.isNotBlank()) {
                                                 onAddCompanion(newFriendName.trim())
@@ -260,12 +261,12 @@ fun ExpenseSheet(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "My share: ${formatRupees(state.myShare, includeDecimals = true)}",
+                                        text = stringResource(R.string.expense_my_share_format, formatRupees(state.myShare, includeDecimals = true)),
                                         style = FinanceTheme.typography.bodyMedium,
                                         color = FinanceTheme.colors.onSurface
                                     )
                                     Text(
-                                        text = "Owed to me: ${formatRupees(state.owedToMe, includeDecimals = true)}",
+                                        text = stringResource(R.string.expense_owed_to_me_format, formatRupees(state.owedToMe, includeDecimals = true)),
                                         style = FinanceTheme.typography.bodyMedium,
                                         color = FinanceTheme.colors.moneyIn
                                     )
@@ -275,20 +276,20 @@ fun ExpenseSheet(
                     }
                 }
                 SplitMode.CUSTOM -> {
-                    FieldRow(label = "My share (₹)") {
+                    FieldRow(label = stringResource(R.string.label_my_share_rs)) {
                         Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
                             OutlinedTextField(
                                 value = state.customShareText,
                                 onValueChange = onCustomShareChanged,
                                 singleLine = true,
-                                placeholder = { Text("0.00") },
+                                placeholder = { Text(stringResource(R.string.placeholder_amount_zero)) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 shape = FinanceTheme.shapes.medium,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             if (state.owedToMe > 0.0) {
                                 Text(
-                                    text = "Owed to me: ${formatRupees(state.owedToMe, includeDecimals = true)}",
+                                    text = stringResource(R.string.expense_owed_to_me_format, formatRupees(state.owedToMe, includeDecimals = true)),
                                     style = FinanceTheme.typography.bodyMedium,
                                     color = FinanceTheme.colors.moneyIn
                                 )

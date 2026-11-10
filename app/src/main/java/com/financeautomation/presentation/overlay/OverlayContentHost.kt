@@ -84,22 +84,22 @@ fun OverlayContentHost(
             .fillMaxWidth()
             .navigationBarsPadding()
             .displayCutoutPadding()
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-            .heightIn(max = 620.dp)
+            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m)
+            .heightIn(max = FinanceTheme.sizes.maxOverlayHeight)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { /* Consume clicks to prevent backdrop dismissal */ },
         shape = FinanceTheme.shapes.sheet,
         color = FinanceTheme.colors.surface,
-        tonalElevation = 6.dp,
-        shadowElevation = 24.dp
+        tonalElevation = FinanceTheme.sizes.elevationSheet,
+        shadowElevation = FinanceTheme.sizes.elevationDialog
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (isTestMode) {
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    shape = FinanceTheme.shapes.sheet,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -108,7 +108,7 @@ fun OverlayContentHost(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(vertical = FinanceTheme.spacing.s)
                     )
                 }
             }
@@ -116,7 +116,7 @@ fun OverlayContentHost(
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "OverlayFlowAnimation"
+                label = ""
             ) { screen ->
             when (screen) {
                 OverlayFlowScreen.MENU -> {
