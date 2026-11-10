@@ -4,6 +4,9 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -64,6 +67,7 @@ object QuickLogTransactionHelper {
         pendingCaptureDaoProvider: suspend () -> PendingCaptureDao
     ) {
         try {
+            PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.DISMISSED)
             pendingCaptureDaoProvider.invoke().updateState(
                 captureId,
                 PendingCaptureEntity.STATE_DISMISSED
@@ -169,6 +173,7 @@ object QuickLogTransactionHelper {
         )
 
         if (result is Result.Success) {
+            PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.DONE)
             state.captureId?.let { cid ->
                 try {
                     pendingCaptureDaoProvider.invoke().updateState(cid, PendingCaptureEntity.STATE_DONE)

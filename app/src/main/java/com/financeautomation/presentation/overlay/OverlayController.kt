@@ -27,6 +27,9 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.ViewModelProvider
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
@@ -83,12 +86,8 @@ class OverlayController(
     private val mainScope = CoroutineScope(mainDispatcher + SupervisorJob())
 
     private val actionDispatcher = OverlayActionDispatcher(
-        transactionRepository = transactionRepository,
-        tripTagRepository = tripTagRepository,
-        resultPill = resultPill,
-        onDismiss = ::dismiss,
-        mainScope = mainScope,
-        ioDispatcher = ioDispatcher
+        transactionRepository = transactionRepository, tripTagRepository = tripTagRepository,
+        resultPill = resultPill, onDismiss = ::dismiss, mainScope = mainScope, ioDispatcher = ioDispatcher
     )
 
     private val showRequested = AtomicBoolean(false)
@@ -121,6 +120,7 @@ class OverlayController(
         pendingSelfTestCompletion = completion
 
         if (!Settings.canDrawOverlays(appContext)) {
+            PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_PERMISSION_MISSING)
             Diagnostics.record("OverlayController", "show: SYSTEM_ALERT_WINDOW permission missing")
             completion?.complete(false)
             if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
@@ -130,6 +130,7 @@ class OverlayController(
         // Automatic capture while sheet is already open is deferred; atomic check-and-reserve
         if (request is OverlayRequest.Capture) {
             if (currentView != null || !showRequested.compareAndSet(false, true)) {
+                PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_DEFERRED_BUSY)
                 completion?.complete(false)
                 if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
                 return false
@@ -178,16 +179,11 @@ class OverlayController(
                 blurHelper.setupWindowBlur(layoutParams, { currentView }, { currentLayoutParams })
 
                 val viewModelFactory = QuickLogViewModelFactory(
-                    transactionRepository = transactionRepository,
-                    peopleRepository = peopleRepository,
-                    categoryRepository = categoryRepository,
-                    accountRepository = accountRepository,
-                    tripTagRepository = tripTagRepository,
-                    pendingCaptureDaoProvider = pendingCaptureDaoProvider,
-                    syncQueueDaoProvider = syncQueueDaoProvider,
-                    categoryStatDaoProvider = categoryStatDaoProvider,
-                    predictCategoryUseCase = predictCategoryUseCase,
-                    ioDispatcher = ioDispatcher
+                    transactionRepository = transactionRepository, peopleRepository = peopleRepository,
+                    categoryRepository = categoryRepository, accountRepository = accountRepository,
+                    tripTagRepository = tripTagRepository, pendingCaptureDaoProvider = pendingCaptureDaoProvider,
+                    syncQueueDaoProvider = syncQueueDaoProvider, categoryStatDaoProvider = categoryStatDaoProvider,
+                    predictCategoryUseCase = predictCategoryUseCase, ioDispatcher = ioDispatcher
                 )
                 val viewModel = ViewModelProvider(treeOwners, viewModelFactory)[QuickLogViewModel::class.java]
 
@@ -252,6 +248,7 @@ class OverlayController(
                                                 resultPill.show(appContext.getString(R.string.self_test_completed_pill))
                                             } else {
                                                 viewModel.onConfirmAndSave { message ->
+                                                    PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
                                                     dismiss()
                                                     resultPill.show(message)
                                                 }
@@ -263,6 +260,7 @@ class OverlayController(
                                         onStartTrip = actionDispatcher::startTrip,
                                         onEndTrip = actionDispatcher::endTrip,
                                         onDismiss = {
+                                            PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_DISMISSED)
                                             viewModel.onDismiss()
                                             dismiss()
                                         },
@@ -281,9 +279,11 @@ class OverlayController(
                 windowManager.addView(composeView, layoutParams)
                 currentView = composeView
                 _isShowingFlow.value = true
+                PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_SHOWN)
                 completion?.complete(true)
                 if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
             } catch (e: Exception) {
+                PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_ADD_FAILED)
                 showRequested.set(false)
                 completion?.complete(false)
                 if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null

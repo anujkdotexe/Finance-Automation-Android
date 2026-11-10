@@ -3,6 +3,9 @@ package com.financeautomation.service
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.PackageWhitelist
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PipelineCode
+import com.financeautomation.core.utils.PipelineStage
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -75,17 +78,20 @@ class NotificationProcessor(
 
         // 2. Blacklist check (privacy-sensitive messaging apps)
         if (PackageWhitelist.isBlacklisted(sourcePackage)) {
+            PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
             return NotificationProcessingOutcome.Ignored("Blacklisted privacy package: $sourcePackage")
         }
 
         // 3. Whitelist check (financial applications and SMS alerts only, includes BuildConfig.DEBUG guard)
         if (!PackageWhitelist.isWhitelisted(sourcePackage)) {
+            PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_NOT_WHITELISTED_COUNT)
             return NotificationProcessingOutcome.Ignored("Non-whitelisted package: $sourcePackage")
         }
 
         // 4. OTP and verification suppression check
         val fullContent = if (title.isNotBlank()) "$title. $text".trim() else text.trim()
         if (PackageWhitelist.isOtpOrAuth(fullContent)) {
+            PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_OTP)
             return NotificationProcessingOutcome.Ignored("OTP or auth alert suppressed")
         }
 
@@ -98,6 +104,7 @@ class NotificationProcessor(
             val existingHandled = handledNotificationDao.get(key = key, postTime = postTime)
             if (existingHandled != null && existingHandled.contentHash == contentHash) {
                 // Reconnect replay or duplicate posted alert
+                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
                 return NotificationProcessingOutcome.Ignored("Duplicate or reconnect replay notification dropped")
             }
 
@@ -145,20 +152,24 @@ class NotificationProcessor(
 
         return when (parseResult) {
             is NotificationParseResult.Dropped -> {
+                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
                 NotificationProcessingOutcome.Ignored("ParseUseCase dropped: ${parseResult.reason}")
             }
             is NotificationParseResult.FailureAlert -> {
+                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.FAILURE_WORDING)
                 // Check if an existing capture is AWAITING_SUCCESS for this notification key
                 if (pendingCaptureDao != null && sbnKey.isNotBlank()) {
                     val existing = pendingCaptureDao.getByNotificationKey(sbnKey)
                     if (existing != null && existing.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
                         pendingCaptureDao.updateState(existing.id, PendingCaptureEntity.STATE_DISMISSED)
+                        PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.DISMISSED)
                         return NotificationProcessingOutcome.Dismissed(existing.id)
                     }
                 }
                 NotificationProcessingOutcome.Ignored("Payment failed, declined or reversed")
             }
             is NotificationParseResult.FallbackPrompt -> {
+                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_UNREADABLE)
                 // Unreadable alert: amount = null, payee = "Unknown Payee", flags = NEEDS_AMOUNT
                 handleCaptureDecision(
                     sourcePackage = sourcePackage,
@@ -175,6 +186,11 @@ class NotificationProcessor(
             }
             is NotificationParseResult.Success -> {
                 val kind = if (parseResult.isCredit) PendingCaptureEntity.KIND_CREDIT else PendingCaptureEntity.KIND_DEBIT
+                if (parseResult.isCredit) {
+                    PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_OK_CREDIT)
+                } else {
+                    PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_OK_DEBIT)
+                }
                 handleCaptureDecision(
                     sourcePackage = sourcePackage,
                     amount = parseResult.transaction.totalAmount,
@@ -246,6 +262,7 @@ class NotificationProcessor(
                         updatedAt = System.currentTimeMillis()
                     )
                     pendingCaptureDao.update(merged)
+                    PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED)
                     return NotificationProcessingOutcome.Merged(merged.id, enriched = true)
                 }
 
@@ -254,6 +271,7 @@ class NotificationProcessor(
                     it.state == PendingCaptureEntity.STATE_SHOWN || it.state == PendingCaptureEntity.STATE_DONE
                 }
                 if (hasShownOrDone) {
+                    PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.FLAGGED_DUPLICATE)
                     activeFlags = if (activeFlags.isNotBlank()) {
                         "$activeFlags,${PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE}"
                     } else {
@@ -280,6 +298,11 @@ class NotificationProcessor(
         )
 
         pendingCaptureDao?.insert(capture)
+        if (targetState == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
+            PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.AWAITING_SUCCESS)
+        } else {
+            PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.CREATED_WAITING)
+        }
 
         return NotificationProcessingOutcome.Captured(capture)
     }
