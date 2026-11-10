@@ -8,12 +8,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +39,7 @@ import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.components.KpiCard
 import com.financeautomation.presentation.components.SectionHeader
 import com.financeautomation.presentation.components.TransactionRow
+import com.financeautomation.presentation.screens.settings.CompatibilityReportDialog
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.CategorySpend
@@ -109,6 +117,7 @@ fun DashboardContent(
     modifier: Modifier = Modifier
 ) {
     var showAllCategories by remember { mutableStateOf(false) }
+    var showMissedPaymentDialog by remember { mutableStateOf(false) }
     val showLessText = stringResource(R.string.action_show_less)
     val seeAllText = stringResource(R.string.action_see_all)
 
@@ -242,11 +251,34 @@ fun DashboardContent(
                     )
                 }
             }
+
+            item {
+                OutlinedButton(
+                    onClick = { showMissedPaymentDialog = true },
+                    shape = FinanceTheme.shapes.card,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.BugReport,
+                        contentDescription = null,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                    )
+                    Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
+                    Text(stringResource(R.string.report_missed_payment_button))
+                }
+            }
         }
 
         item {
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
         }
+    }
+
+    if (showMissedPaymentDialog) {
+        CompatibilityReportDialog(
+            isMissedPayment = true,
+            onDismiss = { showMissedPaymentDialog = false }
+        )
     }
 }
 

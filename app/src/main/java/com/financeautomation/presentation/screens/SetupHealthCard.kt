@@ -28,15 +28,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -56,9 +59,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
-import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.repository.CompatibilityReportCollector
 import com.financeautomation.presentation.health.OemHardeningHelper
 import com.financeautomation.presentation.overlay.OverlayController
+import com.financeautomation.presentation.screens.settings.CompatibilityReportDialog
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.HealthCheckId
 import com.financeautomation.presentation.viewmodel.HealthCheckItem
@@ -85,6 +89,8 @@ fun SetupHealthCard(
     var selfTestSucceeded by remember { mutableStateOf<Boolean?>(null) }
     var fallbackInstructionText by remember { mutableStateOf<String?>(null) }
     var postNotificationRequestedOnce by remember { mutableStateOf(false) }
+    var reportDialogMode by remember { mutableStateOf<Boolean?>(null) }
+    var oemFeedbackSubmitted by remember { mutableStateOf<Boolean?>(null) }
 
     val postNotificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -97,7 +103,7 @@ fun SetupHealthCard(
                 Manifest.permission.POST_NOTIFICATIONS
             )
             if (permanentlyDenied) {
-                launchAppNotificationSettings(context)
+                SetupHealthIntents.launchAppNotificationSettings(context)
             }
         }
     }
@@ -175,13 +181,13 @@ fun SetupHealthCard(
                             Manifest.permission.POST_NOTIFICATIONS
                         ) && postNotificationRequestedOnce
                         if (permanentlyDenied) {
-                            launchAppNotificationSettings(context)
+                            SetupHealthIntents.launchAppNotificationSettings(context)
                         } else {
                             postNotificationRequestedOnce = true
                             postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
                     } else {
-                        launchSettingsWithGuardedFallback(context, checkItem, oemInfo) { instruction ->
+                        SetupHealthIntents.launchSettingsWithGuardedFallback(context, checkItem, oemInfo) { instruction ->
                             fallbackInstructionText = instruction
                         }
                     }
@@ -191,17 +197,22 @@ fun SetupHealthCard(
                 },
                 oemInstruction = if (checkItem.id == HealthCheckId.OEM_BACKGROUND) {
                     stringResource(oemInfo.instructionRes)
-                } else null
+                } else null,
+                oemFeedback = oemFeedbackSubmitted,
+                onOemFeedback = { openedRightScreen ->
+                    oemFeedbackSubmitted = openedRightScreen
+                    SetupHealthIntents.recordOemFeedback(oemInfo.brand.name, openedRightScreen)
+                }
             )
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
         }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
-        // 3. Self-Test Simulation Section
+        // 3. Self-Test Simulation & Reporting Section
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
@@ -222,7 +233,8 @@ fun SetupHealthCard(
                         }
                     }
                 },
-                shape = FinanceTheme.shapes.card
+                shape = FinanceTheme.shapes.card,
+                modifier = Modifier.weight(1f)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
@@ -232,6 +244,36 @@ fun SetupHealthCard(
                 Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
                 Text(stringResource(R.string.health_self_test_button))
             }
+
+            OutlinedButton(
+                onClick = { reportDialogMode = false },
+                shape = FinanceTheme.shapes.card,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Share,
+                    contentDescription = null,
+                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                )
+                Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
+                Text(stringResource(R.string.health_generate_report_button))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+        OutlinedButton(
+            onClick = { reportDialogMode = true },
+            shape = FinanceTheme.shapes.card,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.BugReport,
+                contentDescription = null,
+                modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+            )
+            Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
+            Text(stringResource(R.string.report_missed_payment_button))
         }
 
         AnimatedVisibility(visible = selfTestResultText != null) {
@@ -252,6 +294,13 @@ fun SetupHealthCard(
             }
         }
     }
+
+    reportDialogMode?.let { isMissed ->
+        CompatibilityReportDialog(
+            isMissedPayment = isMissed,
+            onDismiss = { reportDialogMode = null }
+        )
+    }
 }
 
 @Composable
@@ -259,7 +308,9 @@ private fun HealthCheckRow(
     item: HealthCheckItem,
     onFix: () -> Unit,
     onToggleOemDone: (Boolean) -> Unit,
-    oemInstruction: String? = null
+    oemInstruction: String? = null,
+    oemFeedback: Boolean? = null,
+    onOemFeedback: ((Boolean) -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -312,58 +363,27 @@ private fun HealthCheckRow(
                         Text(text = stringResource(R.string.health_oem_open_settings), style = MaterialTheme.typography.labelSmall)
                     }
                 }
-            }
-        }
-    }
-}
 
-private fun launchSettingsWithGuardedFallback(
-    context: Context,
-    item: HealthCheckItem,
-    oemInfo: com.financeautomation.presentation.health.OemInfo,
-    onFallbackFailed: (String) -> Unit
-) {
-    val intent = SetupHealthViewModel.createFixIntent(item.id, context)
-    try {
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        if (e !is ActivityNotFoundException && e !is SecurityException) throw e
-        Diagnostics.record("SetupHealthCard", "${e.javaClass.simpleName}: launchFixIntent")
-        val fallback = SetupHealthViewModel.getAppDetailsSettingsIntent(context)
-        try {
-            context.startActivity(fallback)
-        } catch (fallbackEx: Exception) {
-            if (fallbackEx !is ActivityNotFoundException && fallbackEx !is SecurityException) throw fallbackEx
-            Diagnostics.record("SetupHealthCard", "${fallbackEx.javaClass.simpleName}: launchFallbackIntent")
-            val instruction = if (item.id == HealthCheckId.OEM_BACKGROUND) {
-                context.getString(oemInfo.instructionRes)
-            } else {
-                context.getString(item.descriptionRes)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = FinanceTheme.sizes.iconLarge, top = FinanceTheme.sizes.badgeOffset),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    Text(text = stringResource(R.string.oem_feedback_prompt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FilterChip(
+                        selected = oemFeedback == true,
+                        onClick = { onOemFeedback?.invoke(true) },
+                        label = { Text(stringResource(R.string.action_yes)) },
+                        shape = FinanceTheme.shapes.small
+                    )
+                    FilterChip(
+                        selected = oemFeedback == false,
+                        onClick = { onOemFeedback?.invoke(false) },
+                        label = { Text(stringResource(R.string.action_no)) },
+                        shape = FinanceTheme.shapes.small
+                    )
+                }
             }
-            onFallbackFailed(instruction)
-        }
-    }
-}
-
-private fun launchAppNotificationSettings(context: Context) {
-    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-    } else {
-        SetupHealthViewModel.getAppDetailsSettingsIntent(context)
-    }
-    try {
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        if (e !is ActivityNotFoundException && e !is SecurityException) throw e
-        Diagnostics.record("SetupHealthCard", "${e.javaClass.simpleName}: launchNotificationSettings")
-        try {
-            context.startActivity(SetupHealthViewModel.getAppDetailsSettingsIntent(context))
-        } catch (fe: Exception) {
-            if (fe !is ActivityNotFoundException && fe !is SecurityException) throw fe
-            Diagnostics.record("SetupHealthCard", "${fe.javaClass.simpleName}: launchNotificationFallback")
         }
     }
 }

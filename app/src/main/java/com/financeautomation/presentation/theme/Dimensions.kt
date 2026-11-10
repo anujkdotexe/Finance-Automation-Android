@@ -57,6 +57,7 @@ object FinanceSizes {
     val emptyStateIllustration: Dp = 96.dp
     val chartHeight: Dp = 120.dp
     val diagnosticsHeight: Dp = 240.dp
+    val previewMaxHeight: Dp = 280.dp
     val elevationSheet: Dp = 6.dp
     val elevationDialog: Dp = 24.dp
     val maxSheetHeight: Dp = 540.dp
