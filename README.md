@@ -11,7 +11,7 @@ Finance Automation Android is the native Android companion and standalone client
 - **Phase 1.5 - 1.7 (Database Encryption):** Complete. Implements SQLCipher AES-256 local database encryption with Keystore-wrapped key in raw hex form, one-time plaintext SQLite migration with table verification, transient Keystore retry guard, and non-crashing canary check.
 - **Phase 2 (Sheet Gateway, Layout & Config Sync):** Complete. Ported iOS master template layout, clustered column and doughnut charts with deduplication, workbook properties (`locale = "en_IN"`, `timeZone = "Asia/Kolkata"`), and durable two-way configuration synchronization (`ConfigSyncCoordinator`, `SyncQueueEntity.OP_CONFIG_PUSH`).
 - **Phase 3 (Accounting Engine & Room v4):** Complete. Implemented 3-mode split math, netting, settlement waterfall, repayment waterfall, 12-hop debt carry-forward, non-destructive voiding, cross-month debt rollover lineage tracking, two-phase idempotent planJson execution, monthly rollover triggers, and year-close workbook statement generation.
-- **Phase 4 (Capture Pipeline & Room v5):** Planned next.
+- **Phase 4 (Capture Pipeline & Room v5):** Complete. Interception pipeline with `NotificationListenerServiceImpl`, in-memory `ForegroundWatcher` with screen/keyguard broadcast wake channel, and Room schema version 5.
 - **Phase 5 (Overlay & User Flows):** Planned.
 - **Phase 6+ (Integration & Verification):** Planned.
 
@@ -62,7 +62,7 @@ The application operates offline-first: transactions and configuration changes a
 - **Privacy Package Blacklist:** Personal messaging apps (WhatsApp, Telegram, Signal, Messenger, Instagram, Discord) and OTP/2FA verification codes are immediately dropped.
 - **Zero Raw Alert Text Stored:** Alerts are parsed in memory. Raw title and body text are never stored in the database, logged, or transmitted off-device.
 - **Minimal OAuth Scope:** Requests only `https://www.googleapis.com/auth/drive.file`, restricting app access strictly to workbooks and files created by the application itself.
-- **Encrypted Local Storage:** Database is encrypted at rest using SQLCipher with an AES-256 key wrapped in Android Keystore.
+- **Encrypted Local Storage:** Database is protected by SQLCipher AES-256 encryption. The database key is generated on the device and wrapped by an Android Keystore AES-GCM key.
 - **Zero Secret Commits:** No API keys, client secrets, tokens, or keystores are stored in source code.
 
 ---
