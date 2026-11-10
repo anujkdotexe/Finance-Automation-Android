@@ -66,7 +66,6 @@ interface AppContainer {
     val okHttpClient: OkHttpClient
     val databaseReady: Deferred<FinanceDatabase>
     suspend fun awaitDatabase(): FinanceDatabase
-    val database: FinanceDatabase
     val googleDriveClient: GoogleDriveClient
     val googleSheetsClient: GoogleSheetsClient
     val workbookResolver: WorkbookResolver
@@ -84,7 +83,6 @@ interface AppContainer {
     val syncTransactionsUseCase: SyncTransactionsUseCase
     val syncConfigUseCase: SyncConfigUseCase
     val regenerateDashboardUseCase: RegenerateDashboardUseCase
-    val lineageDao: LineageDao
     val calculateSplitUseCase: CalculateSplitUseCase
     val nettingUseCase: NettingUseCase
     val settlementWaterfallUseCase: SettlementWaterfallUseCase
@@ -93,8 +91,6 @@ interface AppContainer {
     val voidTransactionUseCase: VoidTransactionUseCase
     val yearCloseUseCase: YearCloseUseCase
     val accountingSyncExecutor: AccountingSyncExecutor
-    val pendingCaptureDao: PendingCaptureDao
-    val handledNotificationDao: HandledNotificationDao
     val foregroundWatcher: ForegroundWatcher
 }
 
@@ -131,13 +127,6 @@ class DefaultAppContainer(
     }
 
     override suspend fun awaitDatabase(): FinanceDatabase = databaseReady.await()
-
-    override val database: FinanceDatabase
-        get() = if (databaseReady.isCompleted) {
-            databaseReady.getCompleted()
-        } else {
-            FinanceDatabase.getInstance(applicationContext)
-        }
 
     override val googleDriveClient: GoogleDriveClient by lazy {
         GoogleDriveClient(
@@ -300,9 +289,6 @@ class DefaultAppContainer(
         )
     }
 
-    override val lineageDao: LineageDao
-        get() = database.lineageDao()
-
     override val calculateSplitUseCase: CalculateSplitUseCase by lazy {
         CalculateSplitUseCase()
     }
@@ -344,12 +330,6 @@ class DefaultAppContainer(
             yearCloseUseCase = yearCloseUseCase
         )
     }
-
-    override val pendingCaptureDao: PendingCaptureDao
-        get() = database.pendingCaptureDao()
-
-    override val handledNotificationDao: HandledNotificationDao
-        get() = database.handledNotificationDao()
 
     override val foregroundWatcher: ForegroundWatcher by lazy {
         ForegroundWatcher(
