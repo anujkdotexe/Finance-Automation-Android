@@ -83,7 +83,7 @@ fun TransactionRow(
 private fun TransactionRowPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
         TransactionRow(
-            description = "Blue Tokai Coffee",
+            description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
             dateText = "10 Nov",
             account = "SBI",
             amount = 240.0,
@@ -97,7 +97,7 @@ private fun TransactionRowPreviewLight() {
 private fun TransactionRowPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
         TransactionRow(
-            description = "Dinner at Toit",
+            description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
             dateText = "09 Nov",
             account = "Canara",
             amount = 1850.0,
@@ -111,7 +111,7 @@ private fun TransactionRowPreviewDark() {
 private fun TransactionRowPreviewLargeFont() {
     FinanceAutomationTheme(darkTheme = false) {
         TransactionRow(
-            description = "Uber to Airport",
+            description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
             dateText = "08 Nov",
             account = "SBI",
             amount = 640.0,

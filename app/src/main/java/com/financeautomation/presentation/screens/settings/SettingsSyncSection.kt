@@ -1,7 +1,5 @@
 package com.financeautomation.presentation.screens.settings
 
-import com.financeautomation.presentation.screens.SettingsCard
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,12 +30,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.financeautomation.R
+import com.financeautomation.presentation.screens.SettingsCard
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 
 /**
- * Settings section for Google Sheets ledger connectivity, cloud config sync, and settle window (Design Guide 5.2).
+ * Settings section: Google Sheets Master Ledger sync and settle buffer interval.
+ * Split from SettingsScreen to preserve the 400-line ceiling (Design Guide 4).
  */
 @Composable
 fun SettingsSyncSection(
@@ -56,15 +57,15 @@ fun SettingsSyncSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)) {
         // 1. Google Sheets Connection & Cloud Sync
         SettingsCard(
-            title = "Google Sheets and sync",
-            subtitle = "Master Ledger integration and automated cloud sync",
+            title = stringResource(R.string.settings_sync_title),
+            subtitle = stringResource(R.string.settings_sync_desc),
             icon = Icons.Rounded.CloudSync
         ) {
             OutlinedTextField(
                 value = spreadsheetInput,
                 onValueChange = { spreadsheetInput = it },
-                label = { Text("Google Spreadsheet ID") },
-                placeholder = { Text("Paste spreadsheet ID from URL") },
+                label = { Text(stringResource(R.string.settings_spreadsheet_id_label)) },
+                placeholder = { Text(stringResource(R.string.settings_spreadsheet_id_placeholder)) },
                 singleLine = true,
                 shape = FinanceTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth()
@@ -79,9 +80,9 @@ fun SettingsSyncSection(
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Save ID")
+                    Text(stringResource(R.string.settings_save_id))
                 }
 
                 OutlinedButton(
@@ -91,11 +92,11 @@ fun SettingsSyncSection(
                     modifier = Modifier.weight(1f)
                 ) {
                     if (state.isSyncing) {
-                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                        CircularProgressIndicator(strokeWidth = FinanceTheme.sizes.strokeThick, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     } else {
-                        Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                         Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                        Text("Sync now")
+                        Text(stringResource(R.string.action_sync_now))
                     }
                 }
             }
@@ -110,9 +111,9 @@ fun SettingsSyncSection(
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Mirror config")
+                    Text(stringResource(R.string.action_mirror_config))
                 }
 
                 OutlinedButton(
@@ -121,9 +122,9 @@ fun SettingsSyncSection(
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(imageVector = Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Restore config")
+                    Text(stringResource(R.string.action_restore_config))
                 }
             }
 
@@ -138,19 +139,19 @@ fun SettingsSyncSection(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (state.isRegeneratingDashboard) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    CircularProgressIndicator(strokeWidth = FinanceTheme.sizes.strokeThick, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                 } else {
-                    Icon(imageVector = Icons.Rounded.CloudDone, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Rounded.CloudDone, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text("Regenerate dashboard formulas")
+                    Text(stringResource(R.string.action_regenerate_dashboard))
                 }
             }
         }
 
         // 2. Background Settle Buffer
         SettingsCard(
-            title = "Background settle buffer",
-            subtitle = "Wait window before dispatching cloud sync: ${sliderValue.toInt()}s (30s to 300s)",
+            title = stringResource(R.string.settings_settle_buffer_title),
+            subtitle = stringResource(R.string.settings_settle_buffer_desc_format, sliderValue.toInt()),
             icon = Icons.Rounded.Timer
         ) {
             Slider(

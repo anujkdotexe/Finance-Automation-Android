@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CallReceived
@@ -33,8 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import com.financeautomation.R
+import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
  * Choose Action launcher menu (Phase 5.6).
@@ -55,20 +56,20 @@ fun ChooseActionMenu(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Grabber Pill
         Box(
             modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
+                .width(FinanceTheme.sizes.grabberWidth)
+                .height(FinanceTheme.sizes.grabberHeight)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                .background(FinanceTheme.colors.outline.copy(alpha = 0.4f))
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // Header Row
         Row(
@@ -77,77 +78,77 @@ fun ChooseActionMenu(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Choose Action",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.prompt_choose_action),
+                style = FinanceTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = FinanceTheme.colors.onSurface
             )
 
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(FinanceTheme.sizes.icon28)
                     .clickable { onDismiss() }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = stringResource(R.string.cd_close),
+                        tint = FinanceTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // 5 Flow Action Tiles
         ActionMenuTile(
-            title = "Expense",
-            subtitle = "Personal, Equal, or Custom Split",
+            title = stringResource(R.string.action_menu_expense_title),
+            subtitle = stringResource(R.string.action_menu_expense_sub),
             icon = Icons.AutoMirrored.Rounded.ReceiptLong,
             onClick = onSelectExpense
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
         ActionMenuTile(
-            title = "Income / Return",
-            subtitle = "Friend Settlement, Salary, or Inflow",
+            title = stringResource(R.string.action_menu_income_title),
+            subtitle = stringResource(R.string.action_menu_income_sub),
             icon = Icons.AutoMirrored.Rounded.CallReceived,
             onClick = onSelectIncome
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
         ActionMenuTile(
-            title = "Friend Paid For Me",
-            subtitle = "Log money owed to a friend",
+            title = stringResource(R.string.action_menu_friend_paid_title),
+            subtitle = stringResource(R.string.action_menu_friend_paid_sub),
             icon = Icons.Rounded.Handshake,
             onClick = onSelectFriendPaid
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
         ActionMenuTile(
-            title = "Repaid a Friend",
-            subtitle = "Record debt repayment to a friend",
+            title = stringResource(R.string.action_menu_repaid_friend_title),
+            subtitle = stringResource(R.string.action_menu_repaid_friend_sub),
             icon = Icons.Rounded.Payment,
             onClick = onSelectRepaid
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
         ActionMenuTile(
-            title = "Trip Mode",
-            subtitle = "Start or end an active trip tag",
+            title = stringResource(R.string.action_menu_trip_mode_title),
+            subtitle = stringResource(R.string.action_menu_trip_mode_sub),
             icon = Icons.Rounded.Flight,
             onClick = onSelectTripMode
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
     }
 }
 
@@ -159,29 +160,29 @@ private fun ActionMenuTile(
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = FinanceTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        border = BorderStroke(FinanceTheme.sizes.strokeThin, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(38.dp)
+                shape = FinanceTheme.shapes.medium,
+                color = FinanceTheme.colors.primaryContainer,
+                modifier = Modifier.size(FinanceTheme.sizes.avatar38)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        tint = FinanceTheme.colors.primary,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                     )
                 }
             }
@@ -189,17 +190,16 @@ private fun ActionMenuTile(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = FinanceTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = FinanceTheme.colors.onSurface
                 )
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = FinanceTheme.typography.bodySmall,
+                    color = FinanceTheme.colors.onSurfaceVariant
                 )
             }
         }
     }
 }
-

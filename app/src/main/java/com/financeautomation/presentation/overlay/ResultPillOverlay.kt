@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,30 +84,30 @@ class ResultPillOverlay(
                     setContent {
                         FinanceAutomationTheme {
                             Surface(
-                                shape = RoundedCornerShape(24.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shadowElevation = 8.dp,
-                                tonalElevation = 6.dp,
+                                shape = FinanceTheme.shapes.pill,
+                                color = FinanceTheme.colors.primaryContainer,
+                                shadowElevation = FinanceTheme.spacing.s,
+                                tonalElevation = FinanceTheme.sizes.elevationSheet,
                                 modifier = Modifier
-                                    .padding(horizontal = 16.dp)
+                                    .padding(horizontal = FinanceTheme.spacing.l)
                                     .clickable { dismiss() }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.s),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.CheckCircle,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
+                                        tint = FinanceTheme.colors.primary,
+                                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
                                     )
                                     Text(
                                         text = message,
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = FinanceTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.padding(start = 8.dp)
+                                        modifier = Modifier.padding(start = FinanceTheme.spacing.s)
                                     )
                                 }
                             }

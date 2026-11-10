@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -41,8 +40,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AmountText
@@ -54,52 +54,50 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Individual Transaction Review Card displaying metadata, amount, and 1-tap actions.
+ * Interactive card displaying a pending transaction for quick review and 1-tap confirmation.
  */
 @Composable
 fun ReviewTransactionCard(
     transaction: Transaction,
     onConfirm: () -> Unit,
-    onEdit: () -> Unit,
     onVoid: () -> Unit,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
+        shape = FinanceTheme.shapes.large,
+        border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = FinanceTheme.sizes.strokeThin),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(FinanceTheme.spacing.l)
         ) {
             // Duplicate Warning Banner
             if (transaction.isPossibleDuplicate) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = FinanceTheme.shapes.card,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp)
+                        .padding(bottom = FinanceTheme.spacing.m)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.WarningAmber,
-                            contentDescription = "Warning",
+                            contentDescription = stringResource(R.string.cd_warning),
                             tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                         Text(
-                            text = "Possible duplicate detected. Please verify before confirming.",
+                            text = stringResource(R.string.review_duplicate_warning),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             fontWeight = FontWeight.Medium
@@ -120,9 +118,9 @@ fun ReviewTransactionCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(FinanceTheme.sizes.avatarMedium)
                             .background(
-                                color = MaterialTheme.colorScheme.primaryContainer,
+                                color = FinanceTheme.colors.primaryContainer,
                                 shape = CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -130,24 +128,24 @@ fun ReviewTransactionCard(
                         Icon(
                             imageVector = resolveCategoryIcon(transaction.category),
                             contentDescription = transaction.category,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                            tint = FinanceTheme.colors.primary,
+                            modifier = Modifier.size(FinanceTheme.sizes.icon22)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.m))
 
                     Column {
                         Text(
-                            text = transaction.merchant.ifBlank { "Unknown Merchant" },
-                            style = MaterialTheme.typography.titleMedium,
+                            text = transaction.merchant.ifBlank { stringResource(R.string.review_unknown_merchant) },
+                            style = FinanceTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = FinanceTheme.colors.onSurface
                         )
                         Text(
                             text = formatTimestamp(transaction.timestamp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = FinanceTheme.typography.bodySmall,
+                            color = FinanceTheme.colors.onSurfaceVariant
                         )
                     }
                 }
@@ -159,24 +157,24 @@ fun ReviewTransactionCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
             // Metadata Row: Category Pill, Status Badge, and Split Details
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp)
+                    color = FinanceTheme.colors.surfaceVariant,
+                    shape = FinanceTheme.shapes.small
                 ) {
                     Text(
                         text = transaction.category.ifBlank { CategoryConstants.CATEGORY_FOOD_AND_DRINK },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = FinanceTheme.typography.labelSmall,
+                        color = FinanceTheme.colors.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs)
                     )
                 }
 
@@ -184,27 +182,27 @@ fun ReviewTransactionCard(
 
                 if (transaction.companions.isNotBlank() && transaction.companions != "Personal") {
                     Text(
-                        text = "Split with ${transaction.companions}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = stringResource(R.string.split_with_companions, transaction.companions),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = FinanceTheme.colors.onSurfaceVariant,
                         maxLines = 1
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
             // Action Buttons: 1-Tap Confirm, Edit/Split, Void
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
                     onClick = onConfirm,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = FinanceTheme.shapes.card,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        containerColor = FinanceTheme.colors.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     modifier = Modifier.weight(1.2f)
@@ -212,43 +210,41 @@ fun ReviewTransactionCard(
                     Icon(
                         imageVector = Icons.Rounded.Check,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
                     Text(
-                        text = "Confirm",
+                        text = stringResource(R.string.action_confirm),
                         fontWeight = FontWeight.SemiBold
                     )
                 }
 
                 OutlinedButton(
                     onClick = onEdit,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    shape = FinanceTheme.shapes.card,
+                    border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Edit,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
                     Text(
-                        text = "Edit",
+                        text = stringResource(R.string.action_edit),
                         fontWeight = FontWeight.Medium
                     )
                 }
 
                 TextButton(
                     onClick = onVoid,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = ButtonDefaults.textButtonColors(contentColor = FinanceTheme.colors.error)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
-                        contentDescription = "Void",
-                        modifier = Modifier.size(18.dp)
+                        contentDescription = stringResource(R.string.action_void),
+                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
                     )
                 }
             }
@@ -262,38 +258,38 @@ fun ReviewTransactionCard(
 @Composable
 fun EmptyInboxState(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.padding(32.dp),
+        modifier = modifier.padding(FinanceTheme.spacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(FinanceTheme.sizes.avatarLarge)
                 .background(
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = FinanceTheme.colors.primaryContainer,
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = "All Caught Up",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(38.dp)
+                contentDescription = stringResource(R.string.review_empty_title),
+                tint = FinanceTheme.colors.primary,
+                modifier = Modifier.size(FinanceTheme.sizes.avatar38)
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
         Text(
-            text = "All Caught Up",
-            style = MaterialTheme.typography.titleLarge,
+            text = stringResource(R.string.review_empty_title),
+            style = FinanceTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = FinanceTheme.colors.onSurface
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
         Text(
-            text = "No pending transactions needing review. New UPI & card alerts will appear here in real-time.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = stringResource(R.string.review_empty_desc),
+            style = FinanceTheme.typography.bodyMedium,
+            color = FinanceTheme.colors.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
@@ -316,4 +312,3 @@ private fun formatTimestamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
     return formatter.format(Date(timestamp))
 }
-

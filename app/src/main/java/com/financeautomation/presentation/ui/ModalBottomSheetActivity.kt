@@ -27,6 +27,7 @@ import androidx.core.view.WindowCompat
 import com.financeautomation.FinanceApplication
 import com.financeautomation.presentation.components.ExpenseSheet
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 
 /**
@@ -98,7 +99,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         onCancel = { dismissSafely() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 14.dp)
+                            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m)
                     )
                 }
             }

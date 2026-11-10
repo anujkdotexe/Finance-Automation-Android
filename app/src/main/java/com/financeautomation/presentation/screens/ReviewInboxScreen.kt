@@ -55,12 +55,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.ExpenseModalBottomSheet
 import com.financeautomation.presentation.components.StatusChip
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxUiState
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
@@ -150,28 +153,28 @@ fun ReviewInboxContent(
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    contentPadding = PaddingValues(FinanceTheme.spacing.l),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
                     item {
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = FinanceTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Receipt,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(FinanceTheme.sizes.icon18)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                                 Text(
-                                    text = "${state.items.size} transaction${if (state.items.size > 1) "s" else ""} awaiting confirmation",
+                                    text = stringResource(R.string.review_awaiting_confirmation, state.items.size),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer

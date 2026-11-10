@@ -112,7 +112,7 @@ fun TextAction(
 @Composable
 private fun ButtonsPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        PrimaryButton(text = "Add expense", onClick = {})
+        PrimaryButton(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.quick_add_tile_label), onClick = {})
     }
 }
 
@@ -120,7 +120,7 @@ private fun ButtonsPreviewLight() {
 @Composable
 private fun ButtonsPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        SecondaryButton(text = "Cancel", onClick = {})
+        SecondaryButton(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.action_cancel), onClick = {})
     }
 }
 
@@ -128,7 +128,7 @@ private fun ButtonsPreviewDark() {
 @Composable
 private fun ButtonsPreviewLargeFont() {
     FinanceAutomationTheme(darkTheme = false) {
-        TextAction(text = "See all", onClick = {})
+        TextAction(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.action_see_all), onClick = {})
     }
 }
 

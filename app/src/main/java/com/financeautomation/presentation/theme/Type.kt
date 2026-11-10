@@ -111,7 +111,13 @@ data class FinanceTypography(
     val amountLarge: TextStyle,
     val titleMedium: TextStyle,
     val bodyMedium: TextStyle,
-    val labelMedium: TextStyle
+    val labelMedium: TextStyle,
+    val labelLarge: TextStyle = Typography.labelLarge,
+    val headlineSmall: TextStyle = Typography.headlineSmall,
+    val titleSmall: TextStyle = Typography.titleSmall,
+    val bodySmall: TextStyle = Typography.bodySmall,
+    val labelSmall: TextStyle = Typography.labelSmall,
+    val titleLarge: TextStyle = Typography.titleLarge
 )
 
 val FinanceTypographyTokens = FinanceTypography(

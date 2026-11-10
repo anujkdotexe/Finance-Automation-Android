@@ -58,7 +58,11 @@ fun SectionHeader(
 @Composable
 private fun SectionHeaderPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        SectionHeader(title = "Where it went", actionText = "See all", onActionClick = {})
+        SectionHeader(
+            title = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.dashboard_where_it_went),
+            actionText = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.action_see_all),
+            onActionClick = {}
+        )
     }
 }
 
@@ -66,7 +70,11 @@ private fun SectionHeaderPreviewLight() {
 @Composable
 private fun SectionHeaderPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        SectionHeader(title = "Recent transactions", actionText = "See all", onActionClick = {})
+        SectionHeader(
+            title = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.dashboard_recent),
+            actionText = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.action_see_all),
+            onActionClick = {}
+        )
     }
 }
 
@@ -74,7 +82,7 @@ private fun SectionHeaderPreviewDark() {
 @Composable
 private fun SectionHeaderPreviewLargeFont() {
     FinanceAutomationTheme(darkTheme = false) {
-        SectionHeader(title = "Where it went")
+        SectionHeader(title = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.dashboard_where_it_went))
     }
 }
 

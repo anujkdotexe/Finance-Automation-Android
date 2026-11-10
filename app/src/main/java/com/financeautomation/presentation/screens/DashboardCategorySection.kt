@@ -18,7 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.financeautomation.R
 import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
 import com.financeautomation.presentation.components.SyncStatusLine
@@ -43,10 +44,10 @@ fun MonthHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onPreviousMonth, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = onPreviousMonth, modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                    contentDescription = "Previous Month",
+                    contentDescription = stringResource(R.string.cd_prev_month),
                     tint = FinanceTheme.colors.onSurface
                 )
             }
@@ -57,10 +58,10 @@ fun MonthHeader(
                 color = FinanceTheme.colors.onSurface
             )
 
-            IconButton(onClick = onNextMonth, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = onNextMonth, modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = "Next Month",
+                    contentDescription = stringResource(R.string.cd_next_month),
                     tint = FinanceTheme.colors.onSurface
                 )
             }
@@ -111,10 +112,9 @@ fun CategoryBarRow(item: CategorySpend, modifier: Modifier = Modifier) {
             progress = { item.percentage },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(4.dp),
+                .height(FinanceTheme.sizes.grabberHeight),
             color = FinanceTheme.colors.brand,
             trackColor = FinanceTheme.colors.surfaceVariant
         )
     }
 }
-

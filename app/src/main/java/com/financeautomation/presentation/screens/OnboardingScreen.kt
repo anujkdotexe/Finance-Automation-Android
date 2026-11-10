@@ -55,12 +55,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.financeautomation.R
+import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.OnboardingUiState
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
 import com.financeautomation.presentation.viewmodel.StepState
@@ -115,38 +118,38 @@ fun OnboardingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = FinanceTheme.spacing.xl)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.Start
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xl))
 
             Text(
-                text = "Welcome to Finance Automation",
+                text = stringResource(R.string.onboarding_welcome_title),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
             Text(
-                text = "Complete the checklist below to set up your personal Google Drive workspace and automated notification interception.",
+                text = stringResource(R.string.onboarding_welcome_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxl))
 
             // Step 1: Sign In
             OnboardingStepItem(
                 stepNumber = 1,
-                title = "Sign in with Google",
+                title = stringResource(R.string.onboarding_step1_title),
                 subtitle = when (state.step1State) {
-                    StepState.COMPLETED -> "Signed in and authorized for Google Drive sync"
-                    StepState.IN_PROGRESS -> "Authorizing through Google Identity..."
-                    StepState.ERROR -> state.step1Error ?: "Authorization failed"
-                    StepState.NOT_STARTED -> "Authorizes drive.file scope to manage your master workbook"
+                    StepState.COMPLETED -> stringResource(R.string.onboarding_step1_completed)
+                    StepState.IN_PROGRESS -> stringResource(R.string.onboarding_step1_progress)
+                    StepState.ERROR -> state.step1Error ?: stringResource(R.string.onboarding_step1_not_started)
+                    StepState.NOT_STARTED -> stringResource(R.string.onboarding_step1_not_started)
                 },
                 icon = Icons.Default.Lock,
                 state = state.step1State,
@@ -154,25 +157,25 @@ fun OnboardingScreen(
                     if (state.step1State == StepState.NOT_STARTED || state.step1State == StepState.ERROR) {
                         Button(
                             onClick = viewModel::startSignIn,
-                            shape = RoundedCornerShape(8.dp)
+                            shape = FinanceTheme.shapes.small
                         ) {
-                            Text("Sign in with Google")
+                            Text(stringResource(R.string.onboarding_step1_title))
                         }
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
             // Step 2: Creating Finance Workspace
             OnboardingStepItem(
                 stepNumber = 2,
-                title = "Creating your finance workspace",
+                title = stringResource(R.string.onboarding_step2_title),
                 subtitle = when (state.step2State) {
-                    StepState.COMPLETED -> "Master workbook '${state.workbookName}' ready"
-                    StepState.IN_PROGRESS -> "Locating or provisioning master workbook..."
-                    StepState.ERROR -> state.step2Error ?: "Workspace creation failed"
-                    StepState.NOT_STARTED -> "Provisions Finance${state.workbookName.takeLast(4)} and Config tabs"
+                    StepState.COMPLETED -> state.workbookName
+                    StepState.IN_PROGRESS -> stringResource(R.string.onboarding_step2_progress)
+                    StepState.ERROR -> state.step2Error ?: ""
+                    StepState.NOT_STARTED -> ""
                 },
                 icon = Icons.Default.TableChart,
                 state = state.step2State,
@@ -180,25 +183,25 @@ fun OnboardingScreen(
                     if (state.step2State == StepState.ERROR) {
                         OutlinedButton(
                             onClick = viewModel::startWorkspaceProvisioning,
-                            shape = RoundedCornerShape(8.dp)
+                            shape = FinanceTheme.shapes.small
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Retry Workspace Setup")
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                            Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
+                            Text(stringResource(R.string.action_retry_workspace))
                         }
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
             // Step 3: Permissions
             OnboardingStepItem(
                 stepNumber = 3,
-                title = "Notification listener permission",
+                title = stringResource(R.string.onboarding_step3_title),
                 subtitle = when (state.step3State) {
-                    StepState.COMPLETED -> "Notification listener enabled"
-                    else -> "Required to intercept UPI and banking debit alerts in real time"
+                    StepState.COMPLETED -> stringResource(R.string.onboarding_step3_completed)
+                    else -> stringResource(R.string.onboarding_step3_desc)
                 },
                 icon = Icons.Default.Notifications,
                 state = state.step3State,
@@ -211,24 +214,24 @@ fun OnboardingScreen(
                                 }
                                 context.startActivity(intent)
                             },
-                            shape = RoundedCornerShape(8.dp)
+                            shape = FinanceTheme.shapes.small
                         ) {
-                            Text("Grant Permission")
+                            Text(stringResource(R.string.action_grant_permission))
                         }
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
             // Step 4: Ready
             OnboardingStepItem(
                 stepNumber = 4,
-                title = "Ready",
+                title = stringResource(R.string.onboarding_step4_title),
                 subtitle = if (state.step4State == StepState.COMPLETED) {
-                    "Your workspace is ready. You can now track and review expenses."
+                    stringResource(R.string.onboarding_step4_completed)
                 } else {
-                    "Complete all steps above to finish setup"
+                    stringResource(R.string.onboarding_step4_pending)
                 },
                 icon = Icons.Default.Check,
                 state = state.step4State,
@@ -243,18 +246,18 @@ fun OnboardingScreen(
                                     onOnboardingFinished()
                                 }
                             },
-                            shape = RoundedCornerShape(8.dp),
+                            shape = FinanceTheme.shapes.small,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
-                            Text("Get Started")
+                            Text(stringResource(R.string.action_get_started))
                         }
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxl))
         }
     }
 }
@@ -271,19 +274,19 @@ private fun OnboardingStepItem(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = FinanceTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start
             ) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(FinanceTheme.sizes.avatarSmall)
                         .clip(CircleShape)
                         .background(
                             when (state) {
@@ -300,18 +303,18 @@ private fun OnboardingStepItem(
                             Icons.Default.Check,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                         )
                         StepState.IN_PROGRESS -> CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium),
                             color = MaterialTheme.colorScheme.onSecondary,
-                            strokeWidth = 2.dp
+                            strokeWidth = FinanceTheme.sizes.strokeThick
                         )
                         StepState.ERROR -> Icon(
                             Icons.Default.ErrorOutline,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onError,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                         )
                         StepState.NOT_STARTED -> Text(
                             text = stepNumber.toString(),
@@ -322,7 +325,7 @@ private fun OnboardingStepItem(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(FinanceTheme.spacing.l))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -343,7 +346,7 @@ private fun OnboardingStepItem(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                 action()

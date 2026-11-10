@@ -24,7 +24,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import com.financeautomation.R
 import com.financeautomation.presentation.components.AmountTone
 import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.components.KpiCard
@@ -107,6 +109,8 @@ fun DashboardContent(
     modifier: Modifier = Modifier
 ) {
     var showAllCategories by remember { mutableStateOf(false) }
+    val showLessText = stringResource(R.string.action_show_less)
+    val seeAllText = stringResource(R.string.action_see_all)
 
     LazyColumn(
         modifier = modifier.padding(horizontal = FinanceTheme.spacing.l),
@@ -126,8 +130,8 @@ fun DashboardContent(
         if (state.transactionCount == 0 && state.currentBurn == 0.0) {
             item {
                 EmptyState(
-                    message = "Nothing logged yet. Pay with UPI and the prompt will appear, or tap Add expense.",
-                    actionText = "Add expense",
+                    message = stringResource(R.string.dashboard_empty_message),
+                    actionText = stringResource(R.string.dashboard_empty_action),
                     onActionClick = onAddExpense,
                     modifier = Modifier.padding(vertical = FinanceTheme.spacing.xxl)
                 )
@@ -149,7 +153,7 @@ fun DashboardContent(
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
                     OwedSummaryCard(
-                        title = "Owed to me",
+                        title = stringResource(R.string.dashboard_owed_to_me),
                         amount = state.owedToMe,
                         tone = AmountTone.MONEY_IN,
                         topFriends = state.topOwedToMe,
@@ -157,7 +161,7 @@ fun DashboardContent(
                         modifier = Modifier.weight(1f)
                     )
                     OwedSummaryCard(
-                        title = "I owe",
+                        title = stringResource(R.string.dashboard_i_owe),
                         amount = state.iOwePeople,
                         tone = AmountTone.MONEY_OWED,
                         topFriends = state.topIOwe,
@@ -182,9 +186,9 @@ fun DashboardContent(
             if (displayedCategories.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Where it went",
+                        title = stringResource(R.string.dashboard_where_it_went),
                         actionText = if (state.allCategories.size > 5) {
-                            if (showAllCategories) "Show less" else "See all"
+                            if (showAllCategories) showLessText else seeAllText
                         } else null,
                         onActionClick = { showAllCategories = !showAllCategories }
                     )
@@ -199,8 +203,8 @@ fun DashboardContent(
             if (state.recentTransactions.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Recent",
-                        actionText = "See all",
+                        title = stringResource(R.string.dashboard_recent),
+                        actionText = stringResource(R.string.action_see_all),
                         onActionClick = onNavigateToReview
                     )
                 }
@@ -223,17 +227,17 @@ fun DashboardContent(
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
                     KpiCard(
-                        label = "Savings",
+                        label = stringResource(R.string.dashboard_savings),
                         amount = state.savings,
                         tone = AmountTone.INFO,
-                        caption = "SIPs and investments",
+                        caption = stringResource(R.string.dashboard_savings_caption),
                         modifier = Modifier.weight(1f)
                     )
                     KpiCard(
-                        label = "Income",
+                        label = stringResource(R.string.dashboard_income),
                         amount = state.income,
                         tone = AmountTone.MONEY_IN,
-                        caption = "Total inflows",
+                        caption = stringResource(R.string.dashboard_income_caption),
                         modifier = Modifier.weight(1f)
                     )
                 }

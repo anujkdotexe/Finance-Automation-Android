@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 
@@ -27,7 +26,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 fun KpiCard(
     label: String,
     amount: Double,
-    caption: String,
+    caption: String = "",
     modifier: Modifier = Modifier,
     tone: AmountTone = AmountTone.DEFAULT,
     includeDecimals: Boolean = false,
@@ -35,10 +34,10 @@ fun KpiCard(
 ) {
     Card(
         shape = FinanceTheme.shapes.large,
-        border = BorderStroke(1.dp, FinanceTheme.colors.outline),
+        border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
         modifier = modifier
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(role = Role.Button, onClick = onClick)
@@ -80,9 +79,8 @@ fun KpiCard(
 private fun KpiCardPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
         KpiCard(
-            label = "Living burn this month",
+            label = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.dashboard_hero_burn_title),
             amount = 14250.0,
-            caption = "Daily average: ₹475 | Last month: ₹21,300",
             tone = AmountTone.MONEY_OUT
         )
     }
@@ -93,9 +91,8 @@ private fun KpiCardPreviewLight() {
 private fun KpiCardPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
         KpiCard(
-            label = "Owed to me",
+            label = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.dashboard_owed_to_me),
             amount = 3200.0,
-            caption = "Rohan, Aman, Neha",
             tone = AmountTone.MONEY_IN
         )
     }
@@ -106,9 +103,8 @@ private fun KpiCardPreviewDark() {
 private fun KpiCardPreviewLargeFont() {
     FinanceAutomationTheme(darkTheme = false) {
         KpiCard(
-            label = "I owe",
+            label = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.dashboard_i_owe),
             amount = 1200.0,
-            caption = "Siddharth",
             tone = AmountTone.MONEY_OWED
         )
     }
