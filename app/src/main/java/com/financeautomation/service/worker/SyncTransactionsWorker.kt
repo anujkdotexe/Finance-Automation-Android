@@ -1,5 +1,6 @@
 package com.financeautomation.service.worker
 
+import android.annotation.SuppressLint
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -30,6 +31,7 @@ class SyncTransactionsWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
+    @SuppressLint("RestrictedApi")
     override suspend fun doWork(): androidx.work.ListenableWorker.Result = withContext(Dispatchers.IO) {
         val app = applicationContext as? FinanceApplication
         val repository = testRepository ?: app?.appContainer?.transactionRepository
