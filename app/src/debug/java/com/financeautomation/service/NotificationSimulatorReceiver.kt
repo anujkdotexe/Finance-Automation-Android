@@ -39,7 +39,6 @@ class NotificationSimulatorReceiver : BroadcastReceiver() {
                 handledNotificationDao = db.handledNotificationDao(),
                 accountDao = db.accountDao(),
                 preferenceDao = db.preferenceDao(),
-                repository = container.transactionRepository,
                 parseUseCase = container.parseNotificationUseCase,
                 ownPackageName = context.packageName
             )
@@ -54,14 +53,6 @@ class NotificationSimulatorReceiver : BroadcastReceiver() {
                     if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
                         watcher.notifyCaptureWaiting(scope)
                     }
-                }
-                is NotificationProcessingOutcome.Created -> {
-                    val launchIntent = Intent(context, com.financeautomation.presentation.ui.ModalBottomSheetActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                        putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, outcome.transaction.id)
-                        putExtra(QuickActionReceiver.EXTRA_TRANSACTION_ID, outcome.transaction.id)
-                    }
-                    context.startActivity(launchIntent)
                 }
                 else -> {
                 }
