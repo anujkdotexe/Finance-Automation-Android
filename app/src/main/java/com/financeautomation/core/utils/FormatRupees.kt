@@ -1,9 +1,8 @@
 package com.financeautomation.core.utils
 
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /**
  * Universal monetary formatter strictly implementing Indian grouping (₹1,23,456) per Design Guide 3.4.
@@ -13,15 +12,37 @@ import kotlin.math.abs
  * - Negative amounts display a leading minus sign (-₹500), never brackets.
  */
 fun formatRupees(amount: Double, includeDecimals: Boolean = false): String {
-    val isNegative = amount < 0
+    val isNegative = amount < 0.0
     val absAmount = abs(amount)
-    val symbols = DecimalFormatSymbols(Locale.forLanguageTag("en-IN")).apply {
-        currencySymbol = "₹"
+
+    val longPart = absAmount.toLong()
+    val fracPart = ((absAmount - longPart) * 100.0).roundToLong().toInt()
+
+    val str = longPart.toString()
+    val formattedInt = if (str.length <= 3) {
+        str
+    } else {
+        val last3 = str.substring(str.length - 3)
+        val remaining = str.substring(0, str.length - 3)
+        val groupedRemaining = StringBuilder()
+        var count = 0
+        for (i in remaining.length - 1 downTo 0) {
+            if (count > 0 && count % 2 == 0) {
+                groupedRemaining.append(',')
+            }
+            groupedRemaining.append(remaining[i])
+            count++
+        }
+        groupedRemaining.reverse().toString() + "," + last3
     }
-    val pattern = if (includeDecimals) "₹##,##,##0.00" else "₹##,##,##0"
-    val df = DecimalFormat(pattern, symbols)
-    val formatted = df.format(absAmount)
-    return if (isNegative) "-$formatted" else formatted
+
+    val result = if (includeDecimals) {
+        val fracStr = if (fracPart < 10) "0$fracPart" else "$fracPart"
+        "₹$formattedInt.$fracStr"
+    } else {
+        "₹$formattedInt"
+    }
+    return if (isNegative) "-$result" else result
 }
 
 /**
@@ -37,4 +58,3 @@ fun formatAmountInput(amount: Double): String {
         String.format(Locale.US, "%.2f", amount)
     }
 }
-

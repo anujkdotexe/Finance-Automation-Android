@@ -52,7 +52,7 @@ The application must faithfully reproduce the proven iOS split calculations:
    * `My Share` = Total Amount
    * `Owed To Me` = `0`
    * `Companions` = `"Personal"`
-   * `Status` = `"Settled"`
+   * `Status` = `"Personal"` (iOS wins; `Settled` is used when netting absorbs the full owed amount)
 2. **`Split Equally`:**
    * Multi-select companion chips from local `people` table + `+ Add New Friend`.
    * Let $N$ be the count of selected friends.

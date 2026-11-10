@@ -37,6 +37,40 @@ These are not for build agents. Do them in this order. Each step has the evidenc
 
 Updates after the first beta: increase `versionCode`, build `assembleBeta`, upload it in the console. Friends get a notification and install it over the old build, which only works because every build uses the same release key.
 
+### 2.1 What the build expects
+
+Prerequisite configuration files and asset placement across build targets:
+
+| File path | Purpose | Required by | Fallback / Behavior if missing |
+| :--- | :--- | :--- | :--- |
+| `local.properties` | Android SDK directory (`sdk.dir`) and optional OAuth client ID override (`oauth.client.id`) | `debug`, `beta`, `release` | Required for Gradle build to locate SDK. `oauth.client.id` defaults to dev ID if unspecified. |
+| `keystore.properties` | Release keystore path, alias, keystore password, and key password | `beta`, `release` | In `beta`, gracefully falls back to debug signing key if absent so developers can build locally. In `release`, required for release signing. |
+| `app/google-services.json` | Firebase configuration for Crashlytics telemetry | `beta`, `release` | Optional. If absent, the Google Services and Crashlytics Gradle plugins are bypassed gracefully. |
+| `app/src/main/assets/oem_routes.json` | Bundled vendor navigation routes for battery and background settings | `debug`, `beta`, `release` | Bundled repository asset. Loaded at runtime with hardcoded fallback intents if missing. |
+
+Build type requirements:
+- `debug`: Builds with debug key. Exposes `NotificationSimulatorReceiver`. Enables vendor discovery scan. Crashlytics disabled.
+- `beta`: Signs with release key if `keystore.properties` is present (debug key fallback). Simulator stripped. Enables vendor discovery scan. Crashlytics enabled when opted-in.
+- `release`: Signs with release key. Simulator stripped. `QUERY_ALL_PACKAGES` stripped. Vendor discovery scan disabled. Crashlytics enabled when opted-in. `allowBackup=false`.
+
+Build and sideload commands:
+- Debug APK:
+  - Build: `./gradlew assembleDebug`
+  - Sideload: `adb install -r app/build/outputs/apk/debug/app-debug.apk`
+- Beta APK:
+  - Build: `./gradlew assembleBeta`
+  - Sideload: `adb install -r app/build/outputs/apk/beta/app-beta.apk`
+- Release APK / Bundle:
+  - Build APK: `./gradlew assembleRelease`
+  - Sideload APK: `adb install -r app/build/outputs/apk/release/app-release-unsigned.apk` (or signed release APK)
+  - Build App Bundle: `./gradlew bundleRelease`
+
+Beta update and install-over verification (static checks, no physical device attached):
+- `applicationId`: Shared identically (`com.financeautomation`) across all build types to ensure package identity.
+- `signingConfig`: Beta targets release signing key via `keystore.properties` to ensure update certificate compatibility.
+- Keystore fallback: If `keystore.properties` is missing, beta falls back to the debug key for development; updates over builds signed with a different key will be rejected by Android Package Manager (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+- `versionCode`: Integer increment on each build ensures Android Package Manager applies in-place database retention without data wipe.
+
 ## 3. Build types
 
 | Build type | Signing | Discovery scan | Simulator | Crashlytics |
