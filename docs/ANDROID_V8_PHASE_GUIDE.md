@@ -1199,7 +1199,7 @@ and message texts in the report builder (show the fields it can read).
 
 ## Phase 10 - MVP closure
 
-Status: not started.
+Status: Audit and closure items complete. PR opened against main for reviewer approval.
 
 1. Remove dead code: the `presentation/ui/*` placeholder files, `SettleWindowWorker` if still present, unused mappers and
    constants, the old fixed-grid config code once the new one is in use, unused imports. Confirm each deletion has no remaining
@@ -1248,3 +1248,27 @@ tidy-up). They are done after Phase 10 and before the live device test. Build ag
 | D13 | Failure visibility | Crashlytics opt in, a pipeline trail and a user-shared compatibility report |
 | D14 | Phone-brand routes | Data file in assets, resolve-then-fallback, discovery scan in debug and beta only |
 | D15 | Build types | debug, beta, release; same application id |
+
+---
+
+## Section 12 Engineering Plan Audit Status
+
+Status of all fifteen audit items from Section 12 of [ANDROID_V8_ENGINEERING_AND_TEST_PLAN.md](./ANDROID_V8_ENGINEERING_AND_TEST_PLAN.md):
+
+| # | Area | Description | Status | Evidence / Implementation Reference |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | Sheet writes | Appends must use `valueInputOption=RAW` to prevent formula injection (`=IMPORTXML(...)`) | Fixed | `GoogleSheetsClient.kt` sets `valueInputOption=RAW` on all append and batch update operations. Verified in unit tests. |
+| 2 | Offline queue | Failed items stranded; `getAllPending` only queried `PENDING`; repository returned success on all failures | Fixed | `SyncWorker.kt` queries `PENDING` and `FAILED` rows, returns `Result.retry()` on transient network failures, and records retry counts. `SyncQueueDao.kt` updated. |
+| 3 | Month tabs | Dynamic month tab creation (`MMM26`), carry forward from previous month, dynamic year workbook (`FinanceYYYY`) | Fixed | `SheetProvisioner.kt` generates monthly tabs dynamically. `WorkbookResolver.kt` supports dynamic year resolution. `SettingsSyncCoordinator.kt` provisions `FinanceYYYY`. |
+| 4 | UUIDs and row safety | Hidden UUID columns V-AB never populated; row mutation by index corrupts on manual sheet sort | Fixed | `SheetPayloadMapper.kt` writes UUID to column K and column AB. Updates and voids query `LedgerSnapshotReader.kt` and match by UUID before applying in-place cell updates. |
+| 5 | Accounting engine | Waterfall, repayments, netting, quotas, surplus routing, inflows/payables never executed | Fixed | `LedgerEngine.kt`, `CalculateSplitUseCase.kt`, and `LogExpenseUseCase.kt` implement Code.gs v2.3.0 parity: personal status, split equally, custom shares, inflows, and payables. |
+| 6 | Capture timing | Immediate launch during payment PIN entry; overlay exemption fragile on Android 14/15 | Fixed | `NotificationProcessor.kt` introduces capture delay for foreground payment apps, transitions to review queue if dismissed, and falls back to heads-up notification. |
+| 7 | Credits | Credit alerts dropped by direction filter; Income / Return never captured | Fixed | `ParseNotificationUseCase.kt` and `NotificationProcessor.kt` parse credit alerts as `TransactionType.INCOME`. Full support in `LogExpenseUseCase.kt`. |
+| 8 | Duplicates | On listener reconnect, 5-minute alerts reprocessed but dedup window only 120 seconds | Fixed | `NotificationProcessor.kt` uses unified deduplication cache tracking hashes and timestamps across listener rebinds and notification flurries. |
+| 9 | Auth | Deprecated `GoogleSignIn` / blocking token call; committed OAuth client ID; token logged in logcat | Fixed | `GoogleAuthTokenProvider.kt` uses Google Identity / Credential Manager with `drive.file` scope. Committed client secrets purged. Token logging removed. First-run onboarding in `OnboardingScreen.kt`. |
+| 10 | Test hook in release | `NotificationSimulatorReceiver` exported and registered in all build types | Fixed | Manifest moved to `app/src/debug/AndroidManifest.xml`. Release manifest inspection verifies 0 occurrences of simulator receiver. |
+| 11 | Listener resilience | Only `requestRebind` on disconnect; no boot receiver, toggle rebind, or setup health screen | Fixed | `BootReceiver.kt`, periodic health checks, component toggle rebind, OEM guidance routes (`oem_routes.json`), and `SetupHealthCard.kt` added. |
+| 12 | Overlay look | Translucent activity with solid surface; no blur; Android default icon; hardcoded category chips | Fixed | Modern Jetpack Compose Material 3 bottom sheet (`ModalBottomSheetActivity.kt`), financial icon assets, dynamic theme tokens, and dynamic predicted category chips (`CategoryChip.kt`). |
+| 13 | Menu and flows | No Choose Action menu; missing Income, Friend Paid For Me, Repaid flows; no category prediction or account inference | Fixed | `EntryActivity.kt` provides Choose Action menu with Income, Friend Paid, and Repay flows. `CategoryPredictor.kt` and `AccountInferrer.kt` predict based on recency and merchant patterns. |
+| 14 | Widget | 1x1 widget dynamic size only Android 12+; opens translucent sheet instead of menu | Fixed | `QuickLogWidgetReceiver.kt` provides 1x1 widget with Glance/RemoteViews and responsive layouts across API 28-35. Dimension tokens moved to `dimens.xml`. |
+| 15 | Minor | Target SDK 36 vs 35; settle window mismatch; redundant settle worker; OTP regex over-matching; OEM SMS package coverage | Fixed | `targetSdk` pinned to 35 in `build.gradle.kts`. Redundant settle worker eliminated. OTP regex tightened. Whitelist expanded for OEM SMS packages in `FinancialPackages.kt`. |
