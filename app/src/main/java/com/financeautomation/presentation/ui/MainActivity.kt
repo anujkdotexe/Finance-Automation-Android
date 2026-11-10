@@ -310,6 +310,8 @@ fun MainScreen(
             MainNavDestination.DASHBOARD -> {
                 DashboardScreen(
                     viewModel = dashboardViewModel,
+                    onNavigateToReview = { currentDestination = MainNavDestination.INBOX },
+                    onAddExpense = { showManualAddSheet = true },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
