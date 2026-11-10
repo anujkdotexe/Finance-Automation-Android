@@ -82,14 +82,12 @@ class QuickLogViewModel(
         viewModelScope.launch(ioDispatcher) {
             accountRepository.getAccounts().collect { accounts ->
                 _uiState.update { current ->
-                    current.copy(
-                        availableAccounts = accounts,
-                        selectedAccount = if (accounts.any { it.name.equals(current.selectedAccount, ignoreCase = true) }) {
-                            current.selectedAccount
-                        } else {
-                            accounts.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_SBI
-                        }
-                    )
+                    val acc = if (accounts.any { it.name.equals(current.selectedAccount, ignoreCase = true) }) {
+                        current.selectedAccount
+                    } else {
+                        accounts.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_SBI
+                    }
+                    current.copy(availableAccounts = accounts, selectedAccount = acc)
                 }
             }
         }
@@ -197,21 +195,8 @@ class QuickLogViewModel(
      * Initializes self-test mode with sample expense data and no pending capture (Spec 7.4).
      * Does not reference any whitelisted package or write to persistent storage.
      */
-    fun setSelfTestMode() {
-        _uiState.update {
-            it.copy(
-                captureId = null,
-                sourcePackage = "selftest",
-                amountText = "250",
-                amount = 250.0,
-                payee = "Coffee House (Self-Test)",
-                selectedCategory = "Food & Drink",
-                isNeedsAmount = false,
-                isPossibleDuplicate = false,
-                isSaved = false,
-                isDismissed = false
-            )
-        }
+    fun setSelfTestMode(samplePayee: String? = null) {
+        _uiState.update { SelfTestSampleData.createSelfTestState(it, samplePayee) }
         recalculateSplit()
     }
 
@@ -293,19 +278,9 @@ class QuickLogViewModel(
         val calculation = when (state.splitMode) {
             SplitMode.JUST_ME -> calculateSplitUseCase.calculateJustMe(total)
             SplitMode.SPLIT_EQUALLY -> calculateSplitUseCase.calculateSplitEqually(total, selectedCompanions)
-            SplitMode.CUSTOM -> calculateSplitUseCase.calculateCustomSplit(
-                totalAmount = total,
-                myShare = state.customShare ?: total,
-                companions = selectedCompanions
-            )
+            SplitMode.CUSTOM -> calculateSplitUseCase.calculateCustomSplit(total, state.customShare ?: total, selectedCompanions)
         }
-
-        _uiState.update {
-            it.copy(
-                myShare = calculation.myShare,
-                owedToMe = calculation.owedToMe
-            )
-        }
+        _uiState.update { it.copy(myShare = calculation.myShare, owedToMe = calculation.owedToMe) }
     }
 
     /**

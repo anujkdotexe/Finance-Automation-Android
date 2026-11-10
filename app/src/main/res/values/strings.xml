@@ -59,6 +59,10 @@
     <string name="health_self_test_banner">TEST MODE - Verification Prompt (Not Saved)</string>
     <string name="health_self_test_success">Self-test passed: Quick Log sheet rendered successfully</string>
     <string name="health_self_test_failed">Self-test failed: Overlay permission missing or window failed to attach</string>
+    <string name="self_test_completed_pill">Self-test completed (not saved)</string>
+    <string name="self_test_sample_payee">Coffee House (Self-Test)</string>
+    <string name="health_channel_name">Health &amp; Setup Alerts</string>
+    <string name="health_channel_desc">Alerts regarding required background permissions and listener status</string>
     <string name="health_advanced_title">Advanced Diagnostics</string>
     <string name="health_advanced_subtitle">In-memory lifecycle and error diagnostic events</string>
 

@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.ViewModelProvider
+import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -247,7 +248,7 @@ class OverlayController(
                                         onConfirmExpense = {
                                             if (request is OverlayRequest.SelfTest) {
                                                 dismiss()
-                                                resultPill.show("Self-test completed (not saved)")
+                                                resultPill.show(appContext.getString(R.string.self_test_completed_pill))
                                             } else {
                                                 viewModel.onConfirmAndSave { message ->
                                                     dismiss()
