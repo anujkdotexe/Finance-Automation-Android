@@ -108,6 +108,10 @@ object OemHardeningHelper {
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             )
             OemBrand.OPPO -> listOf(
+                Intent().setComponent(ComponentName("com.oplus.battery", "com.oplus.startupapp.view.AssociateStartActivity")),
+                Intent().setComponent(ComponentName("com.oplus.battery", "com.oplus.powermanager.fuelgaue.PowerUsageModelActivity")),
+                Intent().setComponent(ComponentName("com.oplus.securitypermission", "com.oplusos.securitypermission.appcontrolcenter.view.AppControlCenterActivity")),
+                Intent().setComponent(ComponentName("com.oplus.safecenter", "com.oplus.safecenter.permission.AppPermissionControlActivity")),
                 Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
                 Intent().setComponent(ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")),
                 Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity")),
@@ -120,6 +124,10 @@ object OemHardeningHelper {
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             )
             OemBrand.ONEPLUS -> listOf(
+                Intent().setComponent(ComponentName("com.oplus.battery", "com.oplus.startupapp.view.AssociateStartActivity")),
+                Intent().setComponent(ComponentName("com.oplus.battery", "com.oplus.powermanager.fuelgaue.PowerUsageModelActivity")),
+                Intent().setComponent(ComponentName("com.oplus.securitypermission", "com.oplusos.securitypermission.appcontrolcenter.view.AppControlCenterActivity")),
+                Intent().setComponent(ComponentName("com.oplus.safecenter", "com.oplus.safecenter.permission.AppPermissionControlActivity")),
                 Intent().setComponent(ComponentName("com.oneplus.security", "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity")),
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             )
