@@ -14,12 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,7 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.financeautomation.FinanceApplication
-import com.financeautomation.presentation.components.AppleExpensePromptSheet
+import com.financeautomation.presentation.components.ExpenseSheet
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 
@@ -88,36 +83,23 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         ) { dismissSafely() },
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    // Floating Bottom Sheet Island (Apple Shortcuts & Dynamic Island Style)
-                    Surface(
+                    // Floating Bottom Sheet using unified SheetScaffold
+                    ExpenseSheet(
+                        state = state,
+                        onAmountChanged = expenseViewModel::onAmountChanged,
+                        onMerchantChanged = expenseViewModel::onMerchantChanged,
+                        onCategorySelected = expenseViewModel::onCategorySelected,
+                        onSplitModeChanged = expenseViewModel::onSplitModeChanged,
+                        onCompanionToggled = expenseViewModel::onCompanionToggled,
+                        onAddCompanion = expenseViewModel::onAddNewCompanion,
+                        onCustomShareChanged = expenseViewModel::onCustomShareChanged,
+                        onConfirmAndSave = expenseViewModel::onConfirmAndSave,
+                        onVoid = expenseViewModel::onVoid,
+                        onCancel = { dismissSafely() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
                             .padding(horizontal = 14.dp, vertical = 14.dp)
-                            .heightIn(max = 540.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { /* consume click to prevent backdrop dismissal */ },
-                        shape = RoundedCornerShape(32.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 6.dp,
-                        shadowElevation = 24.dp
-                    ) {
-                        AppleExpensePromptSheet(
-                            state = state,
-                            onAmountChanged = expenseViewModel::onAmountChanged,
-                            onMerchantChanged = expenseViewModel::onMerchantChanged,
-                            onCategorySelected = expenseViewModel::onCategorySelected,
-                            onSplitModeChanged = expenseViewModel::onSplitModeChanged,
-                            onCompanionToggled = expenseViewModel::onCompanionToggled,
-                            onAddCompanion = expenseViewModel::onAddNewCompanion,
-                            onCustomShareChanged = expenseViewModel::onCustomShareChanged,
-                            onConfirmAndSave = expenseViewModel::onConfirmAndSave,
-                            onVoid = expenseViewModel::onVoid,
-                            onCancel = { dismissSafely() }
-                        )
-                    }
+                    )
                 }
             }
         }
