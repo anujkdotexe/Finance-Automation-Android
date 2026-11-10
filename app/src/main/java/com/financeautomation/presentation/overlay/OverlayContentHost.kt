@@ -32,6 +32,7 @@ import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.presentation.components.QuickLogSheet
+import com.financeautomation.presentation.components.SheetScaffold
 import com.financeautomation.presentation.flows.ChooseActionMenu
 import com.financeautomation.presentation.flows.FriendPaidFlowSheet
 import com.financeautomation.presentation.flows.IncomeReturnFlowSheet
@@ -78,22 +79,30 @@ fun OverlayContentHost(
 ) {
     var currentScreen by remember { mutableStateOf(initialScreen) }
     val openedFromMenu = remember { initialScreen == OverlayFlowScreen.MENU }
+    val quickLogState by quickLogViewModel.uiState.collectAsState()
 
-    Surface(
+    val sheetTitle = when (currentScreen) {
+        OverlayFlowScreen.MENU -> stringResource(R.string.prompt_choose_action)
+        OverlayFlowScreen.EXPENSE -> if (quickLogState.captureId != null) {
+            stringResource(R.string.badge_payment_intercepted)
+        } else {
+            stringResource(R.string.prompt_enter_amount)
+        }
+        OverlayFlowScreen.INCOME_RETURN -> stringResource(R.string.prompt_amount_received)
+        OverlayFlowScreen.FRIEND_PAID -> stringResource(R.string.action_menu_friend_paid_title)
+        OverlayFlowScreen.REPAID_FRIEND -> stringResource(R.string.action_menu_repaid_friend_title)
+        OverlayFlowScreen.TRIP_MODE -> stringResource(R.string.action_menu_trip_mode_title)
+    }
+
+    SheetScaffold(
+        title = sheetTitle,
+        onDismiss = onDismiss,
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .displayCutoutPadding()
             .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m)
             .heightIn(max = FinanceTheme.sizes.maxOverlayHeight)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { /* Consume clicks to prevent backdrop dismissal */ },
-        shape = FinanceTheme.shapes.sheet,
-        color = FinanceTheme.colors.surface,
-        tonalElevation = FinanceTheme.sizes.elevationSheet,
-        shadowElevation = FinanceTheme.sizes.elevationDialog
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (isTestMode) {

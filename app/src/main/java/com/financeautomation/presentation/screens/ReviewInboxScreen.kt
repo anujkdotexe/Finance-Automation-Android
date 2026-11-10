@@ -61,10 +61,8 @@ import androidx.compose.ui.unit.dp
 import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Transaction
-import com.financeautomation.presentation.components.ExpenseModalBottomSheet
 import com.financeautomation.presentation.components.StatusChip
 import com.financeautomation.presentation.theme.FinanceTheme
-import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxUiState
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
 import java.text.SimpleDateFormat
@@ -79,7 +77,7 @@ import java.util.Locale
 @Composable
 fun ReviewInboxScreen(
     reviewInboxViewModel: ReviewInboxViewModel,
-    expenseViewModel: ExpenseViewModel? = null,
+    onEditTransaction: ((Transaction) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val state by reviewInboxViewModel.uiState.collectAsState()
@@ -109,19 +107,9 @@ fun ReviewInboxScreen(
             },
             onSelectTransaction = { txn ->
                 reviewInboxViewModel.selectTransaction(txn)
-                expenseViewModel?.loadTransaction(txn.id)
+                onEditTransaction?.invoke(txn)
             },
             modifier = Modifier.padding(innerPadding)
-        )
-    }
-
-    // Modal Bottom Sheet for detailed review and split editing
-    if (state.selectedTransaction != null && expenseViewModel != null) {
-        ExpenseModalBottomSheet(
-            viewModel = expenseViewModel,
-            onDismiss = {
-                reviewInboxViewModel.clearSelection()
-            }
         )
     }
 }

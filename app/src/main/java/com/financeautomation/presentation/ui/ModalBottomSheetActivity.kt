@@ -22,13 +22,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import com.financeautomation.FinanceApplication
-import com.financeautomation.presentation.components.ExpenseSheet
+import com.financeautomation.R
+import com.financeautomation.presentation.components.QuickLogSheet
+import com.financeautomation.presentation.components.SheetScaffold
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
-import com.financeautomation.presentation.viewmodel.ExpenseViewModel
+import com.financeautomation.presentation.viewmodel.QuickLogViewModel
+import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
 
 /**
  * Transparent Activity hosting the interactive Floating Modal Bottom Sheet for expense splitting and categorization.
@@ -37,14 +40,17 @@ import com.financeautomation.presentation.viewmodel.ExpenseViewModel
  */
 class ModalBottomSheetActivity : ComponentActivity() {
 
-    private val expenseViewModel: ExpenseViewModel by viewModels {
+    private val quickLogViewModel: QuickLogViewModel by viewModels {
         val app = application as FinanceApplication
-        ExpenseViewModel.provideFactory(
+        QuickLogViewModelFactory(
             transactionRepository = app.appContainer.transactionRepository,
             peopleRepository = app.appContainer.peopleRepository,
             categoryRepository = app.appContainer.categoryRepository,
             accountRepository = app.appContainer.accountRepository,
+            tripTagRepository = app.appContainer.tripTagRepository,
             pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
+            syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
+            categoryStatDaoProvider = { app.appContainer.awaitDatabase().categoryStatDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -65,7 +71,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
 
         setContent {
             FinanceAutomationTheme(transparentSystemBars = true) {
-                val state by expenseViewModel.uiState.collectAsState()
+                val state by quickLogViewModel.uiState.collectAsState()
 
                 LaunchedEffect(state.isSaved, state.isVoided) {
                     if (state.isSaved || state.isVoided) {
@@ -85,29 +91,40 @@ class ModalBottomSheetActivity : ComponentActivity() {
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     // Floating Bottom Sheet using unified SheetScaffold
-                    ExpenseSheet(
-                        state = state,
-                        onAmountChanged = expenseViewModel::onAmountChanged,
-                        onMerchantChanged = expenseViewModel::onMerchantChanged,
-                        onCategorySelected = expenseViewModel::onCategorySelected,
-                        onSplitModeChanged = expenseViewModel::onSplitModeChanged,
-                        onCompanionToggled = expenseViewModel::onCompanionToggled,
-                        onAddCompanion = expenseViewModel::onAddNewCompanion,
-                        onCustomShareChanged = expenseViewModel::onCustomShareChanged,
-                        onConfirmAndSave = expenseViewModel::onConfirmAndSave,
-                        onVoid = expenseViewModel::onVoid,
-                        onCancel = { dismissSafely() },
+                    SheetScaffold(
+                        title = when {
+                            state.transactionId != null -> stringResource(R.string.prompt_enter_amount)
+                            state.captureId != null -> stringResource(R.string.badge_payment_intercepted)
+                            else -> stringResource(R.string.prompt_enter_amount)
+                        },
+                        onDismiss = { dismissSafely() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m)
-                    )
+                    ) {
+                        QuickLogSheet(
+                            state = state,
+                            onAmountChanged = quickLogViewModel::onAmountChanged,
+                            onPayeeChanged = quickLogViewModel::onPayeeChanged,
+                            onAccountSelected = quickLogViewModel::onAccountSelected,
+                            onCategorySelected = quickLogViewModel::onCategorySelected,
+                            onSplitModeChanged = quickLogViewModel::onSplitModeChanged,
+                            onCompanionToggled = quickLogViewModel::onCompanionToggled,
+                            onAddCompanion = quickLogViewModel::onAddNewCompanion,
+                            onCustomShareChanged = quickLogViewModel::onCustomShareChanged,
+                            onEndTrip = quickLogViewModel::onEndTrip,
+                            onConfirmAndSave = { quickLogViewModel.onConfirmAndSave { dismissSafely() } },
+                            onDismiss = { dismissSafely() },
+                            onVoid = { quickLogViewModel.onVoid { dismissSafely() } }
+                        )
+                    }
                 }
             }
         }
     }
 
     private fun dismissSafely() {
-        expenseViewModel.onDismissCapture()
+        quickLogViewModel.onDismiss()
         finish()
         overridePendingTransition(0, 0)
     }
@@ -131,13 +148,13 @@ class ModalBottomSheetActivity : ComponentActivity() {
 
         when {
             !captureId.isNullOrBlank() -> {
-                expenseViewModel.loadCapture(captureId)
+                quickLogViewModel.loadCapture(captureId)
             }
             !txnId.isNullOrBlank() -> {
-                expenseViewModel.loadTransaction(txnId)
+                quickLogViewModel.loadTransaction(txnId)
             }
             else -> {
-                expenseViewModel.clearState()
+                quickLogViewModel.setManualMode()
             }
         }
     }

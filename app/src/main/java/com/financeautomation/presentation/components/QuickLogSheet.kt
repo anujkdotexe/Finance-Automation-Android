@@ -83,6 +83,7 @@ fun QuickLogSheet(
     onEndTrip: () -> Unit,
     onConfirmAndSave: () -> Unit,
     onDismiss: () -> Unit,
+    onVoid: (() -> Unit)? = null,
     onKeyboardFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -370,6 +371,15 @@ fun QuickLogSheet(
                     )
                 }
             }
+        }
+
+        if (state.transactionId != null && onVoid != null) {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
+            SecondaryButton(
+                text = stringResource(R.string.action_void),
+                onClick = onVoid,
+                enabled = !state.isSaving
+            )
         }
 
         state.errorMessage?.let { errorMsg ->
