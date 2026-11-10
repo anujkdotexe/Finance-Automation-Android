@@ -35,6 +35,7 @@ import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
 import com.financeautomation.domain.usecase.CarryForwardUseCase
+import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.LogExpenseUseCase
 import com.financeautomation.domain.usecase.NettingUseCase
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
@@ -100,6 +101,7 @@ interface AppContainer {
     val foregroundWatcher: ForegroundWatcher
     val overlayController: OverlayController
     val peopleListRebuilder: PeopleListRebuilder
+    val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase
 }
 
 /**
@@ -362,6 +364,7 @@ class DefaultAppContainer(
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
             predictCategoryUseCase = predictCategoryUseCase,
+            getOpenDebtsForPersonUseCase = getOpenDebtsForPersonUseCase,
             ioDispatcher = ioDispatcher,
             mainDispatcher = mainDispatcher
         )
@@ -382,6 +385,14 @@ class DefaultAppContainer(
             preferencesRepository = preferencesRepository,
             googleSheetsClient = googleSheetsClient,
             peopleRepository = peopleRepository,
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase by lazy {
+        GetOpenDebtsForPersonUseCase(
+            preferencesRepository = preferencesRepository,
+            googleSheetsClient = googleSheetsClient,
             ioDispatcher = ioDispatcher
         )
     }

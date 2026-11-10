@@ -46,7 +46,9 @@ import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
+import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
+import com.financeautomation.presentation.flows.OpenDebtItem
 import com.financeautomation.presentation.components.QuickLogSheet
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
@@ -55,6 +57,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.function.Consumer
 
@@ -73,18 +76,22 @@ class OverlayController(
     private val syncQueueDaoProvider: suspend () -> SyncQueueDao,
     private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
     private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
+    private val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val resultPill = ResultPillOverlay(appContext)
+    private val blurHelper = OverlayBlurHelper(windowManager)
     private val mainScope = CoroutineScope(mainDispatcher)
+
+    private val openDebtsState = mutableStateOf<List<OpenDebtItem>>(emptyList())
+    private var openDebtsJob: Job? = null
 
     private var currentView: ComposeView? = null
     private var currentTreeOwners: ComposeOverlayTreeOwners? = null
     private var currentLayoutParams: WindowManager.LayoutParams? = null
-    private var blurListener: Any? = null
 
     /**
      * Shows an overlay window for the given request.
@@ -117,7 +124,7 @@ class OverlayController(
                 currentLayoutParams = layoutParams
 
                 // Android 12+ Hardware Cross-Window Blur handling
-                setupWindowBlur(layoutParams)
+                blurHelper.setupWindowBlur(layoutParams, { currentView }, { currentLayoutParams })
 
                 val viewModelFactory = QuickLogViewModelFactory(
                     transactionRepository = transactionRepository,
@@ -196,7 +203,8 @@ class OverlayController(
                                         accounts = accounts,
                                         companions = companions,
                                         activeTripTag = activeTripTag,
-                                        openDebts = emptyList(),
+                                        openDebts = openDebtsState.value,
+                                        onPersonChanged = ::loadOpenDebtsForPerson,
                                         onConfirmExpense = {
                                             viewModel.onConfirmAndSave { message ->
                                                 dismiss()
@@ -290,6 +298,20 @@ class OverlayController(
         }
     }
 
+    private fun loadOpenDebtsForPerson(person: String) {
+        openDebtsJob?.cancel()
+        val query = person.trim()
+        if (query.isBlank()) {
+            openDebtsState.value = emptyList()
+            return
+        }
+        val useCase = getOpenDebtsForPersonUseCase ?: return
+        openDebtsJob = mainScope.launch {
+            val debts = useCase(query)
+            openDebtsState.value = debts
+        }
+    }
+
     /**
      * Toggles FLAG_NOT_FOCUSABLE dynamically to allow the software keyboard to emerge.
      */
@@ -311,7 +333,7 @@ class OverlayController(
      * Dismisses the currently displayed overlay window and recycles resources.
      */
     fun dismiss() {
-        teardownWindowBlur()
+        blurHelper.teardownWindowBlur()
         currentView?.let { view ->
             try {
                 currentTreeOwners?.destroy()
@@ -341,49 +363,6 @@ class OverlayController(
         if (!Settings.canDrawOverlays(appContext)) return false
         show(OverlayRequest.SelfTest)
         return true
-    }
-
-    private fun setupWindowBlur(params: WindowManager.LayoutParams) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (windowManager.isCrossWindowBlurEnabled) {
-                params.flags = params.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                params.blurBehindRadius = 24
-            }
-            val listener = Consumer<Boolean> { enabled ->
-                val view = currentView ?: return@Consumer
-                val lp = currentLayoutParams ?: return@Consumer
-                if (enabled) {
-                    lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                    lp.blurBehindRadius = 24
-                } else {
-                    lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                    lp.blurBehindRadius = 0
-                }
-                try {
-                    windowManager.updateViewLayout(view, lp)
-                } catch (e: Exception) {
-                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: updateViewLayout blur")
-                }
-            }
-            windowManager.addCrossWindowBlurEnabledListener(listener)
-            blurListener = listener
-        }
-    }
-
-    private fun teardownWindowBlur() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            @Suppress("UNCHECKED_CAST")
-            val listener = blurListener as? Consumer<Boolean>
-            if (listener != null) {
-                try {
-                    windowManager.removeCrossWindowBlurEnabledListener(listener)
-                } catch (e: Exception) {
-                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: removeCrossWindowBlurEnabledListener")
-                } finally {
-                    blurListener = null
-                }
-            }
-        }
     }
 }
 

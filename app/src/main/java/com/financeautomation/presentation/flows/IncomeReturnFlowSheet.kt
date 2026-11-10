@@ -55,10 +55,15 @@ data class OpenDebtItem(
     val uuid: String,
     val description: String,
     val amountOwed: Double,
-    val tabName: String
+    val tabName: String,
+    val person: String = ""
 ) {
     val displayLabel: String
-        get() = "$description (Rs. ${amountOwed.toInt()}) [$tabName]"
+        get() = if (person.isNotBlank()) {
+            "$description (₹${amountOwed.toInt()} - $person) [$tabName]"
+        } else {
+            "$description (₹${amountOwed.toInt()}) [$tabName]"
+        }
 }
 
 /**
@@ -69,6 +74,7 @@ fun IncomeReturnFlowSheet(
     accounts: List<Account>,
     companions: List<Companion>,
     openDebts: List<OpenDebtItem>,
+    onPersonChanged: (String) -> Unit,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (amount: Double, account: String, inflowType: String, settler: String, reason: String, explicitRefs: List<String>) -> Unit,
@@ -255,7 +261,10 @@ fun IncomeReturnFlowSheet(
                 companions.take(6).forEach { companion ->
                     FilterChip(
                         selected = (settlerName.equals(companion.name, ignoreCase = true)),
-                        onClick = { settlerName = companion.name },
+                        onClick = {
+                            settlerName = companion.name
+                            onPersonChanged(companion.name)
+                        },
                         label = { Text(companion.name) }
                     )
                 }
@@ -265,7 +274,10 @@ fun IncomeReturnFlowSheet(
 
         OutlinedTextField(
             value = settlerName,
-            onValueChange = { settlerName = it },
+            onValueChange = {
+                settlerName = it
+                onPersonChanged(it)
+            },
             label = { Text("Name") },
             placeholder = { Text("e.g. Rohit, Rohit Kumar, Employer") },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
