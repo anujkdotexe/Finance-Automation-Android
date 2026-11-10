@@ -1,8 +1,18 @@
 package com.financeautomation.presentation.screens
 
+import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,6 +82,23 @@ fun SetupHealthCard(
     var selfTestResultText by remember { mutableStateOf<String?>(null) }
     var selfTestSucceeded by remember { mutableStateOf<Boolean?>(null) }
     var fallbackInstructionText by remember { mutableStateOf<String?>(null) }
+    var postNotificationRequestedOnce by remember { mutableStateOf(false) }
+
+    val postNotificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.refreshChecks()
+        if (!isGranted) {
+            val activity = context as? Activity
+            val permanentlyDenied = activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(
+                activity,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+            if (permanentlyDenied) {
+                launchAppNotificationSettings(context)
+            }
+        }
+    }
 
     val oemInfo = remember { OemHardeningHelper.getOemInfo() }
 
@@ -136,6 +163,21 @@ fun SetupHealthCard(
                     fallbackInstructionText = null
                     if (checkItem.id == HealthCheckId.GOOGLE_CONNECTION) {
                         onNavigateGoogleSignIn?.invoke()
+                    } else if (checkItem.id == HealthCheckId.POST_NOTIFICATIONS && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val activity = context as? Activity
+                        val permanentlyDenied = activity != null && ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) != PackageManager.PERMISSION_GRANTED && !ActivityCompat.shouldShowRequestPermissionRationale(
+                            activity,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) && postNotificationRequestedOnce
+                        if (permanentlyDenied) {
+                            launchAppNotificationSettings(context)
+                        } else {
+                            postNotificationRequestedOnce = true
+                            postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                     } else {
                         launchSettingsWithGuardedFallback(context, checkItem, oemInfo) { instruction ->
                             fallbackInstructionText = instruction
@@ -196,9 +238,7 @@ fun SetupHealthCard(
                 Surface(
                     color = if (isSuccess) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer,
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 ) {
                     Text(
                         text = text,
@@ -225,128 +265,49 @@ private fun HealthCheckRow(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Status indicator icon
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(
-                            color = when (item.status) {
-                                HealthStatus.OK -> MaterialTheme.colorScheme.tertiaryContainer
-                                HealthStatus.MISSING -> MaterialTheme.colorScheme.errorContainer
-                                HealthStatus.UNKNOWN -> MaterialTheme.colorScheme.secondaryContainer
-                            },
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = when (item.status) {
-                            HealthStatus.OK -> Icons.Rounded.CheckCircle
-                            HealthStatus.MISSING -> Icons.Rounded.ErrorOutline
-                            HealthStatus.UNKNOWN -> Icons.Rounded.HelpOutline
-                        },
-                        contentDescription = null,
-                        tint = when (item.status) {
-                            HealthStatus.OK -> MaterialTheme.colorScheme.onTertiaryContainer
-                            HealthStatus.MISSING -> MaterialTheme.colorScheme.onErrorContainer
-                            HealthStatus.UNKNOWN -> MaterialTheme.colorScheme.onSecondaryContainer
-                        },
-                        modifier = Modifier.size(16.dp)
-                    )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                val (statusBg, statusTint, statusIcon) = when (item.status) {
+                    HealthStatus.OK -> Triple(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, Icons.Rounded.CheckCircle)
+                    HealthStatus.MISSING -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer, Icons.Rounded.ErrorOutline)
+                    HealthStatus.UNKNOWN -> Triple(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, Icons.Rounded.HelpOutline)
                 }
-
+                Box(modifier = Modifier.size(24.dp).background(statusBg, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(statusIcon, contentDescription = null, tint = statusTint, modifier = Modifier.size(16.dp))
+                }
                 Spacer(modifier = Modifier.width(10.dp))
-
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(item.titleRes),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = stringResource(item.descriptionRes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = stringResource(item.titleRes), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text(text = stringResource(item.descriptionRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!item.detailText.isNullOrBlank()) {
-                        Text(
-                            text = "Status: ${item.detailText}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Text(text = "Status: ${item.detailText}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                     }
                 }
-
                 Spacer(modifier = Modifier.width(8.dp))
-
-                // Action button or status badge
                 if (item.status == HealthStatus.MISSING && item.canFix) {
                     Button(
                         onClick = onFix,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError
-                        ),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.height(34.dp)
                     ) {
-                        Text(
-                            text = stringResource(R.string.health_fix_button),
-                            style = MaterialTheme.typography.labelMedium
-                        )
+                        Text(text = stringResource(R.string.health_fix_button), style = MaterialTheme.typography.labelMedium)
                     }
                 } else if (item.status == HealthStatus.OK) {
-                    Text(
-                        text = stringResource(R.string.health_status_ok),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
+                    Text(text = stringResource(R.string.health_status_ok), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
                 }
             }
 
-            // Special OEM guidance and manual toggle
             if (item.id == HealthCheckId.OEM_BACKGROUND) {
                 Spacer(modifier = Modifier.height(8.dp))
                 if (!oemInstruction.isNullOrBlank()) {
-                    Text(
-                        text = oemInstruction,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 34.dp)
-                    )
+                    Text(text = oemInstruction, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 34.dp))
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 24.dp, top = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = item.isOemToggleDone,
-                        onCheckedChange = onToggleOemDone,
-                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                    )
-                    Text(
-                        text = "Configured on this device",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium
-                    )
+                Row(modifier = Modifier.fillMaxWidth().padding(start = 24.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = item.isOemToggleDone, onCheckedChange = onToggleOemDone, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
+                    Text(text = "Configured on this device", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.weight(1f))
-                    OutlinedButton(
-                        onClick = onFix,
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text(
-                            text = "Open OEM settings",
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                    OutlinedButton(onClick = onFix, shape = RoundedCornerShape(8.dp), modifier = Modifier.height(32.dp)) {
+                        Text(text = "Open OEM settings", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -378,6 +339,29 @@ private fun launchSettingsWithGuardedFallback(
                 context.getString(item.descriptionRes)
             }
             onFallbackFailed(instruction)
+        }
+    }
+}
+
+private fun launchAppNotificationSettings(context: Context) {
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    } else {
+        SetupHealthViewModel.getAppDetailsSettingsIntent(context)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        if (e !is ActivityNotFoundException && e !is SecurityException) throw e
+        Diagnostics.record("SetupHealthCard", "${e.javaClass.simpleName}: launchNotificationSettings")
+        try {
+            context.startActivity(SetupHealthViewModel.getAppDetailsSettingsIntent(context))
+        } catch (fe: Exception) {
+            if (fe !is ActivityNotFoundException && fe !is SecurityException) throw fe
+            Diagnostics.record("SetupHealthCard", "${fe.javaClass.simpleName}: launchNotificationFallback")
         }
     }
 }
