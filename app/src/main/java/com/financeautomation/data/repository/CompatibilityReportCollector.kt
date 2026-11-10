@@ -6,6 +6,7 @@ import com.financeautomation.BuildConfig
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.DiscoveryScanner
 import com.financeautomation.core.utils.LocalCrashRecorder
+import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.PipelineEventDao
 import com.financeautomation.domain.model.CompatibilityReportBuilder
 import com.financeautomation.domain.model.CompatibilityReportData
@@ -127,6 +128,8 @@ object CompatibilityReportCollector {
             funnelCounts = funnel,
             recentTrail = recentTrail,
             discoveryScan = discovery,
+            lastHeartbeatTime = PipelineTrail.getLastHeartbeatTime(),
+            todayDroppedNonWhitelistedCount = PipelineTrail.getTodayDroppedNonWhitelistedCount(),
             userNote = userNote
         )
 

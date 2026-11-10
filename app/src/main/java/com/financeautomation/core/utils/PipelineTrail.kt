@@ -1,5 +1,6 @@
 package com.financeautomation.core.utils
 
+import android.content.Context
 import com.financeautomation.data.local.dao.PipelineEventDao
 import com.financeautomation.data.local.entity.PipelineEventEntity
 import kotlinx.coroutines.CancellationException
@@ -8,6 +9,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -15,98 +19,101 @@ import java.util.concurrent.atomic.AtomicLong
 enum class PipelineStage {
     LISTENER,
     ALERT,
-    CAPTURE,
     WATCHER,
     PROMPT,
+    CAPTURE,
     SYNC,
     DEVICE
 }
 
 enum class PipelineCode {
-    // LISTENER
     CONNECTED,
     DISCONNECTED,
     REBIND_REQUESTED,
     REBIND_OK,
     HEARTBEAT,
-
-    // ALERT
     WHITELISTED_SEEN,
     DROPPED_BLACKLIST,
-    DROPPED_NOT_WHITELISTED_COUNT,
     DROPPED_OTP,
     DROPPED_DUPLICATE,
+    DROPPED_NOT_WHITELISTED_COUNT,
     FAILURE_WORDING,
-    PARSE_UNREADABLE,
     PARSE_OK_DEBIT,
     PARSE_OK_CREDIT,
-
-    // CAPTURE
-    CREATED_WAITING,
-    AWAITING_SUCCESS,
-    MERGED,
-    FLAGGED_DUPLICATE,
-    DISMISSED,
-    DONE,
-
-    // WATCHER
-    USAGE_ACCESS_MISSING_SHOW_NOW,
-    SOURCE_APP_FOREGROUND,
-    TWO_POLLS_OK,
+    PARSE_UNREADABLE,
     SCREEN_LOCKED_WAIT,
     UNLOCKED_RESUME,
+    SOURCE_APP_FOREGROUND,
+    TWO_POLLS_OK,
     BACKOFF,
-
-    // PROMPT
-    OVERLAY_PERMISSION_MISSING,
+    USAGE_ACCESS_MISSING_SHOW_NOW,
     OVERLAY_SHOWN,
     OVERLAY_ADD_FAILED,
+    OVERLAY_PERMISSION_MISSING,
     OVERLAY_DEFERRED_BUSY,
     HEADS_UP_POSTED,
     HEADS_UP_BLOCKED_NOTIFICATIONS_OFF,
     USER_SAVED,
     USER_DISMISSED,
-
-    // SYNC
+    CREATED_WAITING,
+    AWAITING_SUCCESS,
+    DISMISSED,
+    DONE,
+    MERGED,
+    FLAGGED_DUPLICATE,
     QUEUED,
     SUCCESS,
     TRANSPORT_FAILURE,
     NEEDS_REVIEW,
-
-    // DEVICE
     SNAPSHOT
 }
 
-/**
- * Capped pipeline event trail tracking system failure points (Phase 9.3b).
- * Strongly-typed enums prevent recording of raw alert text, PII, or financial amounts.
- * In-memory buffer flushes asynchronously in batches on Dispatchers.IO and prunes to 500 rows / 7 days.
- */
 object PipelineTrail {
 
     private const val MAX_ROWS = 500
     private const val SEVEN_DAYS_MS = 7L * 24 * 60 * 60 * 1000
     private const val BATCH_FLUSH_THRESHOLD = 5
+    private const val PREFS_NAME = "pipeline_heartbeat_prefs"
+    private const val KEY_HEARTBEAT_TIME = "last_heartbeat_time"
+    private const val KEY_DROPPED_COUNT = "dropped_not_whitelisted_count"
+    private const val KEY_DAY = "current_day_key"
+    private const val PERSIST_INTERVAL_MS = 60_000L
 
     private val buffer = ConcurrentLinkedQueue<PipelineEventEntity>()
     private val isFlushing = AtomicBoolean(false)
 
-    @Volatile
-    var lastHeartbeatTime: Long = 0L
-        private set
+    private val heartbeatTime = AtomicLong(0L)
+    private val droppedCount = AtomicLong(0L)
+    private val lastPersistedAt = AtomicLong(0L)
 
-    val nonWhitelistedCount = AtomicLong(0L)
-
+    private var appContext: Context? = null
     private var daoProvider: (suspend () -> PipelineEventDao)? = null
     private var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun initialize(
+        context: Context,
         dispatcher: CoroutineDispatcher = Dispatchers.IO,
         daoSupplier: suspend () -> PipelineEventDao
     ) {
+        this.appContext = context.applicationContext
         this.ioDispatcher = dispatcher
         this.daoProvider = daoSupplier
+
+        try {
+            val prefs = this.appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (prefs != null) {
+                heartbeatTime.set(prefs.getLong(KEY_HEARTBEAT_TIME, 0L))
+                val savedDay = prefs.getString(KEY_DAY, "") ?: ""
+                val today = getTodayKey()
+                if (savedDay == today) {
+                    droppedCount.set(prefs.getLong(KEY_DROPPED_COUNT, 0L))
+                } else {
+                    droppedCount.set(0L)
+                }
+            }
+        } catch (ignored: Exception) {
+        }
     }
 
     fun record(
@@ -130,13 +137,41 @@ object PipelineTrail {
     }
 
     fun recordHeartbeat() {
-        lastHeartbeatTime = System.currentTimeMillis()
-        record(PipelineStage.LISTENER, PipelineCode.HEARTBEAT)
+        heartbeatTime.set(System.currentTimeMillis())
+        maybePersistHeartbeatAsync()
     }
 
     fun recordDroppedNotWhitelisted() {
-        nonWhitelistedCount.incrementAndGet()
-        record(PipelineStage.ALERT, PipelineCode.DROPPED_NOT_WHITELISTED_COUNT)
+        droppedCount.incrementAndGet()
+        maybePersistHeartbeatAsync()
+    }
+
+    fun getLastHeartbeatTime(): Long = heartbeatTime.get()
+
+    fun getTodayDroppedNonWhitelistedCount(): Long = droppedCount.get()
+
+    private fun getTodayKey(): String {
+        return SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+    }
+
+    private fun maybePersistHeartbeatAsync() {
+        val now = System.currentTimeMillis()
+        val lastPersist = lastPersistedAt.get()
+        if (now - lastPersist < PERSIST_INTERVAL_MS) return
+        if (!lastPersistedAt.compareAndSet(lastPersist, now)) return
+
+        scope.launch(ioDispatcher) {
+            try {
+                val ctx = appContext ?: return@launch
+                val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putLong(KEY_HEARTBEAT_TIME, heartbeatTime.get())
+                    .putLong(KEY_DROPPED_COUNT, droppedCount.get())
+                    .putString(KEY_DAY, getTodayKey())
+                    .apply()
+            } catch (ignored: Exception) {
+            }
+        }
     }
 
     fun triggerFlush() {
@@ -166,4 +201,3 @@ object PipelineTrail {
         }
     }
 }
-
