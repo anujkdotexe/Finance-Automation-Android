@@ -103,7 +103,7 @@ class CalculateSplitUseCaseTest {
 
         // Verify origin row: Col J zeroed, status Carried
         assertEquals(0.00, updatedOrigin.owedToMe, 0.001)
-        assertEquals(TransactionStatus.CARRIED, updatedOrigin.status)
+        assertEquals(TransactionStatus.CARRIED_FWD, updatedOrigin.status)
 
         // Verify target row: fresh UUID, description prefixed, Col J carries debt, status Pending
         assertNotEquals(original.id, targetTxn.id)
