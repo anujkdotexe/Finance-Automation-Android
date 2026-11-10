@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.res.Configuration
 import android.os.Bundle
+import com.financeautomation.core.utils.CrashlyticsManager
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.LocalCrashRecorder
 import com.financeautomation.core.utils.PipelineCode
@@ -31,6 +32,7 @@ class FinanceApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         LocalCrashRecorder.install(this, BuildConfig.VERSION_NAME)
+        CrashlyticsManager.initAtAppStart(this)
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
 

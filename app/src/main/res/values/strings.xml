@@ -358,6 +358,8 @@
     <string name="action_no">No</string>
     <string name="report_capture_health_title">Capture Health &amp; Trail</string>
     <string name="report_capture_health_subtitle">Inspect daily capture funnel and pipeline trail events</string>
+    <string name="crashlytics_card_title">Reliability &amp; Diagnostics</string>
+    <string name="crashlytics_card_desc">Anonymous technical telemetry to fix crashes and background freezes</string>
     <string name="crashlytics_opt_in_title">Help improve reliability</string>
     <string name="crashlytics_opt_in_desc">Sends crash and freeze reports (app version, phone model, Android version, error location). Never amounts, names or messages.</string>
     <string name="btn_test_crash">Test Crash (Debug/Beta)</string>
