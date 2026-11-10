@@ -43,7 +43,7 @@ Agents developing on this codebase must adhere strictly to these engineering sta
     * Paytm (`net.one97.paytm`)
     * System SMS / Bank debit alerts
 * **Strict Privacy Rule:** Under no circumstances should the service read, log, cache, or inspect notifications from personal messaging apps (WhatsApp, Telegram, Signal) or OTP authentication messages.
-* **Data Transit:** Financial notification payloads must only be parsed locally on device and committed to the user's private Google Sheet. Never transmit parsed data to third-party servers.
+* **Data Transit:** Financial notification payloads must only be parsed locally on device and committed to the user's private Google Sheet. Never transmit parsed data to third-party servers. When the user has explicitly opted in, crash and freeze reports containing technical data only (app version, device model, Android OS level, error location) may be sent to Firebase Crashlytics; such reports must never include transaction amounts, payees, account names, or notification message text.
 
 ### C. Split Logic & Accounting Mathematics
 The application must faithfully reproduce the proven iOS split calculations:
@@ -96,4 +96,6 @@ The application must faithfully reproduce the proven iOS split calculations:
 5. **Reviewer Handoff Channel:**
    * At the start of every task, call `read_inbox` on the `finance-handoff` MCP server (or read `docs/handoff/TO_AGENT.md` if the tool is unavailable) and follow it.
    * At the end of every task, call `post_report` with the report (or overwrite `docs/handoff/FROM_AGENT.md`). Setup is in `tools/handoff-mcp/README.md`.
+6. **Pull Request Merging Rule:**
+   * Agents must never merge a pull request without explicit approval from the reviewer. Creating and pushing a PR is permitted, but merging is strictly forbidden until approved.
 

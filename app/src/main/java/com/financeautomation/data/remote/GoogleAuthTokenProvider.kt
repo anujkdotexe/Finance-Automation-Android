@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
@@ -163,10 +164,10 @@ class GoogleAuthTokenProvider(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     CHANNEL_AUTH_ALERTS,
-                    "Drive Sync Authentication",
+                    context.getString(R.string.notification_channel_auth_name),
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
-                    description = "Alerts when Google Drive sync authorization requires renewal"
+                    description = context.getString(R.string.notification_channel_auth_desc)
                 }
                 notificationManager.createNotificationChannel(channel)
             }
@@ -191,8 +192,8 @@ class GoogleAuthTokenProvider(
 
             val notification = NotificationCompat.Builder(context, CHANNEL_AUTH_ALERTS)
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .setContentTitle("Reconnect Google Drive sync")
-                .setContentText("Tap to authorize Google Drive sync and resume queued operations")
+                .setContentTitle(context.getString(R.string.notif_auth_reconnect_title))
+                .setContentText(context.getString(R.string.notif_auth_reconnect_text))
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setContentIntent(pendingIntent)
