@@ -7,6 +7,7 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * State holder and action coordinator for the floating Quick Log sheet.
@@ -55,49 +57,23 @@ class QuickLogViewModel(
     val uiState: StateFlow<QuickLogUiState> = _uiState.asStateFlow()
 
     init {
-        observeCompanions()
-        observeCategories()
-        observeAccounts()
-        observeActiveTripTag()
-    }
-
-    private fun observeCompanions() {
         viewModelScope.launch(ioDispatcher) {
-            peopleRepository.getCompanions().collect { companions ->
-                _uiState.update { it.copy(availableCompanions = companions) }
-            }
-        }
-    }
-
-    private fun observeCategories() {
-        viewModelScope.launch(ioDispatcher) {
-            categoryRepository.getCategories().collect { categories ->
-                _uiState.update { it.copy(availableCategories = categories) }
-                refreshPredictedCategories(_uiState.value.payee)
-            }
-        }
-    }
-
-    private fun observeAccounts() {
-        viewModelScope.launch(ioDispatcher) {
-            accountRepository.getAccounts().collect { accounts ->
-                _uiState.update { current ->
-                    val acc = if (accounts.any { it.name.equals(current.selectedAccount, ignoreCase = true) }) {
-                        current.selectedAccount
-                    } else {
-                        accounts.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_SBI
-                    }
-                    current.copy(availableAccounts = accounts, selectedAccount = acc)
+            launch { peopleRepository.getCompanions().collect { c -> _uiState.update { it.copy(availableCompanions = c) } } }
+            launch {
+                categoryRepository.getCategories().collect { cats ->
+                    _uiState.update { it.copy(availableCategories = cats) }
+                    refreshPredictedCategories(_uiState.value.payee)
                 }
             }
-        }
-    }
-
-    private fun observeActiveTripTag() {
-        viewModelScope.launch(ioDispatcher) {
-            tripTagRepository.getActiveTag().collect { activeTag ->
-                _uiState.update { it.copy(activeTripTag = activeTag) }
+            launch {
+                accountRepository.getAccounts().collect { accs ->
+                    _uiState.update { curr ->
+                        val acc = if (accs.any { it.name.equals(curr.selectedAccount, ignoreCase = true) }) curr.selectedAccount else accs.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_SBI
+                        curr.copy(availableAccounts = accs, selectedAccount = acc)
+                    }
+                }
             }
+            launch { tripTagRepository.getActiveTag().collect { t -> _uiState.update { it.copy(activeTripTag = t) } } }
         }
     }
 
@@ -110,7 +86,7 @@ class QuickLogViewModel(
                 val dao = pendingCaptureDaoProvider.invoke()
                 val capture = dao.getById(captureId) ?: return@launch
                 val amountVal = capture.amount ?: 0.0
-                val amountStr = if (amountVal > 0.0) String.format(java.util.Locale.US, "%.2f", amountVal) else ""
+                val amountStr = formatAmountInput(amountVal)
                 val isNeedsAmount = capture.flags.contains(PendingCaptureEntity.FLAG_NEEDS_AMOUNT) || amountVal <= 0.0
                 val isPossibleDup = capture.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
 
@@ -139,30 +115,15 @@ class QuickLogViewModel(
     private fun refreshPredictedCategories(payee: String) {
         viewModelScope.launch(ioDispatcher) {
             try {
-                val statDao = categoryStatDaoProvider?.invoke()
-                val categories = _uiState.value.availableCategories
-                if (statDao == null || categories.isEmpty()) return@launch
-
-                val key = predictCategoryUseCase.computePayeeKey(payee)
-                val statsForPayee = statDao.getStatsForPayee(key).map { it.category }
-                val globalCategories = statDao.getGlobalCategoryRank()
-                val configuredNames = categories.map { it.name }
-
-                val rankedNames = predictCategoryUseCase(payee, statsForPayee, globalCategories, configuredNames)
-                val nameToCategory = categories.associateBy { it.name.lowercase() }
-                val reordered = rankedNames.mapNotNull { nameToCategory[it.lowercase()] }
-                val firstChoice = rankedNames.firstOrNull() ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
-
-                _uiState.update { current ->
-                    current.copy(
-                        availableCategories = if (reordered.isNotEmpty()) reordered else current.availableCategories,
-                        selectedCategory = if (current.selectedCategory == CategoryConstants.CATEGORY_FOOD_AND_DRINK || !current.availableCategories.any { it.name.equals(current.selectedCategory, ignoreCase = true) }) {
-                            firstChoice
-                        } else {
-                            current.selectedCategory
-                        }
-                    )
-                }
+                val current = _uiState.value
+                val ranked = QuickLogCategoryRanker.rankCategories(
+                    payee = payee,
+                    categories = current.availableCategories,
+                    currentSelected = current.selectedCategory,
+                    statDaoProvider = categoryStatDaoProvider,
+                    predictCategoryUseCase = predictCategoryUseCase
+                ) ?: return@launch
+                _uiState.update { it.copy(availableCategories = ranked.first, selectedCategory = ranked.second) }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: refreshPredictedCategories")
@@ -297,67 +258,47 @@ class QuickLogViewModel(
             return
         }
 
+        val txnId = state.transactionId
+        if (txnId != null) {
+            _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    when (val res = QuickLogTransactionHelper.updateExisting(txnId, state, transactionRepository)) {
+                        is Result.Success -> {
+                            _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = "Updated") }
+                            onSaved("Updated")
+                        }
+                        is Result.Error -> {
+                            _uiState.update { it.copy(isSaving = false, errorMessage = res.message) }
+                        }
+                        is Result.Loading -> Unit
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: updateTransaction")
+                    _uiState.update { it.copy(isSaving = false, errorMessage = "Update failed: ${e.message}") }
+                }
+            }
+            return
+        }
+
         _uiState.update { it.copy(isSaving = true, errorMessage = null) }
         viewModelScope.launch(ioDispatcher) {
             try {
-                val selectedCompanions = state.availableCompanions
-                    .filter { state.selectedCompanionIds.contains(it.id) }
-                    .map { it.name }
-
-                val result = logExpenseUseCase(
-                    amount = state.amount,
-                    merchant = state.payee.ifBlank { "Expense" },
-                    category = state.selectedCategory,
-                    account = state.selectedAccount,
-                    splitMode = state.splitMode,
-                    companions = selectedCompanions,
-                    customShare = state.customShare,
-                    tripTag = state.activeTripTag?.name ?: "",
-                    sourcePackage = state.sourcePackage,
-                    timestamp = System.currentTimeMillis(),
-                    reviewState = ReviewState.CONFIRMED
-                )
-
-                when (result) {
+                when (val result = QuickLogTransactionHelper.logNewExpense(
+                    state = state,
+                    logExpenseUseCase = logExpenseUseCase,
+                    pendingCaptureDaoProvider = pendingCaptureDaoProvider,
+                    categoryStatDaoProvider = categoryStatDaoProvider,
+                    predictCategoryUseCase = predictCategoryUseCase
+                )) {
                     is Result.Success -> {
-                        // Mark capture DONE
-                        state.captureId?.let { cid ->
-                            try {
-                                pendingCaptureDaoProvider.invoke().updateState(
-                                    cid,
-                                    PendingCaptureEntity.STATE_DONE
-                                )
-                            } catch (e: Exception) {
-                                if (e is CancellationException) throw e
-                                Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: updateState DONE")
-                            }
-                        }
-
-                        // Update category stats (Phase 5.4 point 4)
-                        try {
-                            val statDao = categoryStatDaoProvider?.invoke()
-                            if (statDao != null) {
-                                val key = predictCategoryUseCase.computePayeeKey(state.payee)
-                                statDao.incrementStat(key, state.selectedCategory, System.currentTimeMillis())
-                            }
-                        } catch (statEx: Exception) {
-                            if (statEx is CancellationException) throw statEx
-                            Diagnostics.record("QuickLogViewModel", "${statEx.javaClass.simpleName}: incrementStat")
-                        }
-
                         val message = "Saved, will sync"
-                        _uiState.update {
-                            it.copy(isSaving = false, isSaved = true, resultMessage = message)
-                        }
+                        _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = message) }
                         onSaved(message)
                     }
                     is Result.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isSaving = false,
-                                errorMessage = result.message
-                            )
-                        }
+                        _uiState.update { it.copy(isSaving = false, errorMessage = result.message) }
                     }
                     is Result.Loading -> Unit
                 }
@@ -367,6 +308,85 @@ class QuickLogViewModel(
                 _uiState.update { it.copy(isSaving = false, errorMessage = "Save failed: ${e.message}") }
             }
         }
+    }
+
+    /**
+     * Loads an existing transaction for review and correction (Design Guide 5.3 & 5.5).
+     */
+    fun loadTransaction(txnId: String) {
+        if (txnId.isBlank()) return
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val txn = transactionRepository.getTransactionById(txnId) ?: return@launch
+                val companionsList = if (txn.companions.isNotBlank() && txn.companions != "Personal") {
+                    txn.companions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                } else emptyList()
+
+                val matchedIds = QuickLogTransactionHelper.matchOrInsertCompanions(
+                    companionsList, _uiState.value.availableCompanions, peopleRepository
+                )
+                val determinedMode = QuickLogTransactionHelper.determineSplitMode(
+                    txn.companions, txn.owedToMe, txn.totalAmount, txn.myShare, companionsList
+                )
+
+                _uiState.update { current ->
+                    current.copy(
+                        transactionId = txn.id,
+                        amount = txn.totalAmount,
+                        amountText = formatAmountInput(txn.totalAmount),
+                        payee = txn.merchant,
+                        selectedCategory = txn.category,
+                        selectedAccount = txn.account,
+                        splitMode = determinedMode,
+                        selectedCompanionIds = matchedIds,
+                        customShare = if (determinedMode == SplitMode.CUSTOM) txn.myShare else null,
+                        customShareText = if (determinedMode == SplitMode.CUSTOM) formatAmountInput(txn.myShare) else "",
+                        myShare = txn.myShare,
+                        owedToMe = txn.owedToMe,
+                        isPossibleDuplicate = txn.isPossibleDuplicate,
+                        isSaved = false,
+                        isVoided = false,
+                        errorMessage = null
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: loadTransaction")
+            }
+        }
+    }
+
+    /**
+     * Voids the active transaction non-destructively (Design Guide 5.3).
+     */
+    fun onVoid(onVoided: () -> Unit = {}) {
+        val txnId = _uiState.value.transactionId ?: return
+        _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                when (val res = transactionRepository.voidTransaction(txnId)) {
+                    is Result.Success -> {
+                        _uiState.update { it.copy(isSaving = false, isVoided = true) }
+                        onVoided()
+                    }
+                    is Result.Error -> {
+                        _uiState.update { it.copy(isSaving = false, errorMessage = res.message ?: "Failed to void") }
+                    }
+                    is Result.Loading -> Unit
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onVoid")
+                _uiState.update { it.copy(isSaving = false, errorMessage = "Void failed: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Resets state for a clean prompt cycle.
+     */
+    fun clearState() {
+        _uiState.value = QuickLogUiState()
     }
 
     /**
