@@ -99,6 +99,7 @@ class SetupHealthViewModel(
                 )
 
                 val hasMissing = items.any { it.status == HealthStatus.MISSING }
+                com.financeautomation.service.NotificationAccessAlertManager.checkAndSyncAlert(context)
 
                 _uiState.update {
                     it.copy(

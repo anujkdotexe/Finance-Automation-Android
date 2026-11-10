@@ -13,6 +13,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -35,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.FinanceApplication
 import com.financeautomation.presentation.components.ExpenseBottomSheet
+import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.screens.DashboardScreen
 import com.financeautomation.presentation.screens.OnboardingScreen
 import com.financeautomation.presentation.screens.ReviewInboxScreen
@@ -45,6 +48,8 @@ import com.financeautomation.presentation.viewmodel.ExpenseViewModel
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
+import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
+import com.financeautomation.presentation.viewmodel.SetupHealthViewModelFactory
 import androidx.compose.runtime.collectAsState
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -120,6 +125,20 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private val setupHealthViewModel: SetupHealthViewModel by viewModels {
+        val app = application as FinanceApplication
+        SetupHealthViewModelFactory(
+            context = applicationContext,
+            preferencesRepository = app.appContainer.preferencesRepository,
+            ioDispatcher = app.appContainer.ioDispatcher
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        setupHealthViewModel.refreshChecks()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -147,6 +166,8 @@ class MainActivity : ComponentActivity() {
                             dashboardViewModel = dashboardViewModel,
                             expenseViewModel = expenseViewModel,
                             settingsViewModel = settingsViewModel,
+                            setupHealthViewModel = setupHealthViewModel,
+                            overlayControllerProvider = { app.appContainer.overlayController },
                             onReRunSetup = { forceOnboarding = true }
                         )
                     }
@@ -163,11 +184,14 @@ fun MainScreen(
     dashboardViewModel: DashboardViewModel,
     expenseViewModel: ExpenseViewModel,
     settingsViewModel: SettingsViewModel,
+    setupHealthViewModel: SetupHealthViewModel,
+    overlayControllerProvider: () -> OverlayController,
     onReRunSetup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentDestination by remember { mutableStateOf(MainNavDestination.INBOX) }
     var showManualAddSheet by remember { mutableStateOf(false) }
+    val healthState by setupHealthViewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -218,15 +242,25 @@ fun MainScreen(
                             )
                         },
                         icon = {
-                            Icon(
-                                imageVector = when (destination) {
-                                    MainNavDestination.INBOX -> Icons.Rounded.ReceiptLong
-                                    MainNavDestination.DASHBOARD -> Icons.Rounded.Dashboard
-                                    MainNavDestination.SETTINGS -> Icons.Rounded.Tune
-                                },
-                                contentDescription = destination.label,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            if (destination == MainNavDestination.SETTINGS && healthState.hasMissing) {
+                                BadgedBox(badge = { Badge() }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Tune,
+                                        contentDescription = destination.label,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = when (destination) {
+                                        MainNavDestination.INBOX -> Icons.Rounded.ReceiptLong
+                                        MainNavDestination.DASHBOARD -> Icons.Rounded.Dashboard
+                                        MainNavDestination.SETTINGS -> Icons.Rounded.Tune
+                                    },
+                                    contentDescription = destination.label,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -282,6 +316,8 @@ fun MainScreen(
             MainNavDestination.SETTINGS -> {
                 SettingsScreen(
                     viewModel = settingsViewModel,
+                    setupHealthViewModel = setupHealthViewModel,
+                    overlayControllerProvider = overlayControllerProvider,
                     onReRunSetup = onReRunSetup,
                     modifier = Modifier.padding(innerPadding)
                 )

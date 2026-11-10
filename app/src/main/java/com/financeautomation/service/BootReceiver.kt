@@ -36,6 +36,9 @@ class BootReceiver : BroadcastReceiver() {
                 NotificationListenerServiceImpl.rebindService(context)
             }
 
+            // 1b. Check and sync persistent alert if notification access is missing (Phase 7.4)
+            NotificationAccessAlertManager.checkAndSyncAlert(context)
+
             // 2. Re-enqueue all periodic WorkManager tasks
             MonthlyRolloverWorker.schedule(context)
             NotificationListenerHealthWorker.schedule(context)
