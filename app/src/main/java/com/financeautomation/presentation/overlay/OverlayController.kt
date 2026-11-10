@@ -38,6 +38,7 @@ import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.flows.OpenDebtItem
+import kotlinx.coroutines.CompletableDeferred
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
@@ -108,8 +109,13 @@ class OverlayController(
      * Returns true if displayed or queued, false if blocked by missing permissions or active presentation.
      */
     fun show(request: OverlayRequest): Boolean {
+        return showInternal(request, null)
+    }
+
+    private fun showInternal(request: OverlayRequest, completion: CompletableDeferred<Boolean>?): Boolean {
         if (!Settings.canDrawOverlays(appContext)) {
             Diagnostics.record("OverlayController", "show: SYSTEM_ALERT_WINDOW permission missing")
+            completion?.complete(false)
             return false
         }
 
@@ -187,8 +193,12 @@ class OverlayController(
                         viewModel.loadCapture(request.captureId)
                         OverlayFlowScreen.EXPENSE
                     }
-                    is OverlayRequest.ManualExpense, is OverlayRequest.SelfTest -> {
+                    is OverlayRequest.ManualExpense -> {
                         viewModel.setManualMode()
+                        OverlayFlowScreen.EXPENSE
+                    }
+                    is OverlayRequest.SelfTest -> {
+                        viewModel.setSelfTestMode()
                         OverlayFlowScreen.EXPENSE
                     }
                     is OverlayRequest.SpecificFlow -> {
@@ -243,9 +253,14 @@ class OverlayController(
                                         openDebts = openDebtsState.value,
                                         onPersonChanged = ::loadOpenDebtsForPerson,
                                         onConfirmExpense = {
-                                            viewModel.onConfirmAndSave { message ->
+                                            if (request is OverlayRequest.SelfTest) {
                                                 dismiss()
-                                                resultPill.show(message)
+                                                resultPill.show("Self-test completed (not saved)")
+                                            } else {
+                                                viewModel.onConfirmAndSave { message ->
+                                                    dismiss()
+                                                    resultPill.show(message)
+                                                }
                                             }
                                         },
                                         onConfirmIncome = actionDispatcher::confirmIncome,
@@ -259,7 +274,8 @@ class OverlayController(
                                         },
                                         onKeyboardFocusChanged = { hasFocus ->
                                             setKeyboardFocus(hasFocus)
-                                        }
+                                        },
+                                        isTestMode = (request is OverlayRequest.SelfTest)
                                     )
                                 }
                             }
@@ -271,8 +287,10 @@ class OverlayController(
                 windowManager.addView(composeView, layoutParams)
                 currentView = composeView
                 _isShowingFlow.value = true
+                completion?.complete(true)
             } catch (e: Exception) {
                 showRequested.set(false)
+                completion?.complete(false)
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: show failed")
                 val failedCaptureId = currentCaptureId
@@ -357,12 +375,18 @@ class OverlayController(
 
     /**
      * Self-test simulation of the Quick Log sheet (Spec 7.4).
-     * Returns true if addView succeeded.
+     * Awaits addView completion and returns true if window was successfully added.
      */
-    fun showSelfTest(): Boolean {
+    suspend fun showSelfTest(): Boolean {
         if (!Settings.canDrawOverlays(appContext)) return false
-        show(OverlayRequest.SelfTest)
-        return true
+        val deferred = CompletableDeferred<Boolean>()
+        val initiated = showInternal(OverlayRequest.SelfTest, deferred)
+        if (!initiated) return false
+        return try {
+            deferred.await()
+        } catch (_: Exception) {
+            false
+        }
     }
 
     companion object {

@@ -193,6 +193,28 @@ class QuickLogViewModel(
         refreshPredictedCategories("")
     }
 
+    /**
+     * Initializes self-test mode with sample expense data and no pending capture (Spec 7.4).
+     * Does not reference any whitelisted package or write to persistent storage.
+     */
+    fun setSelfTestMode() {
+        _uiState.update {
+            it.copy(
+                captureId = null,
+                sourcePackage = "selftest",
+                amountText = "250",
+                amount = 250.0,
+                payee = "Coffee House (Self-Test)",
+                selectedCategory = "Food & Drink",
+                isNeedsAmount = false,
+                isPossibleDuplicate = false,
+                isSaved = false,
+                isDismissed = false
+            )
+        }
+        recalculateSplit()
+    }
+
     fun onAmountChanged(text: String) {
         val sanitized = text.filter { it.isDigit() || it == '.' }
         val parsed = sanitized.toDoubleOrNull() ?: 0.0

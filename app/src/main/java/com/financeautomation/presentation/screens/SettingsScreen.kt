@@ -81,8 +81,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
+import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
 
 /**
  * Modernized Settings and Configuration screen supporting 100% config-driven customization.
@@ -91,6 +93,8 @@ import com.financeautomation.presentation.viewmodel.SettingsViewModel
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    setupHealthViewModel: SetupHealthViewModel? = null,
+    overlayControllerProvider: (() -> OverlayController)? = null,
     onReRunSetup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -116,6 +120,8 @@ fun SettingsScreen(
     ) { innerPadding ->
         SettingsContent(
             state = state,
+            setupHealthViewModel = setupHealthViewModel,
+            overlayControllerProvider = overlayControllerProvider,
             onReRunSetup = onReRunSetup,
             onSignOut = viewModel::onGoogleSignOut,
             onSpreadsheetIdChanged = viewModel::onSpreadsheetIdChanged,
@@ -147,6 +153,8 @@ fun SettingsScreen(
 @Composable
 fun SettingsContent(
     state: SettingsUiState,
+    setupHealthViewModel: SetupHealthViewModel? = null,
+    overlayControllerProvider: (() -> OverlayController)? = null,
     onReRunSetup: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onSpreadsheetIdChanged: (String) -> Unit,
@@ -194,6 +202,15 @@ fun SettingsContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // --- Card -0.5: Setup Health & System Hardening (Phase 7.1 - 7.4) ---
+        setupHealthViewModel?.let { healthVm ->
+            SetupHealthCard(
+                viewModel = healthVm,
+                overlayControllerProvider = overlayControllerProvider,
+                onNavigateGoogleSignIn = onReRunSetup
+            )
+        }
+
         // --- Card 0: Google Sign-In & Automated Drive Provisioning ---
         SettingsCard(
             title = "Google Identity & Master Ledger",
@@ -698,6 +715,9 @@ fun SettingsContent(
                 steps = 8
             )
         }
+
+        // --- Card 7: Advanced Diagnostics Log (Phase 7.4) ---
+        AdvancedDiagnosticsCard()
     }
 
     // Rename Companion Dialog
