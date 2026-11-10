@@ -133,19 +133,38 @@ class OverlayController(
                 )
                 val viewModel = ViewModelProvider(treeOwners, viewModelFactory)[QuickLogViewModel::class.java]
 
-                when (request) {
-                    is OverlayRequest.Capture -> viewModel.loadCapture(request.captureId)
-                    is OverlayRequest.ManualExpense -> viewModel.setManualMode()
-                    is OverlayRequest.ChooseAction -> viewModel.setManualMode()
-                    is OverlayRequest.SelfTest -> viewModel.setManualMode()
-                    is OverlayRequest.SpecificFlow -> viewModel.setManualMode()
+                val accounts = accountRepository.getAllAccounts()
+                val companions = peopleRepository.getAllCompanions()
+                val activeTripTag = tripTagRepository.getActiveTagSync()
+
+                val initialScreen = when (request) {
+                    is OverlayRequest.ChooseAction -> OverlayFlowScreen.MENU
+                    is OverlayRequest.Capture -> {
+                        viewModel.loadCapture(request.captureId)
+                        OverlayFlowScreen.EXPENSE
+                    }
+                    is OverlayRequest.ManualExpense, is OverlayRequest.SelfTest -> {
+                        viewModel.setManualMode()
+                        OverlayFlowScreen.EXPENSE
+                    }
+                    is OverlayRequest.SpecificFlow -> {
+                        when (request.flowType.uppercase()) {
+                            "INCOME_RETURN" -> OverlayFlowScreen.INCOME_RETURN
+                            "FRIEND_PAID" -> OverlayFlowScreen.FRIEND_PAID
+                            "REPAID_FRIEND" -> OverlayFlowScreen.REPAID_FRIEND
+                            "TRIP_MODE" -> OverlayFlowScreen.TRIP_MODE
+                            else -> {
+                                viewModel.setManualMode()
+                                OverlayFlowScreen.EXPENSE
+                            }
+                        }
+                    }
                 }
 
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
                         FinanceAutomationTheme {
-                            val state by viewModel.uiState.collectAsState()
                             var isVisible by remember { mutableStateOf(false) }
 
                             LaunchedEffect(Unit) {
@@ -171,48 +190,32 @@ class OverlayController(
                                     enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                                     exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                                 ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .navigationBarsPadding()
-                                            .displayCutoutPadding()
-                                            .padding(horizontal = 14.dp, vertical = 12.dp)
-                                            .heightIn(max = 580.dp)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) { /* consume clicks to prevent backdrop dismissal */ },
-                                        shape = RoundedCornerShape(32.dp),
-                                        color = MaterialTheme.colorScheme.surface,
-                                        tonalElevation = 6.dp,
-                                        shadowElevation = 24.dp
-                                    ) {
-                                        QuickLogSheet(
-                                            state = state,
-                                            onAmountChanged = viewModel::onAmountChanged,
-                                            onPayeeChanged = viewModel::onPayeeChanged,
-                                            onAccountSelected = viewModel::onAccountSelected,
-                                            onCategorySelected = viewModel::onCategorySelected,
-                                            onSplitModeChanged = viewModel::onSplitModeChanged,
-                                            onCompanionToggled = viewModel::onCompanionToggled,
-                                            onAddCompanion = viewModel::onAddNewCompanion,
-                                            onCustomShareChanged = viewModel::onCustomShareChanged,
-                                            onEndTrip = viewModel::onEndTrip,
-                                            onConfirmAndSave = {
-                                                viewModel.onConfirmAndSave { message ->
-                                                    dismiss()
-                                                    resultPill.show(message)
-                                                }
-                                            },
-                                            onDismiss = {
-                                                viewModel.onDismiss()
+                                    OverlayContentHost(
+                                        initialScreen = initialScreen,
+                                        quickLogViewModel = viewModel,
+                                        accounts = accounts,
+                                        companions = companions,
+                                        activeTripTag = activeTripTag,
+                                        openDebts = emptyList(),
+                                        onConfirmExpense = {
+                                            viewModel.onConfirmAndSave { message ->
                                                 dismiss()
-                                            },
-                                            onKeyboardFocusChanged = { hasFocus ->
-                                                setKeyboardFocus(hasFocus)
+                                                resultPill.show(message)
                                             }
-                                        )
-                                    }
+                                        },
+                                        onConfirmIncome = ::handleConfirmIncome,
+                                        onConfirmFriendPaid = ::handleConfirmPayable,
+                                        onConfirmRepaid = ::handleConfirmRepaid,
+                                        onStartTrip = ::handleStartTrip,
+                                        onEndTrip = ::handleEndTrip,
+                                        onDismiss = {
+                                            viewModel.onDismiss()
+                                            dismiss()
+                                        },
+                                        onKeyboardFocusChanged = { hasFocus ->
+                                            setKeyboardFocus(hasFocus)
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -225,6 +228,64 @@ class OverlayController(
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: show failed")
+            }
+        }
+    }
+
+    private fun handleConfirmIncome(
+        amount: Double,
+        account: String,
+        inflowType: String,
+        settler: String,
+        reason: String,
+        explicitRefs: List<String>
+    ) {
+        mainScope.launch(ioDispatcher) {
+            val res = transactionRepository.logCredit(settler, amount, explicitRefs, account, inflowType, reason)
+            mainScope.launch {
+                dismiss()
+                resultPill.show(if (res is com.financeautomation.core.model.Result.Success) "Saved, will sync" else "Failed to record income")
+            }
+        }
+    }
+
+    private fun handleConfirmPayable(amount: Double, creditor: String, whatFor: String) {
+        mainScope.launch(ioDispatcher) {
+            val res = transactionRepository.logPayable(creditor, amount, whatFor)
+            mainScope.launch {
+                dismiss()
+                resultPill.show(if (res is com.financeautomation.core.model.Result.Success) "Saved, will sync" else "Failed to record payable")
+            }
+        }
+    }
+
+    private fun handleConfirmRepaid(amount: Double, person: String, timestamp: Long) {
+        mainScope.launch(ioDispatcher) {
+            val res = transactionRepository.logRepayment(person, amount, null, timestamp)
+            mainScope.launch {
+                dismiss()
+                resultPill.show(if (res is com.financeautomation.core.model.Result.Success) "Saved, will sync" else "Failed to record repayment")
+            }
+        }
+    }
+
+    private fun handleStartTrip(tagName: String) {
+        mainScope.launch(ioDispatcher) {
+            val tag = tripTagRepository.getTagByName(tagName) ?: tripTagRepository.insertTripTag(tagName)
+            tripTagRepository.setActiveTag(tag.id)
+            mainScope.launch {
+                dismiss()
+                resultPill.show("Trip '$tagName' started")
+            }
+        }
+    }
+
+    private fun handleEndTrip() {
+        mainScope.launch(ioDispatcher) {
+            tripTagRepository.setActiveTag(null)
+            mainScope.launch {
+                dismiss()
+                resultPill.show("Trip ended")
             }
         }
     }

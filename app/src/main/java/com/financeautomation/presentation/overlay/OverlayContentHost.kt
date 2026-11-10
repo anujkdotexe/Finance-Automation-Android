@@ -1,0 +1,186 @@
+package com.financeautomation.presentation.overlay
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.financeautomation.domain.model.Account
+import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.TripTag
+import com.financeautomation.presentation.components.QuickLogSheet
+import com.financeautomation.presentation.flows.ChooseActionMenu
+import com.financeautomation.presentation.flows.FriendPaidFlowSheet
+import com.financeautomation.presentation.flows.IncomeReturnFlowSheet
+import com.financeautomation.presentation.flows.OpenDebtItem
+import com.financeautomation.presentation.flows.RepaidFriendFlowSheet
+import com.financeautomation.presentation.flows.TripModeFlowSheet
+import com.financeautomation.presentation.viewmodel.QuickLogViewModel
+
+/**
+ * Screen state machine for overlay flows (Phase 5.6).
+ */
+enum class OverlayFlowScreen {
+    MENU,
+    EXPENSE,
+    INCOME_RETURN,
+    FRIEND_PAID,
+    REPAID_FRIEND,
+    TRIP_MODE
+}
+
+/**
+ * Host composable orchestrating navigation between the Choose Action menu and the five logging flows.
+ */
+@Composable
+fun OverlayContentHost(
+    initialScreen: OverlayFlowScreen,
+    quickLogViewModel: QuickLogViewModel,
+    accounts: List<Account>,
+    companions: List<Companion>,
+    activeTripTag: TripTag?,
+    openDebts: List<OpenDebtItem>,
+    onConfirmExpense: () -> Unit,
+    onConfirmIncome: (amount: Double, account: String, inflowType: String, settler: String, reason: String, explicitRefs: List<String>) -> Unit,
+    onConfirmFriendPaid: (amount: Double, creditor: String, whatFor: String) -> Unit,
+    onConfirmRepaid: (amount: Double, person: String, timestamp: Long) -> Unit,
+    onStartTrip: (tagName: String) -> Unit,
+    onEndTrip: () -> Unit,
+    onDismiss: () -> Unit,
+    onKeyboardFocusChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var currentScreen by remember { mutableStateOf(initialScreen) }
+    val openedFromMenu = remember { initialScreen == OverlayFlowScreen.MENU }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .displayCutoutPadding()
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .heightIn(max = 620.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { /* Consume clicks to prevent backdrop dismissal */ },
+        shape = RoundedCornerShape(32.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 6.dp,
+        shadowElevation = 24.dp
+    ) {
+        AnimatedContent(
+            targetState = currentScreen,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "OverlayFlowAnimation"
+        ) { screen ->
+            when (screen) {
+                OverlayFlowScreen.MENU -> {
+                    ChooseActionMenu(
+                        onSelectExpense = { currentScreen = OverlayFlowScreen.EXPENSE },
+                        onSelectIncome = { currentScreen = OverlayFlowScreen.INCOME_RETURN },
+                        onSelectFriendPaid = { currentScreen = OverlayFlowScreen.FRIEND_PAID },
+                        onSelectRepaid = { currentScreen = OverlayFlowScreen.REPAID_FRIEND },
+                        onSelectTripMode = { currentScreen = OverlayFlowScreen.TRIP_MODE },
+                        onDismiss = onDismiss
+                    )
+                }
+
+                OverlayFlowScreen.EXPENSE -> {
+                    val state by quickLogViewModel.uiState.collectAsState()
+                    QuickLogSheet(
+                        state = state,
+                        onAmountChanged = quickLogViewModel::onAmountChanged,
+                        onPayeeChanged = quickLogViewModel::onPayeeChanged,
+                        onAccountSelected = quickLogViewModel::onAccountSelected,
+                        onCategorySelected = quickLogViewModel::onCategorySelected,
+                        onSplitModeChanged = quickLogViewModel::onSplitModeChanged,
+                        onCompanionToggled = quickLogViewModel::onCompanionToggled,
+                        onAddCompanion = quickLogViewModel::onAddNewCompanion,
+                        onCustomShareChanged = quickLogViewModel::onCustomShareChanged,
+                        onEndTrip = quickLogViewModel::onEndTrip,
+                        onConfirmAndSave = onConfirmExpense,
+                        onDismiss = {
+                            if (openedFromMenu) {
+                                currentScreen = OverlayFlowScreen.MENU
+                            } else {
+                                quickLogViewModel.onDismiss()
+                                onDismiss()
+                            }
+                        },
+                        onKeyboardFocusChanged = onKeyboardFocusChanged
+                    )
+                }
+
+                OverlayFlowScreen.INCOME_RETURN -> {
+                    IncomeReturnFlowSheet(
+                        accounts = accounts,
+                        companions = companions,
+                        openDebts = openDebts,
+                        onBack = {
+                            if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
+                        },
+                        onDismiss = onDismiss,
+                        onConfirm = onConfirmIncome,
+                        onKeyboardFocusChanged = onKeyboardFocusChanged
+                    )
+                }
+
+                OverlayFlowScreen.FRIEND_PAID -> {
+                    FriendPaidFlowSheet(
+                        companions = companions,
+                        onBack = {
+                            if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
+                        },
+                        onDismiss = onDismiss,
+                        onConfirm = onConfirmFriendPaid,
+                        onKeyboardFocusChanged = onKeyboardFocusChanged
+                    )
+                }
+
+                OverlayFlowScreen.REPAID_FRIEND -> {
+                    RepaidFriendFlowSheet(
+                        companions = companions,
+                        onBack = {
+                            if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
+                        },
+                        onDismiss = onDismiss,
+                        onConfirm = onConfirmRepaid,
+                        onKeyboardFocusChanged = onKeyboardFocusChanged
+                    )
+                }
+
+                OverlayFlowScreen.TRIP_MODE -> {
+                    TripModeFlowSheet(
+                        activeTag = activeTripTag,
+                        onBack = {
+                            if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
+                        },
+                        onDismiss = onDismiss,
+                        onStartTrip = onStartTrip,
+                        onEndTrip = onEndTrip,
+                        onKeyboardFocusChanged = onKeyboardFocusChanged
+                    )
+                }
+            }
+        }
+    }
+}
+

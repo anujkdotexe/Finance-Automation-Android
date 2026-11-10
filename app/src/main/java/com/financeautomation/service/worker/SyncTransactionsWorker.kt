@@ -39,7 +39,15 @@ class SyncTransactionsWorker(
             )
         }
 
-        executeSync(repository, runAttemptCount)
+        val syncResult = executeSync(repository, runAttemptCount)
+        if (syncResult is androidx.work.ListenableWorker.Result.Success) {
+            try {
+                app?.appContainer?.peopleListRebuilder?.refresh()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+        syncResult
     }
 
     companion object {
