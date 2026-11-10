@@ -47,11 +47,6 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.core.content.pm.ShortcutInfoCompat
-import androidx.core.content.pm.ShortcutManagerCompat
-import androidx.core.graphics.drawable.IconCompat
-import com.financeautomation.presentation.ui.EntryActivity
-import com.financeautomation.service.QuickLogWidgetProvider
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -328,70 +323,7 @@ fun SettingsContent(
         }
 
         // --- Card 0.75: Home Screen 1-Tap Quick Log Widget ---
-        SettingsCard(
-            title = "Home Screen 1-Tap Widget",
-            subtitle = "1x1 app icon sized widget for instant manual expense logging",
-            icon = Icons.Rounded.Widgets
-        ) {
-            Text(
-                text = "Add a 1x1 Quick Log icon to your Home Screen. Tapping it pops up the Apple prompt sheet directly over your wallpaper without opening the main app.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        val appWidgetManager = context.getSystemService(AppWidgetManager::class.java)
-                        val myProvider = ComponentName(context, QuickLogWidgetProvider::class.java)
-                        if (appWidgetManager != null && appWidgetManager.isRequestPinAppWidgetSupported) {
-                            appWidgetManager.requestPinAppWidget(myProvider, null, null)
-                        }
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = Icons.Rounded.Widgets, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Pin 1x1 Widget")
-                }
-
-                if (ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
-                    Button(
-                        onClick = {
-                            val pinIntent = Intent(context, EntryActivity::class.java).apply {
-                                action = Intent.ACTION_VIEW
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            }
-                            val icon = IconCompat.createWithResource(context, com.financeautomation.R.drawable.ic_quick_log_symbol)
-                            val info = ShortcutInfoCompat.Builder(context, "quick_log")
-                                .setShortLabel(context.getString(com.financeautomation.R.string.quick_log_shortcut_short_label))
-                                .setLongLabel(context.getString(com.financeautomation.R.string.quick_log_shortcut_long_label))
-                                .setIcon(icon)
-                                .setIntent(pinIntent)
-                                .build()
-                            ShortcutManagerCompat.requestPinShortcut(context, info, null)
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(com.financeautomation.R.string.add_as_app_icon_button))
-                    }
-                } else {
-                    Text(
-                        text = stringResource(com.financeautomation.R.string.pin_shortcut_not_supported_explanation),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
+        HomeScreenIconCard()
 
         // --- Card 1: Google Sheets Connection & Cloud Sync ---
         SettingsCard(
