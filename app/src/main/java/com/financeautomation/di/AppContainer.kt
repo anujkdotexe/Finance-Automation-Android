@@ -37,6 +37,7 @@ import com.financeautomation.domain.usecase.CarryForwardUseCase
 import com.financeautomation.domain.usecase.LogExpenseUseCase
 import com.financeautomation.domain.usecase.NettingUseCase
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
+import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.domain.usecase.RegenerateDashboardUseCase
 import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
@@ -87,6 +88,7 @@ interface AppContainer {
     val regenerateDashboardUseCase: RegenerateDashboardUseCase
     val calculateSplitUseCase: CalculateSplitUseCase
     val logExpenseUseCase: LogExpenseUseCase
+    val predictCategoryUseCase: PredictCategoryUseCase
     val nettingUseCase: NettingUseCase
     val settlementWaterfallUseCase: SettlementWaterfallUseCase
     val repaymentWaterfallUseCase: RepaymentWaterfallUseCase
@@ -304,6 +306,10 @@ class DefaultAppContainer(
         )
     }
 
+    override val predictCategoryUseCase: PredictCategoryUseCase by lazy {
+        PredictCategoryUseCase()
+    }
+
     override val nettingUseCase: NettingUseCase by lazy {
         NettingUseCase()
     }
@@ -352,6 +358,8 @@ class DefaultAppContainer(
             tripTagRepository = tripTagRepository,
             pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
+            predictCategoryUseCase = predictCategoryUseCase,
             ioDispatcher = ioDispatcher,
             mainDispatcher = mainDispatcher
         )
@@ -361,6 +369,8 @@ class DefaultAppContainer(
         ForegroundWatcher(
             context = applicationContext,
             pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
+            categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
+            predictCategoryUseCase = predictCategoryUseCase,
             overlayControllerProvider = { overlayController }
         )
     }

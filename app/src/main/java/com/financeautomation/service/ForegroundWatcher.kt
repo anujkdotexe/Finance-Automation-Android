@@ -18,8 +18,10 @@ import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.overlay.OverlayRequest
 import com.financeautomation.presentation.ui.EntryActivity
@@ -45,6 +47,8 @@ class ForegroundWatcher(
     private val context: Context,
     private val directPendingCaptureDao: PendingCaptureDao? = null,
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
+    private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
+    private val predictCategoryUseCase: PredictCategoryUseCase? = null,
     private val overlayControllerProvider: (() -> OverlayController)? = null,
     private val onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
 ) {
@@ -57,6 +61,8 @@ class ForegroundWatcher(
         context = context,
         directPendingCaptureDao = pendingCaptureDao,
         pendingCaptureDaoProvider = null,
+        categoryStatDaoProvider = null,
+        predictCategoryUseCase = null,
         overlayControllerProvider = null,
         onTriggerPrompt = onTriggerPrompt
     )
@@ -70,6 +76,8 @@ class ForegroundWatcher(
         context = context,
         directPendingCaptureDao = null,
         pendingCaptureDaoProvider = pendingCaptureDaoProvider,
+        categoryStatDaoProvider = null,
+        predictCategoryUseCase = null,
         overlayControllerProvider = overlayControllerProvider,
         onTriggerPrompt = onTriggerPrompt
     )
@@ -279,80 +287,13 @@ class ForegroundWatcher(
         }
     }
 
-    private fun postHeadsUpFallback(capture: PendingCaptureEntity) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS,
-                "Financial Alerts",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Expense review and categorization alerts"
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val notificationId = capture.id.hashCode()
-
-        // Details button opens EntryActivity
-        val detailsIntent = Intent(context, EntryActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EntryActivity.EXTRA_CAPTURE_ID, capture.id)
-        }
-        val pendingDetails = PendingIntent.getActivity(
-            context,
-            notificationId,
-            detailsIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    private suspend fun postHeadsUpFallback(capture: PendingCaptureEntity) {
+        ForegroundHeadsUpHelper.postHeadsUpNotification(
+            context = context,
+            capture = capture,
+            categoryStatDaoProvider = categoryStatDaoProvider,
+            predictCategoryUseCase = predictCategoryUseCase
         )
-
-        // Top two category buttons (spec 5.5 point 2)
-        val cat1 = CategoryConstants.CATEGORY_FOOD_AND_DRINK
-        val cat2 = CategoryConstants.CATEGORY_GROCERIES
-
-        val intentCat1 = Intent(context, QuickActionReceiver::class.java).apply {
-            action = QuickActionReceiver.ACTION_QUICK_CATEGORIZE
-            putExtra(QuickActionReceiver.EXTRA_CAPTURE_ID, capture.id)
-            putExtra(QuickActionReceiver.EXTRA_CATEGORY, cat1)
-            putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-        }
-        val pendingCat1 = PendingIntent.getBroadcast(
-            context,
-            notificationId * 10 + 1,
-            intentCat1,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val intentCat2 = Intent(context, QuickActionReceiver::class.java).apply {
-            action = QuickActionReceiver.ACTION_QUICK_CATEGORIZE
-            putExtra(QuickActionReceiver.EXTRA_CAPTURE_ID, capture.id)
-            putExtra(QuickActionReceiver.EXTRA_CATEGORY, cat2)
-            putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-        }
-        val pendingCat2 = PendingIntent.getBroadcast(
-            context,
-            notificationId * 10 + 2,
-            intentCat2,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val amountStr = capture.amount?.let { "₹" + String.format(java.util.Locale.US, "%.2f", it) } ?: "Pending review"
-        val titleText = if (capture.payee.isNotBlank()) capture.payee else "Payment Detected"
-
-        val builder = NotificationCompat.Builder(context, NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS)
-            .setSmallIcon(android.R.drawable.stat_notify_more)
-            .setContentTitle(titleText)
-            .setContentText(amountStr)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setAutoCancel(true)
-            .setContentIntent(pendingDetails)
-            .addAction(0, cat1, pendingCat1)
-            .addAction(0, cat2, pendingCat2)
-            .addAction(0, "Details", pendingDetails)
-
-        notificationManager.notify(notificationId, builder.build())
     }
 
     private fun registerScreenReceiver() {

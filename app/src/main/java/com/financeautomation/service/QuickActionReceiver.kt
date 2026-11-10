@@ -94,6 +94,13 @@ class QuickActionReceiver : BroadcastReceiver() {
                             if (logResult is com.financeautomation.core.model.Result.Success<*>) {
                                 captureDao.updateState(capture.id, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
                                 try {
+                                    val statDao = db.categoryStatDao()
+                                    val key = container.predictCategoryUseCase.computePayeeKey(capture.payee)
+                                    statDao.incrementStat(key, resolvedCategory, System.currentTimeMillis())
+                                } catch (statEx: Exception) {
+                                    Diagnostics.record("QuickActionReceiver", "${statEx.javaClass.simpleName}: incrementStat")
+                                }
+                                try {
                                     SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
                                 } catch (e: Exception) {
                                     Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: enqueueExpedited")

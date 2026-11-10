@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.domain.repository.AccountRepository
@@ -45,9 +46,11 @@ import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
+import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.components.QuickLogSheet
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
+import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -68,6 +71,8 @@ class OverlayController(
     private val tripTagRepository: TripTagRepository,
     private val pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
     private val syncQueueDaoProvider: suspend () -> SyncQueueDao,
+    private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
+    private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
 ) {
@@ -114,7 +119,7 @@ class OverlayController(
                 // Android 12+ Hardware Cross-Window Blur handling
                 setupWindowBlur(layoutParams)
 
-                val viewModelFactory = QuickLogViewModel.provideFactory(
+                val viewModelFactory = QuickLogViewModelFactory(
                     transactionRepository = transactionRepository,
                     peopleRepository = peopleRepository,
                     categoryRepository = categoryRepository,
@@ -122,6 +127,8 @@ class OverlayController(
                     tripTagRepository = tripTagRepository,
                     pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     syncQueueDaoProvider = syncQueueDaoProvider,
+                    categoryStatDaoProvider = categoryStatDaoProvider,
+                    predictCategoryUseCase = predictCategoryUseCase,
                     ioDispatcher = ioDispatcher
                 )
                 val viewModel = ViewModelProvider(treeOwners, viewModelFactory)[QuickLogViewModel::class.java]

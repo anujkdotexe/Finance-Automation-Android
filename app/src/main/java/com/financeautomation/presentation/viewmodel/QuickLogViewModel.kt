@@ -1,14 +1,13 @@
 package com.financeautomation.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
-import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
@@ -23,6 +22,7 @@ import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
 import com.financeautomation.domain.usecase.LogExpenseUseCase
+import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +44,8 @@ class QuickLogViewModel(
     private val tripTagRepository: TripTagRepository,
     private val pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
     private val syncQueueDaoProvider: suspend () -> SyncQueueDao,
+    private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
+    private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -70,16 +72,8 @@ class QuickLogViewModel(
     private fun observeCategories() {
         viewModelScope.launch(ioDispatcher) {
             categoryRepository.getCategories().collect { categories ->
-                _uiState.update { current ->
-                    current.copy(
-                        availableCategories = categories,
-                        selectedCategory = if (categories.any { it.name.equals(current.selectedCategory, ignoreCase = true) }) {
-                            current.selectedCategory
-                        } else {
-                            categories.firstOrNull()?.name ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
-                        }
-                    )
-                }
+                _uiState.update { it.copy(availableCategories = categories) }
+                refreshPredictedCategories(_uiState.value.payee)
             }
         }
     }
@@ -136,9 +130,44 @@ class QuickLogViewModel(
                     )
                 }
                 recalculateSplit()
+                refreshPredictedCategories(capture.payee)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: loadCapture")
+            }
+        }
+    }
+
+    private fun refreshPredictedCategories(payee: String) {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val statDao = categoryStatDaoProvider?.invoke()
+                val categories = _uiState.value.availableCategories
+                if (statDao == null || categories.isEmpty()) return@launch
+
+                val key = predictCategoryUseCase.computePayeeKey(payee)
+                val statsForPayee = statDao.getStatsForPayee(key).map { it.category }
+                val globalCategories = statDao.getGlobalCategoryRank()
+                val configuredNames = categories.map { it.name }
+
+                val rankedNames = predictCategoryUseCase(payee, statsForPayee, globalCategories, configuredNames)
+                val nameToCategory = categories.associateBy { it.name.lowercase() }
+                val reordered = rankedNames.mapNotNull { nameToCategory[it.lowercase()] }
+                val firstChoice = rankedNames.firstOrNull() ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
+
+                _uiState.update { current ->
+                    current.copy(
+                        availableCategories = if (reordered.isNotEmpty()) reordered else current.availableCategories,
+                        selectedCategory = if (current.selectedCategory == CategoryConstants.CATEGORY_FOOD_AND_DRINK || !current.availableCategories.any { it.name.equals(current.selectedCategory, ignoreCase = true) }) {
+                            firstChoice
+                        } else {
+                            current.selectedCategory
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: refreshPredictedCategories")
             }
         }
     }
@@ -161,6 +190,7 @@ class QuickLogViewModel(
             )
         }
         recalculateSplit()
+        refreshPredictedCategories("")
     }
 
     fun onAmountChanged(text: String) {
@@ -172,15 +202,12 @@ class QuickLogViewModel(
 
     fun onPayeeChanged(text: String) {
         _uiState.update { it.copy(payee = text) }
+        refreshPredictedCategories(text)
     }
 
-    fun onAccountSelected(accountName: String) {
-        _uiState.update { it.copy(selectedAccount = accountName) }
-    }
+    fun onAccountSelected(accountName: String) = _uiState.update { it.copy(selectedAccount = accountName) }
 
-    fun onCategorySelected(categoryName: String) {
-        _uiState.update { it.copy(selectedCategory = categoryName) }
-    }
+    fun onCategorySelected(categoryName: String) = _uiState.update { it.copy(selectedCategory = categoryName) }
 
     fun onSplitModeChanged(mode: SplitMode) {
         _uiState.update { it.copy(splitMode = mode) }
@@ -309,6 +336,18 @@ class QuickLogViewModel(
                             }
                         }
 
+                        // Update category stats (Phase 5.4 point 4)
+                        try {
+                            val statDao = categoryStatDaoProvider?.invoke()
+                            if (statDao != null) {
+                                val key = predictCategoryUseCase.computePayeeKey(state.payee)
+                                statDao.incrementStat(key, state.selectedCategory, System.currentTimeMillis())
+                            }
+                        } catch (statEx: Exception) {
+                            if (statEx is CancellationException) throw statEx
+                            Diagnostics.record("QuickLogViewModel", "${statEx.javaClass.simpleName}: incrementStat")
+                        }
+
                         val message = "Saved, will sync"
                         _uiState.update {
                             it.copy(isSaving = false, isSaved = true, resultMessage = message)
@@ -353,37 +392,6 @@ class QuickLogViewModel(
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onDismiss updateState DISMISSED")
-            }
-        }
-    }
-
-    companion object {
-        fun provideFactory(
-            transactionRepository: TransactionRepository,
-            peopleRepository: PeopleRepository,
-            categoryRepository: CategoryRepository,
-            accountRepository: AccountRepository,
-            tripTagRepository: TripTagRepository,
-            pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
-            syncQueueDaoProvider: suspend () -> SyncQueueDao,
-            calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
-            logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return QuickLogViewModel(
-                    transactionRepository = transactionRepository,
-                    peopleRepository = peopleRepository,
-                    categoryRepository = categoryRepository,
-                    accountRepository = accountRepository,
-                    tripTagRepository = tripTagRepository,
-                    pendingCaptureDaoProvider = pendingCaptureDaoProvider,
-                    syncQueueDaoProvider = syncQueueDaoProvider,
-                    calculateSplitUseCase = calculateSplitUseCase,
-                    logExpenseUseCase = logExpenseUseCase,
-                    ioDispatcher = ioDispatcher
-                ) as T
             }
         }
     }
