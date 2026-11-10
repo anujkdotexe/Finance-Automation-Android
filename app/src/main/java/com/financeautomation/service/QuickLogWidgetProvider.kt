@@ -3,8 +3,10 @@ package com.financeautomation.service
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -52,6 +54,19 @@ class QuickLogWidgetProvider : AppWidgetProvider() {
         private const val MAX_SIDE_PX = 512
         private const val CORNER_RADIUS_RATIO = 0.22f
         private const val SYMBOL_SCALE_RATIO = 0.56f
+
+        fun updateAllWidgets(context: Context) {
+            try {
+                val appWidgetManager = AppWidgetManager.getInstance(context) ?: return
+                val componentName = ComponentName(context, QuickLogWidgetProvider::class.java)
+                val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName) ?: return
+                for (id in appWidgetIds) {
+                    updateAppWidget(context, appWidgetManager, id)
+                }
+            } catch (e: Exception) {
+                Diagnostics.record("QuickLogWidgetProvider", "${e.javaClass.simpleName}: updateAllWidgets failed")
+            }
+        }
 
         fun updateAppWidget(
             context: Context,
@@ -116,18 +131,10 @@ class QuickLogWidgetProvider : AppWidgetProvider() {
             val canvas = Canvas(bitmap)
 
             val radius = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val resId = context.resources.getIdentifier(
-                    "system_app_widget_background_radius",
-                    "dimen",
-                    "android"
-                )
-                if (resId > 0) {
-                    try {
-                        context.resources.getDimension(resId)
-                    } catch (_: Exception) {
-                        CORNER_RADIUS_RATIO * side
-                    }
-                } else {
+                try {
+                    context.resources.getDimension(android.R.dimen.system_app_widget_background_radius)
+                } catch (e: Resources.NotFoundException) {
+                    Diagnostics.record("QuickLogWidgetProvider", "${e.javaClass.simpleName}: system_app_widget_background_radius not found")
                     CORNER_RADIUS_RATIO * side
                 }
             } else {
