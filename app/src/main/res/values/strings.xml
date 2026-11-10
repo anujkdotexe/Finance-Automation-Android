@@ -338,6 +338,13 @@
     <string name="placeholder_friend_name">Friend name</string>
     <string name="placeholder_amount_zero">0.00</string>
 
+    <!-- Background Notifications & Channels -->
+    <string name="notif_auth_reconnect_title">Reconnect Google Drive sync</string>
+    <string name="notif_auth_reconnect_text">Tap to authorize Google Drive sync and resume queued operations</string>
+    <string name="notif_payment_detected_title">Payment Detected</string>
+    <string name="notif_expense_tracking_disabled_title">Expense Tracking Disabled</string>
+    <string name="notif_expense_tracking_disabled_text">Notification access was turned off. Tap to re-enable automated capture.</string>
+
     <!-- Plurals -->
     <plurals name="review_pending_count">
         <item quantity="one">%d transaction needs review</item>

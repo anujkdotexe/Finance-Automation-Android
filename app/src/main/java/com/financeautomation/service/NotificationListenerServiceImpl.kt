@@ -15,6 +15,7 @@ import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.financeautomation.FinanceApplication
+import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
@@ -175,7 +176,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_FINANCIAL_ALERTS)
             .setSmallIcon(android.R.drawable.stat_notify_more)
-            .setContentTitle("Payment Detected")
+            .setContentTitle(getString(R.string.notif_payment_detected_title))
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -188,10 +189,10 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_FINANCIAL_ALERTS,
-                "Financial Alerts",
+                getString(R.string.notification_channel_heads_up_name),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Expense review and categorization alerts"
+                description = getString(R.string.notification_channel_heads_up_desc)
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(channel)
