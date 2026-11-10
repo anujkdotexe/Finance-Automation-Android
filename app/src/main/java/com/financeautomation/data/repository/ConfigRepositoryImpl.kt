@@ -2,6 +2,7 @@ package com.financeautomation.data.repository
 
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.safeCall
 import com.financeautomation.data.remote.GoogleSheetsClient
 import com.financeautomation.domain.model.ConfigRow
@@ -59,7 +60,8 @@ class ConfigRepositoryImpl(
 
                 val updatedAt = try {
                     if (updatedStr.isNotBlank()) Instant.parse(updatedStr) else Instant.EPOCH
-                } catch (_: DateTimeParseException) {
+                } catch (e: DateTimeParseException) {
+                    Diagnostics.record("ConfigRepositoryImpl", "parseUpdatedAt: ${e.javaClass.simpleName}")
                     Instant.EPOCH
                 }
 

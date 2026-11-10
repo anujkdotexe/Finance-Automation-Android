@@ -157,6 +157,9 @@ object CompatibilityReportBuilder {
         }
         sb.appendLine("- Last Listener Heartbeat: $heartbeatStr")
         sb.appendLine("- Today Filtered Non-Whitelisted Count: ${data.todayDroppedNonWhitelistedCount}")
+        val capturesCount = data.funnelCounts.filter { it.code == "CREATED_WAITING" || it.code == "AWAITING_SUCCESS" }.sumOf { it.count }
+        val savedCount = data.funnelCounts.filter { it.code == "USER_SAVED" }.sumOf { it.count }
+        sb.appendLine("- Funnel Summary: captures=$capturesCount, saved=$savedCount")
         if (data.funnelCounts.isEmpty()) {
             sb.appendLine("- No funnel events recorded for today.")
         } else {

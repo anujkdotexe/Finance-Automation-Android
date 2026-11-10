@@ -40,12 +40,11 @@ class FinanceApplication : Application() {
         PipelineTrail.initialize(applicationContext, Dispatchers.IO) {
             appContainer.awaitDatabase().pipelineEventDao()
         }
-        val (snapshotA, snapshotB) = DeviceSnapshot.capture(applicationContext)
-        PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
-
-        // 1. Pre-warm database on background thread and resume foreground watcher
+        // 1. Pre-warm database on background thread, record device snapshot, and resume foreground watcher
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val (snapshotA, snapshotB) = DeviceSnapshot.capture(applicationContext)
+                PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
                 val db = appContainer.awaitDatabase()
                 db.openHelper.writableDatabase
                 DeviceSnapshot.updateCrashlyticsSummaries(applicationContext, snapshotA, db.pipelineEventDao())

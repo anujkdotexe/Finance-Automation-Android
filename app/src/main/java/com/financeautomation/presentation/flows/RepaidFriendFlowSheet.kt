@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.presentation.theme.FinanceTheme
 import java.time.LocalDate
@@ -217,7 +218,8 @@ fun RepaidFriendFlowSheet(
             onClick = {
                 val timestamp = try {
                     LocalDate.parse(dateText).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-                } catch (_: DateTimeParseException) {
+                } catch (e: DateTimeParseException) {
+                    Diagnostics.record("RepaidFriendFlowSheet", "parseDate: ${e.javaClass.simpleName}")
                     System.currentTimeMillis()
                 }
                 onConfirm(parsedAmount, personName.trim(), timestamp)

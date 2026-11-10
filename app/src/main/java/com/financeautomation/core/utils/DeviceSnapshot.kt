@@ -13,6 +13,7 @@ import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.financeautomation.data.local.dao.PipelineEventDao
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -162,14 +163,16 @@ object DeviceSnapshot {
                 val now = System.currentTimeMillis()
                 val counts = pipelineEventDao.getFunnelCounts(startOfDay, now)
                 for (item in counts) {
-                    if (item.stage == "CAPTURE" || item.code.startsWith("PARSE_OK")) {
+                    if (item.code == PipelineCode.CREATED_WAITING.name || item.code == PipelineCode.AWAITING_SUCCESS.name) {
                         captures += item.count
                     }
-                    if (item.code == "USER_SAVED" || item.code == "SUCCESS" || item.code == "DONE") {
+                    if (item.code == PipelineCode.USER_SAVED.name) {
                         saved += item.count
                     }
                 }
-            } catch (ignored: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("DeviceSnapshot", "funnelCounts: ${e.javaClass.simpleName}")
             }
         }
         val funnelSummary = "captures=$captures,saved=$saved"
