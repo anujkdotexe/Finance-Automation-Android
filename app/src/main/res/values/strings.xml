@@ -98,7 +98,7 @@
     <string name="dashboard_empty_message">Nothing logged yet. Pay with UPI and the prompt will appear, or tap Add expense.</string>
     <string name="dashboard_empty_action">Add expense</string>
     <string name="sync_status_synced_now">Synced just now</string>
-    <string name="sync_status_syncing">Syncing...</string>
+    <string name="sync_status_syncing">Syncing&#8230;</string>
     <string name="sync_status_offline">Offline</string>
     <string name="cd_prev_month">Previous Month</string>
     <string name="cd_next_month">Next Month</string>
@@ -154,10 +154,10 @@
     <string name="onboarding_welcome_desc">Complete the checklist below to set up your personal Google Drive workspace and automated notification interception.</string>
     <string name="onboarding_step1_title">Sign in with Google</string>
     <string name="onboarding_step1_completed">Signed in and authorized for Google Drive sync</string>
-    <string name="onboarding_step1_progress">Authorizing through Google Identity...</string>
+    <string name="onboarding_step1_progress">Authorizing through Google Identity&#8230;</string>
     <string name="onboarding_step1_not_started">Authorizes drive.file scope to manage your master workbook</string>
     <string name="onboarding_step2_title">Creating your finance workspace</string>
-    <string name="onboarding_step2_progress">Locating or provisioning master workbook...</string>
+    <string name="onboarding_step2_progress">Locating or provisioning master workbook&#8230;</string>
     <string name="onboarding_step3_title">Notification listener permission</string>
     <string name="onboarding_step3_completed">Notification listener enabled</string>
     <string name="onboarding_step3_desc">Required to intercept UPI and banking debit alerts in real time</string>
@@ -349,7 +349,7 @@
     <string name="report_title">Compatibility Report</string>
     <string name="report_missed_payment_title">Report Missed Payment</string>
     <string name="report_user_note_label">Optional Note</string>
-    <string name="report_user_note_placeholder">Describe what payment alert or app failed...</string>
+    <string name="report_user_note_placeholder">Describe what payment alert or app failed&#8230;</string>
     <string name="report_action_share">Share Report</string>
     <string name="report_missed_payment_button">A payment did not show a prompt</string>
     <string name="health_generate_report_button">Share Compatibility Report</string>

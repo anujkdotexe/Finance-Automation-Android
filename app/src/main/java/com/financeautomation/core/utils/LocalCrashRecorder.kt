@@ -1,5 +1,6 @@
 package com.financeautomation.core.utils
 
+import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
@@ -72,6 +73,8 @@ object LocalCrashRecorder {
         )
 
         val prefs = getPrefs(context)
+        // Synchronous commit required in uncaught exception handler before process termination
+        @SuppressLint("ApplySharedPref")
         prefs.edit().putString(KEY_LAST_CRASH, json.encodeToString(entry)).commit()
     }
 
