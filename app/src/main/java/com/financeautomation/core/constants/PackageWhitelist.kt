@@ -54,8 +54,17 @@ object PackageWhitelist {
         RegexOption.IGNORE_CASE
     )
 
+    const val PACKAGE_DEBUG_SHELL: String = "com.android.shell"
+    const val PACKAGE_DEBUG_TEST: String = "com.financeautomation.test"
+
     fun isWhitelisted(packageName: String): Boolean {
-        return WHITELISTED_FINANCIAL_PACKAGES.contains(packageName.trim())
+        val trimmed = packageName.trim()
+        if (com.financeautomation.BuildConfig.DEBUG) {
+            if (trimmed == PACKAGE_DEBUG_SHELL || trimmed == PACKAGE_DEBUG_TEST) {
+                return true
+            }
+        }
+        return WHITELISTED_FINANCIAL_PACKAGES.contains(trimmed)
     }
 
     fun isBlacklisted(packageName: String): Boolean {

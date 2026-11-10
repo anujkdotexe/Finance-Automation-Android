@@ -36,10 +36,14 @@ class FinanceApplication : Application() {
             appContainer.configSyncCoordinator.pullOnForeground(force = false)
         }
 
-        // 3. Schedule daily periodic monthly rollover check
+        // 3. Schedule daily periodic monthly rollover check and 6-hour listener health worker
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
+        com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
 
-        // 4. Register process lifecycle observer via ActivityLifecycleCallbacks for foreground pull
+        // 4. Resume foreground watcher for any pending WAITING captures
+        appContainer.foregroundWatcher.checkAndResume(CoroutineScope(Dispatchers.IO))
+
+        // 5. Register process lifecycle observer via ActivityLifecycleCallbacks for foreground pull
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
                 startedActivityCount++

@@ -20,6 +20,9 @@ import com.financeautomation.data.repository.PreferencesRepositoryImpl
 import com.financeautomation.data.repository.TransactionRepositoryImpl
 import com.financeautomation.data.repository.TripTagRepositoryImpl
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.HandledNotificationDao
+import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.service.ForegroundWatcher
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.ConfigRepository
@@ -86,6 +89,9 @@ interface AppContainer {
     val voidTransactionUseCase: VoidTransactionUseCase
     val yearCloseUseCase: YearCloseUseCase
     val accountingSyncExecutor: AccountingSyncExecutor
+    val pendingCaptureDao: PendingCaptureDao
+    val handledNotificationDao: HandledNotificationDao
+    val foregroundWatcher: ForegroundWatcher
 }
 
 /**
@@ -328,6 +334,21 @@ class DefaultAppContainer(
             carryForwardUseCase = carryForwardUseCase,
             nettingUseCase = nettingUseCase,
             yearCloseUseCase = yearCloseUseCase
+        )
+    }
+
+    override val pendingCaptureDao: PendingCaptureDao by lazy {
+        database.pendingCaptureDao()
+    }
+
+    override val handledNotificationDao: HandledNotificationDao by lazy {
+        database.handledNotificationDao()
+    }
+
+    override val foregroundWatcher: ForegroundWatcher by lazy {
+        ForegroundWatcher(
+            context = applicationContext,
+            pendingCaptureDao = pendingCaptureDao
         )
     }
 }
