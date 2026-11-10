@@ -65,6 +65,12 @@ Build and sideload commands:
   - Sideload APK: `adb install -r app/build/outputs/apk/release/app-release-unsigned.apk` (or signed release APK)
   - Build App Bundle: `./gradlew bundleRelease`
 
+Beta update and install-over verification (static checks, no physical device attached):
+- `applicationId`: Shared identically (`com.financeautomation`) across all build types to ensure package identity.
+- `signingConfig`: Beta targets release signing key via `keystore.properties` to ensure update certificate compatibility.
+- Keystore fallback: If `keystore.properties` is missing, beta falls back to the debug key for development; updates over builds signed with a different key will be rejected by Android Package Manager (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+- `versionCode`: Integer increment on each build ensures Android Package Manager applies in-place database retention without data wipe.
+
 ## 3. Build types
 
 | Build type | Signing | Discovery scan | Simulator | Crashlytics |
