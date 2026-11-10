@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -36,7 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.FinanceApplication
-import com.financeautomation.presentation.components.ExpenseBottomSheet
+import com.financeautomation.presentation.components.ExpenseModalBottomSheet
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.screens.DashboardScreen
 import com.financeautomation.presentation.screens.OnboardingScreen
@@ -253,7 +253,7 @@ fun MainScreen(
                             } else {
                                 Icon(
                                     imageVector = when (destination) {
-                                        MainNavDestination.INBOX -> Icons.Rounded.ReceiptLong
+                                        MainNavDestination.INBOX -> Icons.AutoMirrored.Rounded.ReceiptLong
                                         MainNavDestination.DASHBOARD -> Icons.Rounded.Dashboard
                                         MainNavDestination.SETTINGS -> Icons.Rounded.Tune
                                     },
@@ -326,7 +326,7 @@ fun MainScreen(
     }
 
     if (showManualAddSheet) {
-        ExpenseBottomSheet(
+        ExpenseModalBottomSheet(
             viewModel = expenseViewModel,
             onDismiss = { showManualAddSheet = false }
         )
