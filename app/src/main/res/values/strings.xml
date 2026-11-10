@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Finance Automation</string>
-    <string name="quick_add_tile_label">Log Expense</string>
+    <string name="quick_add_tile_label">Quick log</string>
     <string name="notification_channel_heads_up_name">Expense Alerts</string>
     <string name="notification_channel_heads_up_desc">Interactive alerts for intercepted UPI expenses</string>
     <string name="notification_channel_sync_name">Cloud Sync Status</string>
@@ -19,6 +19,14 @@
     <string name="category_travel">Travel</string>
     <string name="category_shopping">Shopping</string>
     <string name="category_uncategorized">Uncategorized</string>
-    <string name="quick_log_widget_label">Quick Log</string>
+    <string name="quick_log_widget_label">Quick log</string>
     <string name="quick_log_widget_desc">Tap to log an expense immediately</string>
+    <string name="home_screen_widget_card_title">Home Screen 1-Tap Widget</string>
+    <string name="home_screen_widget_card_subtitle">1x1 app icon sized widget for instant manual expense logging</string>
+    <string name="home_screen_widget_card_desc">Add a 1x1 Quick Log icon to your Home Screen. Tapping it opens the Quick Log sheet over your current screen.</string>
+    <string name="pin_1x1_widget_button">Pin 1x1 Widget</string>
+    <string name="add_as_app_icon_button">Add as app icon</string>
+    <string name="pin_shortcut_not_supported_explanation">Pinned shortcuts are not supported by your current launcher</string>
+    <string name="quick_log_shortcut_short_label">Quick log</string>
+    <string name="quick_log_shortcut_long_label">Quick log expense</string>
 </resources>
