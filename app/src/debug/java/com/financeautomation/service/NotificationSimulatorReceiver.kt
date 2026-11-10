@@ -30,19 +30,19 @@ class NotificationSimulatorReceiver : BroadcastReceiver() {
 
         val app = context.applicationContext as? FinanceApplication ?: return
         val container = app.appContainer
-        val processor = NotificationProcessor(
-            pendingCaptureDao = container.database.pendingCaptureDao(),
-            handledNotificationDao = container.database.handledNotificationDao(),
-            accountDao = container.database.accountDao(),
-            preferenceDao = container.database.preferenceDao(),
-            repository = container.transactionRepository,
-            parseUseCase = container.parseNotificationUseCase,
-            ownPackageName = context.packageName
-        )
-
         val watcher = container.foregroundWatcher
 
         scope.launch {
+            val db = container.awaitDatabase()
+            val processor = NotificationProcessor(
+                pendingCaptureDao = db.pendingCaptureDao(),
+                handledNotificationDao = db.handledNotificationDao(),
+                accountDao = db.accountDao(),
+                preferenceDao = db.preferenceDao(),
+                repository = container.transactionRepository,
+                parseUseCase = container.parseNotificationUseCase,
+                ownPackageName = context.packageName
+            )
             val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey)
             when (outcome) {
                 is NotificationProcessingOutcome.Captured -> {

@@ -8,88 +8,114 @@ import com.financeautomation.domain.repository.AccountRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 /**
- * Implementation of [AccountRepository] backed by Room SQLite [AccountDao].
+ * Implementation of [AccountRepository] backed by Room SQLite [AccountDao]
+ * or a suspend DAO provider for main-thread safety.
  */
 class AccountRepositoryImpl(
-    private val accountDao: AccountDao,
+    private val accountDao: AccountDao? = null,
+    private val accountDaoProvider: (suspend () -> AccountDao)? = null,
     private val configSyncCoordinator: ConfigSyncCoordinator? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AccountRepository {
 
-    override fun getAccounts(includeArchived: Boolean): Flow<List<Account>> {
-        val flow = if (includeArchived) {
-            accountDao.getAccountsFlow()
+    constructor(
+        accountDao: AccountDao,
+        configSyncCoordinator: ConfigSyncCoordinator? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        accountDao = accountDao,
+        accountDaoProvider = null,
+        configSyncCoordinator = configSyncCoordinator,
+        ioDispatcher = ioDispatcher
+    )
+
+    private suspend fun resolveDao(): AccountDao =
+        accountDao ?: accountDaoProvider?.invoke()
+            ?: throw IllegalStateException("AccountDao or provider must be supplied")
+
+    override fun getAccounts(includeArchived: Boolean): Flow<List<Account>> = flow {
+        val dao = resolveDao()
+        val baseFlow = if (includeArchived) {
+            dao.getAccountsFlow()
         } else {
-            accountDao.getActiveAccountsFlow()
+            dao.getActiveAccountsFlow()
         }
-        return flow.map { entities -> entities.map { it.toDomain() } }
-    }
+        emitAll(baseFlow.map { entities -> entities.map { it.toDomain() } })
+    }.flowOn(ioDispatcher)
 
     override suspend fun getAllAccounts(includeArchived: Boolean): List<Account> = withContext(ioDispatcher) {
+        val dao = resolveDao()
         val entities = if (includeArchived) {
-            accountDao.getAllAccounts()
+            dao.getAllAccounts()
         } else {
-            accountDao.getActiveAccounts()
+            dao.getActiveAccounts()
         }
         entities.map { it.toDomain() }
     }
 
     override suspend fun getAccountById(id: String): Account? = withContext(ioDispatcher) {
-        accountDao.getById(id)?.toDomain()
+        resolveDao().getById(id)?.toDomain()
     }
 
     override suspend fun getAccountByName(name: String): Account? = withContext(ioDispatcher) {
-        accountDao.getByName(name)?.toDomain()
+        resolveDao().getByName(name)?.toDomain()
     }
 
     override suspend fun getDefaultAccount(): Account? = withContext(ioDispatcher) {
-        accountDao.getDefaultAccount()?.toDomain()
+        resolveDao().getDefaultAccount()?.toDomain()
     }
 
     override suspend fun insertAccount(account: Account): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
         if (account.isDefault) {
-            accountDao.clearDefaultFlag()
+            dao.clearDefaultFlag()
         }
-        accountDao.insert(AccountEntity.fromDomain(account))
+        dao.insert(AccountEntity.fromDomain(account))
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun updateAccount(account: Account): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
         if (account.isDefault) {
-            accountDao.clearDefaultFlag()
+            dao.clearDefaultFlag()
         }
-        accountDao.update(AccountEntity.fromDomain(account))
+        dao.update(AccountEntity.fromDomain(account))
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun setDefaultAccount(id: String): Unit = withContext(ioDispatcher) {
-        accountDao.clearDefaultFlag()
-        accountDao.setDefaultFlag(id)
+        val dao = resolveDao()
+        dao.clearDefaultFlag()
+        dao.setDefaultFlag(id)
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun archiveAccount(id: String): Unit = withContext(ioDispatcher) {
-        accountDao.archiveAccount(id)
+        resolveDao().archiveAccount(id)
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun unarchiveAccount(id: String): Unit = withContext(ioDispatcher) {
-        accountDao.unarchiveAccount(id)
+        resolveDao().unarchiveAccount(id)
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun deleteAccount(id: String): Unit = withContext(ioDispatcher) {
-        accountDao.deleteById(id)
+        resolveDao().deleteById(id)
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun reorderAccounts(accountIds: List<String>): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
         accountIds.forEachIndexed { index, id ->
-            accountDao.updateDisplayOrder(id, index)
+            dao.updateDisplayOrder(id, index)
         }
         configSyncCoordinator?.schedulePush()
     }

@@ -17,6 +17,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.service.NotificationListenerServiceImpl
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -40,6 +41,7 @@ class NotificationListenerHealthWorker(
             }
             return Result.success()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Diagnostics.record(TAG, "${e.javaClass.simpleName}: doWork failed")
             return Result.failure()
         }

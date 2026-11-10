@@ -8,60 +8,84 @@ import com.financeautomation.domain.repository.TripTagRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
- * Implementation of [TripTagRepository] backed by Room SQLite [TripTagDao].
+ * Implementation of [TripTagRepository] backed by Room SQLite [TripTagDao]
+ * or a suspend DAO provider for main-thread safety.
  */
 class TripTagRepositoryImpl(
-    private val tripTagDao: TripTagDao,
+    private val tripTagDao: TripTagDao? = null,
+    private val tripTagDaoProvider: (suspend () -> TripTagDao)? = null,
     private val configSyncCoordinator: ConfigSyncCoordinator? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TripTagRepository {
 
-    override fun getTripTags(includeArchived: Boolean): Flow<List<TripTag>> {
-        val flow = if (includeArchived) {
-            tripTagDao.getTripTagsFlow()
+    constructor(
+        tripTagDao: TripTagDao,
+        configSyncCoordinator: ConfigSyncCoordinator? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        tripTagDao = tripTagDao,
+        tripTagDaoProvider = null,
+        configSyncCoordinator = configSyncCoordinator,
+        ioDispatcher = ioDispatcher
+    )
+
+    private suspend fun resolveDao(): TripTagDao =
+        tripTagDao ?: tripTagDaoProvider?.invoke()
+            ?: throw IllegalStateException("TripTagDao or provider must be supplied")
+
+    override fun getTripTags(includeArchived: Boolean): Flow<List<TripTag>> = flow {
+        val dao = resolveDao()
+        val baseFlow = if (includeArchived) {
+            dao.getTripTagsFlow()
         } else {
-            tripTagDao.getActiveTripTagsFlow()
+            dao.getActiveTripTagsFlow()
         }
-        return flow.map { entities -> entities.map { it.toDomain() } }
-    }
+        emitAll(baseFlow.map { entities -> entities.map { it.toDomain() } })
+    }.flowOn(ioDispatcher)
 
     override suspend fun getAllTripTags(includeArchived: Boolean): List<TripTag> = withContext(ioDispatcher) {
+        val dao = resolveDao()
         val entities = if (includeArchived) {
-            tripTagDao.getAllTripTags()
+            dao.getAllTripTags()
         } else {
-            tripTagDao.getActiveTripTags()
+            dao.getActiveTripTags()
         }
         entities.map { it.toDomain() }
     }
 
     override suspend fun getActiveTripTags(): List<TripTag> = withContext(ioDispatcher) {
-        tripTagDao.getActiveTripTags().map { it.toDomain() }
+        resolveDao().getActiveTripTags().map { it.toDomain() }
     }
 
-    override fun getActiveTag(): Flow<TripTag?> {
-        return tripTagDao.getActiveTagFlow().map { it?.toDomain() }
-    }
+    override fun getActiveTag(): Flow<TripTag?> = flow {
+        val dao = resolveDao()
+        emitAll(dao.getActiveTagFlow().map { it?.toDomain() })
+    }.flowOn(ioDispatcher)
 
     override suspend fun getActiveTagSync(): TripTag? = withContext(ioDispatcher) {
-        tripTagDao.getActiveTag()?.toDomain()
+        resolveDao().getActiveTag()?.toDomain()
     }
 
     override suspend fun getTagById(id: String): TripTag? = withContext(ioDispatcher) {
-        tripTagDao.getById(id)?.toDomain()
+        resolveDao().getById(id)?.toDomain()
     }
 
     override suspend fun getTagByName(name: String): TripTag? = withContext(ioDispatcher) {
-        tripTagDao.getByName(name)?.toDomain()
+        resolveDao().getByName(name)?.toDomain()
     }
 
     override suspend fun insertTripTag(name: String): TripTag = withContext(ioDispatcher) {
+        val dao = resolveDao()
         val trimmed = name.trim()
-        val existing = tripTagDao.getByName(trimmed)
+        val existing = dao.getByName(trimmed)
         if (existing != null) {
             return@withContext existing.toDomain()
         }
@@ -76,36 +100,37 @@ class TripTagRepositoryImpl(
             updatedAt = now,
             dirty = 1
         )
-        tripTagDao.insert(entity)
+        dao.insert(entity)
         configSyncCoordinator?.schedulePush()
         entity.toDomain()
     }
 
     override suspend fun updateTripTag(tripTag: TripTag): Unit = withContext(ioDispatcher) {
-        tripTagDao.update(TripTagEntity.fromDomain(tripTag))
+        resolveDao().update(TripTagEntity.fromDomain(tripTag))
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun setActiveTag(id: String?): Unit = withContext(ioDispatcher) {
-        tripTagDao.clearActiveFlags()
+        val dao = resolveDao()
+        dao.clearActiveFlags()
         if (id != null) {
-            tripTagDao.setActiveFlag(id)
+            dao.setActiveFlag(id)
         }
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun archiveTripTag(id: String): Unit = withContext(ioDispatcher) {
-        tripTagDao.archiveTag(id)
+        resolveDao().archiveTag(id)
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun unarchiveTripTag(id: String): Unit = withContext(ioDispatcher) {
-        tripTagDao.unarchiveTag(id)
+        resolveDao().unarchiveTag(id)
         configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun deleteTripTag(id: String): Unit = withContext(ioDispatcher) {
-        tripTagDao.deleteById(id)
+        resolveDao().deleteById(id)
         configSyncCoordinator?.schedulePush()
     }
 }

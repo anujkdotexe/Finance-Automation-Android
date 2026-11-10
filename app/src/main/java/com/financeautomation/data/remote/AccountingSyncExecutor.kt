@@ -31,14 +31,47 @@ import java.util.UUID
 class AccountingSyncExecutor(
     private val googleSheetsClient: GoogleSheetsClient,
     private val googleDriveClient: GoogleDriveClient,
-    private val syncQueueDao: SyncQueueDao,
-    private val lineageDao: LineageDao,
+    private val syncQueueDao: SyncQueueDao? = null,
+    private val lineageDao: LineageDao? = null,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+    private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
     private val settlementWaterfallUseCase: SettlementWaterfallUseCase = SettlementWaterfallUseCase(),
     private val repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
     private val carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
     private val nettingUseCase: NettingUseCase = NettingUseCase(),
     private val yearCloseUseCase: YearCloseUseCase = YearCloseUseCase()
 ) {
+    constructor(
+        googleSheetsClient: GoogleSheetsClient,
+        googleDriveClient: GoogleDriveClient,
+        syncQueueDao: SyncQueueDao,
+        lineageDao: LineageDao,
+        settlementWaterfallUseCase: SettlementWaterfallUseCase = SettlementWaterfallUseCase(),
+        repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
+        carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
+        nettingUseCase: NettingUseCase = NettingUseCase(),
+        yearCloseUseCase: YearCloseUseCase = YearCloseUseCase()
+    ) : this(
+        googleSheetsClient = googleSheetsClient,
+        googleDriveClient = googleDriveClient,
+        syncQueueDao = syncQueueDao,
+        lineageDao = lineageDao,
+        syncQueueDaoProvider = null,
+        lineageDaoProvider = null,
+        settlementWaterfallUseCase = settlementWaterfallUseCase,
+        repaymentWaterfallUseCase = repaymentWaterfallUseCase,
+        carryForwardUseCase = carryForwardUseCase,
+        nettingUseCase = nettingUseCase,
+        yearCloseUseCase = yearCloseUseCase
+    )
+
+    private suspend fun resolveSyncQueueDao(): SyncQueueDao =
+        syncQueueDao ?: syncQueueDaoProvider?.invoke()
+            ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")
+
+    private suspend fun resolveLineageDao(): LineageDao =
+        lineageDao ?: lineageDaoProvider?.invoke()
+            ?: throw IllegalStateException("LineageDao or provider must be supplied")
 
     suspend fun executeLogCredit(
         item: SyncQueueEntity,
@@ -60,7 +93,7 @@ class AccountingSyncExecutor(
                 emptyList()
             }
 
-            val lineageRecords = lineageDao.getAll().map { it.toDomain() }
+            val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
             val resolveCarriedFn: (LedgerDebit) -> LedgerDebit? = { carriedRow ->
                 carryForwardUseCase.resolveCarriedDebit(carriedRow, allDebits, lineageRecords)
             }
@@ -80,7 +113,7 @@ class AccountingSyncExecutor(
             )
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
-            syncQueueDao.updatePlanJson(item.id, planJson)
+            resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
         return applyAccountingPlan(spreadsheetId, plan)
@@ -145,7 +178,7 @@ class AccountingSyncExecutor(
             )
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
-            syncQueueDao.updatePlanJson(item.id, planJson)
+            resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
         return applyAccountingPlan(spreadsheetId, plan)
@@ -171,7 +204,7 @@ class AccountingSyncExecutor(
                 emptyList()
             }
 
-            val lineageRecords = lineageDao.getAll().map { it.toDomain() }
+            val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
             val resolveCarriedFn: (LedgerPayable) -> LedgerPayable? = { carriedRow ->
                 carryForwardUseCase.resolveCarriedPayable(carriedRow, allPayables, lineageRecords)
             }
@@ -188,7 +221,7 @@ class AccountingSyncExecutor(
             )
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
-            syncQueueDao.updatePlanJson(item.id, planJson)
+            resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
         return applyAccountingPlan(spreadsheetId, plan)
@@ -235,7 +268,7 @@ class AccountingSyncExecutor(
         if (applyResult is Result.Success) {
             // Persist lineage records into Room in one transaction
             if (rolloverResult.lineageRecords.isNotEmpty()) {
-                lineageDao.insertAll(rolloverResult.lineageRecords.map { LineageEntity.fromDomain(it) })
+                resolveLineageDao().insertAll(rolloverResult.lineageRecords.map { LineageEntity.fromDomain(it) })
             }
         }
         return applyResult

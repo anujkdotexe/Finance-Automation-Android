@@ -6,6 +6,7 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.financeautomation.R
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.presentation.ui.ModalBottomSheetActivity
 
 /**
@@ -20,7 +21,8 @@ class QuickSettingsTileService : TileService() {
         tile.state = Tile.STATE_INACTIVE
         tile.label = try {
             getString(R.string.quick_add_tile_label)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Diagnostics.record("QuickSettingsTileService", "${e.javaClass.simpleName}: getString label fallback")
             "Log Expense"
         }
         tile.updateTile()

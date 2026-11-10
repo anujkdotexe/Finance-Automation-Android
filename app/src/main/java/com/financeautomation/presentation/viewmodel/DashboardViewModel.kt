@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Transaction
@@ -44,10 +45,37 @@ data class DashboardUiState(
  */
 class DashboardViewModel(
     private val transactionRepository: TransactionRepository,
-    private val syncQueueDao: SyncQueueDao,
+    private val directSyncQueueDao: SyncQueueDao? = null,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val categoryRepository: CategoryRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDao: SyncQueueDao,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = syncQueueDao,
+        syncQueueDaoProvider = null,
+        categoryRepository = categoryRepository,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDaoProvider: suspend () -> SyncQueueDao,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = null,
+        syncQueueDaoProvider = syncQueueDaoProvider,
+        categoryRepository = categoryRepository,
+        ioDispatcher = ioDispatcher
+    )
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
@@ -56,8 +84,14 @@ class DashboardViewModel(
         observeData()
     }
 
+    private suspend fun resolveSyncQueueDao(): SyncQueueDao {
+        return directSyncQueueDao ?: syncQueueDaoProvider?.invoke()
+            ?: throw IllegalStateException("SyncQueueDao not available")
+    }
+
     private fun observeData() {
         viewModelScope.launch(ioDispatcher) {
+            val syncQueueDao = resolveSyncQueueDao()
             combine(
                 transactionRepository.getTransactions(),
                 syncQueueDao.getAllQueueFlow()
@@ -139,8 +173,8 @@ class DashboardViewModel(
             if (context != null) {
                 try {
                     SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
-                } catch (_: Exception) {
-                    // Safe fallback for isolated or test environments
+                } catch (e: Exception) {
+                    Diagnostics.record("DashboardViewModel", "${e.javaClass.simpleName}: enqueueExpedited")
                 }
             }
 
@@ -183,6 +217,23 @@ class DashboardViewModel(
                 return DashboardViewModel(
                     transactionRepository = transactionRepository,
                     syncQueueDao = syncQueueDao,
+                    categoryRepository = categoryRepository,
+                    ioDispatcher = ioDispatcher
+                ) as T
+            }
+        }
+
+        fun provideFactory(
+            transactionRepository: TransactionRepository,
+            syncQueueDaoProvider: suspend () -> SyncQueueDao,
+            categoryRepository: CategoryRepository? = null,
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return DashboardViewModel(
+                    transactionRepository = transactionRepository,
+                    syncQueueDaoProvider = syncQueueDaoProvider,
                     categoryRepository = categoryRepository,
                     ioDispatcher = ioDispatcher
                 ) as T

@@ -24,11 +24,31 @@ import kotlinx.coroutines.withContext
  */
 class ConfigSyncCoordinator(
     private val syncConfigUseCase: SyncConfigUseCase,
-    private val syncQueueDao: SyncQueueDao,
+    private val syncQueueDao: SyncQueueDao? = null,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val localGateway: ConfigSyncLocalGateway,
     private val applicationScope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
+    constructor(
+        syncConfigUseCase: SyncConfigUseCase,
+        syncQueueDao: SyncQueueDao,
+        localGateway: ConfigSyncLocalGateway,
+        applicationScope: CoroutineScope,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        syncConfigUseCase = syncConfigUseCase,
+        syncQueueDao = syncQueueDao,
+        syncQueueDaoProvider = null,
+        localGateway = localGateway,
+        applicationScope = applicationScope,
+        ioDispatcher = ioDispatcher
+    )
+
+    private suspend fun resolveSyncQueueDao(): SyncQueueDao =
+        syncQueueDao ?: syncQueueDaoProvider?.invoke()
+            ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")
+
     private val pushMutex = Mutex()
     private var pendingPushJob: Job? = null
     var onTriggerQueueSync: (() -> Unit)? = null
@@ -58,9 +78,10 @@ class ConfigSyncCoordinator(
      */
     suspend fun enqueueDurablePush(): Result<Unit> = withContext(ioDispatcher) {
         safeCall {
-            val pendingCount = syncQueueDao.countPendingOperations(SyncQueueEntity.OP_CONFIG_PUSH)
+            val dao = resolveSyncQueueDao()
+            val pendingCount = dao.countPendingOperations(SyncQueueEntity.OP_CONFIG_PUSH)
             if (pendingCount == 0) {
-                syncQueueDao.insert(
+                dao.insert(
                     SyncQueueEntity(
                         transactionId = "config_push_${System.currentTimeMillis()}",
                         operationType = SyncQueueEntity.OP_CONFIG_PUSH,

@@ -7,6 +7,7 @@ import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -85,7 +86,8 @@ class ReviewInboxViewModel(
                 } else {
                     try {
                         CategoryConstants.normalizeCategory(trimmed)
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Diagnostics.record("ReviewInboxViewModel", "${e.javaClass.simpleName}: normalizeCategory fallback")
                         trimmed
                     }
                 }

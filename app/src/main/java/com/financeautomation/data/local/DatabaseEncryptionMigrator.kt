@@ -87,8 +87,8 @@ object DatabaseEncryptionMigrator {
                             cachedCounts[table] = cursor.getLong(0)
                         }
                     }
-                } catch (ignored: Exception) {
-                    // Table might not exist in an older schema version
+                } catch (e: Exception) {
+                    Log.d(TAG, "Table count check skipped for $table: ${e.javaClass.simpleName}")
                 }
             }
 
@@ -213,12 +213,16 @@ object DatabaseEncryptionMigrator {
             for (table in otherTables) {
                 try {
                     encDb.execSQL("INSERT OR IGNORE INTO $table SELECT * FROM plain_backup.$table;")
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w(TAG, "Fallback restore table $table skipped: ${e.javaClass.simpleName}")
+                }
             }
 
             try {
                 encDb.execSQL("DETACH DATABASE plain_backup;")
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "Fallback detach plain_backup failed: ${e.javaClass.simpleName}")
+            }
 
             Log.i(TAG, "Plain backup fallback restoration completed table-by-table.")
         } catch (e: Exception) {

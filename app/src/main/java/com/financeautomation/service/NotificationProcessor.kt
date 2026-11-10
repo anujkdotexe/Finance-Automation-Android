@@ -5,6 +5,7 @@ import com.financeautomation.core.constants.PackageWhitelist
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -17,6 +18,7 @@ import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.domain.usecase.WordingClass
+import kotlinx.coroutines.CancellationException
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.UUID
@@ -160,12 +162,16 @@ class NotificationProcessor(
         // 6. Inferred account resolution from configured accounts
         val configuredAccounts: List<String> = try {
             accountDao?.getAllAccounts()?.map { it.name } ?: emptyList()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: getAllAccounts fallback")
             emptyList()
         }
         val defaultAccount: String = try {
             preferenceDao?.getPreference("default_account") ?: CategoryConstants.ACCOUNT_SBI
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: defaultAccount preference fallback")
             CategoryConstants.ACCOUNT_SBI
         }
 

@@ -1,9 +1,7 @@
 package com.financeautomation.data.repository
 
-import android.content.Context
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.ConfigConstants
-import com.financeautomation.data.local.FinanceDatabase
 import com.financeautomation.data.local.dao.PreferenceDao
 import com.financeautomation.data.local.entity.PreferenceEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
@@ -13,6 +11,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -21,22 +22,27 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Repository implementation of [PreferencesRepository].
  * Backed primarily by Room SQLite [PreferenceDao] in preferences_table
- * with reactive Flow observation.
+ * with reactive Flow observation and suspend DAO provider for main-thread safety.
  */
 class PreferencesRepositoryImpl(
     private val preferenceDao: PreferenceDao? = null,
+    private val preferenceDaoProvider: (suspend () -> PreferenceDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : PreferencesRepository {
 
-    constructor(context: Context?) : this(
-        preferenceDao = context?.let {
-            try {
-                FinanceDatabase.getInstance(it).preferenceDao()
-            } catch (_: Exception) {
-                null
-            }
-        }
+    /**
+     * Explicit test/headless constructor utilizing in-memory preferences fallback.
+     */
+    constructor(isTestHeadless: Boolean = true) : this(
+        preferenceDao = null,
+        preferenceDaoProvider = null,
+        ioDispatcher = Dispatchers.IO
     )
+
+    private suspend fun resolveDao(): PreferenceDao? {
+        if (preferenceDao != null) return preferenceDao
+        return preferenceDaoProvider?.invoke()
+    }
 
     // In-memory fallbacks when running headless without Room database
     private val memSpreadsheetId = MutableStateFlow<String?>(null)
@@ -49,19 +55,23 @@ class PreferencesRepositoryImpl(
 
     var configSyncCoordinator: ConfigSyncCoordinator? = null
 
-    override fun getSpreadsheetId(): Flow<String?> {
-        val dao = preferenceDao ?: return memSpreadsheetId.asStateFlow()
-        return dao.getPreferenceFlow(KEY_SPREADSHEET_ID)
-    }
+    override fun getSpreadsheetId(): Flow<String?> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memSpreadsheetId.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_SPREADSHEET_ID))
+        }
+    }.flowOn(ioDispatcher)
 
     override suspend fun getSpreadsheetIdSync(): String? = withContext(ioDispatcher) {
-        val dao = preferenceDao ?: return@withContext memSpreadsheetId.value
+        val dao = resolveDao() ?: return@withContext memSpreadsheetId.value
         dao.getPreference(KEY_SPREADSHEET_ID)
     }
 
     override suspend fun setSpreadsheetId(id: String): Unit = withContext(ioDispatcher) {
         val trimmed = id.trim()
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             dao.setPreference(PreferenceEntity(KEY_SPREADSHEET_ID, trimmed, updatedAt = System.currentTimeMillis(), dirty = 0))
         } else {
@@ -69,15 +79,19 @@ class PreferencesRepositoryImpl(
         }
     }
 
-    override fun getSpreadsheetIdForYear(year: Int): Flow<String?> {
-        val dao = preferenceDao ?: return memSpreadsheetId.asStateFlow()
-        return dao.getPreferenceFlow(keySpreadsheetIdForYear(year)).map { yearSpecificId ->
-            yearSpecificId ?: dao.getPreference(KEY_SPREADSHEET_ID)
+    override fun getSpreadsheetIdForYear(year: Int): Flow<String?> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memSpreadsheetId.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(keySpreadsheetIdForYear(year)).map { yearSpecificId ->
+                yearSpecificId ?: dao.getPreference(KEY_SPREADSHEET_ID)
+            })
         }
-    }
+    }.flowOn(ioDispatcher)
 
     override suspend fun getSpreadsheetIdForYearSync(year: Int): String? = withContext(ioDispatcher) {
-        val dao = preferenceDao ?: return@withContext memSpreadsheetId.value
+        val dao = resolveDao() ?: return@withContext memSpreadsheetId.value
         val yearSpecific = dao.getPreference(keySpreadsheetIdForYear(year))
         if (!yearSpecific.isNullOrBlank()) {
             yearSpecific
@@ -88,7 +102,7 @@ class PreferencesRepositoryImpl(
 
     override suspend fun setSpreadsheetIdForYear(year: Int, id: String): Unit = withContext(ioDispatcher) {
         val trimmed = id.trim()
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             val now = System.currentTimeMillis()
             dao.setPreference(PreferenceEntity(keySpreadsheetIdForYear(year), trimmed, updatedAt = now, dirty = 0))
@@ -98,19 +112,23 @@ class PreferencesRepositoryImpl(
         }
     }
 
-    override fun getDefaultAccount(): Flow<String> {
-        val dao = preferenceDao ?: return memDefaultAccount.asStateFlow()
-        return dao.getPreferenceFlow(KEY_DEFAULT_ACCOUNT).map { it ?: CategoryConstants.ACCOUNT_SBI }
-    }
+    override fun getDefaultAccount(): Flow<String> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memDefaultAccount.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_DEFAULT_ACCOUNT).map { it ?: CategoryConstants.ACCOUNT_SBI })
+        }
+    }.flowOn(ioDispatcher)
 
     override suspend fun getDefaultAccountSync(): String = withContext(ioDispatcher) {
-        val dao = preferenceDao ?: return@withContext memDefaultAccount.value
+        val dao = resolveDao() ?: return@withContext memDefaultAccount.value
         dao.getPreference(KEY_DEFAULT_ACCOUNT) ?: CategoryConstants.ACCOUNT_SBI
     }
 
     override suspend fun setDefaultAccount(account: String): Unit = withContext(ioDispatcher) {
         val trimmed = account.trim()
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             dao.setPreference(PreferenceEntity(KEY_DEFAULT_ACCOUNT, trimmed, updatedAt = System.currentTimeMillis(), dirty = 1))
         } else {
@@ -119,14 +137,18 @@ class PreferencesRepositoryImpl(
         configSyncCoordinator?.schedulePush()
     }
 
-    override fun getActiveTrip(): Flow<String?> {
-        val dao = preferenceDao ?: return memActiveTrip.asStateFlow()
-        return dao.getPreferenceFlow(KEY_ACTIVE_TRIP)
-    }
+    override fun getActiveTrip(): Flow<String?> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memActiveTrip.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_ACTIVE_TRIP))
+        }
+    }.flowOn(ioDispatcher)
 
     override suspend fun setActiveTrip(trip: String?): Unit = withContext(ioDispatcher) {
         val trimmed = trip?.trim()?.ifEmpty { null }
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             if (trimmed != null) {
                 dao.setPreference(PreferenceEntity(KEY_ACTIVE_TRIP, trimmed, updatedAt = System.currentTimeMillis(), dirty = 1))
@@ -139,19 +161,23 @@ class PreferencesRepositoryImpl(
         configSyncCoordinator?.schedulePush()
     }
 
-    override fun getGoogleAccountEmail(): Flow<String?> {
-        val dao = preferenceDao ?: return memGoogleEmail.asStateFlow()
-        return dao.getPreferenceFlow(KEY_GOOGLE_EMAIL)
-    }
+    override fun getGoogleAccountEmail(): Flow<String?> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memGoogleEmail.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_GOOGLE_EMAIL))
+        }
+    }.flowOn(ioDispatcher)
 
     override suspend fun getGoogleAccountEmailSync(): String? = withContext(ioDispatcher) {
-        val dao = preferenceDao ?: return@withContext memGoogleEmail.value
+        val dao = resolveDao() ?: return@withContext memGoogleEmail.value
         dao.getPreference(KEY_GOOGLE_EMAIL)
     }
 
     override suspend fun setGoogleAccountEmail(email: String?): Unit = withContext(ioDispatcher) {
         val trimmed = email?.trim()?.ifEmpty { null }
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             if (trimmed != null) {
                 dao.setPreference(PreferenceEntity(KEY_GOOGLE_EMAIL, trimmed, updatedAt = System.currentTimeMillis(), dirty = 0))
@@ -163,21 +189,25 @@ class PreferencesRepositoryImpl(
         }
     }
 
-    override fun getSettleDelaySeconds(): Flow<Int> {
-        val dao = preferenceDao ?: return memSettleDelay.asStateFlow()
-        return dao.getPreferenceFlow(KEY_SETTLE_DELAY_SECONDS).map {
-            it?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS
+    override fun getSettleDelaySeconds(): Flow<Int> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memSettleDelay.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_SETTLE_DELAY_SECONDS).map {
+                it?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS
+            })
         }
-    }
+    }.flowOn(ioDispatcher)
 
     override suspend fun getSettleDelaySecondsSync(): Int = withContext(ioDispatcher) {
-        val dao = preferenceDao ?: return@withContext memSettleDelay.value
+        val dao = resolveDao() ?: return@withContext memSettleDelay.value
         dao.getPreference(KEY_SETTLE_DELAY_SECONDS)?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS
     }
 
     override suspend fun setSettleDelaySeconds(seconds: Int): Unit = withContext(ioDispatcher) {
         val bounded = seconds.coerceIn(30, 300)
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             dao.setPreference(PreferenceEntity(KEY_SETTLE_DELAY_SECONDS, bounded.toString(), updatedAt = System.currentTimeMillis(), dirty = 1))
         } else {
@@ -192,7 +222,7 @@ class PreferencesRepositoryImpl(
             return@withContext existing
         }
         val newId = UUID.randomUUID().toString()
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             dao.setPreference(PreferenceEntity(KEY_DEVICE_ID, newId, updatedAt = System.currentTimeMillis(), dirty = 0))
         } else {
@@ -202,17 +232,17 @@ class PreferencesRepositoryImpl(
     }
 
     override suspend fun getDeviceIdSync(): String? = withContext(ioDispatcher) {
-        val dao = preferenceDao ?: return@withContext memDeviceId.value
+        val dao = resolveDao() ?: return@withContext memDeviceId.value
         dao.getPreference(KEY_DEVICE_ID)
     }
 
     override suspend fun getPreference(key: String): String? = withContext(ioDispatcher) {
-        val dao = preferenceDao ?: return@withContext memGenericPrefs[key]
+        val dao = resolveDao() ?: return@withContext memGenericPrefs[key]
         dao.getPreference(key)
     }
 
     override suspend fun setPreference(key: String, value: String?, isDirty: Boolean): Unit = withContext(ioDispatcher) {
-        val dao = preferenceDao
+        val dao = resolveDao()
         val trimmed = value?.trim()
         val dirtyFlag = if (isDirty && !ConfigConstants.isLocalOnlyPref(key)) 1 else 0
         if (dao != null) {
@@ -234,7 +264,7 @@ class PreferencesRepositoryImpl(
     }
 
     override suspend fun deletePreference(key: String): Unit = withContext(ioDispatcher) {
-        val dao = preferenceDao
+        val dao = resolveDao()
         if (dao != null) {
             dao.deletePreference(key)
         } else {

@@ -83,13 +83,13 @@ data class TransactionEntity(
 
         val domainReviewState = try {
             ReviewState.valueOf(reviewState)
-        } catch (_: Exception) {
+        } catch (e: IllegalArgumentException) {
             ReviewState.NEEDS_REVIEW
         }
 
         val domainSyncState = try {
             SyncState.valueOf(syncState)
-        } catch (_: Exception) {
+        } catch (e: IllegalArgumentException) {
             SyncState.PENDING
         }
 

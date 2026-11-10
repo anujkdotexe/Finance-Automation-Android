@@ -1,12 +1,14 @@
 package com.financeautomation.domain.usecase
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.remote.DashboardFormulaBuilder
 import com.financeautomation.data.remote.GoogleSheetsClient
 import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.PreferencesRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -107,7 +109,9 @@ class RegenerateDashboardUseCase(
                 }
                 result
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Diagnostics.record("RegenerateDashboardUseCase", "${e.javaClass.simpleName}: fetchSheetIds fallback")
             mapOf("Dashboard" to 0)
         }
     }

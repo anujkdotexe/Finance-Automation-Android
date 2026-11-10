@@ -44,8 +44,10 @@ import com.financeautomation.domain.usecase.VoidTransactionUseCase
 import com.financeautomation.domain.usecase.YearCloseUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -62,6 +64,8 @@ interface AppContainer {
     val tokenProvider: TokenProvider?
     val googleAuthTokenProvider: GoogleAuthTokenProvider
     val okHttpClient: OkHttpClient
+    val databaseReady: Deferred<FinanceDatabase>
+    suspend fun awaitDatabase(): FinanceDatabase
     val database: FinanceDatabase
     val googleDriveClient: GoogleDriveClient
     val googleSheetsClient: GoogleSheetsClient
@@ -122,9 +126,18 @@ class DefaultAppContainer(
             .build()
     }
 
-    override val database: FinanceDatabase by lazy {
+    override val databaseReady: Deferred<FinanceDatabase> = CoroutineScope(SupervisorJob() + Dispatchers.IO).async {
         FinanceDatabase.getInstance(applicationContext)
     }
+
+    override suspend fun awaitDatabase(): FinanceDatabase = databaseReady.await()
+
+    override val database: FinanceDatabase
+        get() = if (databaseReady.isCompleted) {
+            databaseReady.getCompleted()
+        } else {
+            FinanceDatabase.getInstance(applicationContext)
+        }
 
     override val googleDriveClient: GoogleDriveClient by lazy {
         GoogleDriveClient(
@@ -142,7 +155,7 @@ class DefaultAppContainer(
 
     override val preferencesRepository: PreferencesRepository by lazy {
         PreferencesRepositoryImpl(
-            preferenceDao = database.preferenceDao(),
+            preferenceDaoProvider = { awaitDatabase().preferenceDao() },
             ioDispatcher = ioDispatcher
         ).also { impl ->
             impl.configSyncCoordinator = configSyncCoordinator
@@ -151,7 +164,7 @@ class DefaultAppContainer(
 
     override val peopleRepository: PeopleRepository by lazy {
         PeopleRepositoryImpl(
-            companionDao = database.companionDao(),
+            companionDaoProvider = { awaitDatabase().companionDao() },
             configSyncCoordinator = configSyncCoordinator,
             ioDispatcher = ioDispatcher
         )
@@ -159,7 +172,7 @@ class DefaultAppContainer(
 
     override val accountRepository: AccountRepository by lazy {
         AccountRepositoryImpl(
-            accountDao = database.accountDao(),
+            accountDaoProvider = { awaitDatabase().accountDao() },
             configSyncCoordinator = configSyncCoordinator,
             ioDispatcher = ioDispatcher
         )
@@ -167,7 +180,7 @@ class DefaultAppContainer(
 
     override val categoryRepository: CategoryRepository by lazy {
         CategoryRepositoryImpl(
-            categoryDao = database.categoryDao(),
+            categoryDaoProvider = { awaitDatabase().categoryDao() },
             configSyncCoordinator = configSyncCoordinator,
             ioDispatcher = ioDispatcher
         )
@@ -175,7 +188,7 @@ class DefaultAppContainer(
 
     override val tripTagRepository: TripTagRepository by lazy {
         TripTagRepositoryImpl(
-            tripTagDao = database.tripTagDao(),
+            tripTagDaoProvider = { awaitDatabase().tripTagDao() },
             configSyncCoordinator = configSyncCoordinator,
             ioDispatcher = ioDispatcher
         )
@@ -190,11 +203,7 @@ class DefaultAppContainer(
 
     override val configSyncLocalGateway: ConfigSyncLocalGateway by lazy {
         ConfigSyncLocalGatewayImpl(
-            accountDao = database.accountDao(),
-            categoryDao = database.categoryDao(),
-            companionDao = database.companionDao(),
-            tripTagDao = database.tripTagDao(),
-            preferenceDao = database.preferenceDao(),
+            dbProvider = { awaitDatabase() },
             ioDispatcher = ioDispatcher
         )
     }
@@ -223,8 +232,8 @@ class DefaultAppContainer(
 
     override val transactionRepository: TransactionRepository by lazy {
         TransactionRepositoryImpl(
-            transactionDao = database.transactionDao(),
-            syncQueueDao = database.syncQueueDao(),
+            transactionDaoProvider = { awaitDatabase().transactionDao() },
+            syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             googleSheetsClient = googleSheetsClient,
             preferencesRepository = preferencesRepository,
             workbookResolver = workbookResolver,
@@ -266,7 +275,7 @@ class DefaultAppContainer(
     override val configSyncCoordinator: ConfigSyncCoordinator by lazy {
         ConfigSyncCoordinator(
             syncConfigUseCase = syncConfigUseCase,
-            syncQueueDao = database.syncQueueDao(),
+            syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             localGateway = configSyncLocalGateway,
             applicationScope = CoroutineScope(SupervisorJob() + ioDispatcher),
             ioDispatcher = ioDispatcher
@@ -291,9 +300,8 @@ class DefaultAppContainer(
         )
     }
 
-    override val lineageDao: LineageDao by lazy {
-        database.lineageDao()
-    }
+    override val lineageDao: LineageDao
+        get() = database.lineageDao()
 
     override val calculateSplitUseCase: CalculateSplitUseCase by lazy {
         CalculateSplitUseCase()
@@ -327,8 +335,8 @@ class DefaultAppContainer(
         AccountingSyncExecutor(
             googleSheetsClient = googleSheetsClient,
             googleDriveClient = googleDriveClient,
-            syncQueueDao = database.syncQueueDao(),
-            lineageDao = database.lineageDao(),
+            syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            lineageDaoProvider = { awaitDatabase().lineageDao() },
             settlementWaterfallUseCase = settlementWaterfallUseCase,
             repaymentWaterfallUseCase = repaymentWaterfallUseCase,
             carryForwardUseCase = carryForwardUseCase,
@@ -337,18 +345,16 @@ class DefaultAppContainer(
         )
     }
 
-    override val pendingCaptureDao: PendingCaptureDao by lazy {
-        database.pendingCaptureDao()
-    }
+    override val pendingCaptureDao: PendingCaptureDao
+        get() = database.pendingCaptureDao()
 
-    override val handledNotificationDao: HandledNotificationDao by lazy {
-        database.handledNotificationDao()
-    }
+    override val handledNotificationDao: HandledNotificationDao
+        get() = database.handledNotificationDao()
 
     override val foregroundWatcher: ForegroundWatcher by lazy {
         ForegroundWatcher(
             context = applicationContext,
-            pendingCaptureDao = pendingCaptureDao
+            pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() }
         )
     }
 }

@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
         val app = application as FinanceApplication
         DashboardViewModel.provideFactory(
             transactionRepository = app.appContainer.transactionRepository,
-            syncQueueDao = app.appContainer.database.syncQueueDao(),
+            syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
             categoryRepository = app.appContainer.categoryRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
             peopleRepository = app.appContainer.peopleRepository,
             categoryRepository = app.appContainer.categoryRepository,
             accountRepository = app.appContainer.accountRepository,
+            pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }

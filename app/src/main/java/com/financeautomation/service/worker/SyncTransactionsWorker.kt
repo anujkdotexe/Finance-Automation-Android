@@ -16,6 +16,7 @@ import androidx.work.workDataOf
 import com.financeautomation.FinanceApplication
 import com.financeautomation.core.model.Result as DomainResult
 import com.financeautomation.domain.repository.TransactionRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
@@ -78,6 +79,7 @@ class SyncTransactionsWorker(
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 if (runAttemptCount < MAX_RETRIES) {
                     androidx.work.ListenableWorker.Result.retry()
                 } else {
