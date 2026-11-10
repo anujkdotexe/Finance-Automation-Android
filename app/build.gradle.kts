@@ -62,20 +62,13 @@ android {
             matchingFallbacks += listOf("release")
             signingConfig = signingConfigs.getByName("releaseSigning")
             buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "true")
-            buildConfigField("Boolean", "ENABLE_SIMULATOR", "true")
+            buildConfigField("Boolean", "ENABLE_SIMULATOR", "false")
         }
         debug {
             isMinifyEnabled = false
             isDebuggable = true
             buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "true")
             buildConfigField("Boolean", "ENABLE_SIMULATOR", "true")
-        }
-    }
-
-    sourceSets {
-        getByName("beta") {
-            java.srcDirs("src/debug/java")
-            res.srcDirs("src/debug/res")
         }
     }
 
