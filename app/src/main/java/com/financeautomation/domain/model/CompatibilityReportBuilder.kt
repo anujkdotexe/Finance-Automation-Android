@@ -1,5 +1,6 @@
 package com.financeautomation.domain.model
 
+import com.financeautomation.core.utils.DeviceSnapshot
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -167,6 +168,21 @@ object CompatibilityReportBuilder {
 
         // 7. Recent Pipeline Trail Events
         sb.appendLine("## 7. Pipeline Trail Events (${data.recentTrail.size})")
+        val latestSnapshot = data.recentTrail.firstOrNull { it.stage == "DEVICE" && it.code == "SNAPSHOT" && it.metricA != null }
+        if (latestSnapshot != null) {
+            val a = latestSnapshot.metricA ?: 0L
+            val b = latestSnapshot.metricB ?: 0L
+            sb.appendLine("### Latest Device Snapshot")
+            sb.appendLine("- Listener Access: ${DeviceSnapshot.decodeFlag(a, DeviceSnapshot.BIT_LISTENER_ACCESS)}")
+            sb.appendLine("- Overlay Permission: ${DeviceSnapshot.decodeFlag(a, DeviceSnapshot.BIT_OVERLAY_PERMISSION)}")
+            sb.appendLine("- Usage Access: ${DeviceSnapshot.decodeFlag(a, DeviceSnapshot.BIT_USAGE_ACCESS)}")
+            sb.appendLine("- Post Notifications: ${DeviceSnapshot.decodeFlag(a, DeviceSnapshot.BIT_POST_NOTIFICATIONS)}")
+            sb.appendLine("- Battery Optimization Unrestricted: ${DeviceSnapshot.decodeFlag(a, DeviceSnapshot.BIT_BATTERY_UNRESTRICTED)}")
+            sb.appendLine("- Background Restricted: ${DeviceSnapshot.decodeFlag(a, DeviceSnapshot.BIT_BACKGROUND_RESTRICTED)}")
+            sb.appendLine("- Doze State Active: ${DeviceSnapshot.decodeFlag(a, DeviceSnapshot.BIT_DOZE_STATE)}")
+            sb.appendLine("- App Standby Bucket: ${DeviceSnapshot.decodeBucket(b)}")
+            sb.appendLine()
+        }
         if (data.recentTrail.isEmpty()) {
             sb.appendLine("No recent trail events.")
         } else {

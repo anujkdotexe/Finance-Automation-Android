@@ -7,6 +7,8 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.financeautomation.FinanceApplication
+import com.financeautomation.core.utils.DeviceSnapshot
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.LocalCrashRecorder
 import com.financeautomation.core.utils.PipelineCode
@@ -26,7 +28,12 @@ class CapturePipelineHealthWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT)
+            val (snapshotA, snapshotB) = DeviceSnapshot.capture(applicationContext)
+            PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
+            val app = applicationContext as? FinanceApplication
+            val db = app?.appContainer?.awaitDatabase()
+            val dao = db?.pipelineEventDao()
+            DeviceSnapshot.updateCrashlyticsSummaries(applicationContext, snapshotA, dao)
             LocalCrashRecorder.readAndStoreExitReasons(applicationContext)
             PipelineTrail.triggerFlush()
             Result.success()
