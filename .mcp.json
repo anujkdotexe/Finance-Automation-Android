@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "finance-handoff": {
+      "command": "node",
+      "args": [
+        "tools/handoff-mcp/server.mjs"
+      ]
+    }
+  }
+}
