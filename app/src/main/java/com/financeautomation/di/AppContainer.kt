@@ -15,6 +15,7 @@ import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.data.repository.AccountRepositoryImpl
 import com.financeautomation.data.repository.CategoryRepositoryImpl
 import com.financeautomation.data.repository.ConfigRepositoryImpl
+import com.financeautomation.data.repository.PeopleListRebuilder
 import com.financeautomation.data.repository.PeopleRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
 import com.financeautomation.data.repository.TransactionRepositoryImpl
@@ -98,6 +99,7 @@ interface AppContainer {
     val accountingSyncExecutor: AccountingSyncExecutor
     val foregroundWatcher: ForegroundWatcher
     val overlayController: OverlayController
+    val peopleListRebuilder: PeopleListRebuilder
 }
 
 /**
@@ -372,6 +374,15 @@ class DefaultAppContainer(
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
             predictCategoryUseCase = predictCategoryUseCase,
             overlayControllerProvider = { overlayController }
+        )
+    }
+
+    override val peopleListRebuilder: PeopleListRebuilder by lazy {
+        PeopleListRebuilder(
+            preferencesRepository = preferencesRepository,
+            googleSheetsClient = googleSheetsClient,
+            peopleRepository = peopleRepository,
+            ioDispatcher = ioDispatcher
         )
     }
 }
