@@ -2,9 +2,11 @@ package com.financeautomation
 
 import android.app.Activity
 import android.app.Application
+import android.content.res.Configuration
 import android.os.Bundle
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.di.AppContainer
+import com.financeautomation.service.QuickLogWidgetProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,9 +22,11 @@ class FinanceApplication : Application() {
         private set
 
     private var startedActivityCount = 0
+    private var lastNightMode: Int = 0
 
     override fun onCreate() {
         super.onCreate()
+        lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
 
         // 1. Pre-warm database on background thread and resume foreground watcher
@@ -65,6 +69,16 @@ class FinanceApplication : Application() {
             }
         }
 
+        // 2c. Refresh launcher widgets on background dispatcher
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                QuickLogWidgetProvider.updateAllWidgets(applicationContext)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: updateAllWidgets startup")
+            }
+        }
+
         // 3. Schedule daily periodic monthly rollover check and 6-hour listener health worker
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
@@ -96,5 +110,21 @@ class FinanceApplication : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {}
         })
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val currentNightMode = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (currentNightMode != lastNightMode) {
+            lastNightMode = currentNightMode
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    QuickLogWidgetProvider.updateAllWidgets(applicationContext)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: updateAllWidgets theme change")
+                }
+            }
+        }
     }
 }
