@@ -30,6 +30,7 @@ import java.util.UUID
  */
 data class ExpenseUiState(
     val transactionId: String? = null,
+    val captureId: String? = null,
     val amountText: String = "",
     val amount: Double = 0.0,
     val merchant: String = "",
@@ -63,6 +64,7 @@ class ExpenseViewModel(
     private val peopleRepository: PeopleRepository,
     private val categoryRepository: com.financeautomation.domain.repository.CategoryRepository? = null,
     private val accountRepository: com.financeautomation.domain.repository.AccountRepository? = null,
+    private val pendingCaptureDao: com.financeautomation.data.local.dao.PendingCaptureDao? = null,
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -194,6 +196,64 @@ class ExpenseViewModel(
                         errorMessage = "Transaction not found"
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * Loads a pending alert capture by ID into the editor state.
+     */
+    fun loadCapture(captureId: String) {
+        if (captureId.isBlank()) return
+        viewModelScope.launch(ioDispatcher) {
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    isSaved = false,
+                    isVoided = false,
+                    errorMessage = null
+                )
+            }
+            val capture = pendingCaptureDao?.getById(captureId)
+            if (capture != null) {
+                val amt = capture.amount ?: 0.0
+                val formatted = if (amt > 0.0) formatAmount(amt) else ""
+                _uiState.update { current ->
+                    val stateWithData = current.copy(
+                        captureId = capture.id,
+                        transactionId = null,
+                        amountText = formatted,
+                        amount = amt,
+                        merchant = capture.payee,
+                        account = capture.inferredAccount ?: current.account,
+                        isLoading = false,
+                        isSaved = false,
+                        isVoided = false,
+                        errorMessage = null
+                    )
+                    recalculateSplit(stateWithData)
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Pending capture not found"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Marks the active pending capture as DISMISSED when the bottom sheet is dismissed without saving.
+     */
+    fun onDismissCapture() {
+        val cid = _uiState.value.captureId
+        if (!cid.isNullOrBlank() && !_uiState.value.isSaved) {
+            viewModelScope.launch(ioDispatcher) {
+                try {
+                    pendingCaptureDao?.updateState(cid, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DISMISSED)
+                } catch (_: Exception) {}
             }
         }
     }
@@ -411,6 +471,7 @@ class ExpenseViewModel(
                     )
                     when (val res = transactionRepository.updateTransaction(updated)) {
                         is Result.Success -> {
+                            markCaptureDoneIfPresent()
                             _uiState.update { it.copy(isSaving = false, isSaved = true) }
                         }
                         is Result.Error -> {
@@ -434,6 +495,7 @@ class ExpenseViewModel(
                     reviewState = ReviewState.CONFIRMED
                 )) {
                     is Result.Success -> {
+                        markCaptureDoneIfPresent()
                         _uiState.update { it.copy(isSaving = false, isSaved = true) }
                     }
                     is Result.Error -> {
@@ -442,6 +504,15 @@ class ExpenseViewModel(
                     is Result.Loading -> {}
                 }
             }
+        }
+    }
+
+    private suspend fun markCaptureDoneIfPresent() {
+        val cid = _uiState.value.captureId
+        if (!cid.isNullOrBlank()) {
+            try {
+                pendingCaptureDao?.updateState(cid, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+            } catch (_: Exception) {}
         }
     }
 
@@ -502,6 +573,7 @@ class ExpenseViewModel(
             peopleRepository: PeopleRepository,
             categoryRepository: com.financeautomation.domain.repository.CategoryRepository? = null,
             accountRepository: com.financeautomation.domain.repository.AccountRepository? = null,
+            pendingCaptureDao: com.financeautomation.data.local.dao.PendingCaptureDao? = null,
             calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
             logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -513,6 +585,7 @@ class ExpenseViewModel(
                     peopleRepository = peopleRepository,
                     categoryRepository = categoryRepository,
                     accountRepository = accountRepository,
+                    pendingCaptureDao = pendingCaptureDao,
                     calculateSplitUseCase = calculateSplitUseCase,
                     logExpenseUseCase = logExpenseUseCase,
                     ioDispatcher = ioDispatcher

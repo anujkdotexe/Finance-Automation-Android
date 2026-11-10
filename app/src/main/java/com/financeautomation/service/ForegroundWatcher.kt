@@ -19,11 +19,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -39,6 +41,7 @@ class ForegroundWatcher(
     private val mutex = Mutex()
     private var watcherJob: Job? = null
     private val pollCounters = ConcurrentHashMap<String, Int>()
+    private val wakeChannel = Channel<Unit>(Channel.CONFLATED)
 
     @Volatile
     private var screenReceiverRegistered = false
@@ -47,7 +50,7 @@ class ForegroundWatcher(
         override fun onReceive(c: Context?, intent: Intent?) {
             val action = intent?.action ?: return
             if (action == Intent.ACTION_SCREEN_ON || action == Intent.ACTION_USER_PRESENT) {
-                // Wake up loop check
+                wakeChannel.trySend(Unit)
             }
         }
     }
@@ -159,7 +162,9 @@ class ForegroundWatcher(
                     }
 
                     if (!isScreenInteractiveAndUnlocked()) {
-                        delay(POLL_INTERVAL_MS)
+                        withTimeoutOrNull(POLL_INTERVAL_MS) {
+                            wakeChannel.receive()
+                        }
                         continue
                     }
 
@@ -186,7 +191,9 @@ class ForegroundWatcher(
                         }
                     }
 
-                    delay(POLL_INTERVAL_MS)
+                    withTimeoutOrNull(POLL_INTERVAL_MS) {
+                        wakeChannel.receive()
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -207,6 +214,7 @@ class ForegroundWatcher(
                 // Default launcher: start ModalBottomSheetActivity with capture ID
                 val intent = Intent(context, ModalBottomSheetActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra(ModalBottomSheetActivity.EXTRA_CAPTURE_ID, capture.id)
                     putExtra("capture_id", capture.id)
                     putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, capture.id)
                 }
@@ -224,7 +232,11 @@ class ForegroundWatcher(
                 addAction(Intent.ACTION_USER_PRESENT)
             }
             try {
-                context.registerReceiver(screenReceiver, filter)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    context.registerReceiver(screenReceiver, filter)
+                }
                 screenReceiverRegistered = true
             } catch (e: Exception) {
                 Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: registerReceiver")

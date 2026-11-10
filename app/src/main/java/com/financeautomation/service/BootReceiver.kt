@@ -40,9 +40,14 @@ class BootReceiver : BroadcastReceiver() {
             NotificationListenerHealthWorker.schedule(context)
             SyncTransactionsWorker.enqueuePeriodic(context)
 
-            // 3. Resume ForegroundWatcher for any persisted WAITING captures
+            // 3. Reset incomplete SHOWN captures to WAITING and resume ForegroundWatcher
             val app = context.applicationContext as? FinanceApplication
-            app?.appContainer?.foregroundWatcher?.checkAndResume(receiverScope)
+            receiverScope.launch {
+                try {
+                    app?.appContainer?.database?.pendingCaptureDao()?.resetShownToWaiting()
+                } catch (_: Exception) {}
+                app?.appContainer?.foregroundWatcher?.checkAndResume(receiverScope)
+            }
         } catch (e: Exception) {
             Diagnostics.record("BootReceiver", "${e.javaClass.simpleName}: onReceive")
         }
