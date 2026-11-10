@@ -6,7 +6,6 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.financeautomation.R
-import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.presentation.ui.EntryActivity
 
 /**
@@ -19,12 +18,7 @@ class QuickSettingsTileService : TileService() {
         super.onStartListening()
         val tile = qsTile ?: return
         tile.state = Tile.STATE_INACTIVE
-        tile.label = try {
-            getString(R.string.quick_add_tile_label)
-        } catch (e: Exception) {
-            Diagnostics.record("QuickSettingsTileService", "${e.javaClass.simpleName}: getString label fallback")
-            "Quick log"
-        }
+        tile.label = getString(R.string.quick_add_tile_label)
         tile.updateTile()
     }
 
@@ -54,9 +48,5 @@ class QuickSettingsTileService : TileService() {
         } else {
             launchAction.run()
         }
-    }
-
-    override fun onStopListening() {
-        super.onStopListening()
     }
 }
