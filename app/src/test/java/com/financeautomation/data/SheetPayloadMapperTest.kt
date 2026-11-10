@@ -224,7 +224,7 @@ class SheetPayloadMapperTest {
         val updated = SheetPayloadMapper.mapOriginRolloverUpdate(pendingTxn)
 
         assertEquals(0.0, updated.owedToMe, 0.001)
-        assertEquals(TransactionStatus.CARRIED, updated.status)
+        assertEquals(TransactionStatus.CARRIED_FWD, updated.status)
         assertEquals(225.0, updated.myShare, 0.001) // myShare preserved in origin
     }
 
