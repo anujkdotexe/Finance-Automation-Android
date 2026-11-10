@@ -1047,13 +1047,12 @@ to show; it never changes app logic.
 | :--- | :--- | :--- |
 | Samsung | Remove the app from sleeping and deep-sleeping apps; set battery to Unrestricted | `com.samsung.android.lool` battery activities; battery settings |
 | Xiaomi, Redmi, Poco | Turn on Autostart; allow "Display pop-up windows while running in the background"; battery saver No restrictions; lock the app in Recents | `com.miui.securitycenter` autostart management; `miui.intent.action.APP_PERM_EDITOR` with `extra_pkgname` |
-| Oppo, Realme | Allow auto-start and background activity; allow in the battery manager | `com.coloros.safecenter` and `com.oppo.safe` startup lists; battery settings |
+| Oppo, Realme | Allow auto-start and background activity; allow in the battery manager | `com.oplus.battery`, `com.oplus.securitypermission`, `com.oplus.safecenter` activities; `com.coloros.safecenter` and `com.oppo.safe` startup lists; battery settings |
 | Vivo | Allow auto-start; allow background pop-up; turn off high background power consumption restriction | `com.vivo.permissionmanager` background start-up manager; `com.iqoo.secure` power pages |
-| OnePlus | Battery optimisation set to Don't optimise; allow auto-launch | `com.oneplus.security` launch list; battery optimisation settings |
+| OnePlus | Battery optimisation set to Don't optimise; allow auto-launch | `com.oplus` activities; `com.oneplus.security` launch list; battery optimisation settings |
 | Pixel and others | Standard permissions only | none |
 
-These component names are widely reported but firmware-dependent. Treat them as candidates: resolve each before use, never crash on
-a missing one, and never depend on one. Put the instruction text in `strings.xml`.
+These component names are widely reported but firmware-dependent. Realme candidates are verified on a physical Realme RMX3998 on Android 16; Samsung, Xiaomi and Vivo lists are unverified until tested on those phones. Treat them as candidates: resolve each before use, never crash on a missing one, and never depend on one. Put the instruction text in `strings.xml`.
 
 ### 7.4 Self-test and warnings
 

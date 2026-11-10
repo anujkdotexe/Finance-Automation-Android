@@ -1,5 +1,7 @@
 package com.financeautomation.presentation.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.presentation.health.OemHardeningHelper
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.viewmodel.HealthCheckId
@@ -68,6 +71,7 @@ fun SetupHealthCard(
 
     var selfTestResultText by remember { mutableStateOf<String?>(null) }
     var selfTestSucceeded by remember { mutableStateOf<Boolean?>(null) }
+    var fallbackInstructionText by remember { mutableStateOf<String?>(null) }
 
     val oemInfo = remember { OemHardeningHelper.getOemInfo() }
 
@@ -105,20 +109,36 @@ fun SetupHealthCard(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        AnimatedVisibility(visible = fallbackInstructionText != null) {
+            fallbackInstructionText?.let { text ->
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                ) {
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+        }
+
         // 2. The 7 Setup Health Check Rows
         state.checks.forEach { checkItem ->
             HealthCheckRow(
                 item = checkItem,
                 onFix = {
+                    fallbackInstructionText = null
                     if (checkItem.id == HealthCheckId.GOOGLE_CONNECTION) {
                         onNavigateGoogleSignIn?.invoke()
                     } else {
-                        val intent = SetupHealthViewModel.createFixIntent(checkItem.id, context)
-                        try {
-                            context.startActivity(intent)
-                        } catch (_: Exception) {
-                            val fallback = SetupHealthViewModel.getAppDetailsSettingsIntent(context)
-                            context.startActivity(fallback)
+                        launchSettingsWithGuardedFallback(context, checkItem, oemInfo) { instruction ->
+                            fallbackInstructionText = instruction
                         }
                     }
                 },
@@ -330,6 +350,34 @@ private fun HealthCheckRow(
                     }
                 }
             }
+        }
+    }
+}
+
+private fun launchSettingsWithGuardedFallback(
+    context: Context,
+    item: HealthCheckItem,
+    oemInfo: com.financeautomation.presentation.health.OemInfo,
+    onFallbackFailed: (String) -> Unit
+) {
+    val intent = SetupHealthViewModel.createFixIntent(item.id, context)
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        if (e !is ActivityNotFoundException && e !is SecurityException) throw e
+        Diagnostics.record("SetupHealthCard", "${e.javaClass.simpleName}: launchFixIntent")
+        val fallback = SetupHealthViewModel.getAppDetailsSettingsIntent(context)
+        try {
+            context.startActivity(fallback)
+        } catch (fallbackEx: Exception) {
+            if (fallbackEx !is ActivityNotFoundException && fallbackEx !is SecurityException) throw fallbackEx
+            Diagnostics.record("SetupHealthCard", "${fallbackEx.javaClass.simpleName}: launchFallbackIntent")
+            val instruction = if (item.id == HealthCheckId.OEM_BACKGROUND) {
+                context.getString(oemInfo.instructionRes)
+            } else {
+                context.getString(item.descriptionRes)
+            }
+            onFallbackFailed(instruction)
         }
     }
 }
