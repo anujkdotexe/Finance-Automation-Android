@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.data.local.dao.CategoryStatDao
@@ -30,10 +31,10 @@ object ForegroundHeadsUpHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS,
-                "Financial Alerts",
+                context.getString(R.string.notification_channel_heads_up_name),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Expense review and categorization alerts"
+                description = context.getString(R.string.notification_channel_heads_up_desc)
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(channel)
@@ -104,7 +105,7 @@ object ForegroundHeadsUpHelper {
         )
 
         val amountStr = capture.amount?.let { formatRupees(it, includeDecimals = true) } ?: "Pending review"
-        val titleText = if (capture.payee.isNotBlank()) capture.payee else "Payment Detected"
+        val titleText = if (capture.payee.isNotBlank()) capture.payee else context.getString(R.string.notif_payment_detected_title)
 
         val builder = NotificationCompat.Builder(context, NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS)
             .setSmallIcon(android.R.drawable.stat_notify_more)

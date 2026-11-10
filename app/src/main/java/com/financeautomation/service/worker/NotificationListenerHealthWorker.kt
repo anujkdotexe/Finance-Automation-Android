@@ -15,6 +15,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.service.NotificationListenerServiceImpl
 import kotlinx.coroutines.CancellationException
@@ -58,10 +59,10 @@ class NotificationListenerHealthWorker(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_HEALTH_ALERTS,
-                "Service Health Alerts",
+                applicationContext.getString(R.string.health_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Alerts when notification interception requires user authorization"
+                description = applicationContext.getString(R.string.health_channel_desc)
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -78,8 +79,8 @@ class NotificationListenerHealthWorker(
 
         val builder = NotificationCompat.Builder(applicationContext, CHANNEL_HEALTH_ALERTS)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("Expense Tracking Disabled")
-            .setContentText("Notification access was turned off. Tap to re-enable automated capture.")
+            .setContentTitle(applicationContext.getString(R.string.notif_expense_tracking_disabled_title))
+            .setContentText(applicationContext.getString(R.string.notif_expense_tracking_disabled_text))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

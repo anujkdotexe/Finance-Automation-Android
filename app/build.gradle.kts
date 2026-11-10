@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,11 +22,31 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val keystorePropsFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties()
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.inputStream().use { keystoreProps.load(it) }
+    }
+
+    signingConfigs {
+        create("releaseSigning") {
+            if (keystorePropsFile.exists()) {
+                val storePath = keystoreProps.getProperty("storeFile")
+                storeFile = if (storePath != null) file(storePath) else null
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            } else {
+                initWith(signingConfigs.getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("releaseSigning")
             ndk {
                 abiFilters += listOf("arm64-v8a", "armeabi-v7a")
             }
@@ -32,10 +54,28 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "false")
+            buildConfigField("Boolean", "ENABLE_SIMULATOR", "false")
+        }
+        create("beta") {
+            initWith(buildTypes.getByName("release"))
+            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("releaseSigning")
+            buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "true")
+            buildConfigField("Boolean", "ENABLE_SIMULATOR", "true")
         }
         debug {
             isMinifyEnabled = false
             isDebuggable = true
+            buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "true")
+            buildConfigField("Boolean", "ENABLE_SIMULATOR", "true")
+        }
+    }
+
+    sourceSets {
+        getByName("beta") {
+            java.srcDirs("src/debug/java")
+            res.srcDirs("src/debug/res")
         }
     }
 
@@ -109,6 +149,10 @@ dependencies {
     // KotlinX Serialization JSON
     implementation(libs.kotlinx.serialization.json)
 
+    // Firebase Crashlytics (inert without google-services.json)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
+
     // Unit Testing
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
@@ -121,5 +165,10 @@ dependencies {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
