@@ -2,7 +2,6 @@ package com.financeautomation.presentation.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Build
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
@@ -14,18 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,12 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.PeopleRepository
@@ -49,7 +38,6 @@ import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.flows.OpenDebtItem
-import com.financeautomation.presentation.components.QuickLogSheet
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
@@ -58,8 +46,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.function.Consumer
 
 /**
  * Application-scoped controller managing the system alert overlay window for transaction review and flows.
@@ -84,8 +75,24 @@ class OverlayController(
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val resultPill = ResultPillOverlay(appContext)
     private val blurHelper = OverlayBlurHelper(windowManager)
-    private val mainScope = CoroutineScope(mainDispatcher)
+    private val mainScope = CoroutineScope(mainDispatcher + SupervisorJob())
 
+    private val actionDispatcher = OverlayActionDispatcher(
+        transactionRepository = transactionRepository,
+        tripTagRepository = tripTagRepository,
+        resultPill = resultPill,
+        onDismiss = ::dismiss,
+        mainScope = mainScope,
+        ioDispatcher = ioDispatcher
+    )
+
+    val isShowing: Boolean
+        get() = currentView != null
+
+    private val _isShowingFlow = MutableStateFlow(false)
+    val isShowingFlow: StateFlow<Boolean> = _isShowingFlow.asStateFlow()
+
+    private var currentCaptureId: String? = null
     private val openDebtsState = mutableStateOf<List<OpenDebtItem>>(emptyList())
     private var openDebtsJob: Job? = null
 
@@ -95,12 +102,34 @@ class OverlayController(
 
     /**
      * Shows an overlay window for the given request.
+     * Returns true if displayed or queued, false if blocked by missing permissions or active presentation.
      */
-    fun show(request: OverlayRequest) {
+    fun show(request: OverlayRequest): Boolean {
         if (!Settings.canDrawOverlays(appContext)) {
             Diagnostics.record("OverlayController", "show: SYSTEM_ALERT_WINDOW permission missing")
-            return
+            return false
         }
+
+        // Automatic capture while sheet is already open is deferred; remains in WAITING
+        if (request is OverlayRequest.Capture && isShowing) {
+            return false
+        }
+
+        // Explicit user action replacing an active capture reverts the old capture back to WAITING
+        val replacedCaptureId = currentCaptureId
+        if (replacedCaptureId != null && request !is OverlayRequest.Capture) {
+            mainScope.launch(ioDispatcher) {
+                try {
+                    pendingCaptureDaoProvider().updateState(replacedCaptureId, PendingCaptureEntity.STATE_WAITING)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: revertReplacedCapture")
+                }
+            }
+            currentCaptureId = null
+        }
+
+        currentCaptureId = (request as? OverlayRequest.Capture)?.captureId
 
         mainScope.launch {
             try {
@@ -182,7 +211,7 @@ class OverlayController(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .background(SCRIM_COLOR)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
@@ -211,11 +240,11 @@ class OverlayController(
                                                 resultPill.show(message)
                                             }
                                         },
-                                        onConfirmIncome = ::handleConfirmIncome,
-                                        onConfirmFriendPaid = ::handleConfirmPayable,
-                                        onConfirmRepaid = ::handleConfirmRepaid,
-                                        onStartTrip = ::handleStartTrip,
-                                        onEndTrip = ::handleEndTrip,
+                                        onConfirmIncome = actionDispatcher::confirmIncome,
+                                        onConfirmFriendPaid = actionDispatcher::confirmPayable,
+                                        onConfirmRepaid = actionDispatcher::confirmRepaid,
+                                        onStartTrip = actionDispatcher::startTrip,
+                                        onEndTrip = actionDispatcher::endTrip,
                                         onDismiss = {
                                             viewModel.onDismiss()
                                             dismiss()
@@ -233,69 +262,24 @@ class OverlayController(
                 treeOwners.attachTo(composeView)
                 windowManager.addView(composeView, layoutParams)
                 currentView = composeView
+                _isShowingFlow.value = true
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: show failed")
-            }
-        }
-    }
-
-    private fun handleConfirmIncome(
-        amount: Double,
-        account: String,
-        inflowType: String,
-        settler: String,
-        reason: String,
-        explicitRefs: List<String>
-    ) {
-        mainScope.launch(ioDispatcher) {
-            val res = transactionRepository.logCredit(settler, amount, explicitRefs, account, inflowType, reason)
-            mainScope.launch {
+                val failedCaptureId = currentCaptureId
+                if (failedCaptureId != null) {
+                    launch(ioDispatcher) {
+                        try {
+                            pendingCaptureDaoProvider().updateState(failedCaptureId, PendingCaptureEntity.STATE_WAITING)
+                        } catch (ex: Exception) {
+                            if (ex is CancellationException) throw ex
+                        }
+                    }
+                }
                 dismiss()
-                resultPill.show(if (res is com.financeautomation.core.model.Result.Success) "Saved, will sync" else "Failed to record income")
             }
         }
-    }
-
-    private fun handleConfirmPayable(amount: Double, creditor: String, whatFor: String) {
-        mainScope.launch(ioDispatcher) {
-            val res = transactionRepository.logPayable(creditor, amount, whatFor)
-            mainScope.launch {
-                dismiss()
-                resultPill.show(if (res is com.financeautomation.core.model.Result.Success) "Saved, will sync" else "Failed to record payable")
-            }
-        }
-    }
-
-    private fun handleConfirmRepaid(amount: Double, person: String, timestamp: Long) {
-        mainScope.launch(ioDispatcher) {
-            val res = transactionRepository.logRepayment(person, amount, null, timestamp)
-            mainScope.launch {
-                dismiss()
-                resultPill.show(if (res is com.financeautomation.core.model.Result.Success) "Saved, will sync" else "Failed to record repayment")
-            }
-        }
-    }
-
-    private fun handleStartTrip(tagName: String) {
-        mainScope.launch(ioDispatcher) {
-            val tag = tripTagRepository.getTagByName(tagName) ?: tripTagRepository.insertTripTag(tagName)
-            tripTagRepository.setActiveTag(tag.id)
-            mainScope.launch {
-                dismiss()
-                resultPill.show("Trip '$tagName' started")
-            }
-        }
-    }
-
-    private fun handleEndTrip() {
-        mainScope.launch(ioDispatcher) {
-            tripTagRepository.setActiveTag(null)
-            mainScope.launch {
-                dismiss()
-                resultPill.show("Trip ended")
-            }
-        }
+        return true
     }
 
     private fun loadOpenDebtsForPerson(person: String) {
@@ -340,12 +324,13 @@ class OverlayController(
                 windowManager.removeView(view)
             } catch (e: Exception) {
                 Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: dismiss")
-            } finally {
-                currentView = null
-                currentTreeOwners = null
-                currentLayoutParams = null
             }
         }
+        currentView = null
+        currentTreeOwners = null
+        currentLayoutParams = null
+        currentCaptureId = null
+        _isShowingFlow.value = false
     }
 
     /**
@@ -364,5 +349,8 @@ class OverlayController(
         show(OverlayRequest.SelfTest)
         return true
     }
-}
 
+    companion object {
+        val SCRIM_COLOR = Color.Black.copy(alpha = 0.45f)
+    }
+}
