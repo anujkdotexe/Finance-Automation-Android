@@ -20,6 +20,8 @@ import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
+import com.financeautomation.presentation.overlay.OverlayRequest
+import com.financeautomation.presentation.ui.EntryActivity
 import com.financeautomation.presentation.ui.ModalBottomSheetActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -143,13 +145,9 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                         }
                     }
                     is NotificationProcessingOutcome.Created -> {
-                        // Compatibility path: show overlay or fallback alert
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this@NotificationListenerServiceImpl)) {
-                            val intent = Intent(this@NotificationListenerServiceImpl, ModalBottomSheetActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, outcome.transaction.id)
-                            }
-                            startActivity(intent)
+                        val controller = container?.overlayController
+                        if (Settings.canDrawOverlays(this@NotificationListenerServiceImpl) && controller != null) {
+                            controller.show(OverlayRequest.ManualExpense)
                         } else {
                             showHeadsUpNotification(outcome.headsUpNotificationData)
                         }
@@ -207,7 +205,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         createNotificationChannel(notificationManager)
 
-        val intent = Intent(this, ModalBottomSheetActivity::class.java).apply {
+        val intent = Intent(this, EntryActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("source_package", sourcePackage)
         }

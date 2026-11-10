@@ -7,6 +7,7 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.presentation.ui.EntryActivity
 import com.financeautomation.presentation.ui.ModalBottomSheetActivity
 
 /**
@@ -30,7 +31,7 @@ class QuickSettingsTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val intent = Intent(this, ModalBottomSheetActivity::class.java).apply {
+        val intent = Intent(this, EntryActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 

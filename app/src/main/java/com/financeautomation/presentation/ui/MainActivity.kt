@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity() {
 
             val needsOnboarding = forceOnboarding || googleEmail.isNullOrBlank() || spreadsheetId.isNullOrBlank()
 
-            FinanceAutomationTheme(darkTheme = false, dynamicColor = false) {
+            FinanceAutomationTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
