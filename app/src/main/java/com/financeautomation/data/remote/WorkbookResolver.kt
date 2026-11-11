@@ -185,7 +185,21 @@ class WorkbookResolver(
         val tabsMap = (tabsResult as Result.Success).data
         val hasMasterTabs = tabsMap.containsKey("Dashboard") && tabsMap.containsKey("Template")
 
-        if (!hasMasterTabs) {
+        var hasValidLayout = false
+        if (hasMasterTabs) {
+            // Verify that Template tab actually has the 31-column layout populated (row 3 headers)
+            val templateHeadersResult = googleSheetsClient.getRangeValues(spreadsheetId, "Template!A3:AE3")
+            if (templateHeadersResult is Result.Success) {
+                val rowValues = templateHeadersResult.data.firstOrNull() ?: emptyList()
+                val firstHeader = rowValues.firstOrNull()?.toString()?.trim()
+                val lastHeader = rowValues.lastOrNull()?.toString()?.trim()
+                if (firstHeader == "Date" && lastHeader == "Payable Txn UUID" && rowValues.size >= 28) {
+                    hasValidLayout = true
+                }
+            }
+        }
+
+        if (!hasMasterTabs || !hasValidLayout) {
             val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
             val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
             val provRes = googleSheetsClient.provisionMasterWorkbook(
