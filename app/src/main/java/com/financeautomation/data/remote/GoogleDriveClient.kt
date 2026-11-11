@@ -58,7 +58,7 @@ open class GoogleDriveClient(
             okHttpClient.newCall(searchRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val apiError = GoogleApiError.parse("drive.files.list", response.code, bodyString)
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
                     return@withContext Result.Error(
                         GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to query folder '$folderName'"), apiError)
                     )
@@ -93,7 +93,7 @@ open class GoogleDriveClient(
             okHttpClient.newCall(createRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val apiError = GoogleApiError.parse("drive.files.create", response.code, bodyString)
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_CREATE, response.code, bodyString)
                     return@withContext Result.Error(
                         GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to create folder '$folderName'"), apiError)
                     )
@@ -201,7 +201,7 @@ open class GoogleDriveClient(
             okHttpClient.newCall(createRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val apiError = GoogleApiError.parse("drive.files.create", response.code, bodyString)
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_CREATE, response.code, bodyString)
                     return@withContext Result.Error(
                         GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to create spreadsheet '$spreadsheetName'"), apiError)
                     )
@@ -237,7 +237,7 @@ open class GoogleDriveClient(
             okHttpClient.newCall(searchRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val apiError = GoogleApiError.parse("drive.files.list", response.code, bodyString)
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
                     return@withContext Result.Error(
                         GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to find workbook for year $year"), apiError)
                     )
@@ -278,7 +278,7 @@ open class GoogleDriveClient(
             okHttpClient.newCall(searchRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val apiError = GoogleApiError.parse("drive.files.list", response.code, bodyString)
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
                     return@withContext Result.Error(
                         GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to search spreadsheet '$spreadsheetName'"), apiError)
                     )
@@ -342,7 +342,7 @@ open class GoogleDriveClient(
                 okHttpClient.newCall(patchRequest).execute().use { response ->
                     val bodyString = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        val apiError = GoogleApiError.parse("drive.files.update", response.code, bodyString)
+                        val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_UPDATE, response.code, bodyString)
                         return@withContext Result.Error(
                             GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to update file"), apiError)
                         )
@@ -377,7 +377,7 @@ open class GoogleDriveClient(
                 okHttpClient.newCall(postRequest).execute().use { response ->
                     val bodyString = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        val apiError = GoogleApiError.parse("drive.files.create", response.code, bodyString)
+                        val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_CREATE, response.code, bodyString)
                         return@withContext Result.Error(
                             GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to create file"), apiError)
                         )
@@ -412,7 +412,7 @@ open class GoogleDriveClient(
             okHttpClient.newCall(copyRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    val apiError = GoogleApiError.parse("drive.files.copy", response.code, bodyString)
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_COPY, response.code, bodyString)
                     return@withContext Result.Error(
                         GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to copy file '$fileId' to '$backupName'"), apiError)
                     )

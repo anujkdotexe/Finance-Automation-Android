@@ -127,12 +127,7 @@ class DefaultAppContainer(
     override val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     override val rawHttpErrorStore: RawHttpErrorStore by lazy {
-        val dir = try {
-            applicationContext.filesDir ?: java.io.File(System.getProperty("java.io.tmpdir") ?: ".", "files").apply { mkdirs() }
-        } catch (e: Exception) {
-            java.io.File(System.getProperty("java.io.tmpdir") ?: ".", "files").apply { mkdirs() }
-        }
-        RawHttpErrorStore(dir)
+        RawHttpErrorStore(applicationContext.filesDir)
     }
 
     init {

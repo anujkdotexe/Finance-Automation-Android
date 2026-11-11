@@ -167,4 +167,73 @@ class RawHttpErrorStoreTest {
         val entries = store.getEntries()
         assertTrue("Release build must not store raw error bodies", entries.isEmpty())
     }
+
+    @Test
+    fun testPolicyStoresBodyForDriveListAndUpdateCalls() = runBlocking {
+        val store = RawHttpErrorStore(
+            filesDir = tempFolder.newFolder("errors_test_policy_1"),
+            ioDispatcher = Dispatchers.Unconfined,
+            isDebugOrBeta = true
+        )
+
+        // No isProvisioningOrStructure override: the endpoint policy decides.
+        store.recordError(GoogleEndpoint.DRIVE_FILES_LIST, 403, """{"error":{"status":"PERMISSION_DENIED"}}""")
+        store.recordError(GoogleEndpoint.DRIVE_FILES_UPDATE, 400, """{"error":{"status":"INVALID_ARGUMENT"}}""")
+        store.recordError(GoogleEndpoint.SHEETS_VALUES_BATCH_GET, 400, """{"error":{"status":"INVALID_ARGUMENT"}}""")
+
+        val ids = store.getEntries().map { it.endpointId }
+        assertEquals(
+            listOf(
+                GoogleEndpoint.DRIVE_FILES_LIST,
+                GoogleEndpoint.DRIVE_FILES_UPDATE,
+                GoogleEndpoint.SHEETS_VALUES_BATCH_GET
+            ),
+            ids
+        )
+    }
+
+    @Test
+    fun testPolicyStoresNoBodyForTransactionRowCallsAndUnknownIds() = runBlocking {
+        val store = RawHttpErrorStore(
+            filesDir = tempFolder.newFolder("errors_test_policy_2"),
+            ioDispatcher = Dispatchers.Unconfined,
+            isDebugOrBeta = true
+        )
+
+        store.recordError(GoogleEndpoint.SHEETS_VALUES_APPEND, 400, """{"error":{"message":"bad value"}}""")
+        store.recordError(GoogleEndpoint.SHEETS_VALUES_UPDATE, 400, """{"error":{"message":"bad value"}}""")
+        store.recordError(GoogleEndpoint.SHEETS_VALUES_BATCH_UPDATE, 400, """{"error":{"message":"bad value"}}""")
+        store.recordError(GoogleEndpoint.SHEETS_OPERATION, 400, """{"error":{"message":"bad value"}}""")
+        store.recordError("drive.files.search", 400, """{"error":{"message":"unknown id"}}""")
+
+        assertTrue("Transaction-row and unknown endpoints must store no body", store.getEntries().isEmpty())
+    }
+
+    @Test
+    fun testBodyIsCutToFourKilobytesOfUtf8BytesWithoutSplittingCharacters() = runBlocking {
+        val store = RawHttpErrorStore(
+            filesDir = tempFolder.newFolder("errors_test_utf8"),
+            ioDispatcher = Dispatchers.Unconfined,
+            isDebugOrBeta = true
+        )
+
+        // Each euro sign is 3 UTF-8 bytes: 1365 characters fit in 4096 bytes (4095 bytes), a 1366th would not.
+        store.recordError(GoogleEndpoint.SHEETS_BATCH_UPDATE, 400, "€".repeat(3000))
+        // Each e-acute is 2 UTF-8 bytes: exactly 2048 characters fit in 4096 bytes.
+        store.recordError(GoogleEndpoint.SHEETS_BATCH_UPDATE, 400, "é".repeat(5000))
+
+        val entries = store.getEntries()
+        assertEquals(1365, entries[0].responseBody.length)
+        assertEquals(2048, entries[1].responseBody.length)
+        for (entry in entries) {
+            assertTrue(entry.responseBody.toByteArray(Charsets.UTF_8).size <= RawHttpErrorStore.MAX_BODY_BYTES)
+            assertFalse("A character was split", entry.responseBody.contains('�'))
+        }
+    }
+
+    @Test
+    fun testCutToUtf8BytesKeepsShortTextUntouched() {
+        assertEquals("short", RawHttpErrorStore.cutToUtf8Bytes("short", 4096))
+        assertEquals("", RawHttpErrorStore.cutToUtf8Bytes("€", 2))
+    }
 }

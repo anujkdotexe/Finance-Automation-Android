@@ -1,6 +1,7 @@
 package com.financeautomation.data.remote
 
 import com.financeautomation.BuildConfig
+import com.financeautomation.core.utils.Diagnostics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -42,20 +43,21 @@ class RawHttpErrorStore(
         const val MAX_ENTRIES = 20
         const val MAX_BODY_BYTES = 4096
 
-        private val PROVISIONING_AND_STRUCTURE_ENDPOINTS = setOf(
-            "drive.files.create",
-            "drive.files.search",
-            "drive.files.copy",
-            "drive.files.get",
-            "drive.folders.create",
-            "drive.folders.search",
-            "sheets.get",
-            "sheets.batchUpdate",
-            "sheets.create"
-        )
-
+        /** True when a failed response of this endpoint may be stored (see [GoogleEndpoint.BODY_ALLOWED]). */
         fun isStructureOrProvisioningCall(endpointId: String): Boolean {
-            return PROVISIONING_AND_STRUCTURE_ENDPOINTS.contains(endpointId)
+            return GoogleEndpoint.BODY_ALLOWED.contains(endpointId)
+        }
+
+        /** Cuts [text] to at most [maxBytes] UTF-8 bytes without splitting a character. */
+        internal fun cutToUtf8Bytes(text: String, maxBytes: Int): String {
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            if (bytes.size <= maxBytes) return text
+            var end = maxBytes
+            // Step back over continuation bytes (10xxxxxx) so a multi-byte character is never split.
+            while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) {
+                end--
+            }
+            return String(bytes, 0, end, Charsets.UTF_8)
         }
     }
 
@@ -80,12 +82,8 @@ class RawHttpErrorStore(
         // Never store body for transaction row calls
         if (!isProvisioningOrStructure) return@withContext
 
-        // Cut body to 4 KB (4096 characters)
-        val cutBody = if (responseBody.length > MAX_BODY_BYTES) {
-            responseBody.substring(0, MAX_BODY_BYTES)
-        } else {
-            responseBody
-        }
+        // Cut body to 4 KB (4096 UTF-8 bytes, never splitting a character)
+        val cutBody = cutToUtf8Bytes(responseBody, MAX_BODY_BYTES)
 
         val entry = RawHttpErrorEntry(
             timestamp = Instant.now().toString(),
@@ -135,6 +133,7 @@ class RawHttpErrorStore(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Diagnostics.record("RawHttpErrorStore", "load failed: ${e.javaClass.simpleName}")
                 memoryEntries.clear()
             }
         }
@@ -153,7 +152,7 @@ class RawHttpErrorStore(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // Silently ignore storage failures off main thread
+            Diagnostics.record("RawHttpErrorStore", "persist failed: ${e.javaClass.simpleName}")
         }
     }
 }

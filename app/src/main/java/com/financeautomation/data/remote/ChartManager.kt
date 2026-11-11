@@ -64,7 +64,7 @@ object ChartManager {
             okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    throw createHttpException(response.code, bodyString, "getExistingCharts failed", spreadsheetId, "sheets.get")
+                    throw createHttpException(response.code, bodyString, "getExistingCharts failed", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                 }
 
                 val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
