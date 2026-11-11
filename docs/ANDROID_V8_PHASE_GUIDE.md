@@ -283,7 +283,7 @@ How:
 
 1. Spreadsheet properties first, once per workbook: `updateSpreadsheetProperties` with `locale = "en_GB"` and
    `timeZone = "Asia/Kolkata"`, `fields = "locale,timeZone"`, executed in an isolated `batchUpdate` before tab creation.
-   Google Sheets API rejects `en_IN` with HTTP 400 Bad Request because `en_IN` is not in Google Sheets supported locale list. We use `en_GB` as the closest English locale matching Indian date conventions (`DD/MM/YYYY`) and comma formula argument separators, while `timeZone = "Asia/Kolkata"` keeps date functions anchored to IST. All rupee values use explicit custom number formats (`"₹"#,##0`), rendering currency display independent of sheet locale. If the cosmetic properties batch fails, it is logged to Diagnostics and tab provisioning continues uninterrupted.
+   On-device verification confirmed that `locale = "en_GB"` with `timeZone = "Asia/Kolkata"` is accepted by Google Sheets API without error (0 failures logged in Diagnostics or logcat for the locale batch). We use `en_GB` to ensure English month names in `TEXT(TODAY(), "mmm")`, `DD/MM/YYYY` date parsing, and comma formula argument separators, while `timeZone = "Asia/Kolkata"` anchors date functions to IST. All rupee values use explicit custom number formats (`"₹"#,##0`), rendering currency display independent of sheet locale defaults. If the cosmetic properties batch ever fails, it is recorded in Diagnostics and tab provisioning continues uninterrupted.
 2. Ledger tabs (`Template` and every `MmmYY` tab), all in one `batchUpdate`:
    - Grid size: 1000 rows by 31 columns (`updateSheetProperties` with `gridProperties.rowCount` and `columnCount`, fields
      `gridProperties.rowCount,gridProperties.columnCount`).
