@@ -152,10 +152,10 @@ class OnboardingViewModel(
         startWorkspaceProvisioning()
     }
 
-    fun startWorkspaceProvisioning() {
+    fun startWorkspaceProvisioning(forceValidateTabs: Boolean = false) {
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(step2State = StepState.IN_PROGRESS, step2Error = null) }
-            when (val res = workbookResolver.resolveForYear(currentYear, forceValidateTabs = true)) {
+            when (val res = workbookResolver.resolveForYear(currentYear, forceValidateTabs = forceValidateTabs)) {
                 is Result.Success -> {
                     val id = res.data
                     _uiState.update {
@@ -201,29 +201,31 @@ class OnboardingViewModel(
         }
     }
 
-    internal fun formatFriendlyErrorMessage(e: Throwable): String {
-        val apiError = when (e) {
-            is GoogleSheetsApiException -> e.apiError
-            is GoogleDriveApiException -> e.apiError
-            else -> null
-        }
-        if (apiError != null) {
-            val r = apiError.reason
-            return when {
-                r == "SERVICE_DISABLED" || r == "accessNotConfigured" ->
-                    "Google Sheets or Drive API is not enabled for your Google Cloud project. Please enable them in Google Cloud Console."
-                apiError.httpStatus == 403 || r == "ACCESS_TOKEN_SCOPE_INSUFFICIENT" || r == "insufficientPermissions" ->
-                    "Required Google Drive or Sheets permissions were not granted. Please sign out and sign in granting all requested scopes."
-                apiError.httpStatus == 429 || r == "RATE_LIMIT_EXCEEDED" || r == "rateLimitExceeded" || r == "userRateLimitExceeded" ->
-                    "Google API rate limit reached. Please wait a moment and tap Retry."
-                else ->
-                    "Workspace setup failed (${apiError.endpointId} HTTP ${apiError.httpStatus} ${apiError.reason ?: apiError.status ?: "UNKNOWN"}). Tap retry."
-            }
-        }
-        return e.message ?: "Failed to resolve finance workspace"
-    }
-
     companion object {
+        fun formatFriendlyErrorMessage(e: Throwable): String {
+            val apiError = when (e) {
+                is GoogleSheetsApiException -> e.apiError
+                is GoogleDriveApiException -> e.apiError
+                else -> null
+            }
+            if (apiError != null) {
+                val r = apiError.reason
+                return when {
+                    r == "SERVICE_DISABLED" || r == "accessNotConfigured" ->
+                        "Google Sheets or Drive API is not enabled for your Google Cloud project. Please enable them in Google Cloud Console."
+                    apiError.httpStatus == 403 || r == "ACCESS_TOKEN_SCOPE_INSUFFICIENT" || r == "insufficientPermissions" ->
+                        "Required Google Drive or Sheets permissions were not granted. Please sign out and sign in granting all requested scopes."
+                    apiError.httpStatus == 429 || r == "RATE_LIMIT_EXCEEDED" || r == "rateLimitExceeded" || r == "userRateLimitExceeded" ->
+                        "Google API rate limit reached. Please wait a moment and tap Retry."
+                    else -> {
+                        val msgPart = if (!apiError.message.isNullOrBlank()) ": ${apiError.message.take(300)}" else ""
+                        "Workspace setup failed (${apiError.endpointId} HTTP ${apiError.httpStatus} ${apiError.reason ?: apiError.status ?: "UNKNOWN"}$msgPart). Tap retry, or check Settings > Advanced Diagnostics for details."
+                    }
+                }
+            }
+            return "${e.message ?: "Failed to resolve finance workspace"}. Check Settings > Advanced Diagnostics for details."
+        }
+
         fun provideFactory(
             googleAuthTokenProvider: GoogleAuthTokenProvider,
             workbookResolver: WorkbookResolver,

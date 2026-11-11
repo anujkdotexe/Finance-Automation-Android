@@ -79,6 +79,12 @@
     <string name="action_mirror_config">Mirror config</string>
     <string name="action_restore_config">Restore config</string>
     <string name="action_regenerate_dashboard">Regenerate dashboard formulas</string>
+    <string name="action_repair_workbook">Repair workbook</string>
+    <string name="action_repair_workbook_desc">Recreates missing tabs or 31-column layouts in the current year workbook.</string>
+    <string name="msg_repair_workbook_success">Successfully repaired %1$s master workbook</string>
+    <string name="raw_http_errors_title">Raw Google API Errors</string>
+    <string name="raw_http_errors_notice">Contains Google error text. Shared only if you choose.</string>
+    <string name="report_include_google_errors">Include Google error details</string>
     <string name="action_get_started">Get Started</string>
     <string name="action_grant_permission">Grant Permission</string>
     <string name="action_retry_workspace">Retry Workspace Setup</string>

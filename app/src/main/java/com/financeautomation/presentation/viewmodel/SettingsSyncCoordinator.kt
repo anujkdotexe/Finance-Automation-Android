@@ -27,7 +27,7 @@ import java.util.Locale
  */
 class SettingsSyncCoordinator(
     private val preferencesRepository: PreferencesRepository,
-    private val transactionRepository: TransactionRepository,
+    private val transactionRepository: TransactionRepository? = null,
     private val syncConfigUseCase: SyncConfigUseCase?,
     private val regenerateDashboardUseCase: RegenerateDashboardUseCase?,
     private val googleDriveClient: GoogleDriveClient?,
@@ -72,6 +72,7 @@ class SettingsSyncCoordinator(
     }
 
     fun autoProvisionMasterSheet() {
+        if (uiState.value.isProvisioning) return
         val resolver = workbookResolver
         if (resolver != null) {
             scope.launch(ioDispatcher) {
@@ -204,9 +205,10 @@ class SettingsSyncCoordinator(
     }
 
     fun onSyncNow() {
+        val repo = transactionRepository ?: return
         scope.launch(ioDispatcher) {
             uiState.update { it.copy(isSyncing = true, syncResult = null, errorMessage = null) }
-            when (val result = transactionRepository.syncPendingTransactions()) {
+            when (val result = repo.syncPendingTransactions()) {
                 is Result.Success -> {
                     val count = result.data
                     uiState.update {

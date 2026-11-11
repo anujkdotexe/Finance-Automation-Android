@@ -29,7 +29,7 @@ import java.util.Locale
  * For a newly created workbook: provisions Dashboard, Template and current month tab,
  * mirrors default configuration to the Config tab, and regenerates Dashboard.
  */
-class WorkbookResolver(
+open class WorkbookResolver(
     private val googleDriveClient: GoogleDriveClient,
     private val googleSheetsClient: GoogleSheetsClient,
     private val preferencesRepository: PreferencesRepository,
@@ -45,7 +45,7 @@ class WorkbookResolver(
      * Checks if a workbook exists for [year] without creating a new workbook or folder.
      * Queries local preferences first, then checks Google Drive via findWorkbookForYear.
      */
-    suspend fun findExisting(year: Int): Result<String?> = withContext(ioDispatcher) {
+    open suspend fun findExisting(year: Int): Result<String?> = withContext(ioDispatcher) {
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
         if (!storedId.isNullOrBlank()) {
             return@withContext Result.Success(storedId)
@@ -57,7 +57,7 @@ class WorkbookResolver(
         }
     }
 
-    suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean = false): Result<String> = withContext(ioDispatcher) {
+    open suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean = false): Result<String> = withContext(ioDispatcher) {
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
         if (!storedId.isNullOrBlank() && !forceValidateTabs) {
             return@withContext Result.Success(storedId)

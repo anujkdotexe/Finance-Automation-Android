@@ -79,6 +79,7 @@ fun SettingsScreen(
             onMirrorConfigToCloud = viewModel::onMirrorConfigToCloud,
             onRestoreConfigFromCloud = viewModel::onRestoreConfigFromCloud,
             onRegenerateDashboard = viewModel::onRegenerateDashboard,
+            onRepairWorkbook = viewModel::autoProvisionMasterSheet,
             modifier = Modifier.padding(innerPadding)
         )
     }
@@ -109,6 +110,7 @@ fun SettingsContent(
     onMirrorConfigToCloud: () -> Unit,
     onRestoreConfigFromCloud: () -> Unit,
     onRegenerateDashboard: () -> Unit,
+    onRepairWorkbook: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -146,7 +148,8 @@ fun SettingsContent(
             onSyncNow = onSyncNow,
             onMirrorConfigToCloud = onMirrorConfigToCloud,
             onRestoreConfigFromCloud = onRestoreConfigFromCloud,
-            onRegenerateDashboard = onRegenerateDashboard
+            onRegenerateDashboard = onRegenerateDashboard,
+            onRepairWorkbook = onRepairWorkbook
         )
 
         // 5. Overlay Permission, Categories, and Trip Tags
