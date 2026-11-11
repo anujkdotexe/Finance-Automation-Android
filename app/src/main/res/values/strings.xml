@@ -158,6 +158,10 @@
     <string name="onboarding_step1_not_started">Authorizes drive.file scope to manage your master workbook</string>
     <string name="onboarding_step2_title">Creating your finance workspace</string>
     <string name="onboarding_step2_progress">Locating or provisioning master workbook&#8230;</string>
+    <string name="onboarding_error_api_disabled">Google Sheets or Drive API is not enabled for your Google Cloud project. Please enable them in Google Cloud Console.</string>
+    <string name="onboarding_error_insufficient_scope">Required Google Drive or Sheets permissions were not granted. Please sign out and sign in granting all requested scopes.</string>
+    <string name="onboarding_error_rate_limited">Google API rate limit reached. Please wait a moment and tap Retry.</string>
+    <string name="onboarding_error_generic">Workspace setup failed (%1$s HTTP %2$d %3$s). Tap retry.</string>
     <string name="onboarding_step3_title">Notification listener permission</string>
     <string name="onboarding_step3_completed">Notification listener enabled</string>
     <string name="onboarding_step3_desc">Required to intercept UPI and banking debit alerts in real time</string>

@@ -1,0 +1,171 @@
+package com.financeautomation.data.remote
+
+import com.financeautomation.core.model.Result
+import com.financeautomation.domain.repository.PreferencesRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class WorkbookResolverTest {
+
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    private val fakeTokenProvider = object : TokenProvider {
+        override fun getAccessToken(): String = "test_token"
+        override fun refreshAccessToken(): String = "test_token"
+    }
+
+    private class FakePreferencesRepository : PreferencesRepository {
+        val yearMap = mutableMapOf<Int, String>()
+        var activeSpreadsheetId: String? = null
+
+        override fun getSpreadsheetId(): Flow<String?> = flowOf(activeSpreadsheetId)
+        override suspend fun getSpreadsheetIdSync(): String? = activeSpreadsheetId
+        override suspend fun setSpreadsheetId(id: String) { activeSpreadsheetId = id }
+        override fun getSpreadsheetIdForYear(year: Int): Flow<String?> = flowOf(yearMap[year])
+        override suspend fun getSpreadsheetIdForYearSync(year: Int): String? = yearMap[year]
+        override suspend fun setSpreadsheetIdForYear(year: Int, id: String) { yearMap[year] = id }
+        override fun getDefaultAccount(): Flow<String> = flowOf("Account")
+        override suspend fun getDefaultAccountSync(): String = "Account"
+        override suspend fun setDefaultAccount(account: String) {}
+        override fun getActiveTrip(): Flow<String?> = flowOf(null)
+        override suspend fun setActiveTrip(trip: String?) {}
+        override fun getGoogleAccountEmail(): Flow<String?> = flowOf(null)
+        override suspend fun getGoogleAccountEmailSync(): String? = null
+        override suspend fun setGoogleAccountEmail(email: String?) {}
+        override fun getSettleDelaySeconds(): Flow<Int> = flowOf(120)
+        override suspend fun getSettleDelaySecondsSync(): Int = 120
+        override suspend fun setSettleDelaySeconds(seconds: Int) {}
+        override suspend fun getOrCreateDeviceId(): String = "test-device-uuid"
+        override suspend fun getDeviceIdSync(): String? = "test-device-uuid"
+        override suspend fun getPreference(key: String): String? = null
+        override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {}
+        override suspend fun deletePreference(key: String) {}
+    }
+
+    @Test
+    fun testResolverRepairsExistingWorkbookWithOnlySheet1() = runBlocking {
+        var provisionBatchCalled = false
+        val foundWorkbookId = "existing_single_tab_wb_123"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                if (url.contains("/files") && request.method == "GET") {
+                    val body = """
+                        {
+                          "files": [
+                            {
+                              "id": "$foundWorkbookId",
+                              "name": "Finance2026"
+                            }
+                          ]
+                        }
+                    """.trimIndent()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                } else {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        var sheetTabsCallCount = 0
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val method = request.method
+
+                when {
+                    url.contains("fields=sheets.properties") && method == "GET" -> {
+                        sheetTabsCallCount++
+                        // First call: returns only Sheet1 (missing Dashboard & Template)
+                        val body = """
+                            {
+                              "sheets": [
+                                {
+                                  "properties": {
+                                    "sheetId": 0,
+                                    "title": "Sheet1"
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains(":batchUpdate") && method == "POST" -> {
+                        val buffer = okio.Buffer()
+                        request.body?.writeTo(buffer)
+                        val bodyString = buffer.readUtf8()
+                        if (bodyString.contains("addSheet") || bodyString.contains("updateSheetProperties")) {
+                            provisionBatchCalled = true
+                        }
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": [{"addSheet": {"properties": {"sheetId": 101, "title": "Template"}}}]}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository()
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val result = resolver.resolveForYear(2026)
+
+        assertTrue("Expected resolveForYear to succeed", result is Result.Success)
+        assertEquals(foundWorkbookId, (result as Result.Success).data)
+        assertTrue("Expected provisionMasterWorkbook batchUpdate to run for workbook with only Sheet1", provisionBatchCalled)
+        assertEquals("Spreadsheet ID should be saved in preferences", foundWorkbookId, prefs.getSpreadsheetIdForYearSync(2026))
+    }
+}

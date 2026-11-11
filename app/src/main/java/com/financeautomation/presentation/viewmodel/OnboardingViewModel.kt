@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.model.Result
 import com.financeautomation.data.remote.AuthResult
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
+import com.financeautomation.data.remote.GoogleDriveApiException
+import com.financeautomation.data.remote.GoogleSheetsApiException
 import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -168,7 +170,7 @@ class OnboardingViewModel(
                     _uiState.update {
                         it.copy(
                             step2State = StepState.ERROR,
-                            step2Error = res.exception.message ?: "Failed to resolve finance workspace"
+                            step2Error = formatFriendlyErrorMessage(res.exception)
                         )
                     }
                 }
@@ -197,6 +199,28 @@ class OnboardingViewModel(
                 )
             }
         }
+    }
+
+    internal fun formatFriendlyErrorMessage(e: Throwable): String {
+        val apiError = when (e) {
+            is GoogleSheetsApiException -> e.apiError
+            is GoogleDriveApiException -> e.apiError
+            else -> null
+        }
+        if (apiError != null) {
+            val r = apiError.reason
+            return when {
+                r == "SERVICE_DISABLED" || r == "accessNotConfigured" ->
+                    "Google Sheets or Drive API is not enabled for your Google Cloud project. Please enable them in Google Cloud Console."
+                apiError.httpStatus == 403 || r == "ACCESS_TOKEN_SCOPE_INSUFFICIENT" || r == "insufficientPermissions" ->
+                    "Required Google Drive or Sheets permissions were not granted. Please sign out and sign in granting all requested scopes."
+                apiError.httpStatus == 429 || r == "RATE_LIMIT_EXCEEDED" || r == "rateLimitExceeded" || r == "userRateLimitExceeded" ->
+                    "Google API rate limit reached. Please wait a moment and tap Retry."
+                else ->
+                    "Workspace setup failed (${apiError.endpointId} HTTP ${apiError.httpStatus} ${apiError.reason ?: apiError.status ?: "UNKNOWN"}). Tap retry."
+            }
+        }
+        return e.message ?: "Failed to resolve finance workspace"
     }
 
     companion object {
