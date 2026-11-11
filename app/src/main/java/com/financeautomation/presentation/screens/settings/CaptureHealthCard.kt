@@ -80,14 +80,14 @@ fun CaptureHealthCard(
     ) {
         // Daily Funnel Summary
         Text(
-            text = "Daily Pipeline Funnel",
+            text = stringResource(R.string.capture_health_daily_pipeline_funnel),
             style = FinanceTheme.typography.labelMedium,
             color = FinanceTheme.colors.onSurface
         )
 
         if (funnelCounts.isEmpty()) {
             Text(
-                text = "No events recorded today",
+                text = stringResource(R.string.capture_health_no_events_today),
                 style = FinanceTheme.typography.bodySmall,
                 color = FinanceTheme.colors.onSurfaceVariant
             )
@@ -130,7 +130,7 @@ fun CaptureHealthCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Recent Trail Events (${recentEvents.size})",
+                text = stringResource(R.string.capture_health_recent_events_count, recentEvents.size),
                 style = FinanceTheme.typography.labelMedium,
                 color = FinanceTheme.colors.onSurface
             )
