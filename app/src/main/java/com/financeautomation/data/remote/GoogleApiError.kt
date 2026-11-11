@@ -83,8 +83,10 @@ data class GoogleApiError(
                             }
                         }
                     }
-                } catch (_: Exception) {
+                } catch (e: kotlinx.serialization.SerializationException) {
                     // Body is not JSON (e.g. HTML proxy error or plain text)
+                } catch (e: IllegalArgumentException) {
+                    // Malformed JSON element structure
                 }
             }
 
@@ -103,16 +105,16 @@ data class GoogleApiError(
             )
 
             logHttpError(error)
+            com.financeautomation.core.utils.Diagnostics.record(
+                "GoogleHttp",
+                "${error.endpointId} HTTP ${error.httpStatus} (${error.reason ?: error.status ?: "UNKNOWN"}): ${error.message}"
+            )
             return error
         }
 
         private fun logHttpError(error: GoogleApiError) {
             if (BuildConfig.DEBUG || BuildConfig.BUILD_TYPE == "beta") {
-                try {
-                    Log.w("FinanceHttp", error.toLogcatString())
-                } catch (_: Throwable) {
-                    // Safe guard when Log is unmocked in JVM unit tests
-                }
+                Log.w("FinanceHttp", error.toLogcatString())
             }
         }
     }

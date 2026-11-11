@@ -31,6 +31,7 @@ class DiagnosticsTest {
 
         // Simulate app restart by clearing and re-initializing from same folder
         Diagnostics.initialize(folder)
+        Diagnostics.flush()
         val reloaded = Diagnostics.getRecords()
         assertEquals(2, reloaded.size)
         assertEquals("TestTag1", reloaded[0].tag)
@@ -43,7 +44,9 @@ class DiagnosticsTest {
     fun testCapacityCappedAt50() {
         val folder = tempFolder.newFolder("diag_test_2")
         Diagnostics.initialize(folder)
+        Diagnostics.flush()
         Diagnostics.clear()
+        Diagnostics.flush()
 
         for (i in 1..65) {
             Diagnostics.record("Tag$i", "Reason $i")
@@ -59,6 +62,7 @@ class DiagnosticsTest {
 
         // Verify reloaded from disk also has exactly 50
         Diagnostics.initialize(folder)
+        Diagnostics.flush()
         val reloaded = Diagnostics.getRecords()
         assertEquals(Diagnostics.MAX_CAPACITY, reloaded.size)
         assertEquals("Tag16", reloaded.first().tag)
@@ -69,7 +73,9 @@ class DiagnosticsTest {
     fun testClearRemovesFromMemoryAndDisk() {
         val folder = tempFolder.newFolder("diag_test_3")
         Diagnostics.initialize(folder)
+        Diagnostics.flush()
         Diagnostics.clear()
+        Diagnostics.flush()
 
         Diagnostics.record("TagA", "Reason A")
         Diagnostics.flush()
@@ -80,6 +86,7 @@ class DiagnosticsTest {
         assertEquals(0, Diagnostics.getRecords().size)
 
         Diagnostics.initialize(folder)
+        Diagnostics.flush()
         assertEquals(0, Diagnostics.getRecords().size)
     }
 }

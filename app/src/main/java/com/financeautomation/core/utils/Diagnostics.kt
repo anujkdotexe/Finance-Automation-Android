@@ -1,11 +1,16 @@
 package com.financeautomation.core.utils
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -40,17 +45,27 @@ object Diagnostics {
     @Synchronized
     fun initialize(dir: File) {
         storageDir = dir
-        val file = File(dir, "diagnostics.json")
-        if (file.exists()) {
-            try {
-                val content = file.readText()
-                if (content.isNotBlank()) {
-                    val loaded = json.decodeFromString<List<Record>>(content)
-                    records.clear()
-                    loaded.takeLast(MAX_CAPACITY).forEach { records.addLast(it) }
+        diskExecutor.execute {
+            val file = File(dir, "diagnostics.json")
+            if (file.exists()) {
+                try {
+                    val content = file.readText()
+                    if (content.isNotBlank()) {
+                        val loaded = json.decodeFromString<List<Record>>(content)
+                        synchronized(records) {
+                            val inMemoryPending = records.toList()
+                            records.clear()
+                            val combined = (loaded + inMemoryPending).distinctBy {
+                                Triple(it.timestamp, it.tag, it.reason)
+                            }
+                            combined.takeLast(MAX_CAPACITY).forEach { records.addLast(it) }
+                        }
+                    }
+                } catch (e: IOException) {
+                    Log.w("Diagnostics", "Failed to read diagnostics file: ${e.message}")
+                } catch (e: SerializationException) {
+                    Log.w("Diagnostics", "Failed to decode diagnostics file: ${e.message}")
                 }
-            } catch (_: Exception) {
-                // Ignore corrupted or unreadable diagnostic file
             }
         }
     }
@@ -82,8 +97,12 @@ object Diagnostics {
      */
     fun flush(timeoutMs: Long = 2000L) {
         try {
-            diskExecutor.submit {}.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        } catch (_: Exception) {}
+            diskExecutor.submit {}.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+            Log.w("Diagnostics", "Diagnostics flush timed out: ${e.message}")
+        } catch (e: Exception) {
+            Log.w("Diagnostics", "Diagnostics flush interrupted: ${e.message}")
+        }
     }
 
     private fun persistAsync() {
@@ -102,8 +121,10 @@ object Diagnostics {
                     tempFile.copyTo(targetFile, overwrite = true)
                     tempFile.delete()
                 }
-            } catch (_: Exception) {
-                // Non-fatal background write failure
+            } catch (e: IOException) {
+                Log.w("Diagnostics", "Failed to write diagnostics file: ${e.message}")
+            } catch (e: SerializationException) {
+                Log.w("Diagnostics", "Failed to serialize diagnostics records: ${e.message}")
             }
         }
     }
