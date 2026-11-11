@@ -155,7 +155,7 @@ class OnboardingViewModel(
     fun startWorkspaceProvisioning() {
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(step2State = StepState.IN_PROGRESS, step2Error = null) }
-            when (val res = workbookResolver.resolveForYear(currentYear)) {
+            when (val res = workbookResolver.resolveForYear(currentYear, forceValidateTabs = true)) {
                 is Result.Success -> {
                     val id = res.data
                     _uiState.update {

@@ -158,7 +158,10 @@ class MainActivity : ComponentActivity() {
                             settingsViewModel = settingsViewModel,
                             setupHealthViewModel = setupHealthViewModel,
                             overlayControllerProvider = { app.appContainer.overlayController },
-                            onReRunSetup = { forceOnboarding = true }
+                            onReRunSetup = {
+                                onboardingViewModel.startWorkspaceProvisioning()
+                                forceOnboarding = true
+                            }
                         )
                     }
                 }
