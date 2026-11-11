@@ -13,6 +13,7 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -101,7 +102,7 @@ class WorkbookResolverTest {
                 val method = request.method
 
                 when {
-                    url.contains("fields=sheets.properties") && method == "GET" -> {
+                    url.contains("fields=sheets") && method == "GET" -> {
                         sheetTabsCallCount++
                         // First call: returns only Sheet1 (missing Dashboard & Template)
                         val body = """
@@ -216,7 +217,7 @@ class WorkbookResolverTest {
                 val method = request.method
 
                 when {
-                    url.contains("fields=sheets.properties") && method == "GET" -> {
+                    url.contains("fields=sheets") && method == "GET" -> {
                         // Tabs exist: Dashboard and Template already exist
                         val body = """
                             {
@@ -298,5 +299,295 @@ class WorkbookResolverTest {
         assertTrue("Expected resolveForYear to succeed", result is Result.Success)
         assertEquals(foundWorkbookId, (result as Result.Success).data)
         assertTrue("Expected provisionMasterWorkbook batchUpdate to run when tabs exist but layout is empty", provisionBatchCalled)
+    }
+
+    @Test
+    fun testResolverRepairsOnlyMonthTabWhenTemplateIsValidButMonthTabLayoutIsMissing() = runBlocking<Unit> {
+        var batchUpdateCalled = false
+        var batchBody = ""
+        val foundWorkbookId = "existing_partial_month_wb_789"
+        val currentMonthTab = "Nov26"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                if (url.contains("/files") && request.method == "GET") {
+                    val body = """
+                        {
+                          "files": [
+                            {
+                              "id": "$foundWorkbookId",
+                              "name": "Finance2026"
+                            }
+                          ]
+                        }
+                    """.trimIndent()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                } else {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val method = request.method
+
+                when {
+                    url.contains("fields=sheets") && method == "GET" -> {
+                        // Tabs exist: Dashboard, Template, and Nov26
+                        val body = """
+                            {
+                              "sheets": [
+                                {
+                                  "properties": {
+                                    "sheetId": 0,
+                                    "title": "Dashboard"
+                                  }
+                                },
+                                {
+                                  "properties": {
+                                    "sheetId": 101,
+                                    "title": "Template"
+                                  }
+                                },
+                                {
+                                  "properties": {
+                                    "sheetId": 102,
+                                    "title": "$currentMonthTab"
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/Template") && method == "GET" -> {
+                        // Template tab has valid 31 headers
+                        val headers = (0 until com.financeautomation.core.constants.SheetSchemaConstants.TOTAL_COLUMN_COUNT).joinToString(", ") { idx ->
+                            val colLetter = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMNS[idx]
+                            "\"" + com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS[colLetter] + "\""
+                        }
+                        val body = """
+                            {
+                              "range": "Template!A3:AE3",
+                              "majorDimension": "ROWS",
+                              "values": [
+                                [ $headers ]
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/$currentMonthTab") && method == "GET" -> {
+                        // Month tab is empty (no headers)
+                        val body = """
+                            {
+                              "range": "$currentMonthTab!A3:AE3",
+                              "majorDimension": "ROWS",
+                              "values": []
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains(":batchUpdate") && method == "POST" -> {
+                        batchUpdateCalled = true
+                        val buffer = okio.Buffer()
+                        request.body?.writeTo(buffer)
+                        batchBody = buffer.readUtf8()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository()
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val result = resolver.resolveForYear(2026)
+
+        assertTrue("Expected resolveForYear to succeed", result is Result.Success)
+        assertEquals(foundWorkbookId, (result as Result.Success).data)
+        assertTrue("Expected batchUpdate to run to repair month tab", batchUpdateCalled)
+        // Verify that batchUpdate targets the month tab, not re-provisioning the full master workbook
+        assertFalse("Should not attempt to add Template sheet when repairing month tab", batchBody.contains("\"title\":\"Template\""))
+    }
+
+    @Test
+    fun testResolverReProvisionsWhenHeaderNamesDoNotMatchSchemaConstants() = runBlocking<Unit> {
+        var provisionBatchCalled = false
+        val foundWorkbookId = "existing_mismatched_headers_wb_999"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                if (url.contains("/files") && request.method == "GET") {
+                    val body = """
+                        {
+                          "files": [
+                            {
+                              "id": "$foundWorkbookId",
+                              "name": "Finance2026"
+                            }
+                          ]
+                        }
+                    """.trimIndent()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                } else {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val method = request.method
+
+                when {
+                    url.contains("fields=sheets") && method == "GET" -> {
+                        val body = """
+                            {
+                              "sheets": [
+                                { "properties": { "sheetId": 0, "title": "Dashboard" } },
+                                { "properties": { "sheetId": 101, "title": "Template" } }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/Template") && method == "GET" -> {
+                        // Headers with wrong first and last column names
+                        val headers = (0 until com.financeautomation.core.constants.SheetSchemaConstants.TOTAL_COLUMN_COUNT).joinToString(", ") { idx ->
+                            "\"LegacyHeader$idx\""
+                        }
+                        val body = """
+                            {
+                              "range": "Template!A3:AE3",
+                              "majorDimension": "ROWS",
+                              "values": [ [ $headers ] ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains(":batchUpdate") && method == "POST" -> {
+                        provisionBatchCalled = true
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository()
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val result = resolver.resolveForYear(2026)
+
+        assertTrue("Expected resolveForYear to succeed", result is Result.Success)
+        assertEquals(foundWorkbookId, (result as Result.Success).data)
+        assertTrue("Expected provisionMasterWorkbook batchUpdate to run when headers do not match schema constants", provisionBatchCalled)
     }
 }
