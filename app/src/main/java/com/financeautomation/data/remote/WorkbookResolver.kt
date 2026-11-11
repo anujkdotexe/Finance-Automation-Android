@@ -1,5 +1,6 @@
 package com.financeautomation.data.remote
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -13,6 +14,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Resolves the Google Sheets workbook ID for a given fiscal year.
@@ -177,6 +180,20 @@ class WorkbookResolver(
         }
     }
 
+    private suspend fun checkTabHasValidLayout(spreadsheetId: String, tabTitle: String): Boolean {
+        val range = "$tabTitle!A3:AE3"
+        val res = googleSheetsClient.getRangeValues(spreadsheetId, range)
+        if (res !is Result.Success) return false
+        val rowValues = res.data.firstOrNull() ?: return false
+        val firstHeader = rowValues.firstOrNull()?.toString()?.trim()
+        val lastHeader = rowValues.lastOrNull()?.toString()?.trim()
+        val expectedFirst = SheetSchemaConstants.SHEET_COLUMN_HEADERS["A"]
+        val expectedLast = SheetSchemaConstants.SHEET_COLUMN_HEADERS["AE"]
+        return firstHeader == expectedFirst &&
+                lastHeader == expectedLast &&
+                rowValues.size >= SheetSchemaConstants.TOTAL_COLUMN_COUNT
+    }
+
     private suspend fun ensureWorkbookTabs(spreadsheetId: String): Result<Unit> {
         val tabsResult = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
         if (tabsResult is Result.Error) {
@@ -185,23 +202,19 @@ class WorkbookResolver(
         val tabsMap = (tabsResult as Result.Success).data
         val hasMasterTabs = tabsMap.containsKey("Dashboard") && tabsMap.containsKey("Template")
 
-        var hasValidLayout = false
-        if (hasMasterTabs) {
-            // Verify that Template tab actually has the 31-column layout populated (row 3 headers)
-            val templateHeadersResult = googleSheetsClient.getRangeValues(spreadsheetId, "Template!A3:AE3")
-            if (templateHeadersResult is Result.Success) {
-                val rowValues = templateHeadersResult.data.firstOrNull() ?: emptyList()
-                val firstHeader = rowValues.firstOrNull()?.toString()?.trim()
-                val lastHeader = rowValues.lastOrNull()?.toString()?.trim()
-                if (firstHeader == "Date" && lastHeader == "Payable Txn UUID" && rowValues.size >= 28) {
-                    hasValidLayout = true
-                }
-            }
+        val currentMonthTab = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
+            .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
+
+        val hasTemplateLayout = if (hasMasterTabs) {
+            checkTabHasValidLayout(spreadsheetId, "Template")
+        } else {
+            false
         }
 
-        if (!hasMasterTabs || !hasValidLayout) {
-            val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
-            val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+        val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+        val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+
+        if (!hasMasterTabs || !hasTemplateLayout) {
             val provRes = googleSheetsClient.provisionMasterWorkbook(
                 spreadsheetId = spreadsheetId,
                 accounts = accounts,
@@ -209,6 +222,16 @@ class WorkbookResolver(
             )
             if (provRes is Result.Error) {
                 return Result.Error(provRes.exception)
+            }
+        } else if (!tabsMap.containsKey(currentMonthTab) || !checkTabHasValidLayout(spreadsheetId, currentMonthTab)) {
+            val monthRes = googleSheetsClient.provisionMonthTab(
+                spreadsheetId = spreadsheetId,
+                tabName = currentMonthTab,
+                accounts = accounts,
+                categories = categories
+            )
+            if (monthRes is Result.Error) {
+                return Result.Error(monthRes.exception)
             }
         }
         return Result.Success(Unit)
