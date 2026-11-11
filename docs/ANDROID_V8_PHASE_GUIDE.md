@@ -1272,3 +1272,16 @@ Status of all fifteen audit items from Section 12 of [ANDROID_V8_ENGINEERING_AND
 | 13 | Menu and flows | No Choose Action menu; missing Income, Friend Paid For Me, Repaid flows; no category prediction or account inference | Fixed | `EntryActivity.kt` provides Choose Action menu with Income, Friend Paid, and Repaid flows; `PredictCategoryUseCase.kt` and `QuickLogCategoryRanker.kt` predict categories; account inference handled in `NotificationProcessor.kt`. |
 | 14 | Widget | 1x1 widget dynamic size only Android 12+; opens translucent sheet instead of menu | Fixed | `QuickLogWidgetProvider.kt` implements 1x1 widget using `AppWidgetProvider` and RemoteViews; layout declared in `quick_log_widget_info.xml` with dimension tokens in `dimens.xml`. |
 | 15 | Minor | Target SDK 36 vs 35; settle window mismatch; redundant settle worker; OTP regex over-matching; OEM SMS package coverage | Partially Fixed / Consciously Deferred | `targetSdk` is 36 in `build.gradle.kts`, consciously deferred to owner and reviewer per Decision D5. Settle window unified to 120s in `ConfigConstants.kt`; redundant settle worker eliminated; OTP regex tightened in `RegexPatterns.kt`; OEM SMS packages expanded in `PackageWhitelist.kt`. |
+
+---
+
+## Known Large Files
+
+The following five files exceed 400 lines in the codebase. Per reviewer instructions and guide guidance, they are intentionally kept intact without splitting in this round:
+
+1. `app/src/main/java/com/financeautomation/data/remote/GoogleSheetsClient.kt` (1375 lines): Central low-level Google Sheets API client implementing raw append, batch dimension formatting, cell updates, and error handling. Pre-existing foundational client permitted by the guide.
+2. `app/src/main/java/com/financeautomation/data/remote/SheetProvisioner.kt` (1303 lines): Implements 28-column master sheet provisioning, formula generation, styling requests, and multi-table layouts. Pre-existing foundational provisioner permitted by the guide.
+3. `app/src/main/java/com/financeautomation/data/repository/TransactionRepositoryImpl.kt` (968 lines): Implements offline queue management, netting logs, Room persistence, and remote synchronization coordination. Pre-existing repository permitted by the guide.
+4. `app/src/main/java/com/financeautomation/data/remote/AccountingSyncExecutor.kt` (422 lines): Coordinates split execution, repayment waterfalls, and remote row mutations. Kept intact to preserve coherent transactional semantics across accounting steps.
+5. `app/src/main/java/com/financeautomation/di/AppContainer.kt` (407 lines): Manual dependency injection container providing singletons across database, repositories, use cases, and coordinators. Kept in a single container for direct wiring visibility.
+
