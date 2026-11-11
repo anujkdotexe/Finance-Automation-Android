@@ -60,7 +60,23 @@ object SheetProvisioner {
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
 
-        // 1. Merged Ranges in Dashboard
+        // 0. Ensure grid dimensions (1000 rows x 31 columns)
+        requests.add(
+            mapOf(
+                "updateSheetProperties" to mapOf(
+                    "properties" to mapOf(
+                        "sheetId" to dashboardSheetId,
+                        "gridProperties" to mapOf(
+                            "rowCount" to 1000,
+                            "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                        )
+                    ),
+                    "fields" to "gridProperties(rowCount,columnCount)"
+                )
+            )
+        )
+
+        // 1. Merged Ranges in Dashboard (idempotent: unmerge preceding merge)
         val mergeRanges = listOf(
             // Title banner & subtitles
             listOf(0, 1, 0, 20),   // A1:T1
@@ -92,16 +108,18 @@ object SheetProvisioner {
         )
 
         mergeRanges.forEach { r ->
+            val range = mapOf(
+                "sheetId" to dashboardSheetId,
+                "startRowIndex" to r[0],
+                "endRowIndex" to r[1],
+                "startColumnIndex" to r[2],
+                "endColumnIndex" to r[3]
+            )
+            requests.add(mapOf("unmergeCells" to mapOf("range" to range)))
             requests.add(
                 mapOf(
                     "mergeCells" to mapOf(
-                        "range" to mapOf(
-                            "sheetId" to dashboardSheetId,
-                            "startRowIndex" to r[0],
-                            "endRowIndex" to r[1],
-                            "startColumnIndex" to r[2],
-                            "endColumnIndex" to r[3]
-                        ),
+                        "range" to range,
                         "mergeType" to "MERGE_ALL"
                     )
                 )
@@ -735,17 +753,19 @@ object SheetProvisioner {
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
 
-        // 1. Freeze top 3 rows
+        // 1. Ensure grid dimensions (1000 rows x 31 columns) and freeze top 3 rows
         requests.add(
             mapOf(
                 "updateSheetProperties" to mapOf(
                     "properties" to mapOf(
                         "sheetId" to sheetId,
                         "gridProperties" to mapOf(
+                            "rowCount" to 1000,
+                            "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT,
                             "frozenRowCount" to 3
                         )
                     ),
-                    "fields" to "gridProperties.frozenRowCount"
+                    "fields" to "gridProperties(rowCount,columnCount,frozenRowCount)"
                 )
             )
         )
@@ -770,18 +790,20 @@ object SheetProvisioner {
             )
         }
 
-        // 3. Merges:
+        // 3. Merges (idempotent: unmerge preceding merge to allow re-running):
         // Row 1 Title Banner: A1:AB1 (cols 0 to 28, row 0 to 1)
+        val row1BannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 0,
+            "endRowIndex" to 1,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 28
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to row1BannerRange)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 0,
-                        "endRowIndex" to 1,
-                        "startColumnIndex" to 0,
-                        "endColumnIndex" to 28
-                    ),
+                    "range" to row1BannerRange,
                     "mergeType" to "MERGE_ALL"
                 )
             )
@@ -789,48 +811,54 @@ object SheetProvisioner {
 
         // Row 2 Section Group Merges:
         // Table 1 Debits: A2:K2 (cols 0 to 11, row 1 to 2)
+        val table1Range = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to SheetSchemaConstants.TABLE_1_START_COL_INDEX,
+            "endColumnIndex" to SheetSchemaConstants.TABLE_1_END_COL_INDEX + 1
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to table1Range)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 1,
-                        "endRowIndex" to 2,
-                        "startColumnIndex" to SheetSchemaConstants.TABLE_1_START_COL_INDEX,
-                        "endColumnIndex" to SheetSchemaConstants.TABLE_1_END_COL_INDEX + 1
-                    ),
+                    "range" to table1Range,
                     "mergeType" to "MERGE_ALL"
                 )
             )
         )
 
         // Table 2 Inflows: M2:T2 (cols 12 to 20, row 1 to 2)
+        val table2Range = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to SheetSchemaConstants.TABLE_2_START_COL_INDEX,
+            "endColumnIndex" to SheetSchemaConstants.TABLE_2_END_COL_INDEX + 1
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to table2Range)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 1,
-                        "endRowIndex" to 2,
-                        "startColumnIndex" to SheetSchemaConstants.TABLE_2_START_COL_INDEX,
-                        "endColumnIndex" to SheetSchemaConstants.TABLE_2_END_COL_INDEX + 1
-                    ),
+                    "range" to table2Range,
                     "mergeType" to "MERGE_ALL"
                 )
             )
         )
 
         // Table 3 Payables: V2:AB2 (cols 21 to 28, row 1 to 2)
+        val table3Range = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to SheetSchemaConstants.TABLE_3_START_COL_INDEX,
+            "endColumnIndex" to SheetSchemaConstants.TABLE_3_END_COL_INDEX + 1
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to table3Range)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 1,
-                        "endRowIndex" to 2,
-                        "startColumnIndex" to SheetSchemaConstants.TABLE_3_START_COL_INDEX,
-                        "endColumnIndex" to SheetSchemaConstants.TABLE_3_END_COL_INDEX + 1
-                    ),
+                    "range" to table3Range,
                     "mergeType" to "MERGE_ALL"
                 )
             )

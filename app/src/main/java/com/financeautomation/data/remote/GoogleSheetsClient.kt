@@ -1000,6 +1000,8 @@ class GoogleSheetsClient(
                 if (localeRes is Result.Error) {
                     com.financeautomation.core.utils.Diagnostics.record("SheetsLocale", "Locale batch skipped: ${localeRes.exception.message}")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 com.financeautomation.core.utils.Diagnostics.record("SheetsLocale", "Locale batch error: ${e.javaClass.simpleName}")
             }
@@ -1024,24 +1026,52 @@ class GoogleSheetsClient(
                 setupRequests.add(
                     mapOf(
                         "addSheet" to mapOf(
-                            "properties" to mapOf("title" to "Dashboard")
+                            "properties" to mapOf(
+                                "title" to "Dashboard",
+                                "gridProperties" to mapOf("rowCount" to 1000, "columnCount" to 26)
+                            )
                         )
                     )
                 )
             }
 
-            // 2. Ensure Template tab exists
+            // 2. Ensure Template tab exists with at least 31 columns
             if (!tabsMap.containsKey("Template")) {
                 setupRequests.add(
                     mapOf(
                         "addSheet" to mapOf(
-                            "properties" to mapOf("title" to "Template")
+                            "properties" to mapOf(
+                                "title" to "Template",
+                                "gridProperties" to mapOf(
+                                    "rowCount" to 1000,
+                                    "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                )
+                            )
                         )
                     )
                 )
+            } else {
+                // Expand existing Template tab if it was created with default 26 columns
+                val templateSheetId = tabsMap["Template"]
+                if (templateSheetId != null) {
+                    setupRequests.add(
+                        mapOf(
+                            "updateSheetProperties" to mapOf(
+                                "properties" to mapOf(
+                                    "sheetId" to templateSheetId,
+                                    "gridProperties" to mapOf(
+                                        "rowCount" to 1000,
+                                        "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                    )
+                                ),
+                                "fields" to "gridProperties(rowCount,columnCount)"
+                            )
+                        )
+                    )
+                }
             }
 
-            // 3. Ensure current month tab exists (e.g. Nov26, Dec26, Jan27)
+            // 3. Ensure current month tab exists with at least 31 columns
             val currentMonthTab = ZonedDateTime.now(DEFAULT_SHEET_ZONE_ID)
                 .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
 
@@ -1049,10 +1079,35 @@ class GoogleSheetsClient(
                 setupRequests.add(
                     mapOf(
                         "addSheet" to mapOf(
-                            "properties" to mapOf("title" to currentMonthTab)
+                            "properties" to mapOf(
+                                "title" to currentMonthTab,
+                                "gridProperties" to mapOf(
+                                    "rowCount" to 1000,
+                                    "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                )
+                            )
                         )
                     )
                 )
+            } else {
+                // Expand existing month tab if it was created with default 26 columns
+                val monthSheetId = tabsMap[currentMonthTab]
+                if (monthSheetId != null) {
+                    setupRequests.add(
+                        mapOf(
+                            "updateSheetProperties" to mapOf(
+                                "properties" to mapOf(
+                                    "sheetId" to monthSheetId,
+                                    "gridProperties" to mapOf(
+                                        "rowCount" to 1000,
+                                        "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                    )
+                                ),
+                                "fields" to "gridProperties(rowCount,columnCount)"
+                            )
+                        )
+                    )
+                }
             }
 
             if (setupRequests.isNotEmpty()) {
@@ -1090,25 +1145,37 @@ class GoogleSheetsClient(
                 }
 
                 if (deleteRequests.isNotEmpty()) {
-                    batchUpdate(spreadsheetId, deleteRequests)
+                    val delRes = batchUpdate(spreadsheetId, deleteRequests)
+                    if (delRes is Result.Error) {
+                        return@withContext Result.Error(delRes.exception)
+                    }
                 }
 
                 val dashboardRequests = SheetProvisioner.buildDashboardRequests(dashboardId, categories)
-                batchUpdate(spreadsheetId, dashboardRequests)
+                val dashRes = batchUpdate(spreadsheetId, dashboardRequests)
+                if (dashRes is Result.Error) {
+                    return@withContext Result.Error(dashRes.exception)
+                }
             }
 
             // 5. Format Template sheet
             val templateId = tabsMap["Template"]
             if (templateId != null) {
                 val templateRequests = SheetProvisioner.buildProvisionRequests(templateId, "Template", accounts, categories)
-                batchUpdate(spreadsheetId, templateRequests)
+                val templRes = batchUpdate(spreadsheetId, templateRequests)
+                if (templRes is Result.Error) {
+                    return@withContext Result.Error(templRes.exception)
+                }
             }
 
             // 6. Format current month sheet
             val currentMonthId = tabsMap[currentMonthTab]
             if (currentMonthId != null) {
                 val currentMonthRequests = SheetProvisioner.buildProvisionRequests(currentMonthId, currentMonthTab, accounts, categories)
-                batchUpdate(spreadsheetId, currentMonthRequests)
+                val monthRes = batchUpdate(spreadsheetId, currentMonthRequests)
+                if (monthRes is Result.Error) {
+                    return@withContext Result.Error(monthRes.exception)
+                }
             }
 
             Result.Success(Unit)
