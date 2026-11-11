@@ -44,6 +44,8 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
@@ -106,6 +108,8 @@ class TransactionRepositoryImpl(
         onTriggerSync = onTriggerSync,
         ioDispatcher = ioDispatcher
     )
+
+    private val syncMutex = Mutex()
 
     private suspend fun resolveTransactionDao(): TransactionDao =
         transactionDao ?: transactionDaoProvider?.invoke()
@@ -365,17 +369,18 @@ class TransactionRepositoryImpl(
     }
 
     override suspend fun syncPendingTransactions(): Result<Int> = withContext(ioDispatcher) {
-        try {
-            if (googleSheetsClient == null || preferencesRepository == null) {
-                return@withContext Result.Success(0)
-            }
+        syncMutex.withLock {
+            try {
+                if (googleSheetsClient == null || preferencesRepository == null) {
+                    return@withLock Result.Success(0)
+                }
 
             val transactionDao = resolveTransactionDao()
             val syncQueueDao = resolveSyncQueueDao()
 
             val pendingItems = syncQueueDao.getPendingQueueFifo(maxRetries = MAX_SYNC_RETRIES)
             if (pendingItems.isEmpty()) {
-                return@withContext Result.Success(0)
+                return@withLock Result.Success(0)
             }
 
             val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
@@ -737,7 +742,8 @@ class TransactionRepositoryImpl(
                                 timeSerial = txn.timeSerial ?: com.financeautomation.core.utils.DateSerialUtils.toTimeSerial(txn.timestamp),
                                 tabName = tabName,
                                 openPayables = openPayables,
-                                nettingUseCase = nettingUseCase
+                                nettingUseCase = nettingUseCase,
+                                uuid = txn.id
                             )
 
                             // Store plan before writing anything to guarantee idempotent retries
@@ -888,6 +894,7 @@ class TransactionRepositoryImpl(
             Result.Error(e)
         }
     }
+}
 
     private suspend fun applyPlan(
         spreadsheetId: String,
