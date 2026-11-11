@@ -25,11 +25,11 @@ object ChartManager {
     const val DOUGHNUT_CHART_TITLE = "Current Month Spend by Category"
 
     /**
-     * Builds updateSpreadsheetProperties request to enforce en_IN locale and Asia/Kolkata timezone.
+     * Builds updateSpreadsheetProperties request to enforce en_GB locale and Asia/Kolkata timezone.
      * Prevents TEXT(TODAY(), "mmm") from returning non-English month strings on non-English Google accounts.
      */
     fun buildLocaleAndTimeZoneRequest(
-        locale: String = "en_IN",
+        locale: String = "en_GB",
         timeZone: String = "Asia/Kolkata"
     ): Map<String, Any?> {
         return mapOf(
@@ -64,7 +64,7 @@ object ChartManager {
             okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    throw createHttpException(response.code, bodyString, "getExistingCharts failed", spreadsheetId)
+                    throw createHttpException(response.code, bodyString, "getExistingCharts failed", spreadsheetId, "sheets.get")
                 }
 
                 val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
