@@ -287,14 +287,6 @@ class DashboardViewModel(
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
 
-            if (context != null) {
-                try {
-                    SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
-                } catch (e: Exception) {
-                    Diagnostics.record("DashboardViewModel", "${e.javaClass.simpleName}: enqueueExpedited")
-                }
-            }
-
             when (val res = transactionRepository.syncPendingTransactions()) {
                 is Result.Success -> {
                     val count = res.data
