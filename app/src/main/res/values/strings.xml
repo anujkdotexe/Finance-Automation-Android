@@ -299,7 +299,7 @@
     <string name="settings_capture_usage_perm">Usage Stats Permission</string>
     <string name="settings_capture_battery_perm">Battery Optimization</string>
     <string name="settings_capture_oem_perm">OEM Autostart</string>
-    <string name="settings_quick_actions_title">Quick logging shortcuts</string>
+    <string name="settings_quick_actions_title">Add expense shortcuts</string>
     <string name="settings_quick_actions_desc">Access expense logging instantly from anywhere</string>
     <string name="settings_sync_status_title">Sync engine status</string>
     <string name="settings_sync_interval_title">Sync interval</string>
@@ -358,6 +358,9 @@
     <string name="action_no">No</string>
     <string name="report_capture_health_title">Capture Health &amp; Trail</string>
     <string name="report_capture_health_subtitle">Inspect daily capture funnel and pipeline trail events</string>
+    <string name="capture_health_daily_pipeline_funnel">Daily Pipeline Funnel</string>
+    <string name="capture_health_no_events_today">No events recorded today</string>
+    <string name="capture_health_recent_events_count">Recent Trail Events (%1$d)</string>
     <string name="crashlytics_card_title">Reliability &amp; Diagnostics</string>
     <string name="crashlytics_card_desc">Anonymous technical telemetry to fix crashes and background freezes</string>
     <string name="crashlytics_opt_in_title">Help improve reliability</string>
