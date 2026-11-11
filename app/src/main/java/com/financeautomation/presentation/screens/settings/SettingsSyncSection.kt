@@ -55,6 +55,7 @@ fun SettingsSyncSection(
     onMirrorConfigToCloud: () -> Unit,
     onRestoreConfigFromCloud: () -> Unit,
     onRegenerateDashboard: () -> Unit,
+    onRepairWorkbook: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -153,6 +154,37 @@ fun SettingsSyncSection(
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
                     Text(stringResource(R.string.action_regenerate_dashboard))
                 }
+            }
+
+            OutlinedButton(
+                onClick = onRepairWorkbook,
+                enabled = !state.isProvisioning,
+                shape = FinanceTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (state.isProvisioning) {
+                    CircularProgressIndicator(strokeWidth = FinanceTheme.sizes.strokeThick, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                    Text(stringResource(R.string.onboarding_step2_progress))
+                } else {
+                    Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                    Text(stringResource(R.string.action_repair_workbook))
+                }
+            }
+
+            if (!state.errorMessage.isNullOrBlank()) {
+                Text(
+                    text = state.errorMessage,
+                    style = FinanceTheme.typography.bodySmall,
+                    color = FinanceTheme.colors.moneyOut
+                )
+            } else if (!state.userMessage.isNullOrBlank()) {
+                Text(
+                    text = state.userMessage,
+                    style = FinanceTheme.typography.bodySmall,
+                    color = FinanceTheme.colors.moneyIn
+                )
             }
         }
 

@@ -182,7 +182,7 @@ fun OnboardingScreen(
                 action = {
                     if (state.step2State == StepState.ERROR) {
                         OutlinedButton(
-                            onClick = viewModel::startWorkspaceProvisioning,
+                            onClick = { viewModel.startWorkspaceProvisioning(forceValidateTabs = true) },
                             shape = FinanceTheme.shapes.small
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
