@@ -168,4 +168,135 @@ class WorkbookResolverTest {
         assertTrue("Expected provisionMasterWorkbook batchUpdate to run for workbook with only Sheet1", provisionBatchCalled)
         assertEquals("Spreadsheet ID should be saved in preferences", foundWorkbookId, prefs.getSpreadsheetIdForYearSync(2026))
     }
+
+    @Test
+    fun testResolverRepairsPartiallyProvisionedWorkbookWhereTabsExistButLayoutIsMissing() = runBlocking {
+        var provisionBatchCalled = false
+        val foundWorkbookId = "existing_partial_tabs_wb_456"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                if (url.contains("/files") && request.method == "GET") {
+                    val body = """
+                        {
+                          "files": [
+                            {
+                              "id": "$foundWorkbookId",
+                              "name": "Finance2026"
+                            }
+                          ]
+                        }
+                    """.trimIndent()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                } else {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val method = request.method
+
+                when {
+                    url.contains("fields=sheets.properties") && method == "GET" -> {
+                        // Tabs exist: Dashboard and Template already exist
+                        val body = """
+                            {
+                              "sheets": [
+                                {
+                                  "properties": {
+                                    "sheetId": 0,
+                                    "title": "Dashboard"
+                                  }
+                                },
+                                {
+                                  "properties": {
+                                    "sheetId": 101,
+                                    "title": "Template"
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/Template") && method == "GET" -> {
+                        // Layout read: returns empty values (no headers populated)
+                        val body = """
+                            {
+                              "range": "Template!A3:AE3",
+                              "majorDimension": "ROWS",
+                              "values": []
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains(":batchUpdate") && method == "POST" -> {
+                        provisionBatchCalled = true
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository()
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val result = resolver.resolveForYear(2026)
+
+        assertTrue("Expected resolveForYear to succeed", result is Result.Success)
+        assertEquals(foundWorkbookId, (result as Result.Success).data)
+        assertTrue("Expected provisionMasterWorkbook batchUpdate to run when tabs exist but layout is empty", provisionBatchCalled)
+    }
 }
