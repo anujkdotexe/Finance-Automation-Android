@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 class CategoryRepositoryImpl(
     private val categoryDao: CategoryDao? = null,
     private val categoryDaoProvider: (suspend () -> CategoryDao)? = null,
-    private val configSyncCoordinator: ConfigSyncCoordinator? = null,
+    private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : CategoryRepository {
 
@@ -32,9 +32,12 @@ class CategoryRepositoryImpl(
     ) : this(
         categoryDao = categoryDao,
         categoryDaoProvider = null,
-        configSyncCoordinator = configSyncCoordinator,
+        configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
         ioDispatcher = ioDispatcher
     )
+
+    private val configSyncCoordinator: ConfigSyncCoordinator?
+        get() = configSyncCoordinatorProvider?.invoke()
 
     private suspend fun resolveDao(): CategoryDao =
         categoryDao ?: categoryDaoProvider?.invoke()

@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
 class PeopleRepositoryImpl(
     private val companionDao: CompanionDao? = null,
     private val companionDaoProvider: (suspend () -> CompanionDao)? = null,
-    private val configSyncCoordinator: ConfigSyncCoordinator? = null,
+    private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : PeopleRepository {
 
@@ -33,9 +33,12 @@ class PeopleRepositoryImpl(
     ) : this(
         companionDao = companionDao,
         companionDaoProvider = null,
-        configSyncCoordinator = configSyncCoordinator,
+        configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
         ioDispatcher = ioDispatcher
     )
+
+    private val configSyncCoordinator: ConfigSyncCoordinator?
+        get() = configSyncCoordinatorProvider?.invoke()
 
     private suspend fun resolveDao(): CompanionDao =
         companionDao ?: companionDaoProvider?.invoke()
