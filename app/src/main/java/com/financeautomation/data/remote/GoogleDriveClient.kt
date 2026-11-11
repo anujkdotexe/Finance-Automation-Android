@@ -23,7 +23,7 @@ import java.io.IOException
  * Direct OkHttp client for Google Drive v3 REST API.
  * Interacts with Google Drive to locate or provision folders and monthly workbooks.
  */
-class GoogleDriveClient(
+open class GoogleDriveClient(
     private val okHttpClient: OkHttpClient,
     private val tokenProvider: TokenProvider? = null,
     private val baseUrl: String = "https://www.googleapis.com/drive/v3"
@@ -385,6 +385,45 @@ class GoogleDriveClient(
                     val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
                     val newId = jsonResponse["id"]?.jsonPrimitive?.content.orEmpty()
                     Result.Success(newId)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Copies an existing file [fileId] in Google Drive giving it [backupName].
+     * The copy retains the same parent directory and permissions.
+     */
+    open suspend fun copyFile(
+        fileId: String,
+        backupName: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val copyUrl = "$baseUrl/files/$fileId/copy?fields=id%2Cname"
+            val requestBodyJson = """{"name":"${backupName.replace("\"", "\\\"")}"}"""
+            val copyRequest = newRequestBuilder(copyUrl)
+                .post(requestBodyJson.toRequestBody(jsonMediaType))
+                .build()
+
+            okHttpClient.newCall(copyRequest).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse("drive.files.copy", response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to copy file '$fileId' to '$backupName'"), apiError)
+                    )
+                }
+
+                val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
+                val copiedId = jsonResponse["id"]?.jsonPrimitive?.content
+                if (!copiedId.isNullOrBlank()) {
+                    Result.Success(copiedId)
+                } else {
+                    Result.Error(IOException("Drive API returned empty id for copied file '$backupName'"))
                 }
             }
         } catch (e: CancellationException) {

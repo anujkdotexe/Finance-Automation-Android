@@ -6,9 +6,11 @@ import com.financeautomation.data.local.FinanceDatabase
 import com.financeautomation.data.remote.AccountingSyncExecutor
 import com.financeautomation.data.remote.ConfigSheetManager
 import com.financeautomation.data.remote.ConfigSyncCoordinator
+import com.financeautomation.data.remote.GoogleApiError
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.RawHttpErrorStore
 import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.data.remote.TokenRecoveryInterceptor
 import com.financeautomation.data.remote.WorkbookResolver
@@ -102,6 +104,7 @@ interface AppContainer {
     val overlayController: OverlayController
     val peopleListRebuilder: PeopleListRebuilder
     val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase
+    val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
 }
 
 /**
@@ -122,6 +125,19 @@ class DefaultAppContainer(
     override val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     override val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
     override val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
+
+    override val rawHttpErrorStore: RawHttpErrorStore by lazy {
+        val dir = try {
+            applicationContext.filesDir ?: java.io.File(System.getProperty("java.io.tmpdir") ?: ".", "files").apply { mkdirs() }
+        } catch (e: Exception) {
+            java.io.File(System.getProperty("java.io.tmpdir") ?: ".", "files").apply { mkdirs() }
+        }
+        RawHttpErrorStore(dir)
+    }
+
+    init {
+        GoogleApiError.rawHttpErrorStore = rawHttpErrorStore
+    }
 
     override val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()

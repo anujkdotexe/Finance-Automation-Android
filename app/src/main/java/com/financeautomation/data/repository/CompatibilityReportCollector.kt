@@ -34,7 +34,8 @@ object CompatibilityReportCollector {
         healthSummary: List<HealthRowReport> = emptyList(),
         candidateFeedback: Map<String, String> = emptyMap(),
         isMissedPaymentReport: Boolean = false,
-        userNote: String? = null
+        userNote: String? = null,
+        includeGoogleErrors: Boolean = false
     ): String = withContext(Dispatchers.IO) {
         val header = DeviceHeaderInfo(
             appVersion = BuildConfig.VERSION_NAME,
@@ -118,6 +119,12 @@ object CompatibilityReportCollector {
             emptyList()
         }
 
+        val rawGoogleErrors = if (includeGoogleErrors) {
+            com.financeautomation.data.remote.GoogleApiError.rawHttpErrorStore?.getEntries() ?: emptyList()
+        } else {
+            emptyList()
+        }
+
         val data = CompatibilityReportData(
             header = header,
             healthRows = healthSummary,
@@ -130,7 +137,8 @@ object CompatibilityReportCollector {
             discoveryScan = discovery,
             lastHeartbeatTime = PipelineTrail.getLastHeartbeatTime(),
             todayDroppedNonWhitelistedCount = PipelineTrail.getTodayDroppedNonWhitelistedCount(),
-            userNote = userNote
+            userNote = userNote,
+            rawGoogleErrors = rawGoogleErrors
         )
 
         CompatibilityReportBuilder.buildMarkdown(data)

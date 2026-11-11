@@ -15,6 +15,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +48,7 @@ fun CompatibilityReportDialog(
 ) {
     val context = LocalContext.current
     var userNote by remember { mutableStateOf("") }
+    var includeGoogleErrors by remember { mutableStateOf(false) }
     var reportText by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -56,7 +58,7 @@ fun CompatibilityReportDialog(
         stringResource(R.string.report_title)
     }
 
-    LaunchedEffect(userNote, isMissedPayment) {
+    LaunchedEffect(userNote, isMissedPayment, includeGoogleErrors) {
         isLoading = true
         withContext(Dispatchers.IO) {
             val dao = try {
@@ -69,7 +71,8 @@ fun CompatibilityReportDialog(
                 pipelineEventDao = dao,
                 candidateFeedback = SetupHealthIntents.getOemFeedback(),
                 isMissedPaymentReport = isMissedPayment,
-                userNote = userNote.ifBlank { null }
+                userNote = userNote.ifBlank { null },
+                includeGoogleErrors = includeGoogleErrors
             )
             isLoading = false
         }
@@ -105,6 +108,22 @@ fun CompatibilityReportDialog(
                     shape = FinanceTheme.shapes.small,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.report_include_google_errors),
+                        style = FinanceTheme.typography.bodyMedium,
+                        color = FinanceTheme.colors.onSurface
+                    )
+                    Switch(
+                        checked = includeGoogleErrors,
+                        onCheckedChange = { includeGoogleErrors = it }
+                    )
+                }
 
                 // Scrollable preview box
                 Box(

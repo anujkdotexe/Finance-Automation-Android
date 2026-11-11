@@ -56,19 +56,23 @@ object SheetProvisioner {
      */
     fun buildDashboardRequests(
         dashboardSheetId: Int,
-        categories: List<String> = emptyList()
+        categories: List<String> = emptyList(),
+        currentRowCount: Int = 1000,
+        currentColumnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
+        val targetRowCount = maxOf(currentRowCount, 1000)
+        val targetColumnCount = maxOf(currentColumnCount, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
 
-        // 0. Ensure grid dimensions (1000 rows x 31 columns)
+        // 0. Ensure grid dimensions (at least 1000 rows x 26 columns, never shrink)
         requests.add(
             mapOf(
                 "updateSheetProperties" to mapOf(
                     "properties" to mapOf(
                         "sheetId" to dashboardSheetId,
                         "gridProperties" to mapOf(
-                            "rowCount" to 1000,
-                            "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                            "rowCount" to targetRowCount,
+                            "columnCount" to targetColumnCount
                         )
                     ),
                     "fields" to "gridProperties(rowCount,columnCount)"
@@ -749,19 +753,24 @@ object SheetProvisioner {
         sheetId: Int,
         tabTitle: String,
         accounts: List<String> = emptyList(),
-        categories: List<String> = emptyList()
+        categories: List<String> = emptyList(),
+        currentRowCount: Int = 1000,
+        currentColumnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT,
+        existingRuleFormulas: Set<String> = emptySet()
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
+        val targetRowCount = maxOf(currentRowCount, 1000)
+        val targetColumnCount = maxOf(currentColumnCount, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
 
-        // 1. Ensure grid dimensions (1000 rows x 31 columns) and freeze top 3 rows
+        // 1. Ensure grid dimensions (at least 1000 rows x 31 columns, never shrink) and freeze top 3 rows
         requests.add(
             mapOf(
                 "updateSheetProperties" to mapOf(
                     "properties" to mapOf(
                         "sheetId" to sheetId,
                         "gridProperties" to mapOf(
-                            "rowCount" to 1000,
-                            "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT,
+                            "rowCount" to targetRowCount,
+                            "columnCount" to targetColumnCount,
                             "frozenRowCount" to 3
                         )
                     ),
@@ -1054,7 +1063,7 @@ object SheetProvisioner {
             )
         )
 
-        // 7. Column Number Formatting on Data Rows (Rows 4 to 1000)
+        // 7. Column Number Formatting on Data Rows (Rows 4 to targetRowCount)
         // Currency Columns: Total Amount (6), My Share (8), Owed To Me (9), Inflow Amount (18), Payable Amount (25)
         listOf(6, 8, 9, 18, 25).forEach { colIdx ->
             requests.add(
@@ -1064,7 +1073,8 @@ object SheetProvisioner {
                     endCol = colIdx + 1,
                     formatType = "CURRENCY",
                     pattern = "\"₹\"#,##0",
-                    align = "RIGHT"
+                    align = "RIGHT",
+                    endRow = targetRowCount
                 )
             )
         }
@@ -1078,7 +1088,8 @@ object SheetProvisioner {
                     endCol = colIdx + 1,
                     formatType = "DATE",
                     pattern = "dd/mm/yyyy",
-                    align = "CENTER"
+                    align = "CENTER",
+                    endRow = targetRowCount
                 )
             )
         }
@@ -1092,19 +1103,21 @@ object SheetProvisioner {
                     endCol = colIdx + 1,
                     formatType = "TIME",
                     pattern = "hh:mm am/pm",
-                    align = "CENTER"
+                    align = "CENTER",
+                    endRow = targetRowCount
                 )
             )
         }
 
-        // 8. Data Validation Dropdowns (Rows 4 to 1000)
+        // 8. Data Validation Dropdowns (Rows 4 to targetRowCount)
         // Col K (10): Status (Personal, Pending, Settled, Carried Fwd, Void)
         requests.add(
             createDataValidationRequest(
                 sheetId = sheetId,
                 startCol = 10,
                 endCol = 11,
-                values = listOf("Personal", "Pending", "Settled", "Carried Fwd", "Void")
+                values = listOf("Personal", "Pending", "Settled", "Carried Fwd", "Void"),
+                endRow = targetRowCount
             )
         )
 
@@ -1114,7 +1127,8 @@ object SheetProvisioner {
                 sheetId = sheetId,
                 startCol = 27,
                 endCol = 28,
-                values = listOf("Pending", "Partial", "Repaid", "Carried Fwd", "Void")
+                values = listOf("Pending", "Partial", "Repaid", "Carried Fwd", "Void"),
+                endRow = targetRowCount
             )
         )
 
@@ -1125,7 +1139,8 @@ object SheetProvisioner {
                 sheetId = sheetId,
                 startCol = 2,
                 endCol = 3,
-                values = effectiveAccounts
+                values = effectiveAccounts,
+                endRow = targetRowCount
             )
         )
 
@@ -1136,74 +1151,81 @@ object SheetProvisioner {
                 sheetId = sheetId,
                 startCol = 5,
                 endCol = 6,
-                values = effectiveCategories
+                values = effectiveCategories,
+                endRow = targetRowCount
             )
         )
 
-        // 9. Conditional Formatting Rules (Rows 4 to 1000, Cols A-K)
+        // 9. Conditional Formatting Rules (Rows 4 to targetRowCount, Cols A-K)
         // Rule 1: Void -> Strikethrough, gray text #9E9E9E
-        requests.add(
-            mapOf(
-                "addConditionalFormatRule" to mapOf(
-                    "rule" to mapOf(
-                        "ranges" to listOf(
-                            mapOf(
-                                "sheetId" to sheetId,
-                                "startRowIndex" to 3,
-                                "endRowIndex" to 1000,
-                                "startColumnIndex" to 0,
-                                "endColumnIndex" to 11
-                            )
-                        ),
-                        "booleanRule" to mapOf(
-                            "condition" to mapOf(
-                                "type" to "CUSTOM_FORMULA",
-                                "values" to listOf(mapOf("userEnteredValue" to "=\$K4=\"Void\""))
+        val voidFormula = "=\$K4=\"Void\""
+        if (!existingRuleFormulas.contains(voidFormula)) {
+            requests.add(
+                mapOf(
+                    "addConditionalFormatRule" to mapOf(
+                        "rule" to mapOf(
+                            "ranges" to listOf(
+                                mapOf(
+                                    "sheetId" to sheetId,
+                                    "startRowIndex" to 3,
+                                    "endRowIndex" to targetRowCount,
+                                    "startColumnIndex" to 0,
+                                    "endColumnIndex" to 11
+                                )
                             ),
-                            "format" to mapOf(
-                                "textFormat" to mapOf(
-                                    "strikethrough" to true,
-                                    "foregroundColor" to voidGrayColor
+                            "booleanRule" to mapOf(
+                                "condition" to mapOf(
+                                    "type" to "CUSTOM_FORMULA",
+                                    "values" to listOf(mapOf("userEnteredValue" to voidFormula))
+                                ),
+                                "format" to mapOf(
+                                    "textFormat" to mapOf(
+                                        "strikethrough" to true,
+                                        "foregroundColor" to voidGrayColor
+                                    )
                                 )
                             )
-                        )
-                    ),
-                    "index" to 0
+                        ),
+                        "index" to 0
+                    )
                 )
             )
-        )
+        }
 
         // Rule 2: Carried Fwd -> Italic, gray text #9E9E9E
-        requests.add(
-            mapOf(
-                "addConditionalFormatRule" to mapOf(
-                    "rule" to mapOf(
-                        "ranges" to listOf(
-                            mapOf(
-                                "sheetId" to sheetId,
-                                "startRowIndex" to 3,
-                                "endRowIndex" to 1000,
-                                "startColumnIndex" to 0,
-                                "endColumnIndex" to 11
-                            )
-                        ),
-                        "booleanRule" to mapOf(
-                            "condition" to mapOf(
-                                "type" to "CUSTOM_FORMULA",
-                                "values" to listOf(mapOf("userEnteredValue" to "=OR(\$K4=\"Carried Fwd\", \$K4=\"Carried\")"))
+        val carriedFormula = "=OR(\$K4=\"Carried Fwd\", \$K4=\"Carried\")"
+        if (!existingRuleFormulas.contains(carriedFormula)) {
+            requests.add(
+                mapOf(
+                    "addConditionalFormatRule" to mapOf(
+                        "rule" to mapOf(
+                            "ranges" to listOf(
+                                mapOf(
+                                    "sheetId" to sheetId,
+                                    "startRowIndex" to 3,
+                                    "endRowIndex" to targetRowCount,
+                                    "startColumnIndex" to 0,
+                                    "endColumnIndex" to 11
+                                )
                             ),
-                            "format" to mapOf(
-                                "textFormat" to mapOf(
-                                    "italic" to true,
-                                    "foregroundColor" to voidGrayColor
+                            "booleanRule" to mapOf(
+                                "condition" to mapOf(
+                                    "type" to "CUSTOM_FORMULA",
+                                    "values" to listOf(mapOf("userEnteredValue" to carriedFormula))
+                                ),
+                                "format" to mapOf(
+                                    "textFormat" to mapOf(
+                                        "italic" to true,
+                                        "foregroundColor" to voidGrayColor
+                                    )
                                 )
                             )
-                        )
-                    ),
-                    "index" to 1
+                        ),
+                        "index" to 1
+                    )
                 )
             )
-        )
+        }
 
         return requests
     }
@@ -1277,14 +1299,15 @@ object SheetProvisioner {
         endCol: Int,
         formatType: String,
         pattern: String,
-        align: String
+        align: String,
+        endRow: Int = 1000
     ): Map<String, Any?> {
         return mapOf(
             "repeatCell" to mapOf(
                 "range" to mapOf(
                     "sheetId" to sheetId,
                     "startRowIndex" to 3,
-                    "endRowIndex" to 1000,
+                    "endRowIndex" to endRow,
                     "startColumnIndex" to startCol,
                     "endColumnIndex" to endCol
                 ),
@@ -1306,14 +1329,15 @@ object SheetProvisioner {
         sheetId: Int,
         startCol: Int,
         endCol: Int,
-        values: List<String>
+        values: List<String>,
+        endRow: Int = 1000
     ): Map<String, Any?> {
         return mapOf(
             "setDataValidation" to mapOf(
                 "range" to mapOf(
                     "sheetId" to sheetId,
                     "startRowIndex" to 3,
-                    "endRowIndex" to 1000,
+                    "endRowIndex" to endRow,
                     "startColumnIndex" to startCol,
                     "endColumnIndex" to endCol
                 ),

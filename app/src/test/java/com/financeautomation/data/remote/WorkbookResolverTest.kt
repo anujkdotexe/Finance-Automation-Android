@@ -590,4 +590,243 @@ class WorkbookResolverTest {
         assertEquals(foundWorkbookId, (result as Result.Success).data)
         assertTrue("Expected provisionMasterWorkbook batchUpdate to run when headers do not match schema constants", provisionBatchCalled)
     }
+
+    @Test
+    fun testPreRepairCreatesBackupWhenWorkbookContainsDataRows() = runBlocking {
+        var copyFileCalled = false
+        var copiedBackupName: String? = null
+        val storedId = "stored_wb_with_data_789"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                if (url.contains("/copy") && request.method == "POST") {
+                    copyFileCalled = true
+                    val buffer = okio.Buffer()
+                    request.body?.writeTo(buffer)
+                    copiedBackupName = buffer.readUtf8()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"id": "backup_file_id_999", "name": "backup"}""".toResponseBody(jsonMediaType))
+                        .build()
+                } else {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+
+                when {
+                    url.contains("fields=sheets") -> {
+                        val body = """
+                            {
+                              "sheets": [
+                                { "properties": { "sheetId": 0, "title": "Dashboard" } },
+                                { "properties": { "sheetId": 1, "title": "Template" } },
+                                { "properties": { "sheetId": 2, "title": "Nov26" } }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values:batchGet") -> {
+                        // Month tab Nov26 contains a transaction data row at row 4
+                        val body = """
+                            {
+                              "valueRanges": [
+                                {
+                                  "range": "'Nov26'!A4:A5",
+                                  "values": [ ["11/11/2026"] ]
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/") -> {
+                        val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
+                        val body = """
+                            {
+                              "range": "Template!A3:AE3",
+                              "values": [ [ $validHeaders ] ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository().apply {
+            setSpreadsheetIdForYear(2026, storedId)
+        }
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val res = resolver.resolveForYear(2026, forceValidateTabs = true)
+
+        assertTrue(res is Result.Success)
+        assertTrue("Drive copyFile must be called before repair when data rows exist", copyFileCalled)
+        assertTrue("Backup file name must contain 'backup before repair'", copiedBackupName?.contains("backup before repair") == true)
+    }
+
+    @Test
+    fun testPreRepairSkipsBackupWhenWorkbookHasNoDataRows() = runBlocking {
+        var copyFileCalled = false
+        val storedId = "stored_empty_wb_111"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                if (url.contains("/copy")) {
+                    copyFileCalled = true
+                }
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("""{}""".toResponseBody(jsonMediaType))
+                    .build()
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+
+                when {
+                    url.contains("fields=sheets") -> {
+                        val body = """
+                            {
+                              "sheets": [
+                                { "properties": { "sheetId": 0, "title": "Dashboard" } },
+                                { "properties": { "sheetId": 1, "title": "Template" } },
+                                { "properties": { "sheetId": 2, "title": "Nov26" } }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values:batchGet") -> {
+                        // Month tab Nov26 is completely empty in row 4+
+                        val body = """
+                            {
+                              "valueRanges": [
+                                {
+                                  "range": "'Nov26'!A4:A5",
+                                  "values": []
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/") -> {
+                        val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
+                        val body = """
+                            {
+                              "range": "Template!A3:AE3",
+                              "values": [ [ $validHeaders ] ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository().apply {
+            setSpreadsheetIdForYear(2026, storedId)
+        }
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val res = resolver.resolveForYear(2026, forceValidateTabs = true)
+
+        assertTrue(res is Result.Success)
+        assertFalse("Drive copyFile must NOT be called when workbook has no data rows", copyFileCalled)
+    }
 }

@@ -3,6 +3,9 @@ package com.financeautomation.data.remote
 import android.util.Log
 import com.financeautomation.BuildConfig
 import java.io.IOException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -36,6 +39,9 @@ data class GoogleApiError(
     companion object {
         const val MAX_MESSAGE_LENGTH = 300
         private val json = Json { ignoreUnknownKeys = true }
+        @Volatile
+        var rawHttpErrorStore: RawHttpErrorStore? = null
+        private val recordingScope = CoroutineScope(Dispatchers.IO)
 
         fun parse(
             endpointId: String,
@@ -109,6 +115,12 @@ data class GoogleApiError(
                 "GoogleHttp",
                 "${error.endpointId} HTTP ${error.httpStatus} (${error.reason ?: error.status ?: "UNKNOWN"}): ${error.message}"
             )
+            val store = rawHttpErrorStore
+            if (store != null && !responseBody.isNullOrBlank()) {
+                recordingScope.launch {
+                    store.recordError(endpointId, httpStatus, responseBody)
+                }
+            }
             return error
         }
 
