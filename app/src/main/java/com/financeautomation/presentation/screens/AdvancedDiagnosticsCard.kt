@@ -195,7 +195,7 @@ fun AdvancedDiagnosticsCard(
 
         if (rawErrors.isEmpty()) {
             Text(
-                text = "No raw Google API errors recorded.",
+                text = stringResource(R.string.raw_http_errors_empty),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = FinanceTheme.spacing.xs)

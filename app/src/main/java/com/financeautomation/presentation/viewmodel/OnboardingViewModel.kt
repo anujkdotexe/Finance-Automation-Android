@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.data.remote.AuthResult
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
@@ -35,7 +36,7 @@ data class OnboardingUiState(
     val step1State: StepState = StepState.NOT_STARTED,
     val step1Error: String? = null,
     val step2State: StepState = StepState.NOT_STARTED,
-    val step2Error: String? = null,
+    val step2Error: UiText? = null,
     val step3State: StepState = StepState.NOT_STARTED,
     val step4State: StepState = StepState.NOT_STARTED,
     val googleAccountEmail: String? = null,
@@ -202,7 +203,7 @@ class OnboardingViewModel(
     }
 
     companion object {
-        fun formatFriendlyErrorMessage(e: Throwable): String {
+        fun formatFriendlyErrorMessage(e: Throwable): UiText {
             val apiError = when (e) {
                 is GoogleSheetsApiException -> e.apiError
                 is GoogleDriveApiException -> e.apiError
@@ -212,18 +213,31 @@ class OnboardingViewModel(
                 val r = apiError.reason
                 return when {
                     r == "SERVICE_DISABLED" || r == "accessNotConfigured" ->
-                        "Google Sheets or Drive API is not enabled for your Google Cloud project. Please enable them in Google Cloud Console."
+                        UiText(R.string.onboarding_error_api_disabled)
                     apiError.httpStatus == 403 || r == "ACCESS_TOKEN_SCOPE_INSUFFICIENT" || r == "insufficientPermissions" ->
-                        "Required Google Drive or Sheets permissions were not granted. Please sign out and sign in granting all requested scopes."
+                        UiText(R.string.onboarding_error_insufficient_scope)
                     apiError.httpStatus == 429 || r == "RATE_LIMIT_EXCEEDED" || r == "rateLimitExceeded" || r == "userRateLimitExceeded" ->
-                        "Google API rate limit reached. Please wait a moment and tap Retry."
+                        UiText(R.string.onboarding_error_rate_limited)
                     else -> {
-                        val msgPart = if (!apiError.message.isNullOrBlank()) ": ${apiError.message.take(300)}" else ""
-                        "Workspace setup failed (${apiError.endpointId} HTTP ${apiError.httpStatus} ${apiError.reason ?: apiError.status ?: "UNKNOWN"}$msgPart). Tap retry, or check Settings > Advanced Diagnostics for details."
+                        val messagePart = if (apiError.message.isNotBlank()) ": ${apiError.message.take(300)}" else ""
+                        UiText(
+                            R.string.onboarding_error_generic,
+                            listOf(
+                                apiError.endpointId,
+                                apiError.httpStatus,
+                                apiError.reason ?: apiError.status ?: "UNKNOWN",
+                                messagePart
+                            )
+                        )
                     }
                 }
             }
-            return "${e.message ?: "Failed to resolve finance workspace"}. Check Settings > Advanced Diagnostics for details."
+            val detail = e.message
+            return if (detail.isNullOrBlank()) {
+                UiText(R.string.onboarding_error_unknown)
+            } else {
+                UiText(R.string.onboarding_error_unknown_with_message, listOf(detail))
+            }
         }
 
         fun provideFactory(

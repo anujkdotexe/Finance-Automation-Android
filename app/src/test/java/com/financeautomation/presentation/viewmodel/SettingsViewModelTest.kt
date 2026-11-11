@@ -1,7 +1,9 @@
 package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.R
 import com.financeautomation.data.remote.GoogleApiError
+import com.financeautomation.data.remote.GoogleEndpoint
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsApiException
 import com.financeautomation.data.remote.GoogleSheetsClient
@@ -183,9 +185,9 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun testOnboardingFormatFriendlyErrorMessageIncludesGoogleMessageAndDiagnosticsNotice() {
+    fun testOnboardingFormatFriendlyErrorMessageCarriesGoogleMessageAsStringResourceArguments() {
         val googleError = GoogleApiError(
-            endpointId = "sheets.batchUpdate",
+            endpointId = GoogleEndpoint.SHEETS_BATCH_UPDATE,
             httpStatus = 400,
             status = "INVALID_ARGUMENT",
             reason = "INVALID_ARGUMENT",
@@ -197,9 +199,53 @@ class SettingsViewModelTest {
             apiError = googleError
         )
 
-        val friendlyMessage = OnboardingViewModel.formatFriendlyErrorMessage(exception)
+        val friendly = OnboardingViewModel.formatFriendlyErrorMessage(exception)
 
-        assertTrue("Expected message to contain Google error message", friendlyMessage.contains("exceeds grid limits"))
-        assertTrue("Expected message to point to Advanced Diagnostics", friendlyMessage.contains("Settings > Advanced Diagnostics"))
+        assertEquals(R.string.onboarding_error_generic, friendly.resId)
+        assertEquals(GoogleEndpoint.SHEETS_BATCH_UPDATE, friendly.args[0])
+        assertEquals(400, friendly.args[1])
+        assertEquals("INVALID_ARGUMENT", friendly.args[2])
+        assertTrue(
+            "Expected the Google message in the arguments",
+            (friendly.args[3] as String).contains("exceeds grid limits")
+        )
+    }
+
+    @Test
+    fun testOnboardingFormatFriendlyErrorMessageMapsKnownReasonsToDedicatedStrings() {
+        fun sheetsException(status: Int, reason: String?) = GoogleSheetsApiException(
+            message = "failed",
+            statusCode = status,
+            apiError = GoogleApiError(
+                endpointId = GoogleEndpoint.DRIVE_FILES_LIST,
+                httpStatus = status,
+                status = null,
+                reason = reason,
+                message = "m"
+            )
+        )
+
+        assertEquals(
+            R.string.onboarding_error_api_disabled,
+            OnboardingViewModel.formatFriendlyErrorMessage(sheetsException(403, "SERVICE_DISABLED")).resId
+        )
+        assertEquals(
+            R.string.onboarding_error_insufficient_scope,
+            OnboardingViewModel.formatFriendlyErrorMessage(sheetsException(403, "insufficientPermissions")).resId
+        )
+        assertEquals(
+            R.string.onboarding_error_rate_limited,
+            OnboardingViewModel.formatFriendlyErrorMessage(sheetsException(429, "rateLimitExceeded")).resId
+        )
+    }
+
+    @Test
+    fun testOnboardingFormatFriendlyErrorMessageHandlesNonGoogleErrors() {
+        val withMessage = OnboardingViewModel.formatFriendlyErrorMessage(java.io.IOException("socket closed"))
+        assertEquals(R.string.onboarding_error_unknown_with_message, withMessage.resId)
+        assertEquals(listOf<Any>("socket closed"), withMessage.args)
+
+        val withoutMessage = OnboardingViewModel.formatFriendlyErrorMessage(java.io.IOException())
+        assertEquals(R.string.onboarding_error_unknown, withoutMessage.resId)
     }
 }
