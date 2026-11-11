@@ -75,7 +75,7 @@ internal fun <T> Throwable.toDataResult(spreadsheetId: String = ""): DataResult<
  * Direct OkHttp client for Google Sheets v4 REST API.
  * Executes atomic RAW appends, in-place updates, and batch provisioning.
  */
-class GoogleSheetsClient(
+open class GoogleSheetsClient(
     private val okHttpClient: OkHttpClient,
     private val tokenProvider: TokenProvider? = null,
     private val baseUrl: String = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -909,20 +909,21 @@ class GoogleSheetsClient(
      * Creates the tab if missing, extracts the sheetId, and formats headers,
      * banners, column styles, frozen rows, validations, and conditional formatting via SheetProvisioner.
      */
-    suspend fun provisionMonthTab(
+    open suspend fun provisionMonthTab(
         spreadsheetId: String,
         tabName: String,
         accounts: List<String> = emptyList(),
         categories: List<String> = emptyList()
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val tabsResult = getSheetTabsWithIds(spreadsheetId)
-            if (tabsResult is Result.Error) {
-                return@withContext Result.Error(tabsResult.exception)
+            val detailedRes = getSheetTabsDetailed(spreadsheetId)
+            if (detailedRes is Result.Error) {
+                return@withContext Result.Error(detailedRes.exception)
             }
 
-            val tabsMap = (tabsResult as Result.Success).data
-            val existingSheetId = tabsMap[tabName]
+            val detailedMap = (detailedRes as Result.Success).data
+            val existingTabInfo = detailedMap[tabName]
+            val existingSheetId = existingTabInfo?.sheetId
 
             val targetSheetId = if (existingSheetId != null) {
                 existingSheetId
@@ -932,7 +933,11 @@ class GoogleSheetsClient(
                     mapOf(
                         "addSheet" to mapOf(
                             "properties" to mapOf(
-                                "title" to tabName
+                                "title" to tabName,
+                                "gridProperties" to mapOf(
+                                    "rowCount" to 1000,
+                                    "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                )
                             )
                         )
                     )
@@ -962,7 +967,35 @@ class GoogleSheetsClient(
                 newSheetId
             }
 
-            val provisionRequests = SheetProvisioner.buildProvisionRequests(targetSheetId, tabName, accounts, categories)
+            val curRows = existingTabInfo?.rowCount ?: 1000
+            val curCols = existingTabInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+            val targetRows = maxOf(curRows, 1000)
+            val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+            val existingRules = existingTabInfo?.existingRuleFormulas ?: emptySet()
+
+            val provisionRequests = SheetProvisioner.buildProvisionRequests(
+                sheetId = targetSheetId,
+                tabTitle = tabName,
+                accounts = accounts,
+                categories = categories,
+                currentRowCount = targetRows,
+                currentColumnCount = targetCols,
+                existingRuleFormulas = existingRules
+            )
+
+            // Validate safety: must not shrink grid, write to row index >= 3, or use destructive operations
+            val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
+                requests = provisionRequests,
+                isDataTab = true,
+                currentGridRows = curRows,
+                currentGridCols = curCols
+            )
+            if (safetyViolations.isNotEmpty()) {
+                return@withContext Result.Error(
+                    IllegalStateException("Month tab repair safety violation: $safetyViolations")
+                )
+            }
+
             batchUpdate(spreadsheetId, provisionRequests)
         } catch (e: CancellationException) {
             throw e
@@ -991,6 +1024,10 @@ class GoogleSheetsClient(
             }
             var tabsMap = (tabsResult as Result.Success).data.toMutableMap()
             com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Initial tabs: ${tabsMap.keys.toList()}")
+
+            // Read detailed metadata to inspect existing grid sizes and conditional format rules
+            val detailedTabsResult = getSheetTabsDetailed(spreadsheetId)
+            val detailedTabs = if (detailedTabsResult is Result.Success) detailedTabsResult.data else emptyMap()
 
             // 0. Cosmetic properties (en_GB locale and Asia/Kolkata timezone) in their OWN isolated batch.
             // If this fails, record in Diagnostics and proceed; cosmetic properties must never block provisioning.
@@ -1035,7 +1072,7 @@ class GoogleSheetsClient(
                 )
             }
 
-            // 2. Ensure Template tab exists with at least 31 columns
+            // 2. Ensure Template tab exists with at least 31 columns (never shrink existing rows or columns)
             if (!tabsMap.containsKey("Template")) {
                 setupRequests.add(
                     mapOf(
@@ -1051,17 +1088,21 @@ class GoogleSheetsClient(
                     )
                 )
             } else {
-                // Expand existing Template tab if it was created with default 26 columns
                 val templateSheetId = tabsMap["Template"]
-                if (templateSheetId != null) {
+                val templInfo = detailedTabs["Template"]
+                val curRows = templInfo?.rowCount ?: 1000
+                val curCols = templInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val targetRows = maxOf(curRows, 1000)
+                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                if (templateSheetId != null && (targetRows > curRows || targetCols > curCols)) {
                     setupRequests.add(
                         mapOf(
                             "updateSheetProperties" to mapOf(
                                 "properties" to mapOf(
                                     "sheetId" to templateSheetId,
                                     "gridProperties" to mapOf(
-                                        "rowCount" to 1000,
-                                        "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                        "rowCount" to targetRows,
+                                        "columnCount" to targetCols
                                     )
                                 ),
                                 "fields" to "gridProperties(rowCount,columnCount)"
@@ -1071,7 +1112,7 @@ class GoogleSheetsClient(
                 }
             }
 
-            // 3. Ensure current month tab exists with at least 31 columns
+            // 3. Ensure current month tab exists with at least 31 columns (never shrink existing rows or columns)
             val currentMonthTab = ZonedDateTime.now(DEFAULT_SHEET_ZONE_ID)
                 .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
 
@@ -1090,17 +1131,21 @@ class GoogleSheetsClient(
                     )
                 )
             } else {
-                // Expand existing month tab if it was created with default 26 columns
                 val monthSheetId = tabsMap[currentMonthTab]
-                if (monthSheetId != null) {
+                val monthInfo = detailedTabs[currentMonthTab]
+                val curRows = monthInfo?.rowCount ?: 1000
+                val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val targetRows = maxOf(curRows, 1000)
+                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                if (monthSheetId != null && (targetRows > curRows || targetCols > curCols)) {
                     setupRequests.add(
                         mapOf(
                             "updateSheetProperties" to mapOf(
                                 "properties" to mapOf(
                                     "sheetId" to monthSheetId,
                                     "gridProperties" to mapOf(
-                                        "rowCount" to 1000,
-                                        "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                        "rowCount" to targetRows,
+                                        "columnCount" to targetCols
                                     )
                                 ),
                                 "fields" to "gridProperties(rowCount,columnCount)"
@@ -1151,27 +1196,94 @@ class GoogleSheetsClient(
                     }
                 }
 
-                val dashboardRequests = SheetProvisioner.buildDashboardRequests(dashboardId, categories)
+                val dashInfo = detailedTabs["Dashboard"]
+                val dashCurRows = dashInfo?.rowCount ?: 1000
+                val dashCurCols = dashInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val dashTargetRows = maxOf(dashCurRows, 1000)
+                val dashTargetCols = maxOf(dashCurCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+
+                val dashboardRequests = SheetProvisioner.buildDashboardRequests(
+                    dashboardSheetId = dashboardId,
+                    categories = categories,
+                    currentRowCount = dashTargetRows,
+                    currentColumnCount = dashTargetCols
+                )
                 val dashRes = batchUpdate(spreadsheetId, dashboardRequests)
                 if (dashRes is Result.Error) {
                     return@withContext Result.Error(dashRes.exception)
                 }
             }
 
-            // 5. Format Template sheet
+            // 5. Format Template sheet (safe formatting: rows 1-3 only, skip existing rules, never shrink)
             val templateId = tabsMap["Template"]
             if (templateId != null) {
-                val templateRequests = SheetProvisioner.buildProvisionRequests(templateId, "Template", accounts, categories)
+                val templInfo = detailedTabs["Template"]
+                val curRows = templInfo?.rowCount ?: 1000
+                val curCols = templInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val targetRows = maxOf(curRows, 1000)
+                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                val existingRules = templInfo?.existingRuleFormulas ?: emptySet()
+
+                val templateRequests = SheetProvisioner.buildProvisionRequests(
+                    sheetId = templateId,
+                    tabTitle = "Template",
+                    accounts = accounts,
+                    categories = categories,
+                    currentRowCount = targetRows,
+                    currentColumnCount = targetCols,
+                    existingRuleFormulas = existingRules
+                )
+
+                val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
+                    requests = templateRequests,
+                    isDataTab = true,
+                    currentGridRows = curRows,
+                    currentGridCols = curCols
+                )
+                if (safetyViolations.isNotEmpty()) {
+                    return@withContext Result.Error(
+                        IllegalStateException("Template repair safety violation: $safetyViolations")
+                    )
+                }
+
                 val templRes = batchUpdate(spreadsheetId, templateRequests)
                 if (templRes is Result.Error) {
                     return@withContext Result.Error(templRes.exception)
                 }
             }
 
-            // 6. Format current month sheet
+            // 6. Format current month sheet (safe formatting: rows 1-3 only, skip existing rules, never shrink)
             val currentMonthId = tabsMap[currentMonthTab]
             if (currentMonthId != null) {
-                val currentMonthRequests = SheetProvisioner.buildProvisionRequests(currentMonthId, currentMonthTab, accounts, categories)
+                val monthInfo = detailedTabs[currentMonthTab]
+                val curRows = monthInfo?.rowCount ?: 1000
+                val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val targetRows = maxOf(curRows, 1000)
+                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                val existingRules = monthInfo?.existingRuleFormulas ?: emptySet()
+
+                val currentMonthRequests = SheetProvisioner.buildProvisionRequests(
+                    sheetId = currentMonthId,
+                    tabTitle = currentMonthTab,
+                    accounts = accounts,
+                    categories = categories,
+                    currentRowCount = targetRows,
+                    currentColumnCount = targetCols,
+                    existingRuleFormulas = existingRules
+                )
+
+                val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
+                    requests = currentMonthRequests,
+                    isDataTab = true,
+                    currentGridRows = curRows,
+                    currentGridCols = curCols
+                )
+                if (safetyViolations.isNotEmpty()) {
+                    return@withContext Result.Error(
+                        IllegalStateException("Month tab repair safety violation: $safetyViolations")
+                    )
+                }
+
                 val monthRes = batchUpdate(spreadsheetId, currentMonthRequests)
                 if (monthRes is Result.Error) {
                     return@withContext Result.Error(monthRes.exception)
@@ -1187,9 +1299,110 @@ class GoogleSheetsClient(
     }
 
     /**
+     * Detailed metadata for a sheet tab, including grid dimensions and existing conditional format formulas.
+     */
+    data class SheetTabInfo(
+        val sheetId: Int,
+        val title: String,
+        val rowCount: Int = 1000,
+        val columnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT,
+        val existingRuleFormulas: Set<String> = emptySet()
+    )
+
+    /**
+     * Retrieves detailed metadata for all sheets in [spreadsheetId], including gridProperties
+     * (rowCount, columnCount) and existing conditional format formulas.
+     */
+    open suspend fun getSheetTabsDetailed(spreadsheetId: String): Result<Map<String, SheetTabInfo>> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2CgridProperties(rowCount%2CcolumnCount))%2CconditionalFormats(booleanRule(condition(values(userEnteredValue)))))"
+            val request = newRequestBuilder(url).get().build()
+
+            okHttpClient.newCall(request).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@withContext Result.Error(
+                        createHttpException(response.code, bodyString, "Sheets getSheetTabsDetailed failed", spreadsheetId, "sheets.get")
+                    )
+                }
+
+                val jsonResponse = try {
+                    json.parseToJsonElement(bodyString).jsonObject
+                } catch (e: Exception) {
+                    return@withContext Result.Error(MalformedResponseException("Failed to parse getSheetTabsDetailed response JSON (code ${response.code})", e))
+                }
+                val sheetsArray = jsonResponse["sheets"]?.jsonArray.orEmpty()
+                val map = mutableMapOf<String, SheetTabInfo>()
+                sheetsArray.forEach { sheetElem ->
+                    val sheetObj = sheetElem.jsonObject
+                    val props = sheetObj["properties"]?.jsonObject
+                    val title = props?.get("title")?.jsonPrimitive?.content
+                    val id = props?.get("sheetId")?.jsonPrimitive?.content?.toIntOrNull()
+                    if (title != null && id != null) {
+                        val gridProps = props["gridProperties"]?.jsonObject
+                        val rowCount = gridProps?.get("rowCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 1000
+                        val colCount = gridProps?.get("columnCount")?.jsonPrimitive?.content?.toIntOrNull() ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+
+                        val formulas = mutableSetOf<String>()
+                        val cFormats = sheetObj["conditionalFormats"]?.jsonArray.orEmpty()
+                        for (cf in cFormats) {
+                            val boolRule = cf.jsonObject["booleanRule"]?.jsonObject
+                            val cond = boolRule?.get("condition")?.jsonObject
+                            val values = cond?.get("values")?.jsonArray.orEmpty()
+                            for (v in values) {
+                                val uev = v.jsonObject["userEnteredValue"]?.jsonPrimitive?.content
+                                if (uev != null) formulas.add(uev)
+                            }
+                        }
+
+                        map[title] = SheetTabInfo(
+                            sheetId = id,
+                            title = title,
+                            rowCount = rowCount,
+                            columnCount = colCount,
+                            existingRuleFormulas = formulas
+                        )
+                    }
+                }
+                Result.Success(map)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Checks if any month tab in [spreadsheetId] contains data rows (any values in row 4 or below).
+     */
+    open suspend fun hasDataRows(spreadsheetId: String, tabTitles: List<String>): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val monthRegex = Regex("^[A-Z][a-z]{2}\\d{2}$")
+            val monthTabs = tabTitles.filter { it.matches(monthRegex) }
+            if (monthTabs.isEmpty()) {
+                return@withContext Result.Success(false)
+            }
+            val ranges = monthTabs.map { "'$it'!A4:A5" }
+            return@withContext when (val batchRes = batchGetValues(spreadsheetId, ranges)) {
+                is Result.Success -> {
+                    val hasData = batchRes.data.values.any { rows -> rows.isNotEmpty() }
+                    Result.Success(hasData)
+                }
+                is Result.Error -> Result.Error(batchRes.exception)
+                else -> Result.Error(Exception("Unexpected batchGetValues state"))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
      * Retrieves titles and sheet IDs of all sheet tabs in [spreadsheetId].
      */
-    suspend fun getSheetTabsWithIds(spreadsheetId: String): Result<Map<String, Int>> = withContext(Dispatchers.IO) {
+    open suspend fun getSheetTabsWithIds(spreadsheetId: String): Result<Map<String, Int>> = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle))"
             val request = newRequestBuilder(url).get().build()

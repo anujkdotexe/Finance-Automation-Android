@@ -21,6 +21,7 @@ class AppContainerTest {
         return object : ContextWrapper(null) {
             override fun getPackageName(): String = "com.financeautomation"
             override fun getApplicationContext(): Context = this
+            override fun getFilesDir(): java.io.File = java.io.File(System.getProperty("java.io.tmpdir") ?: ".", "test_files").apply { mkdirs() }
             override fun getSystemService(name: String): Any? {
                 return if (name == Context.WINDOW_SERVICE) windowManager else null
             }

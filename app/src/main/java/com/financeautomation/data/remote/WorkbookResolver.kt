@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -76,13 +77,55 @@ open class WorkbookResolver(
             }
 
             if (candidateId != null) {
+                // Check if workbook contains existing data rows before repair
+                val metadataRes = googleSheetsClient.getSheetTabsDetailed(candidateId)
+                if (metadataRes is Result.Success) {
+                    val tabTitles = metadataRes.data.keys.toList()
+                    val hasDataRes = googleSheetsClient.hasDataRows(candidateId, tabTitles)
+                    if (hasDataRes is Result.Success && hasDataRes.data) {
+                        val currentDate = LocalDate.now(ZoneId.of("Asia/Kolkata"))
+                        val backupName = "Finance$year (backup before repair $currentDate)"
+                        val copyRes = googleDriveClient.copyFile(candidateId, backupName)
+                        if (copyRes is Result.Error) {
+                            return@withContext Result.Error(
+                                Exception("Pre-repair backup copy failed: ${copyRes.exception.message}", copyRes.exception)
+                            )
+                        }
+                    }
+                }
+
                 val repairRes = ensureWorkbookTabs(candidateId)
                 if (repairRes is Result.Error) {
                     return@withContext Result.Error(repairRes.exception)
                 }
-                syncConfigUseCase?.mirrorToCloud(candidateId)
-                regenerateDashboardUseCase?.invoke()
-                return@withContext Result.Success(candidateId)
+
+                // Never unconditionally overwrite cloud config with local defaults on repair
+                if (syncConfigUseCase != null) {
+                    when (val restoreRes = syncConfigUseCase.restoreFromCloud(candidateId)) {
+                        is Result.Success -> {
+                            regenerateDashboardUseCase?.invoke()
+                            return@withContext Result.Success(candidateId)
+                        }
+                        is Result.Error -> {
+                            if (restoreRes.exception is EmptyOrMissingConfigTabException) {
+                                syncConfigUseCase.mirrorToCloud(candidateId)
+                                regenerateDashboardUseCase?.invoke()
+                                return@withContext Result.Success(candidateId)
+                            } else {
+                                return@withContext Result.Error(
+                                    Exception(
+                                        "Workbook repair succeeded, but failed to restore configuration: ${restoreRes.exception.javaClass.simpleName}",
+                                        restoreRes.exception
+                                    )
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                } else {
+                    regenerateDashboardUseCase?.invoke()
+                    return@withContext Result.Success(candidateId)
+                }
             }
 
             when (val driveSearch = googleDriveClient.findWorkbookForYear(year)) {

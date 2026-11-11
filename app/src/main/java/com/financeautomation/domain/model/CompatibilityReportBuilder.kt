@@ -75,7 +75,8 @@ data class CompatibilityReportData(
     val discoveryScan: List<String>,
     val lastHeartbeatTime: Long = 0L,
     val todayDroppedNonWhitelistedCount: Long = 0L,
-    val userNote: String? = null
+    val userNote: String? = null,
+    val rawGoogleErrors: List<com.financeautomation.data.remote.RawHttpErrorEntry> = emptyList()
 )
 
 /**
@@ -216,6 +217,18 @@ object CompatibilityReportBuilder {
             sb.appendLine("## 9. Vendor Discovery Scan (${data.discoveryScan.size})")
             for (entry in data.discoveryScan) {
                 sb.appendLine("- $entry")
+            }
+            sb.appendLine()
+        }
+
+        // 10. Raw Google API Errors (User Opt-in)
+        if (data.rawGoogleErrors.isNotEmpty()) {
+            sb.appendLine("## 10. Raw Google API Errors (${data.rawGoogleErrors.size})")
+            for (err in data.rawGoogleErrors) {
+                sb.appendLine("- [${err.timestamp}] ${err.endpointId} HTTP ${err.httpStatus}:")
+                sb.appendLine("```json")
+                sb.appendLine(err.responseBody)
+                sb.appendLine("```")
             }
             sb.appendLine()
         }
