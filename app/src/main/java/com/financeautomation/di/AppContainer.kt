@@ -109,7 +109,8 @@ interface AppContainer {
  */
 class DefaultAppContainer(
     override val applicationContext: Context,
-    providedTokenProvider: TokenProvider? = null
+    providedTokenProvider: TokenProvider? = null,
+    providedDatabaseReady: Deferred<FinanceDatabase>? = null
 ) : AppContainer {
 
     override val tokenProvider: TokenProvider = providedTokenProvider
@@ -132,9 +133,10 @@ class DefaultAppContainer(
             .build()
     }
 
-    override val databaseReady: Deferred<FinanceDatabase> = CoroutineScope(SupervisorJob() + Dispatchers.IO).async {
-        FinanceDatabase.getInstance(applicationContext)
-    }
+    override val databaseReady: Deferred<FinanceDatabase> = providedDatabaseReady
+        ?: CoroutineScope(SupervisorJob() + Dispatchers.IO).async {
+            FinanceDatabase.getInstance(applicationContext)
+        }
 
     override suspend fun awaitDatabase(): FinanceDatabase = databaseReady.await()
 
