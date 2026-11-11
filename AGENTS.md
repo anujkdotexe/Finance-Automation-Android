@@ -98,4 +98,8 @@ The application must faithfully reproduce the proven iOS split calculations:
    * At the end of every task, call `post_report` with the report (or overwrite `docs/handoff/FROM_AGENT.md`). Setup is in `tools/handoff-mcp/README.md`.
 6. **Pull Request Merging Rule:**
    * Agents must never merge a pull request without explicit approval from the reviewer. Creating and pushing a PR is permitted, but merging is strictly forbidden until approved.
+7. **Destructive Git Commands Rule:**
+   * Agents must never run `git restore .`, `git restore` on paths with uncommitted changes, `git checkout -- <path>`, `git reset --hard`, `git clean`, `git stash drop`, or any command that discards uncommitted work, without explicit approval from the user in the same conversation.
+   * If the working tree has unexpected uncommitted changes, stop, list them with `git status` and `git diff --stat`, and ask the user. Do not assume they are stale or disposable.
+   * Before any approved destructive command, save the changes first on a throwaway branch with `git stash push -u` or a commit, and report the reference so the work can be recovered.
 
