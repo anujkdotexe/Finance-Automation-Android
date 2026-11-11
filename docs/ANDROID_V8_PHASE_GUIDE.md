@@ -281,9 +281,9 @@ Do: make `SheetProvisioner` produce the iOS layout plus hidden `AC`, `AD`, `AE`.
 
 How:
 
-1. Spreadsheet properties first, once per workbook: `updateSpreadsheetProperties` with `locale = "en_IN"` and
-   `timeZone = "Asia/Kolkata"`, `fields = "locale,timeZone"`. The Dashboard formulas use `TEXT(TODAY(), "mmm")`, which
-   gives English month names only in an English locale.
+1. Spreadsheet properties first, once per workbook: `updateSpreadsheetProperties` with `locale = "en_GB"` and
+   `timeZone = "Asia/Kolkata"`, `fields = "locale,timeZone"`, executed in an isolated `batchUpdate` before tab creation.
+   Google Sheets API rejects `en_IN` with HTTP 400 Bad Request because `en_IN` is not in Google Sheets supported locale list. We use `en_GB` as the closest English locale matching Indian date conventions (`DD/MM/YYYY`) and comma formula argument separators, while `timeZone = "Asia/Kolkata"` keeps date functions anchored to IST. All rupee values use explicit custom number formats (`"₹"#,##0`), rendering currency display independent of sheet locale. If the cosmetic properties batch fails, it is logged to Diagnostics and tab provisioning continues uninterrupted.
 2. Ledger tabs (`Template` and every `MmmYY` tab), all in one `batchUpdate`:
    - Grid size: 1000 rows by 31 columns (`updateSheetProperties` with `gridProperties.rowCount` and `columnCount`, fields
      `gridProperties.rowCount,gridProperties.columnCount`).

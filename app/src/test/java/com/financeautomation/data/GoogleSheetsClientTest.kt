@@ -465,4 +465,114 @@ class GoogleSheetsClientTest {
         assertTrue(result is Result.Success)
         assertEquals("POST", capturedMethod)
     }
+
+    @Test
+    fun testProvisionMasterWorkbookLocaleBatchFailureResilience() = runBlocking {
+        var localeBatchCalled = false
+        var tabSetupBatchCalled = false
+
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                url.contains("fields=sheets.properties") && method == "GET" -> {
+                    // Initial getSheetTabsWithIds call
+                    val body = """
+                        {
+                          "sheets": [
+                            {
+                              "properties": {
+                                "sheetId": 0,
+                                "title": "Sheet1"
+                              }
+                            }
+                          ]
+                        }
+                    """.trimIndent()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                url.contains(":batchUpdate") && method == "POST" -> {
+                    val buffer = okio.Buffer()
+                    request.body?.writeTo(buffer)
+                    val bodyString = buffer.readUtf8()
+
+                    if (bodyString.contains("updateSpreadsheetProperties")) {
+                        // Cosmetic locale batch: simulate failure
+                        localeBatchCalled = true
+                        val errorJson = """
+                            {
+                              "error": {
+                                "code": 400,
+                                "message": "Invalid locale",
+                                "status": "INVALID_ARGUMENT"
+                              }
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(400)
+                            .message("Bad Request")
+                            .body(errorJson.toResponseBody(jsonMediaType))
+                            .build()
+                    } else {
+                        // Structural tab batch or formatting batch
+                        if (bodyString.contains("addSheet")) {
+                            tabSetupBatchCalled = true
+                        }
+                        val successJson = """
+                            {
+                              "replies": [
+                                {
+                                  "addSheet": {
+                                    "properties": {
+                                      "sheetId": 101,
+                                      "title": "Template"
+                                    }
+                                  }
+                                },
+                                {
+                                  "addSheet": {
+                                    "properties": {
+                                      "sheetId": 102,
+                                      "title": "Nov26"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(successJson.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        val result = client.provisionMasterWorkbook("test_sheet_id")
+        assertTrue("Expected provisioning to succeed even when locale batch fails", result is Result.Success)
+        assertTrue("Locale batch should have been attempted", localeBatchCalled)
+        assertTrue("Tab setup batch should have run", tabSetupBatchCalled)
+    }
 }
