@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 class AccountRepositoryImpl(
     private val accountDao: AccountDao? = null,
     private val accountDaoProvider: (suspend () -> AccountDao)? = null,
-    private val configSyncCoordinator: ConfigSyncCoordinator? = null,
+    private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AccountRepository {
 
@@ -32,9 +32,12 @@ class AccountRepositoryImpl(
     ) : this(
         accountDao = accountDao,
         accountDaoProvider = null,
-        configSyncCoordinator = configSyncCoordinator,
+        configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
         ioDispatcher = ioDispatcher
     )
+
+    private val configSyncCoordinator: ConfigSyncCoordinator?
+        get() = configSyncCoordinatorProvider?.invoke()
 
     private suspend fun resolveDao(): AccountDao =
         accountDao ?: accountDaoProvider?.invoke()

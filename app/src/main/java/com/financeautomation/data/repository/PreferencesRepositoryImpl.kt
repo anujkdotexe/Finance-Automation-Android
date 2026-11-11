@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
 class PreferencesRepositoryImpl(
     private val preferenceDao: PreferenceDao? = null,
     private val preferenceDaoProvider: (suspend () -> PreferenceDao)? = null,
+    private var configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : PreferencesRepository {
 
@@ -36,6 +37,7 @@ class PreferencesRepositoryImpl(
     constructor(isTestHeadless: Boolean = true) : this(
         preferenceDao = null,
         preferenceDaoProvider = null,
+        configSyncCoordinatorProvider = null,
         ioDispatcher = Dispatchers.IO
     )
 
@@ -53,7 +55,11 @@ class PreferencesRepositoryImpl(
     private val memDeviceId = MutableStateFlow<String?>(null)
     private val memGenericPrefs = ConcurrentHashMap<String, String>()
 
-    var configSyncCoordinator: ConfigSyncCoordinator? = null
+    var configSyncCoordinator: ConfigSyncCoordinator?
+        get() = configSyncCoordinatorProvider?.invoke()
+        set(value) {
+            configSyncCoordinatorProvider = value?.let { { it } }
+        }
 
     override fun getSpreadsheetId(): Flow<String?> = flow {
         val dao = resolveDao()

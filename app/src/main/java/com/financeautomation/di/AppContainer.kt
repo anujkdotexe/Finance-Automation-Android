@@ -155,16 +155,15 @@ class DefaultAppContainer(
     override val preferencesRepository: PreferencesRepository by lazy {
         PreferencesRepositoryImpl(
             preferenceDaoProvider = { awaitDatabase().preferenceDao() },
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
-        ).also { impl ->
-            impl.configSyncCoordinator = configSyncCoordinator
-        }
+        )
     }
 
     override val peopleRepository: PeopleRepository by lazy {
         PeopleRepositoryImpl(
             companionDaoProvider = { awaitDatabase().companionDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
         )
     }
@@ -172,7 +171,7 @@ class DefaultAppContainer(
     override val accountRepository: AccountRepository by lazy {
         AccountRepositoryImpl(
             accountDaoProvider = { awaitDatabase().accountDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
         )
     }
@@ -180,7 +179,7 @@ class DefaultAppContainer(
     override val categoryRepository: CategoryRepository by lazy {
         CategoryRepositoryImpl(
             categoryDaoProvider = { awaitDatabase().categoryDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
         )
     }
@@ -188,7 +187,7 @@ class DefaultAppContainer(
     override val tripTagRepository: TripTagRepository by lazy {
         TripTagRepositoryImpl(
             tripTagDaoProvider = { awaitDatabase().tripTagDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
         )
     }

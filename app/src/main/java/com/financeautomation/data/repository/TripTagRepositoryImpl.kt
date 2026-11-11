@@ -22,7 +22,7 @@ import java.util.UUID
 class TripTagRepositoryImpl(
     private val tripTagDao: TripTagDao? = null,
     private val tripTagDaoProvider: (suspend () -> TripTagDao)? = null,
-    private val configSyncCoordinator: ConfigSyncCoordinator? = null,
+    private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TripTagRepository {
 
@@ -33,9 +33,12 @@ class TripTagRepositoryImpl(
     ) : this(
         tripTagDao = tripTagDao,
         tripTagDaoProvider = null,
-        configSyncCoordinator = configSyncCoordinator,
+        configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
         ioDispatcher = ioDispatcher
     )
+
+    private val configSyncCoordinator: ConfigSyncCoordinator?
+        get() = configSyncCoordinatorProvider?.invoke()
 
     private suspend fun resolveDao(): TripTagDao =
         tripTagDao ?: tripTagDaoProvider?.invoke()
