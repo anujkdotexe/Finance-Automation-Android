@@ -54,22 +54,43 @@ class WorkbookResolver(
         }
     }
 
-    suspend fun resolveForYear(year: Int): Result<String> = withContext(ioDispatcher) {
+    suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean = false): Result<String> = withContext(ioDispatcher) {
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
-        if (!storedId.isNullOrBlank()) {
+        if (!storedId.isNullOrBlank() && !forceValidateTabs) {
             return@withContext Result.Success(storedId)
         }
 
         mutex.withLock {
             val lockedStoredId = preferencesRepository.getSpreadsheetIdForYearSync(year)
-            if (!lockedStoredId.isNullOrBlank()) {
+            if (!lockedStoredId.isNullOrBlank() && !forceValidateTabs) {
                 return@withContext Result.Success(lockedStoredId)
+            }
+
+            val candidateId = if (forceValidateTabs && !lockedStoredId.isNullOrBlank()) {
+                lockedStoredId
+            } else {
+                null
+            }
+
+            if (candidateId != null) {
+                val repairRes = ensureWorkbookTabs(candidateId)
+                if (repairRes is Result.Error) {
+                    return@withContext Result.Error(repairRes.exception)
+                }
+                syncConfigUseCase?.mirrorToCloud(candidateId)
+                regenerateDashboardUseCase?.invoke()
+                return@withContext Result.Success(candidateId)
             }
 
             when (val driveSearch = googleDriveClient.findWorkbookForYear(year)) {
                 is Result.Success -> {
                     val foundId = driveSearch.data
                     if (!foundId.isNullOrBlank()) {
+                        val repairRes = ensureWorkbookTabs(foundId)
+                        if (repairRes is Result.Error) {
+                            return@withContext Result.Error(repairRes.exception)
+                        }
+
                         preferencesRepository.setSpreadsheetIdForYear(year, foundId)
                         val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                         if (year == currentYear) {
@@ -154,5 +175,28 @@ class WorkbookResolver(
 
             Result.Success(newSpreadsheetId)
         }
+    }
+
+    private suspend fun ensureWorkbookTabs(spreadsheetId: String): Result<Unit> {
+        val tabsResult = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
+        if (tabsResult is Result.Error) {
+            return Result.Error(tabsResult.exception)
+        }
+        val tabsMap = (tabsResult as Result.Success).data
+        val hasMasterTabs = tabsMap.containsKey("Dashboard") && tabsMap.containsKey("Template")
+
+        if (!hasMasterTabs) {
+            val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+            val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+            val provRes = googleSheetsClient.provisionMasterWorkbook(
+                spreadsheetId = spreadsheetId,
+                accounts = accounts,
+                categories = categories
+            )
+            if (provRes is Result.Error) {
+                return Result.Error(provRes.exception)
+            }
+        }
+        return Result.Success(Unit)
     }
 }

@@ -78,7 +78,7 @@ class SettingsSyncCoordinator(
                 uiState.update { it.copy(isProvisioning = true, errorMessage = null) }
                 val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                 val workbookName = "Finance$currentYear"
-                when (val res = resolver.resolveForYear(currentYear)) {
+                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true)) {
                     is Result.Success -> {
                         val spreadsheetId = res.data
                         preferencesRepository.setSpreadsheetId(spreadsheetId)
