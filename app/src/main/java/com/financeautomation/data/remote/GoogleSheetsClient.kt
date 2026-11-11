@@ -49,7 +49,7 @@ internal fun createHttpException(
     body: String,
     context: String,
     spreadsheetId: String = "",
-    endpointId: String = "sheets.operation"
+    endpointId: String = GoogleEndpoint.SHEETS_OPERATION
 ): IOException {
     val apiError = GoogleApiError.parse(endpointId, code, body)
     return when (code) {
@@ -235,7 +235,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets appendTableScoped failed", spreadsheetId, "sheets.values.append")
+                        createHttpException(response.code, bodyString, "Sheets appendTableScoped failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_APPEND)
                     )
                 }
 
@@ -280,7 +280,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "ensureGridCapacity failed to fetch properties", spreadsheetId, "sheets.get")
+                        createHttpException(response.code, bodyString, "ensureGridCapacity failed to fetch properties", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                     )
                 }
 
@@ -350,7 +350,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "updateCell failed on $cellCoordinate", spreadsheetId, "sheets.values.update")
+                        createHttpException(response.code, bodyString, "updateCell failed on $cellCoordinate", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_UPDATE)
                     )
                 }
                 Result.Success(Unit)
@@ -554,7 +554,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "updateLinkedDebitSettlement failed", spreadsheetId, "sheets.values.batchUpdate")
+                        createHttpException(response.code, bodyString, "updateLinkedDebitSettlement failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_BATCH_UPDATE)
                     )
                 }
                 Result.Success(remaining)
@@ -583,7 +583,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "getRangeValuesRaw failed", spreadsheetId, "sheets.values.get")
+                        createHttpException(response.code, bodyString, "getRangeValuesRaw failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_GET)
                     )
                 }
 
@@ -629,7 +629,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "getRangeValues failed", spreadsheetId, "sheets.values.get")
+                        createHttpException(response.code, bodyString, "getRangeValues failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_GET)
                     )
                 }
 
@@ -682,7 +682,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "batchGetValues failed", spreadsheetId, "sheets.values.batchGet")
+                        createHttpException(response.code, bodyString, "batchGetValues failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_BATCH_GET)
                     )
                 }
 
@@ -757,7 +757,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "batchUpdateValues failed", spreadsheetId, "sheets.values.batchUpdate")
+                        createHttpException(response.code, bodyString, "batchUpdateValues failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_BATCH_UPDATE)
                     )
                 }
                 Result.Success(Unit)
@@ -802,7 +802,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets updateRow failed", spreadsheetId, "sheets.values.update")
+                        createHttpException(response.code, bodyString, "Sheets updateRow failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_UPDATE)
                     )
                 }
                 Result.Success(Unit)
@@ -860,7 +860,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets batchUpdate failed", spreadsheetId, "sheets.batchUpdate")
+                        createHttpException(response.code, bodyString, "Sheets batchUpdate failed", spreadsheetId, GoogleEndpoint.SHEETS_BATCH_UPDATE)
                     )
                 }
                 Result.Success(bodyString)
@@ -1322,7 +1322,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets getSheetTabsDetailed failed", spreadsheetId, "sheets.get")
+                        createHttpException(response.code, bodyString, "Sheets getSheetTabsDetailed failed", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                     )
                 }
 
@@ -1411,7 +1411,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets getSheetTabsWithIds failed", spreadsheetId, "sheets.get")
+                        createHttpException(response.code, bodyString, "Sheets getSheetTabsWithIds failed", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                     )
                 }
 
@@ -1451,7 +1451,7 @@ open class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets getSheetMetadata failed", spreadsheetId, "sheets.get")
+                        createHttpException(response.code, bodyString, "Sheets getSheetMetadata failed", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                     )
                 }
 
