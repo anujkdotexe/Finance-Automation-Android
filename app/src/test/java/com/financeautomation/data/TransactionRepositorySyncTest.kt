@@ -37,6 +37,7 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.ConcurrentHashMap
@@ -216,6 +217,12 @@ class TransactionRepositorySyncTest {
                             }
                             """{"range":"'Nov26'!AC3:AC","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
                         }
+                    }
+                    // getCellString for AC column
+                    method == "GET" && url.contains("!AC") -> {
+                        val row = Regex("""AC(\d+)""").find(url)?.groupValues?.get(1) ?: "4"
+                        val uuid = writtenUuids["AC$row"] ?: "txn_test_void"
+                        """{"range":"'Nov26'!AC$row","majorDimension":"ROWS","values":[["$uuid"]]}"""
                     }
                     // findOrphanDebitRow or table range read
                     method == "GET" && url.contains("/values/") -> {
@@ -979,5 +986,80 @@ class TransactionRepositorySyncTest {
         org.junit.Assert.assertNotNull(queueAfterFail)
         assertEquals(1, queueAfterFail?.retryCount)
         assertEquals(SyncQueueEntity.STATUS_PENDING, queueAfterFail?.status)
+    }
+
+    @Test
+    fun testVoidTransaction_syncsVoidEditsToSheetAndUpdatesLocalRoom() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val mock = CountingSheetsMock()
+        val client = mock.createClient()
+        val prefs = FakePreferencesRepository("test_sheet_id")
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = client,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val txnId = "txn_void_test_123"
+        val existingTxn = TransactionEntity(
+            id = txnId,
+            timestamp = 1794380000000L,
+            dateSerial = 46338,
+            timeSerial = 0.5,
+            account = "SBI",
+            merchant = "Coffee",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 150.0,
+            companions = "Personal",
+            myShare = 150.0,
+            owedToMe = 0.0,
+            status = "Personal",
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED.name,
+            syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 6,
+            isPossibleDuplicate = false
+        )
+        tDao.insert(existingTxn)
+        mock.writtenUuids["AC6"] = txnId
+
+        // Execute void transaction
+        val voidRes = repo.voidTransaction(txnId)
+        assertTrue(voidRes is Result.Success)
+
+        // Verify local Room DB immediately marks void
+        val localAfterVoid = tDao.getById(txnId)
+        assertNotNull(localAfterVoid)
+        assertEquals(0.0, localAfterVoid!!.totalAmount, 0.001)
+        assertEquals(0.0, localAfterVoid.myShare, 0.001)
+        assertEquals(0.0, localAfterVoid.owedToMe, 0.001)
+        assertEquals("Void", localAfterVoid.status)
+        assertEquals("[Void] Coffee", localAfterVoid.merchant)
+        assertEquals(SyncState.VOID.name, localAfterVoid.syncState)
+
+        // Verify sync queue has OP_VOID queued
+        val pendingOps = qDao.getAllPending(10)
+        assertEquals(1, pendingOps.size)
+        assertEquals(SyncQueueEntity.OP_VOID, pendingOps.first().operationType)
+
+        // Execute sync
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue(syncRes is Result.Success)
+
+        // Queue item is cleared
+        assertEquals(0, qDao.getAllPending(10).size)
+
+        // Local DB remains void and synced
+        val finalTxn = tDao.getById(txnId)
+        assertNotNull(finalTxn)
+        assertEquals(SyncState.VOID.name, finalTxn!!.syncState)
+        assertEquals(0.0, finalTxn.totalAmount, 0.001)
     }
 }
