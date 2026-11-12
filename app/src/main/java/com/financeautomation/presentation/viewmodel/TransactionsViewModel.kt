@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.model.ReviewState
-import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.utils.AccountingUtils
@@ -14,7 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -31,6 +34,22 @@ data class DayTransactionGroup(
     val dayTotalOut: Double,
     val dayMyShare: Double,
     val transactions: List<Transaction>
+)
+
+/**
+ * Sync and review state of a single transaction row. Computed in one place
+ * ([TransactionsViewModel.computeRowStatus]) with priority
+ * Failed, Needs review, Waiting to sync, Synced.
+ * The settlement status (Pending, Settled) is a separate field on the transaction.
+ */
+enum class RowStatus { FAILED, NEEDS_REVIEW, WAITING_TO_SYNC, SYNCED }
+
+/**
+ * Transaction ids that currently have a failed or a pending sync queue item.
+ */
+data class QueueTransactionIds(
+    val failed: Set<String> = emptySet(),
+    val pending: Set<String> = emptySet()
 )
 
 /**
@@ -57,6 +76,7 @@ data class TransactionsUiState(
     val searchQuery: String = "",
     val activeFilter: TransactionFilter = TransactionFilter(),
     val groupedTransactions: List<DayTransactionGroup> = emptyList(),
+    val rowStatuses: Map<String, RowStatus> = emptyMap(),
     val isLoading: Boolean = false
 )
 
@@ -66,6 +86,7 @@ data class TransactionsUiState(
  */
 class TransactionsViewModel(
     private val transactionRepository: TransactionRepository,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -80,15 +101,32 @@ class TransactionsViewModel(
         observeTransactions()
     }
 
+    private fun queueIdsFlow() = flow {
+        val dao = syncQueueDaoProvider?.invoke()
+        if (dao == null) {
+            emit(QueueTransactionIds())
+        } else {
+            emitAll(
+                combine(dao.getFailedQueueFlow(), dao.getPendingQueueFlow()) { failed, pending ->
+                    QueueTransactionIds(
+                        failed = failed.map { it.transactionId }.toSet(),
+                        pending = pending.map { it.transactionId }.toSet()
+                    )
+                }
+            )
+        }
+    }.catch { emit(QueueTransactionIds()) }
+
     private fun observeTransactions() {
         viewModelScope.launch(ioDispatcher) {
             combine(
                 transactionRepository.getTransactions(),
                 monthOffsetFlow,
                 searchQueryFlow,
-                filterFlow
-            ) { transactions, monthOffset, query, filter ->
-                calculateState(transactions, monthOffset, query, filter)
+                filterFlow,
+                queueIdsFlow()
+            ) { transactions, monthOffset, query, filter, queueIds ->
+                calculateState(transactions, monthOffset, query, filter, queueIds)
             }.collect { newState ->
                 _uiState.value = newState
             }
@@ -139,7 +177,8 @@ class TransactionsViewModel(
         transactions: List<Transaction>,
         monthOffset: Int,
         query: String,
-        filter: TransactionFilter
+        filter: TransactionFilter,
+        queueIds: QueueTransactionIds
     ): TransactionsUiState {
         val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
         val cal = Calendar.getInstance(kolkataTz).apply {
@@ -216,11 +255,12 @@ class TransactionsViewModel(
 
             if (!filter.status.isNullOrBlank()) {
                 val st = filter.status.trim().lowercase()
+                val rowStatus = computeRowStatus(txn, queueIds)
                 val matchesStatus = when (st) {
-                    "pending" -> txn.status == TransactionStatus.PENDING
-                    "synced" -> txn.syncState == SyncState.SYNCED
-                    "failed" -> txn.syncState == SyncState.FAILED
-                    "needs review", "needs_review" -> txn.reviewState == ReviewState.NEEDS_REVIEW
+                    "pending", "waiting to sync", "waiting_to_sync" -> rowStatus == RowStatus.WAITING_TO_SYNC
+                    "synced" -> rowStatus == RowStatus.SYNCED
+                    "failed" -> rowStatus == RowStatus.FAILED
+                    "needs review", "needs_review" -> rowStatus == RowStatus.NEEDS_REVIEW
                     else -> true
                 }
                 if (!matchesStatus) {
@@ -268,19 +308,33 @@ class TransactionsViewModel(
             searchQuery = query,
             activeFilter = filter,
             groupedTransactions = grouped,
+            rowStatuses = filteredTransactions.associate { it.id to computeRowStatus(it, queueIds) },
             isLoading = false
         )
     }
 
     companion object {
+        /**
+         * Single source of truth for a row's sync/review status.
+         * Priority: Failed, Needs review, Waiting to sync, Synced.
+         */
+        fun computeRowStatus(txn: Transaction, queueIds: QueueTransactionIds): RowStatus = when {
+            txn.id in queueIds.failed -> RowStatus.FAILED
+            txn.reviewState == ReviewState.NEEDS_REVIEW -> RowStatus.NEEDS_REVIEW
+            txn.id in queueIds.pending -> RowStatus.WAITING_TO_SYNC
+            else -> RowStatus.SYNCED
+        }
+
         fun provideFactory(
             transactionRepository: TransactionRepository,
+            syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return TransactionsViewModel(
                     transactionRepository = transactionRepository,
+                    syncQueueDaoProvider = syncQueueDaoProvider,
                     ioDispatcher = ioDispatcher
                 ) as T
             }

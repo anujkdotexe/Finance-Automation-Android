@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import com.financeautomation.data.local.entity.SyncQueueEntity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -124,7 +125,7 @@ class TransactionsViewModelTest {
         tRepo.insertTransaction(txn2)
         tRepo.insertTransaction(txn3)
 
-        val vm = TransactionsViewModel(tRepo, testDispatcher)
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
         advanceUntilIdle()
 
         val state = vm.uiState.value
@@ -181,7 +182,7 @@ class TransactionsViewModelTest {
         tRepo.insertTransaction(activeTxn)
         tRepo.insertTransaction(voidTxn)
 
-        val vm = TransactionsViewModel(tRepo, testDispatcher)
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
         advanceUntilIdle()
 
         val state = vm.uiState.value
@@ -249,7 +250,7 @@ class TransactionsViewModelTest {
             )
         )
 
-        val vm = TransactionsViewModel(tRepo, testDispatcher)
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
         advanceUntilIdle()
 
         // Search merchant
@@ -313,7 +314,7 @@ class TransactionsViewModelTest {
         tRepo.insertTransaction(txn1)
         tRepo.insertTransaction(txn2)
 
-        val vm = TransactionsViewModel(tRepo, testDispatcher)
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
         advanceUntilIdle()
 
         // Filter category
@@ -336,10 +337,10 @@ class TransactionsViewModelTest {
         advanceUntilIdle()
         assertEquals(2, vm.uiState.value.groupedTransactions.flatMap { it.transactions }.size)
 
-        // Filter status "Pending"
+        // Filter status "Pending" now means waiting to sync (pending queue item, not under review)
         vm.setFilter(status = "Pending")
         advanceUntilIdle()
-        assertEquals(listOf("t1"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+        assertEquals(emptyList<String>(), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
 
         // Filter status "Synced"
         vm.setFilter(status = "Synced")
@@ -350,6 +351,71 @@ class TransactionsViewModelTest {
         vm.setFilter(status = "Needs review")
         advanceUntilIdle()
         assertEquals(listOf("t1"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+    }
+
+    private fun baseTxn(id: String, reviewState: ReviewState = ReviewState.CONFIRMED) = Transaction(
+        id = id, timestamp = System.currentTimeMillis(), dateSerial = 46330, timeSerial = 0.5,
+        account = "HDFC", merchant = "M $id", category = "Food & Drink", totalAmount = 100.0,
+        companions = "Personal", myShare = 100.0, owedToMe = 0.0,
+        status = TransactionStatus.PERSONAL, reviewState = reviewState
+    )
+
+    private fun queueItem(id: Long, txnId: String, status: String, retries: Int = 0) =
+        SyncQueueEntity(
+            id = id, transactionId = txnId, operationType = SyncQueueEntity.OP_INSERT,
+            payloadJson = txnId, status = status, retryCount = retries
+        )
+
+    @Test
+    fun testRowStatus_eachStatusAndFilter() = runTest {
+        val tRepo = FakeTransactionRepo()
+        tRepo.insertTransaction(baseTxn("t_failed", ReviewState.NEEDS_REVIEW))
+        tRepo.insertTransaction(baseTxn("t_review", ReviewState.NEEDS_REVIEW))
+        tRepo.insertTransaction(baseTxn("t_wait"))
+        tRepo.insertTransaction(baseTxn("t_synced"))
+        val qDao = StubSyncQueueDao(
+            listOf(
+                queueItem(1, "t_failed", SyncQueueEntity.STATUS_FAILED, 8),
+                queueItem(2, "t_wait", SyncQueueEntity.STATUS_PENDING)
+            )
+        )
+        val vm = TransactionsViewModel(tRepo, { qDao }, testDispatcher)
+        advanceUntilIdle()
+
+        val statuses = vm.uiState.value.rowStatuses
+        assertEquals(RowStatus.FAILED, statuses["t_failed"])
+        assertEquals(RowStatus.NEEDS_REVIEW, statuses["t_review"])
+        assertEquals(RowStatus.WAITING_TO_SYNC, statuses["t_wait"])
+        assertEquals(RowStatus.SYNCED, statuses["t_synced"])
+
+        for ((filter, expected) in listOf(
+            "failed" to "t_failed", "needs review" to "t_review", "pending" to "t_wait", "synced" to "t_synced"
+        )) {
+            vm.setFilter(status = filter)
+            advanceUntilIdle()
+            assertEquals(listOf(expected), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+        }
+    }
+
+    @Test
+    fun testRowStatus_priorityOrder() {
+        val review = baseTxn("x", ReviewState.NEEDS_REVIEW)
+        assertEquals(RowStatus.FAILED, TransactionsViewModel.computeRowStatus(review, QueueTransactionIds(setOf("x"), setOf("x"))))
+        assertEquals(RowStatus.NEEDS_REVIEW, TransactionsViewModel.computeRowStatus(review, QueueTransactionIds(emptySet(), setOf("x"))))
+        val confirmed = baseTxn("x")
+        assertEquals(RowStatus.WAITING_TO_SYNC, TransactionsViewModel.computeRowStatus(confirmed, QueueTransactionIds(emptySet(), setOf("x"))))
+        assertEquals(RowStatus.SYNCED, TransactionsViewModel.computeRowStatus(confirmed, QueueTransactionIds()))
+    }
+
+    @Test
+    fun testSettlementStatusStaysSeparateFromRowStatus() = runTest {
+        val tRepo = FakeTransactionRepo()
+        tRepo.insertTransaction(baseTxn("t_settled").copy(status = TransactionStatus.SETTLED))
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+        val shown = vm.uiState.value.groupedTransactions.flatMap { it.transactions }.single()
+        assertEquals(TransactionStatus.SETTLED, shown.status)
+        assertEquals(RowStatus.SYNCED, vm.uiState.value.rowStatuses["t_settled"])
     }
 }
 
