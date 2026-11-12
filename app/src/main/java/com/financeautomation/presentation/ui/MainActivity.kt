@@ -74,6 +74,8 @@ class MainActivity : ComponentActivity() {
         ReviewInboxViewModel.provideFactory(
             transactionRepository = app.appContainer.transactionRepository,
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
+            pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
+            accountRepository = app.appContainer.accountRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
