@@ -15,8 +15,8 @@ import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Calm utility empty state with one line of context and at most one action (Design Guide 4).
- * No decorative illustrations.
+ * Calm utility empty state with one line of context and at most one action.
+ * Enforces zero decorative noise.
  */
 @Composable
 fun EmptyState(
@@ -70,13 +70,12 @@ private fun EmptyStatePreviewDark() {
     }
 }
 
-@Preview(name = "Large Font 200%", fontScale = 2.0f, showBackground = true)
+@Preview(name = "Font Scale 1.3x", fontScale = 1.3f, showBackground = true)
 @Composable
-private fun EmptyStatePreviewLargeFont() {
+private fun EmptyStatePreviewScale() {
     FinanceAutomationTheme(darkTheme = false) {
         EmptyState(
-            message = "No friends added yet. Tap + to add."
+            message = "Nothing logged yet. Pay with UPI and the prompt will appear, or tap Add expense."
         )
     }
 }
-

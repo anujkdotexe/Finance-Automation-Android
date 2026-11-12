@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -16,10 +18,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Primary high-emphasis button for core flow confirmations (Design Guide 4).
+ * Primary high-emphasis pill button for core flow confirmations.
  */
 @Composable
 fun PrimaryButton(
@@ -32,10 +35,10 @@ fun PrimaryButton(
     Button(
         onClick = onClick,
         enabled = enabled && !isLoading,
-        shape = FinanceTheme.shapes.medium,
+        shape = FinanceShapes.pill,
         colors = ButtonDefaults.buttonColors(
-            containerColor = FinanceTheme.colors.brand,
-            contentColor = FinanceTheme.colors.surface
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -45,7 +48,7 @@ fun PrimaryButton(
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
-                color = FinanceTheme.colors.surface
+                color = MaterialTheme.colorScheme.onPrimary
             )
         } else {
             Text(
@@ -57,22 +60,22 @@ fun PrimaryButton(
 }
 
 /**
- * Secondary outlined button for secondary choices or dismissal (Design Guide 4).
+ * Tonal pill button for secondary commands.
  */
 @Composable
-fun SecondaryButton(
+fun TonalButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    OutlinedButton(
+    FilledTonalButton(
         onClick = onClick,
         enabled = enabled,
-        shape = FinanceTheme.shapes.medium,
-        border = BorderStroke(1.dp, FinanceTheme.colors.outline),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = FinanceTheme.colors.onSurface
+        shape = FinanceShapes.pill,
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -86,7 +89,36 @@ fun SecondaryButton(
 }
 
 /**
- * Lightweight text action link (Design Guide 4).
+ * Secondary outlined button for backwards compatibility.
+ */
+@Composable
+fun SecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = FinanceShapes.pill,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+    ) {
+        Text(
+            text = text,
+            style = FinanceTheme.typography.titleMedium
+        )
+    }
+}
+
+/**
+ * Lightweight text action link with minimum 48dp touch target.
  */
 @Composable
 fun TextAction(
@@ -102,8 +134,8 @@ fun TextAction(
     ) {
         Text(
             text = text,
-            style = FinanceTheme.typography.labelMedium,
-            color = FinanceTheme.colors.info
+            style = FinanceTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
         )
     }
 }
@@ -112,7 +144,7 @@ fun TextAction(
 @Composable
 private fun ButtonsPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        PrimaryButton(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.quick_add_tile_label), onClick = {})
+        PrimaryButton(text = "Add expense", onClick = {})
     }
 }
 
@@ -120,15 +152,14 @@ private fun ButtonsPreviewLight() {
 @Composable
 private fun ButtonsPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        SecondaryButton(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.action_cancel), onClick = {})
+        TonalButton(text = "Review", onClick = {})
     }
 }
 
-@Preview(name = "Large Font 200%", fontScale = 2.0f, showBackground = true)
+@Preview(name = "Font Scale 1.3x", fontScale = 1.3f, showBackground = true)
 @Composable
-private fun ButtonsPreviewLargeFont() {
+private fun ButtonsPreviewScale() {
     FinanceAutomationTheme(darkTheme = false) {
-        TextAction(text = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.action_see_all), onClick = {})
+        TextAction(text = "See all", onClick = {})
     }
 }
-

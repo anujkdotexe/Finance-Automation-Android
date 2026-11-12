@@ -3,7 +3,7 @@
     <shortcut
         android:shortcutId="quick_log"
         android:enabled="true"
-        android:icon="@drawable/ic_quick_log_symbol"
+        android:icon="@drawable/ic_launcher_monochrome"
         android:shortcutShortLabel="@string/quick_log_shortcut_short_label"
         android:shortcutLongLabel="@string/quick_log_shortcut_long_label">
         <intent

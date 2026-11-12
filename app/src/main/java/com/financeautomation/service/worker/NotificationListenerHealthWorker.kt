@@ -78,7 +78,7 @@ class NotificationListenerHealthWorker(
         )
 
         val builder = NotificationCompat.Builder(applicationContext, CHANNEL_HEALTH_ALERTS)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(applicationContext.getString(R.string.notif_expense_tracking_disabled_title))
             .setContentText(applicationContext.getString(R.string.notif_expense_tracking_disabled_text))
             .setPriority(NotificationCompat.PRIORITY_LOW)

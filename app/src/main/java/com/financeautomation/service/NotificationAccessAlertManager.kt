@@ -62,7 +62,7 @@ object NotificationAccessAlertManager {
             )
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID_HEALTH_ALERT)
-                .setSmallIcon(R.drawable.ic_quick_log_symbol)
+                .setSmallIcon(R.drawable.ic_launcher_monochrome)
                 .setContentTitle(context.getString(R.string.health_persistent_notification_title))
                 .setContentText(context.getString(R.string.health_persistent_notification_text))
                 .setPriority(NotificationCompat.PRIORITY_LOW)
