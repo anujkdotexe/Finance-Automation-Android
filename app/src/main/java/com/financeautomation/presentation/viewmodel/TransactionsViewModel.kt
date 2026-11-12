@@ -37,6 +37,11 @@ data class DayTransactionGroup(
 )
 
 /**
+ * Where a search looks: the selected month only, or every month.
+ */
+enum class SearchScope { THIS_MONTH, ALL_MONTHS }
+
+/**
  * Sync and review state of a single transaction row. Computed in one place
  * ([TransactionsViewModel.computeRowStatus]) with priority
  * Failed, Needs review, Waiting to sync, Synced.
@@ -74,6 +79,7 @@ data class TransactionsUiState(
     val totalOut: Double = 0.0,
     val myShare: Double = 0.0,
     val searchQuery: String = "",
+    val searchScope: SearchScope = SearchScope.THIS_MONTH,
     val activeFilter: TransactionFilter = TransactionFilter(),
     val groupedTransactions: List<DayTransactionGroup> = emptyList(),
     val rowStatuses: Map<String, RowStatus> = emptyMap(),
@@ -92,6 +98,7 @@ class TransactionsViewModel(
 
     private val monthOffsetFlow = MutableStateFlow(0)
     private val searchQueryFlow = MutableStateFlow("")
+    private val searchScopeFlow = MutableStateFlow(SearchScope.THIS_MONTH)
     private val filterFlow = MutableStateFlow(TransactionFilter())
 
     private val _uiState = MutableStateFlow(TransactionsUiState(isLoading = true))
@@ -124,9 +131,18 @@ class TransactionsViewModel(
                 monthOffsetFlow,
                 searchQueryFlow,
                 filterFlow,
-                queueIdsFlow()
-            ) { transactions, monthOffset, query, filter, queueIds ->
-                calculateState(transactions, monthOffset, query, filter, queueIds)
+                queueIdsFlow(),
+                searchScopeFlow
+            ) { values ->
+                @Suppress("UNCHECKED_CAST")
+                calculateState(
+                    transactions = values[0] as List<Transaction>,
+                    monthOffset = values[1] as Int,
+                    query = values[2] as String,
+                    filter = values[3] as TransactionFilter,
+                    queueIds = values[4] as QueueTransactionIds,
+                    scope = values[5] as SearchScope
+                )
             }.collect { newState ->
                 _uiState.value = newState
             }
@@ -147,6 +163,10 @@ class TransactionsViewModel(
 
     fun setSearchQuery(query: String) {
         searchQueryFlow.value = query
+    }
+
+    fun setSearchScope(scope: SearchScope) {
+        searchScopeFlow.value = scope
     }
 
     fun setFilter(
@@ -178,7 +198,8 @@ class TransactionsViewModel(
         monthOffset: Int,
         query: String,
         filter: TransactionFilter,
-        queueIds: QueueTransactionIds
+        queueIds: QueueTransactionIds,
+        scope: SearchScope = SearchScope.THIS_MONTH
     ): TransactionsUiState {
         val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
         val cal = Calendar.getInstance(kolkataTz).apply {
@@ -199,17 +220,11 @@ class TransactionsViewModel(
         cal.add(Calendar.MONTH, 1)
         val endOfMonth = cal.timeInMillis
 
-        val monthTransactions = transactions.filter {
-            it.timestamp in startOfMonth until endOfMonth
-        }
-
-        var totalOut = 0.0
-        var myShare = 0.0
-        for (txn in monthTransactions) {
-            if (txn.status != TransactionStatus.VOID) {
-                totalOut += txn.totalAmount
-                myShare += txn.myShare
-            }
+        val searchAllMonths = scope == SearchScope.ALL_MONTHS && query.isNotBlank()
+        val monthTransactions = if (searchAllMonths) {
+            transactions
+        } else {
+            transactions.filter { it.timestamp in startOfMonth until endOfMonth }
         }
 
         val filteredTransactions = monthTransactions.filter { txn ->
@@ -271,6 +286,11 @@ class TransactionsViewModel(
             true
         }
 
+        // Header totals cover the whole month normally, and exactly the results for an all-months search
+        val totalsSource = if (searchAllMonths) filteredTransactions else monthTransactions.filter { it.status != TransactionStatus.VOID }
+        val totalOut = totalsSource.sumOf { it.totalAmount }
+        val myShare = totalsSource.sumOf { it.myShare }
+
         val dayFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US).apply {
             timeZone = kolkataTz
         }
@@ -306,6 +326,7 @@ class TransactionsViewModel(
             totalOut = totalOut,
             myShare = myShare,
             searchQuery = query,
+            searchScope = scope,
             activeFilter = filter,
             groupedTransactions = grouped,
             rowStatuses = filteredTransactions.associate { it.id to computeRowStatus(it, queueIds) },
