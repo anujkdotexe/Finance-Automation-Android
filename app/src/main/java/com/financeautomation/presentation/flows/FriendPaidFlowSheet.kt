@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,8 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
@@ -63,11 +68,22 @@ fun FriendPaidFlowSheet(
     var whatForText by remember { mutableStateOf("") }
 
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { focusManager.clearFocus() }
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -141,7 +157,13 @@ fun FriendPaidFlowSheet(
                 }
             },
             label = { Text(stringResource(R.string.prompt_amount_i_owe)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { focusManager.clearFocus() }
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -169,7 +191,10 @@ fun FriendPaidFlowSheet(
                 companions.take(6).forEach { companion ->
                     FilterChip(
                         selected = (creditorName.equals(companion.name, ignoreCase = true)),
-                        onClick = { creditorName = companion.name },
+                        onClick = {
+                            focusManager.clearFocus()
+                            creditorName = companion.name
+                        },
                         label = { Text(companion.name) }
                     )
                 }
@@ -181,7 +206,10 @@ fun FriendPaidFlowSheet(
             value = creditorName,
             onValueChange = { creditorName = it },
             label = { Text(stringResource(R.string.hint_friends_name)) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Words,
+                imeAction = ImeAction.Next
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -196,7 +224,13 @@ fun FriendPaidFlowSheet(
             value = whatForText,
             onValueChange = { whatForText = it },
             label = { Text(stringResource(R.string.prompt_what_was_this_for)) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { focusManager.clearFocus() }
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()

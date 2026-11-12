@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -39,8 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
@@ -102,11 +107,22 @@ fun IncomeReturnFlowSheet(
     val selectedDebtIds = remember { mutableStateListOf<String>() }
 
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { focusManager.clearFocus() }
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -180,7 +196,13 @@ fun IncomeReturnFlowSheet(
                 }
             },
             label = { Text(stringResource(R.string.prompt_amount_received)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { focusManager.clearFocus() }
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -207,7 +229,10 @@ fun IncomeReturnFlowSheet(
             inflowTypes.forEach { type ->
                 FilterChip(
                     selected = (selectedInflowType == type),
-                    onClick = { selectedInflowType = type },
+                    onClick = {
+                        focusManager.clearFocus()
+                        selectedInflowType = type
+                    },
                     label = { Text(type) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = FinanceTheme.colors.primaryContainer,
@@ -236,7 +261,10 @@ fun IncomeReturnFlowSheet(
             accounts.forEach { account ->
                 FilterChip(
                     selected = (selectedAccount == account.name),
-                    onClick = { selectedAccount = account.name },
+                    onClick = {
+                        focusManager.clearFocus()
+                        selectedAccount = account.name
+                    },
                     label = { Text(account.name) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = FinanceTheme.colors.primaryContainer,
@@ -271,6 +299,7 @@ fun IncomeReturnFlowSheet(
                     FilterChip(
                         selected = (settlerName.equals(companion.name, ignoreCase = true)),
                         onClick = {
+                            focusManager.clearFocus()
                             settlerName = companion.name
                             onPersonChanged(companion.name)
                         },
@@ -288,7 +317,10 @@ fun IncomeReturnFlowSheet(
                 onPersonChanged(it)
             },
             label = { Text(stringResource(R.string.prompt_who_sent_this)) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Words,
+                imeAction = ImeAction.Next
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,7 +348,13 @@ fun IncomeReturnFlowSheet(
             value = reasonText,
             onValueChange = { reasonText = it },
             label = { Text(stringResource(R.string.prompt_reason_note)) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { focusManager.clearFocus() }
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
