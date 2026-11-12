@@ -866,6 +866,97 @@ class TransactionRepositorySyncTest {
     }
 
     @Test
+    fun testReconcile_doesNotDuplicateExistingLocalRow() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+
+        // Local row lacking tab and row index (e.g. freshly logged offline or pending sync)
+        val localTxn = TransactionEntity(
+            id = "txn_groceries_uuid_789",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Groceries",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "AliceBobk",
+            myShare = 120.0,
+            owedToMe = 380.0,
+            status = "Pending",
+            tripTag = "Transit",
+            sheetRowIndex = null,
+            syncState = SyncState.PENDING.name,
+            reviewState = ReviewState.CONFIRMED.name
+        )
+        tDao.insert(localTxn)
+
+        // Remote sheet has row 4 carrying the exact same UUID in column AC
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46338, 0.5, "Cash", "Groceries", "Transit", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        ["txn_groceries_uuid_789"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                }
+            ]
+        }"""
+
+        val sheets = mock.createClient()
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val res = repo.reconcileWithSheet("test_sheet_id")
+        assertTrue(res is Result.Success)
+
+        // Must assert exactly one local row afterwards
+        val allTxns = tDao.transactions.values.toList()
+        assertEquals(1, allTxns.size)
+        val reconciled = allTxns.first()
+        assertEquals("txn_groceries_uuid_789", reconciled.id)
+        assertEquals(4, reconciled.sheetRowIndex) // updated from sheet rowNumber
+        assertEquals(SyncState.SYNCED.name, reconciled.syncState)
+    }
+
+    @Test
     fun testFailedSnapshotRead_doesNotSavePlanAndRetries() = runBlocking {
         val tDao = FakeTransactionDao()
         val qDao = FakeSyncQueueDao()
