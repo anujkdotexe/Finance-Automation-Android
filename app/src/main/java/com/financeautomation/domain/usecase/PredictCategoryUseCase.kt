@@ -27,7 +27,7 @@ class PredictCategoryUseCase {
      * 1. Categories for the payee ordered by count desc then lastUsed desc.
      * 2. Global category totals for the rest.
      * 3. Configured categories not yet present.
-     * 4. Fallback to "Other".
+     * 4. Fallback to CategoryConstants.CATEGORY_OTHER.
      */
     operator fun invoke(
         payee: String,
@@ -58,7 +58,7 @@ class PredictCategoryUseCase {
             }
         }
 
-        // 4. Fallback "Other"
+        // 4. Fallback CATEGORY_OTHER
         if (result.isEmpty()) {
             result.add(CategoryConstants.CATEGORY_OTHER)
         }

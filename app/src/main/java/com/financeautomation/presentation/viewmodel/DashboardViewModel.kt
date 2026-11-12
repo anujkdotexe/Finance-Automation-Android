@@ -9,34 +9,32 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.dao.PayableDao
+import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.entity.PayableEntity
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.TransactionRepository
-import com.financeautomation.service.worker.SyncTransactionsWorker
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 /**
- * Summary item for friend debts shown on the dashboard cards (Design Guide 5.1).
- */
-data class DebtSummary(
-    val name: String,
-    val amount: Double
-)
-
-/**
- * Summary item for category breakdown bars (Design Guide 5.1).
+ * Breakdown of monthly spend by category for visualization.
  */
 data class CategorySpend(
     val category: String,
@@ -45,18 +43,32 @@ data class CategorySpend(
 )
 
 /**
- * UI state for the Calm Utility Home Dashboard (Design Guide 5.1).
+ * Outstanding debt summary per counterparty (who owes me, or who I owe).
+ */
+data class DebtSummary(
+    val name: String,
+    val amount: Double
+)
+
+/**
+ * Reactive state snapshot powering the calm utility Dashboard.
  */
 data class DashboardUiState(
     val selectedMonthLabel: String = "",
     val currentBurn: Double = 0.0,
     val dailyAverage: Double = 0.0,
     val lastMonthBurn: Double = 0.0,
+    val lastMonthSameDayBurn: Double = 0.0,
+    val paceDeltaPercent: Double? = null,
+    val onTrack: Boolean = true,
     val owedToMe: Double = 0.0,
     val topOwedToMe: List<DebtSummary> = emptyList(),
     val iOwePeople: Double = 0.0,
     val topIOwe: List<DebtSummary> = emptyList(),
     val needsReviewCount: Int = 0,
+    val needsReviewTotal: Int = 0,
+    val waitingCount: Int = 0,
+    val failedCount: Int = 0,
     val topCategories: List<CategorySpend> = emptyList(),
     val allCategories: List<CategorySpend> = emptyList(),
     val recentTransactions: List<Transaction> = emptyList(),
@@ -64,9 +76,21 @@ data class DashboardUiState(
     val income: Double = 0.0,
     val transactionCount: Int = 0,
     val syncQueueItems: List<SyncQueueEntity> = emptyList(),
+    val isOffline: Boolean = false,
+    val queuedItems: List<QueuedItem> = emptyList(),
     val isSyncing: Boolean = false,
     val syncMessage: String? = null,
     val errorMessage: String? = null
+)
+
+/**
+ * An item waiting in the sync queue, shown while offline. Carries only the merchant name,
+ * amount and creation time; no ids.
+ */
+data class QueuedItem(
+    val name: String,
+    val amount: Double,
+    val createdAt: Long
 )
 
 /**
@@ -76,7 +100,12 @@ class DashboardViewModel(
     private val transactionRepository: TransactionRepository,
     private val directSyncQueueDao: SyncQueueDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+    private val directPayableDao: PayableDao? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val categoryRepository: CategoryRepository? = null,
+    private val directPendingCaptureDao: PendingCaptureDao? = null,
+    private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
+    private val onlineState: Flow<Boolean>? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -89,7 +118,48 @@ class DashboardViewModel(
         transactionRepository = transactionRepository,
         directSyncQueueDao = syncQueueDao,
         syncQueueDaoProvider = null,
+        directPayableDao = null,
+        payableDaoProvider = null,
         categoryRepository = categoryRepository,
+        directPendingCaptureDao = null,
+        pendingCaptureDaoProvider = null,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDao: SyncQueueDao,
+        payableDao: PayableDao?,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = syncQueueDao,
+        syncQueueDaoProvider = null,
+        directPayableDao = payableDao,
+        payableDaoProvider = null,
+        categoryRepository = categoryRepository,
+        directPendingCaptureDao = null,
+        pendingCaptureDaoProvider = null,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDao: SyncQueueDao,
+        payableDao: PayableDao?,
+        pendingCaptureDao: PendingCaptureDao?,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = syncQueueDao,
+        syncQueueDaoProvider = null,
+        directPayableDao = payableDao,
+        payableDaoProvider = null,
+        categoryRepository = categoryRepository,
+        directPendingCaptureDao = pendingCaptureDao,
+        pendingCaptureDaoProvider = null,
         ioDispatcher = ioDispatcher
     )
 
@@ -102,7 +172,48 @@ class DashboardViewModel(
         transactionRepository = transactionRepository,
         directSyncQueueDao = null,
         syncQueueDaoProvider = syncQueueDaoProvider,
+        directPayableDao = null,
+        payableDaoProvider = null,
         categoryRepository = categoryRepository,
+        directPendingCaptureDao = null,
+        pendingCaptureDaoProvider = null,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDaoProvider: suspend () -> SyncQueueDao,
+        payableDaoProvider: (suspend () -> PayableDao)?,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = null,
+        syncQueueDaoProvider = syncQueueDaoProvider,
+        directPayableDao = null,
+        payableDaoProvider = payableDaoProvider,
+        categoryRepository = categoryRepository,
+        directPendingCaptureDao = null,
+        pendingCaptureDaoProvider = null,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDaoProvider: suspend () -> SyncQueueDao,
+        payableDaoProvider: (suspend () -> PayableDao)?,
+        pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)?,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = null,
+        syncQueueDaoProvider = syncQueueDaoProvider,
+        directPayableDao = null,
+        payableDaoProvider = payableDaoProvider,
+        categoryRepository = categoryRepository,
+        directPendingCaptureDao = null,
+        pendingCaptureDaoProvider = pendingCaptureDaoProvider,
         ioDispatcher = ioDispatcher
     )
 
@@ -119,15 +230,56 @@ class DashboardViewModel(
             ?: throw IllegalStateException("SyncQueueDao not available")
     }
 
+    private suspend fun resolvePayableDao(): PayableDao? {
+        return directPayableDao ?: payableDaoProvider?.invoke()
+    }
+
+    private suspend fun resolvePendingCaptureDao(): PendingCaptureDao? {
+        return directPendingCaptureDao ?: pendingCaptureDaoProvider?.invoke()
+    }
+
     private fun observeData() {
         viewModelScope.launch(ioDispatcher) {
             val syncQueueDao = resolveSyncQueueDao()
+            val payableDao = resolvePayableDao()
+            val pendingCaptureDao = resolvePendingCaptureDao()
+            val payablesFlow = payableDao?.observePending() ?: flowOf(emptyList())
+            val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
+            val needsReviewCapturesFlow = pendingCaptureDao?.getNeedsReviewCapturesFlow() ?: flowOf(emptyList())
+
             combine(
                 transactionRepository.getTransactions(),
                 syncQueueDao.getAllQueueFlow(),
-                monthOffsetFlow
-            ) { transactions, queueItems, monthOffset ->
-                calculateDashboardMetrics(transactions, queueItems, monthOffset)
+                payablesFlow,
+                categoriesFlow,
+                needsReviewCapturesFlow,
+                monthOffsetFlow,
+                onlineState ?: flowOf(true)
+            ) { flows ->
+                @Suppress("UNCHECKED_CAST")
+                val transactions = flows[0] as List<Transaction>
+                @Suppress("UNCHECKED_CAST")
+                val queueItems = flows[1] as List<SyncQueueEntity>
+                @Suppress("UNCHECKED_CAST")
+                val pendingPayables = flows[2] as List<PayableEntity>
+                @Suppress("UNCHECKED_CAST")
+                val categories = flows[3] as List<com.financeautomation.domain.model.Category>
+                @Suppress("UNCHECKED_CAST")
+                val needsReviewCaptures = flows[4] as List<PendingCaptureEntity>
+                val monthOffset = flows[5] as Int
+                val isOnline = flows[6] as Boolean
+
+                calculateDashboardMetrics(
+                    transactions = transactions,
+                    queueItems = queueItems,
+                    pendingPayables = pendingPayables,
+                    categories = categories,
+                    needsReviewCaptures = needsReviewCaptures,
+                    monthOffset = monthOffset
+                ).copy(
+                    isOffline = !isOnline,
+                    queuedItems = buildQueuedItems(transactions, queueItems)
+                )
             }.collect { calculatedState ->
                 _uiState.update { current ->
                     calculatedState.copy(
@@ -152,13 +304,43 @@ class DashboardViewModel(
         monthOffsetFlow.value = 0
     }
 
+    private fun buildQueuedItems(
+        transactions: List<Transaction>,
+        queueItems: List<SyncQueueEntity>
+    ): List<QueuedItem> {
+        val byId = transactions.associateBy { it.id }
+        return queueItems
+            .filter { it.status == SyncQueueEntity.STATUS_PENDING }
+            .sortedBy { it.createdAt }
+            .mapNotNull { item ->
+                val txn = byId[item.transactionId] ?: return@mapNotNull null
+                QueuedItem(name = txn.merchant, amount = txn.totalAmount, createdAt = item.createdAt)
+            }
+    }
+
     private fun calculateDashboardMetrics(
         transactions: List<Transaction>,
         queueItems: List<SyncQueueEntity>,
+        pendingPayables: List<PayableEntity>,
+        categories: List<com.financeautomation.domain.model.Category> = emptyList(),
+        needsReviewCaptures: List<PendingCaptureEntity> = emptyList(),
         monthOffset: Int
     ): DashboardUiState {
-        val nowCal = Calendar.getInstance()
-        val cal = Calendar.getInstance().apply {
+        val excludedCategoryNames: Set<String> = categories
+            .filter { it.isExcludedFromLivingBurn }
+            .map { it.name.trim().lowercase() }
+            .toSet()
+
+        fun isExcluded(category: String): Boolean {
+            val trimmed = category.trim().lowercase()
+            return excludedCategoryNames.contains(trimmed) ||
+                trimmed == CategoryConstants.CATEGORY_SAVINGS.lowercase() ||
+                trimmed == "transfer"
+        }
+
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz)
+        val cal = Calendar.getInstance(kolkataTz).apply {
             add(Calendar.MONTH, monthOffset)
             set(Calendar.DAY_OF_MONTH, 1)
             set(Calendar.HOUR_OF_DAY, 0)
@@ -168,7 +350,9 @@ class DashboardViewModel(
         }
         val startOfMonth = cal.timeInMillis
 
-        val monthLabelFormat = SimpleDateFormat("MMMM yyyy", Locale.US)
+        val monthLabelFormat = SimpleDateFormat("MMMM yyyy", Locale.US).apply {
+            timeZone = kolkataTz
+        }
         val selectedMonthLabel = monthLabelFormat.format(cal.time)
 
         val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
@@ -184,19 +368,30 @@ class DashboardViewModel(
         val endOfMonth = cal.timeInMillis
 
         // Prior month window for "Last month" comparison
-        val priorCal = Calendar.getInstance().apply {
+        val priorCal = Calendar.getInstance(kolkataTz).apply {
             timeInMillis = startOfMonth
             add(Calendar.MONTH, -1)
         }
         val startOfPriorMonth = priorCal.timeInMillis
         val endOfPriorMonth = startOfMonth
 
+        val priorSameDayCal = (priorCal.clone() as Calendar).apply {
+            add(Calendar.DAY_OF_MONTH, daysElapsed)
+        }
+        val endOfPriorSameDay = minOf(priorSameDayCal.timeInMillis, endOfPriorMonth)
+
         var currentBurn = 0.0
         var lastMonthBurn = 0.0
+        var lastMonthSameDayBurn = 0.0
         var savings = 0.0
         var income = 0.0
         var txnCount = 0
         var needsReviewCount = 0
+        var needsReviewWithoutFailedSync = 0
+        val failedTransactionIds = queueItems
+            .filter { it.status == SyncQueueEntity.STATUS_FAILED }
+            .map { it.transactionId }
+            .toSet()
 
         val categorySums = mutableMapOf<String, Double>()
         val monthTransactions = mutableListOf<Transaction>()
@@ -205,20 +400,31 @@ class DashboardViewModel(
         for (txn in transactions) {
             if (txn.reviewState == ReviewState.NEEDS_REVIEW && txn.status != TransactionStatus.VOID) {
                 needsReviewCount++
+                // A failed sync also puts its transaction back in review; count it once, as a failed item
+                if (txn.id !in failedTransactionIds) needsReviewWithoutFailedSync++
             }
 
             // Global unsettled receivables
             if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
-                val friend = txn.companions.ifBlank { "Others" }
-                receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + txn.owedToMe
+                val tokens = com.financeautomation.domain.utils.AccountingUtils.tokens(txn.companions)
+                if (tokens.isEmpty() || txn.companions.equals("Personal", ignoreCase = true)) {
+                    val friend = "Others"
+                    receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + txn.owedToMe
+                } else {
+                    val sharePerPerson = txn.owedToMe / tokens.size
+                    for (friend in tokens) {
+                        receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + sharePerPerson
+                    }
+                }
             }
 
             // Prior month burn
             if (txn.timestamp in startOfPriorMonth until endOfPriorMonth && txn.status != TransactionStatus.VOID) {
-                val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
-                val isXfer = txn.category.equals("Transfer", ignoreCase = true)
-                if (!isSav && !isXfer) {
+                if (!isExcluded(txn.category)) {
                     lastMonthBurn += txn.myShare
+                    if (txn.timestamp < endOfPriorSameDay) {
+                        lastMonthSameDayBurn += txn.myShare
+                    }
                 }
             }
 
@@ -228,11 +434,10 @@ class DashboardViewModel(
                 monthTransactions.add(txn)
 
                 val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
-                val isXfer = txn.category.equals("Transfer", ignoreCase = true)
 
                 if (isSav) {
                     savings += txn.myShare
-                } else if (!isXfer) {
+                } else if (!isExcluded(txn.category)) {
                     currentBurn += txn.myShare
                     categorySums[txn.category] = (categorySums[txn.category] ?: 0.0) + txn.myShare
                 }
@@ -256,20 +461,49 @@ class DashboardViewModel(
             .sortedByDescending { it.amount }
             .take(3)
 
+        val totalIOwe = pendingPayables.sumOf { it.amountIOwe }
+        val topIOwe = pendingPayables
+            .groupBy { it.paidBy }
+            .map { (person, list) -> DebtSummary(name = person, amount = list.sumOf { it.amountIOwe }) }
+            .sortedByDescending { it.amount }
+            .take(3)
+
         val recentTransactions = monthTransactions
             .sortedByDescending { it.timestamp }
             .take(5)
+
+        val paceDeltaPercent: Double? = if (lastMonthSameDayBurn > 0.0) {
+            ((currentBurn - lastMonthSameDayBurn) / lastMonthSameDayBurn) * 100.0
+        } else {
+            null
+        }
+        val onTrack = currentBurn <= lastMonthSameDayBurn
+
+        val waitingCount = queueItems.count {
+            it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS
+        }
+        val failedCount = queueItems.count {
+            it.status == SyncQueueEntity.STATUS_FAILED
+        }
+        val capturesInNeedsReview = needsReviewCaptures.size
+        val needsReviewTotal = needsReviewWithoutFailedSync + capturesInNeedsReview + failedCount
 
         return DashboardUiState(
             selectedMonthLabel = selectedMonthLabel,
             currentBurn = currentBurn,
             dailyAverage = dailyAverage,
             lastMonthBurn = lastMonthBurn,
+            lastMonthSameDayBurn = lastMonthSameDayBurn,
+            paceDeltaPercent = paceDeltaPercent,
+            onTrack = onTrack,
             owedToMe = totalOwedToMe,
             topOwedToMe = topOwedToMe,
-            iOwePeople = 0.0,
-            topIOwe = emptyList(),
+            iOwePeople = totalIOwe,
+            topIOwe = topIOwe,
             needsReviewCount = needsReviewCount,
+            needsReviewTotal = needsReviewTotal,
+            waitingCount = waitingCount,
+            failedCount = failedCount,
             topCategories = topCategories,
             allCategories = allCategories,
             recentTransactions = recentTransactions,
@@ -286,14 +520,6 @@ class DashboardViewModel(
     fun syncNow(context: Context? = null) {
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
-
-            if (context != null) {
-                try {
-                    SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
-                } catch (e: Exception) {
-                    Diagnostics.record("DashboardViewModel", "${e.javaClass.simpleName}: enqueueExpedited")
-                }
-            }
 
             when (val res = transactionRepository.syncPendingTransactions()) {
                 is Result.Success -> {
@@ -326,6 +552,8 @@ class DashboardViewModel(
         fun provideFactory(
             transactionRepository: TransactionRepository,
             syncQueueDao: SyncQueueDao,
+            payableDao: PayableDao? = null,
+            pendingCaptureDao: PendingCaptureDao? = null,
             categoryRepository: CategoryRepository? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -333,7 +561,9 @@ class DashboardViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return DashboardViewModel(
                     transactionRepository = transactionRepository,
-                    syncQueueDao = syncQueueDao,
+                    directSyncQueueDao = syncQueueDao,
+                    directPayableDao = payableDao,
+                    directPendingCaptureDao = pendingCaptureDao,
                     categoryRepository = categoryRepository,
                     ioDispatcher = ioDispatcher
                 ) as T
@@ -343,7 +573,10 @@ class DashboardViewModel(
         fun provideFactory(
             transactionRepository: TransactionRepository,
             syncQueueDaoProvider: suspend () -> SyncQueueDao,
+            payableDaoProvider: (suspend () -> PayableDao)? = null,
+            pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
             categoryRepository: CategoryRepository? = null,
+            onlineState: Flow<Boolean>? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -351,7 +584,10 @@ class DashboardViewModel(
                 return DashboardViewModel(
                     transactionRepository = transactionRepository,
                     syncQueueDaoProvider = syncQueueDaoProvider,
+                    payableDaoProvider = payableDaoProvider,
+                    pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     categoryRepository = categoryRepository,
+                    onlineState = onlineState,
                     ioDispatcher = ioDispatcher
                 ) as T
             }

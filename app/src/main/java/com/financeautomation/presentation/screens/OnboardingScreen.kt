@@ -174,7 +174,7 @@ fun OnboardingScreen(
                 subtitle = when (state.step2State) {
                     StepState.COMPLETED -> state.workbookName
                     StepState.IN_PROGRESS -> stringResource(R.string.onboarding_step2_progress)
-                    StepState.ERROR -> state.step2Error ?: ""
+                    StepState.ERROR -> state.step2Error?.let { stringResource(it.resId, *it.args.toTypedArray()) } ?: ""
                     StepState.NOT_STARTED -> ""
                 },
                 icon = Icons.Default.TableChart,
@@ -182,7 +182,7 @@ fun OnboardingScreen(
                 action = {
                     if (state.step2State == StepState.ERROR) {
                         OutlinedButton(
-                            onClick = viewModel::startWorkspaceProvisioning,
+                            onClick = { viewModel.startWorkspaceProvisioning(forceValidateTabs = true) },
                             shape = FinanceTheme.shapes.small
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))

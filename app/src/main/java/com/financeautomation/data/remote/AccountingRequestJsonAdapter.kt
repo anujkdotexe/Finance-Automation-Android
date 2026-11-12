@@ -5,122 +5,135 @@ import com.financeautomation.domain.model.LogCreditRequest
 import com.financeautomation.domain.model.LogPayableRequest
 import com.financeautomation.domain.model.LogRepaymentRequest
 import com.financeautomation.domain.model.YearCloseRequest
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
- * JSON serialization adapter for accounting request models stored in sync_queue.payloadJson.
+ * Robust JSON serialization adapter for accounting request models stored in sync_queue.payloadJson.
+ * Pure Kotlin with zero Android framework dependencies, ensuring deterministic execution in JVM tests and runtime.
  */
 object AccountingRequestJsonAdapter {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     fun creditRequestToJson(req: LogCreditRequest): String {
-        val obj = JSONObject()
-        obj.put("requestId", req.requestId)
-        obj.put("settler", req.settler)
-        obj.put("amount", req.amount)
-        val refsArr = JSONArray()
-        req.explicitRefs.forEach { refsArr.put(it) }
-        obj.put("explicitRefs", refsArr)
-        obj.put("account", req.account)
-        obj.put("inflowType", req.inflowType)
-        obj.put("reason", req.reason)
-        obj.put("timestamp", req.timestamp)
-        return obj.toString()
+        return buildJsonObject {
+            put("requestId", JsonPrimitive(req.requestId))
+            put("settler", JsonPrimitive(req.settler))
+            put("amount", JsonPrimitive(req.amount))
+            put("explicitRefs", buildJsonArray {
+                req.explicitRefs.forEach { add(JsonPrimitive(it)) }
+            })
+            put("account", JsonPrimitive(req.account))
+            put("inflowType", JsonPrimitive(req.inflowType))
+            put("reason", JsonPrimitive(req.reason))
+            put("timestamp", JsonPrimitive(req.timestamp))
+        }.toString()
     }
 
     fun creditRequestFromJson(jsonStr: String): LogCreditRequest {
-        val obj = JSONObject(jsonStr)
-        val refsArr = obj.optJSONArray("explicitRefs")
-        val explicitRefs = mutableListOf<String>()
-        if (refsArr != null) {
-            for (i in 0 until refsArr.length()) {
-                explicitRefs.add(refsArr.getString(i))
-            }
-        }
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
+        val refs = obj["explicitRefs"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
         return LogCreditRequest(
-            requestId = obj.getString("requestId"),
-            settler = obj.getString("settler"),
-            amount = obj.getDouble("amount"),
-            explicitRefs = explicitRefs,
-            account = obj.getString("account"),
-            inflowType = obj.getString("inflowType"),
-            reason = obj.getString("reason"),
-            timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+            requestId = obj["requestId"]?.jsonPrimitive?.content.orEmpty(),
+            settler = obj["settler"]?.jsonPrimitive?.content.orEmpty(),
+            amount = obj["amount"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+            explicitRefs = refs,
+            account = obj["account"]?.jsonPrimitive?.content.orEmpty(),
+            inflowType = obj["inflowType"]?.jsonPrimitive?.content.orEmpty(),
+            reason = obj["reason"]?.jsonPrimitive?.content.orEmpty(),
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
         )
     }
 
     fun payableRequestToJson(req: LogPayableRequest): String {
-        val obj = JSONObject()
-        obj.put("requestId", req.requestId)
-        obj.put("creditor", req.creditor)
-        obj.put("amount", req.amount)
-        obj.put("whatFor", req.whatFor)
-        obj.put("timestamp", req.timestamp)
-        return obj.toString()
+        return buildJsonObject {
+            put("requestId", JsonPrimitive(req.requestId))
+            put("creditor", JsonPrimitive(req.creditor))
+            put("amount", JsonPrimitive(req.amount))
+            put("whatFor", JsonPrimitive(req.whatFor))
+            put("timestamp", JsonPrimitive(req.timestamp))
+        }.toString()
     }
 
     fun payableRequestFromJson(jsonStr: String): LogPayableRequest {
-        val obj = JSONObject(jsonStr)
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
         return LogPayableRequest(
-            requestId = obj.getString("requestId"),
-            creditor = obj.getString("creditor"),
-            amount = obj.getDouble("amount"),
-            whatFor = obj.getString("whatFor"),
-            timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+            requestId = obj["requestId"]?.jsonPrimitive?.content.orEmpty(),
+            creditor = obj["creditor"]?.jsonPrimitive?.content.orEmpty(),
+            amount = obj["amount"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+            whatFor = obj["whatFor"]?.jsonPrimitive?.content.orEmpty(),
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
         )
     }
 
     fun repaymentRequestToJson(req: LogRepaymentRequest): String {
-        val obj = JSONObject()
-        obj.put("requestId", req.requestId)
-        obj.put("creditor", req.creditor)
-        obj.put("amount", req.amount)
-        obj.put("explicitRef", req.explicitRef ?: JSONObject.NULL)
-        obj.put("timestamp", req.timestamp)
-        return obj.toString()
+        return buildJsonObject {
+            put("requestId", JsonPrimitive(req.requestId))
+            put("creditor", JsonPrimitive(req.creditor))
+            put("amount", JsonPrimitive(req.amount))
+            put("explicitRef", req.explicitRef?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("timestamp", JsonPrimitive(req.timestamp))
+        }.toString()
     }
 
     fun repaymentRequestFromJson(jsonStr: String): LogRepaymentRequest {
-        val obj = JSONObject(jsonStr)
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
+        val ref = obj["explicitRef"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content
         return LogRepaymentRequest(
-            requestId = obj.getString("requestId"),
-            creditor = obj.getString("creditor"),
-            amount = obj.getDouble("amount"),
-            explicitRef = if (obj.isNull("explicitRef")) null else obj.getString("explicitRef"),
-            timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+            requestId = obj["requestId"]?.jsonPrimitive?.content.orEmpty(),
+            creditor = obj["creditor"]?.jsonPrimitive?.content.orEmpty(),
+            amount = obj["amount"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+            explicitRef = ref,
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
         )
     }
 
     fun carryForwardRequestToJson(req: CarryForwardRequest): String {
-        val obj = JSONObject()
-        obj.put("targetTab", req.targetTab)
-        obj.put("sourceTab", req.sourceTab ?: JSONObject.NULL)
-        obj.put("timestamp", req.timestamp)
-        return obj.toString()
+        return buildJsonObject {
+            put("targetTab", JsonPrimitive(req.targetTab))
+            put("sourceTab", req.sourceTab?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("timestamp", JsonPrimitive(req.timestamp))
+            put("accounts", buildJsonArray { req.accounts.forEach { add(JsonPrimitive(it)) } })
+            put("categories", buildJsonArray { req.categories.forEach { add(JsonPrimitive(it)) } })
+        }.toString()
     }
 
     fun carryForwardRequestFromJson(jsonStr: String): CarryForwardRequest {
-        val obj = JSONObject(jsonStr)
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
+        val source = obj["sourceTab"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content
+        val accounts = obj["accounts"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content }.orEmpty()
+        val categories = obj["categories"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content }.orEmpty()
         return CarryForwardRequest(
-            targetTab = obj.getString("targetTab"),
-            sourceTab = if (obj.isNull("sourceTab")) null else obj.getString("sourceTab"),
-            timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+            targetTab = obj["targetTab"]?.jsonPrimitive?.content.orEmpty(),
+            sourceTab = source,
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
+            accounts = accounts,
+            categories = categories
         )
     }
 
     fun yearCloseRequestToJson(req: YearCloseRequest): String {
-        val obj = JSONObject()
-        obj.put("year", req.year)
-        obj.put("timestamp", req.timestamp)
-        return obj.toString()
+        return buildJsonObject {
+            put("year", JsonPrimitive(req.year))
+            put("timestamp", JsonPrimitive(req.timestamp))
+        }.toString()
     }
 
     fun yearCloseRequestFromJson(jsonStr: String): YearCloseRequest {
-        val obj = JSONObject(jsonStr)
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
         return YearCloseRequest(
-            year = obj.getInt("year"),
-            timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+            year = obj["year"]?.jsonPrimitive?.intOrNull ?: 0,
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
         )
     }
 }
-

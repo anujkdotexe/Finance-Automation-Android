@@ -77,7 +77,8 @@ class OverlayController(
     private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
     private val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
+    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
+    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -183,7 +184,8 @@ class OverlayController(
                     categoryRepository = categoryRepository, accountRepository = accountRepository,
                     tripTagRepository = tripTagRepository, pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     syncQueueDaoProvider = syncQueueDaoProvider, categoryStatDaoProvider = categoryStatDaoProvider,
-                    predictCategoryUseCase = predictCategoryUseCase, ioDispatcher = ioDispatcher
+                    predictCategoryUseCase = predictCategoryUseCase, ioDispatcher = ioDispatcher,
+                    subscriptionRepository = subscriptionRepository
                 )
                 val viewModel = ViewModelProvider(treeOwners, viewModelFactory)[QuickLogViewModel::class.java]
 
@@ -247,10 +249,20 @@ class OverlayController(
                                                 dismiss()
                                                 resultPill.show(appContext.getString(R.string.self_test_completed_pill))
                                             } else {
-                                                viewModel.onConfirmAndSave { message ->
+                                                viewModel.onConfirmAndSave { message, txnId ->
                                                     PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
                                                     dismiss()
-                                                    resultPill.show(message)
+                                                    resultPill.show(
+                                                        message = message,
+                                                        transactionId = txnId,
+                                                        onUndo = if (txnId != null) {
+                                                            { id ->
+                                                                mainScope.launch(ioDispatcher) {
+                                                                    transactionRepository.undoRecentSave(id)
+                                                                }
+                                                            }
+                                                        } else null
+                                                    )
                                                 }
                                             }
                                         },

@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""
+Sheet Compare Tool - parity check between an Android provisioned workbook and the iOS
+master reference (docs/ios_reference/Finance2026_Template.xlsx).
+
+A candidate is always required. Without one the tool prints usage and exits with 2.
+
+Usage:
+    python tools/sheet-compare <candidate.xlsx> [reference.xlsx]
+    python tools/sheet-compare --export <spreadsheet_id> [--token <oauth token>]
+    python tools/sheet-compare --self-test
+
+Compared for the Dashboard and the first month tab: merges, key values, titles, headers,
+dropdown validations (the reference has none), and per cell style (font name, size, bold,
+italic, colour, fill, alignment, wrap, number format, borders), column widths (2 pixel
+tolerance) and row heights. The hidden UUID columns AC to AE are ignored. The Config tab is
+not part of the reference; if the candidate has one, only its header row is checked.
+
+Exit codes: 0 no differences, 1 differences found, 2 usage or input error.
+"""
+
+import argparse
+import os
+import re
+import sys
+import urllib.request
+
+try:
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+except ImportError:
+    print("Error: openpyxl is required. Run: pip install openpyxl", file=sys.stderr)
+    sys.exit(2)
+
+DEFAULT_REFERENCE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "docs", "ios_reference", "Finance2026_Template.xlsx",
+)
+
+CONFIG_HEADERS = ["Type", "Key", "Value1", "Value2", "Value3", "Value4", "UpdatedAt", "UpdatedBy", "Deleted"]
+
+MONTH_TAB_PATTERN = re.compile(r"^[A-Z][a-z]{2}\d{2}$")
+
+LAST_COMPARED_MONTH_COLUMN = 28  # A to AB; AC to AE are hidden UUID columns and ignored
+DASHBOARD_STYLE_ROWS = range(1, 31)
+DASHBOARD_STYLE_COLUMNS = range(1, 27)
+MONTH_STYLE_ROWS = range(1, 6)
+HEIGHT_ROWS = range(1, 8)
+PIXEL_TOLERANCE = 2.0
+
+
+def get_cell_text(val):
+    if val is None:
+        return ""
+    if isinstance(val, openpyxl.worksheet.formula.ArrayFormula):
+        return val.text.strip()
+    return str(val).strip()
+
+
+def _color(color):
+    if color is None:
+        return None
+    if color.type == "rgb" and color.rgb:
+        return str(color.rgb)[-6:]
+    if color.type == "theme":
+        return f"theme{color.theme}"
+    return None
+
+
+def cell_style(cell):
+    font = cell.font
+    fill = None
+    if cell.fill is not None and cell.fill.fill_type:
+        raw = cell.fill.fgColor.rgb if cell.fill.fgColor.type == "rgb" else f"theme{cell.fill.fgColor.theme}"
+        fill = str(raw)[-6:] if cell.fill.fgColor.type == "rgb" else raw
+    align = cell.alignment
+    border = cell.border
+    return {
+        "font": font.name,
+        "size": font.sz,
+        "bold": bool(font.b),
+        "italic": bool(font.i),
+        "color": _color(font.color),
+        "fill": fill,
+        "horizontal": align.horizontal,
+        "vertical": align.vertical,
+        "wrap": bool(align.wrap_text),
+        "numberFormat": cell.number_format,
+        "borderBottom": getattr(border.bottom, "style", None),
+        "borderTop": getattr(border.top, "style", None),
+        "borderLeft": getattr(border.left, "style", None),
+        "borderRight": getattr(border.right, "style", None),
+    }
+
+
+def _has_content(cell):
+    return cell.value is not None or (cell.fill is not None and bool(cell.fill.fill_type))
+
+
+def compare_styles(label, cand_ws, ref_ws, rows, columns):
+    diffs = []
+    for r in rows:
+        for c in columns:
+            coord = f"{get_column_letter(c)}{r}"
+            cc, rc = cand_ws[coord], ref_ws[coord]
+            if not _has_content(cc) and not _has_content(rc):
+                continue
+            cs, rs = cell_style(cc), cell_style(rc)
+            for key in rs:
+                if cs[key] != rs[key]:
+                    diffs.append(f"{label} {coord} style {key}: candidate={cs[key]!r} vs reference={rs[key]!r}")
+    return diffs
+
+
+def _width_px(width):
+    return None if width is None else width * 7.0 + 5.0
+
+
+def compare_widths(label, cand_ws, ref_ws, columns):
+    diffs = []
+    for c in columns:
+        letter = get_column_letter(c)
+        cd, rd = cand_ws.column_dimensions.get(letter), ref_ws.column_dimensions.get(letter)
+        cw = cd.width if cd is not None and cd.width else None
+        rw = rd.width if rd is not None and rd.width else None
+        if cw is None and rw is None:
+            continue
+        cp, rp = _width_px(cw), _width_px(rw)
+        if cp is None or rp is None or abs(cp - rp) > PIXEL_TOLERANCE:
+            diffs.append(f"{label} column {letter} width: candidate={cw} vs reference={rw}")
+    return diffs
+
+
+def compare_heights(label, cand_ws, ref_ws, rows):
+    diffs = []
+    for r in rows:
+        ch = cand_ws.row_dimensions[r].height if r in cand_ws.row_dimensions else None
+        rh = ref_ws.row_dimensions[r].height if r in ref_ws.row_dimensions else None
+        if ch is None and rh is None:
+            continue
+        # points to pixels is 4/3; tolerance is in pixels
+        if ch is None or rh is None or abs(ch - rh) * 4.0 / 3.0 > PIXEL_TOLERANCE:
+            diffs.append(f"{label} row {r} height: candidate={ch} vs reference={rh}")
+    return diffs
+
+
+def compare_values(label, cand_ws, ref_ws, coords):
+    diffs = []
+    for coord in coords:
+        c_val = get_cell_text(cand_ws[coord].value)
+        r_val = get_cell_text(ref_ws[coord].value)
+        if c_val != r_val:
+            diffs.append(f"{label} {coord} value: candidate='{c_val}' vs reference='{r_val}'")
+    return diffs
+
+
+def _filter_merges(ws, ignore_hidden):
+    merges = set(str(m) for m in ws.merged_cells.ranges)
+    if ignore_hidden:
+        merges = {m for m in merges if not m.startswith(("AC", "AD", "AE"))}
+    return merges
+
+
+def _validation_count(ws):
+    dv = getattr(ws, "data_validations", None)
+    return len(dv.dataValidation) if dv and dv.dataValidation else 0
+
+
+def compare_dashboard(cand_ws, ref_ws):
+    label = "Dashboard"
+    diffs = []
+    cm, rm = _filter_merges(cand_ws, False), _filter_merges(ref_ws, False)
+    if cm != rm:
+        diffs.append(f"{label} merges differ: {sorted(cm ^ rm)}")
+
+    coords = [f"{col}{row}" for col in "ADGJMP" for row in (4, 5, 6)]
+    coords += [f"{col}{row}" for row in range(5, 18) for col in "UVW"]
+    coords += [f"{col}{row}" for row in range(5, 16) for col in "YZ"]
+    coords += ["A24", "A25", "H25", "A26", "H26", "A27", "H27"]
+    diffs += compare_values(label, cand_ws, ref_ws, coords)
+
+    if _validation_count(cand_ws) > 0:
+        diffs.append(f"{label} has {_validation_count(cand_ws)} dropdown validations (reference has 0)")
+
+    diffs += compare_styles(label, cand_ws, ref_ws, DASHBOARD_STYLE_ROWS, DASHBOARD_STYLE_COLUMNS)
+    diffs += compare_widths(label, cand_ws, ref_ws, DASHBOARD_STYLE_COLUMNS)
+    diffs += compare_heights(label, cand_ws, ref_ws, HEIGHT_ROWS)
+    return diffs
+
+
+def compare_month_tab(cand_ws, ref_ws):
+    label = "Month tab"
+    diffs = []
+    cm, rm = _filter_merges(cand_ws, True), _filter_merges(ref_ws, True)
+    if cm != rm:
+        diffs.append(f"{label} merges differ: {sorted(cm ^ rm)}")
+
+    columns = range(1, LAST_COMPARED_MONTH_COLUMN + 1)
+    coords = ["A2", "M2", "V2"] + [f"{get_column_letter(c)}3" for c in columns]
+    diffs += compare_values(label, cand_ws, ref_ws, coords)
+
+    if _validation_count(cand_ws) > 0:
+        diffs.append(f"{label} has {_validation_count(cand_ws)} dropdown validations (reference has 0)")
+
+    diffs += compare_styles(label, cand_ws, ref_ws, MONTH_STYLE_ROWS, columns)
+    # Data row number formats (rows 4 and 5)
+    diffs += compare_styles(label + " data", cand_ws, ref_ws, (4, 5), columns)
+    diffs += compare_widths(label, cand_ws, ref_ws, columns)
+    diffs += compare_heights(label, cand_ws, ref_ws, HEIGHT_ROWS)
+    return diffs
+
+
+def validate_config_tab(config_ws):
+    """The iOS reference has no Config tab. Only the Android header row is checked."""
+    diffs = []
+    for idx, expected in enumerate(CONFIG_HEADERS, start=1):
+        found = get_cell_text(config_ws.cell(row=1, column=idx).value)
+        if found != expected:
+            diffs.append(f"Config header col {idx}: found '{found}', expected '{expected}'")
+    return diffs
+
+
+def first_month_tab(wb):
+    tabs = [s for s in wb.sheetnames if MONTH_TAB_PATTERN.match(s)]
+    return tabs[0] if tabs else None
+
+
+def compare_workbooks(candidate_path, reference_path=DEFAULT_REFERENCE_PATH):
+    """Returns the list of differences between candidate and reference."""
+    cand_wb = openpyxl.load_workbook(candidate_path, data_only=False)
+    ref_wb = openpyxl.load_workbook(reference_path, data_only=False)
+    diffs = []
+
+    if "Dashboard" not in cand_wb.sheetnames:
+        diffs.append("Candidate workbook missing 'Dashboard' sheet")
+    elif "Dashboard" not in ref_wb.sheetnames:
+        diffs.append("Reference workbook missing 'Dashboard' sheet")
+    else:
+        diffs += compare_dashboard(cand_wb["Dashboard"], ref_wb["Dashboard"])
+
+    ref_month = first_month_tab(ref_wb)
+    cand_month = first_month_tab(cand_wb)
+    if ref_month is None:
+        diffs.append("Reference workbook has no month tab")
+    elif cand_month is None:
+        diffs.append("Candidate workbook missing a month tab")
+    else:
+        diffs += compare_month_tab(cand_wb[cand_month], ref_wb[ref_month])
+
+    if "Config" in cand_wb.sheetnames:
+        diffs += validate_config_tab(cand_wb["Config"])
+    return diffs
+
+
+def export_spreadsheet_as_xlsx(spreadsheet_id, dest_path, access_token=None):
+    export_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=xlsx"
+    req = urllib.request.Request(export_url)
+    if access_token:
+        req.add_header("Authorization", f"Bearer {access_token}")
+    with urllib.request.urlopen(req) as resp, open(dest_path, "wb") as f:
+        f.write(resp.read())
+
+
+def print_result(diffs):
+    if diffs:
+        print(f"Parity comparison failed: {len(diffs)} differences found.")
+        for d in diffs:
+            print(f"  - {d}")
+        return 1
+    print("Parity verified: 0 differences for the Dashboard and the first month tab.")
+    return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Compare an Android workbook with the iOS reference. A candidate is required.",
+        usage="sheet-compare <candidate.xlsx> [reference.xlsx] | --export <spreadsheet_id> | --self-test",
+    )
+    parser.add_argument("candidate", nargs="?", default=None, help="Path to the candidate .xlsx")
+    parser.add_argument("reference", nargs="?", default=DEFAULT_REFERENCE_PATH, help="Path to reference .xlsx")
+    parser.add_argument("--export", dest="export_id", help="Export a Google Spreadsheet by ID and compare it")
+    parser.add_argument("--token", dest="token", help="OAuth access token for export")
+    parser.add_argument("--output", dest="output", default="exported_candidate.xlsx", help="Output path for exported xlsx")
+    parser.add_argument("--self-test", dest="self_test", action="store_true",
+                        help="Compare the reference with itself (proves nothing about the app)")
+
+    args = parser.parse_args(argv)
+
+    if args.self_test:
+        print("SELF-TEST: comparing the reference with itself. This proves nothing about the app;")
+        print("it only shows the tool runs. Compare a real export to check the app.")
+        if not os.path.isfile(args.reference):
+            print(f"Error: Reference workbook not found at: {args.reference}", file=sys.stderr)
+            return 2
+        return print_result(compare_workbooks(args.reference, args.reference))
+
+    if args.export_id:
+        print(f"Exporting spreadsheet {args.export_id} to {args.output}...")
+        export_spreadsheet_as_xlsx(args.export_id, args.output, args.token)
+        candidate_path = args.output
+    elif args.candidate:
+        candidate_path = args.candidate
+    else:
+        parser.print_usage(sys.stderr)
+        print("Error: a candidate .xlsx path or --export <spreadsheet_id> is required.", file=sys.stderr)
+        return 2
+
+    if not os.path.isfile(args.reference):
+        print(f"Error: Reference workbook not found at: {args.reference}", file=sys.stderr)
+        return 2
+    if not os.path.isfile(candidate_path):
+        print(f"Error: Candidate workbook not found at: {candidate_path}", file=sys.stderr)
+        return 2
+
+    return print_result(compare_workbooks(candidate_path, args.reference))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

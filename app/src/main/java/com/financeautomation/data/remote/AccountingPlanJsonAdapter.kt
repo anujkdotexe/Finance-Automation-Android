@@ -5,118 +5,142 @@ import com.financeautomation.domain.model.CellEdit
 import com.financeautomation.domain.model.NewRow
 import com.financeautomation.domain.model.SettledRef
 import com.financeautomation.domain.model.TableType
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Robust JSON serialization adapter for AccountingPlan.
+ * Robust JSON serialization adapter for AccountingPlan using kotlinx.serialization.
  * Used to persist the planned mutations into sync_queue.planJson before executing writes,
  * guaranteeing idempotent retries under process termination and network disconnects.
+ * Pure Kotlin with zero Android framework dependencies.
  */
 object AccountingPlanJsonAdapter {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private fun Any?.toJsonPrimitive(): JsonPrimitive = when (this) {
+        null -> JsonNull
+        is Number -> JsonPrimitive(this)
+        is Boolean -> JsonPrimitive(this)
+        else -> JsonPrimitive(this.toString())
+    }
+
     fun toJson(plan: AccountingPlan): String {
-        val root = JSONObject()
-        root.put("excess", plan.excess)
-        root.put("unmatched", plan.unmatched)
-        root.put("message", plan.message)
+        val root = buildJsonObject {
+            put("excess", JsonPrimitive(plan.excess))
+            put("unmatched", JsonPrimitive(plan.unmatched))
+            put("message", JsonPrimitive(plan.message))
 
-        val editsArr = JSONArray()
-        plan.edits.forEach { edit ->
-            val obj = JSONObject()
-            obj.put("tab", edit.tab)
-            obj.put("row", edit.row)
-            obj.put("column", edit.column)
-            obj.put("value", edit.value ?: JSONObject.NULL)
-            editsArr.put(obj)
+            put("edits", buildJsonArray {
+                plan.edits.forEach { edit ->
+                    add(buildJsonObject {
+                        put("tab", JsonPrimitive(edit.tab))
+                        put("row", JsonPrimitive(edit.row))
+                        put("column", JsonPrimitive(edit.column))
+                        put("value", edit.value.toJsonPrimitive())
+                    })
+                }
+            })
+
+            put("appends", buildJsonArray {
+                plan.appends.forEach { append ->
+                    add(buildJsonObject {
+                        put("table", JsonPrimitive(append.table.name))
+                        put("tab", JsonPrimitive(append.tab))
+                        put("uuid", JsonPrimitive(append.uuid))
+                        put("cells", buildJsonArray {
+                            append.cells.forEach { c ->
+                                add(c.toJsonPrimitive())
+                            }
+                        })
+                    })
+                }
+            })
+
+            put("settled", buildJsonArray {
+                plan.settled.forEach { s ->
+                    add(buildJsonObject {
+                        put("tab", JsonPrimitive(s.tab))
+                        put("row", JsonPrimitive(s.row))
+                        put("uuid", s.uuid?.let { JsonPrimitive(it) } ?: JsonNull)
+                        put("applied", JsonPrimitive(s.applied))
+                        put("remaining", JsonPrimitive(s.remaining))
+                    })
+                }
+            })
         }
-        root.put("edits", editsArr)
-
-        val appendsArr = JSONArray()
-        plan.appends.forEach { append ->
-            val obj = JSONObject()
-            obj.put("table", append.table.name)
-            obj.put("tab", append.tab)
-            obj.put("uuid", append.uuid)
-            val cellsArr = JSONArray()
-            append.cells.forEach { c ->
-                cellsArr.put(c ?: JSONObject.NULL)
-            }
-            obj.put("cells", cellsArr)
-            appendsArr.put(obj)
-        }
-        root.put("appends", appendsArr)
-
-        val settledArr = JSONArray()
-        plan.settled.forEach { s ->
-            val obj = JSONObject()
-            obj.put("tab", s.tab)
-            obj.put("row", s.row)
-            obj.put("uuid", s.uuid ?: JSONObject.NULL)
-            obj.put("applied", s.applied)
-            obj.put("remaining", s.remaining)
-            settledArr.put(obj)
-        }
-        root.put("settled", settledArr)
-
         return root.toString()
     }
 
     fun fromJson(jsonStr: String): AccountingPlan {
-        val root = JSONObject(jsonStr)
-        val excess = root.optDouble("excess", 0.0)
-        val unmatched = root.optBoolean("unmatched", false)
-        val message = root.optString("message", "")
+        val root = json.parseToJsonElement(jsonStr).jsonObject
+        val excess = root["excess"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+        val unmatched = root["unmatched"]?.jsonPrimitive?.booleanOrNull ?: false
+        val message = root["message"]?.jsonPrimitive?.content.orEmpty()
 
         val edits = mutableListOf<CellEdit>()
-        val editsArr = root.optJSONArray("edits")
-        if (editsArr != null) {
-            for (i in 0 until editsArr.length()) {
-                val obj = editsArr.getJSONObject(i)
-                val rawVal = if (obj.isNull("value")) null else obj.get("value")
-                edits.add(
-                    CellEdit(
-                        tab = obj.getString("tab"),
-                        row = obj.getInt("row"),
-                        column = obj.getString("column"),
-                        value = rawVal
-                    )
-                )
+        root["edits"]?.jsonArray?.forEach { el ->
+            val obj = el.jsonObject
+            val tab = obj["tab"]?.jsonPrimitive?.content.orEmpty()
+            val row = obj["row"]?.jsonPrimitive?.intOrNull ?: 0
+            val column = obj["column"]?.jsonPrimitive?.content.orEmpty()
+            val valPrim = obj["value"]?.jsonPrimitive
+            val rawVal: Any? = when {
+                valPrim == null || valPrim is JsonNull -> null
+                valPrim.isString -> valPrim.content
+                valPrim.booleanOrNull != null -> valPrim.booleanOrNull
+                valPrim.doubleOrNull != null -> valPrim.doubleOrNull
+                else -> valPrim.content
             }
+            edits.add(CellEdit(tab = tab, row = row, column = column, value = rawVal))
         }
 
         val appends = mutableListOf<NewRow>()
-        val appendsArr = root.optJSONArray("appends")
-        if (appendsArr != null) {
-            for (i in 0 until appendsArr.length()) {
-                val obj = appendsArr.getJSONObject(i)
-                val table = TableType.valueOf(obj.getString("table"))
-                val tab = obj.getString("tab")
-                val uuid = obj.getString("uuid")
-                val cellsArr = obj.getJSONArray("cells")
-                val cells = mutableListOf<Any?>()
-                for (j in 0 until cellsArr.length()) {
-                    cells.add(if (cellsArr.isNull(j)) null else cellsArr.get(j))
+        root["appends"]?.jsonArray?.forEach { el ->
+            val obj = el.jsonObject
+            val table = TableType.valueOf(obj["table"]?.jsonPrimitive?.content.orEmpty())
+            val tab = obj["tab"]?.jsonPrimitive?.content.orEmpty()
+            val uuid = obj["uuid"]?.jsonPrimitive?.content.orEmpty()
+            val cells = mutableListOf<Any?>()
+            obj["cells"]?.jsonArray?.forEach { cEl ->
+                val cPrim = cEl.jsonPrimitive
+                val v: Any? = when {
+                    cPrim is JsonNull -> null
+                    cPrim.isString -> cPrim.content
+                    cPrim.doubleOrNull != null -> {
+                        val d = cPrim.doubleOrNull!!
+                        if (d % 1.0 == 0.0 && d in Int.MIN_VALUE.toDouble()..Int.MAX_VALUE.toDouble()) {
+                            d.toInt()
+                        } else d
+                    }
+                    cPrim.booleanOrNull != null -> cPrim.booleanOrNull
+                    else -> cPrim.content
                 }
-                appends.add(NewRow(table, tab, uuid, cells))
+                cells.add(v)
             }
+            appends.add(NewRow(table, tab, uuid, cells))
         }
 
         val settled = mutableListOf<SettledRef>()
-        val settledArr = root.optJSONArray("settled")
-        if (settledArr != null) {
-            for (i in 0 until settledArr.length()) {
-                val obj = settledArr.getJSONObject(i)
-                settled.add(
-                    SettledRef(
-                        tab = obj.getString("tab"),
-                        row = obj.getInt("row"),
-                        uuid = if (obj.isNull("uuid")) null else obj.getString("uuid"),
-                        applied = obj.optDouble("applied", 0.0),
-                        remaining = obj.optDouble("remaining", 0.0)
-                    )
-                )
-            }
+        root["settled"]?.jsonArray?.forEach { el ->
+            val obj = el.jsonObject
+            val tab = obj["tab"]?.jsonPrimitive?.content.orEmpty()
+            val row = obj["row"]?.jsonPrimitive?.intOrNull ?: 0
+            val uuid = obj["uuid"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content
+            val applied = obj["applied"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            val remaining = obj["remaining"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            settled.add(SettledRef(tab = tab, row = row, uuid = uuid, applied = applied, remaining = remaining))
         }
 
         return AccountingPlan(
@@ -129,4 +153,3 @@ object AccountingPlanJsonAdapter {
         )
     }
 }
-

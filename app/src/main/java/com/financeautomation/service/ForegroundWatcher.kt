@@ -23,7 +23,12 @@ import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.data.local.entity.TransactionEntity
+import com.financeautomation.core.model.ReviewState
+import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.overlay.OverlayRequest
@@ -48,6 +53,8 @@ class ForegroundWatcher(
     private val context: Context,
     private val directPendingCaptureDao: PendingCaptureDao? = null,
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
+    private val directTransactionDao: TransactionDao? = null,
+    private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
     private val predictCategoryUseCase: PredictCategoryUseCase? = null,
     private val overlayControllerProvider: (() -> OverlayController)? = null,
@@ -62,6 +69,8 @@ class ForegroundWatcher(
         context = context,
         directPendingCaptureDao = pendingCaptureDao,
         pendingCaptureDaoProvider = null,
+        directTransactionDao = null,
+        transactionDaoProvider = null,
         categoryStatDaoProvider = null,
         predictCategoryUseCase = null,
         overlayControllerProvider = null,
@@ -127,7 +136,7 @@ class ForegroundWatcher(
     fun isInForeground(targetPackage: String): Boolean {
         val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return false
         val now = System.currentTimeMillis()
-        val events = usageStats.queryEvents(now - 10 * 60_000L, now) ?: return false
+        val events = usageStats.queryEvents(now - 60 * 60_000L, now) ?: return false
 
         var lastResumeTime = 0L
         var lastPauseTime = 0L
@@ -206,6 +215,7 @@ class ForegroundWatcher(
         registerScreenReceiver()
         watcherJob = scope.launch(Dispatchers.IO) {
             try {
+                expireStaleCaptures(resolveDao())
                 while (isActive) {
                     val waitingList = resolveDao().getWaitingCaptures()
                     if (waitingList.isEmpty()) {
@@ -327,6 +337,14 @@ class ForegroundWatcher(
             Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: triggerPrompt failed")
             return false
         }
+    }
+
+    private suspend fun expireStaleCaptures(pDao: PendingCaptureDao) {
+        val tDao = directTransactionDao ?: transactionDaoProvider?.invoke()
+        NotificationProcessor.expireStaleCaptures(
+            pendingCaptureDao = pDao,
+            transactionDao = tDao
+        )
     }
 
     private suspend fun postHeadsUpFallback(capture: PendingCaptureEntity) {

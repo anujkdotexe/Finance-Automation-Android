@@ -31,7 +31,8 @@ class QuickLogViewModelFactory(
     private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -48,7 +49,8 @@ class QuickLogViewModelFactory(
             predictCategoryUseCase = predictCategoryUseCase,
             calculateSplitUseCase = calculateSplitUseCase,
             logExpenseUseCase = logExpenseUseCase,
-            ioDispatcher = ioDispatcher
+            ioDispatcher = ioDispatcher,
+            subscriptionRepository = subscriptionRepository
         ) as T
     }
 }

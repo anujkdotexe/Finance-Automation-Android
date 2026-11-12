@@ -122,6 +122,16 @@ class SyncConfigUseCase(
                             deleted = row.deleted
                         )
                     }
+                    ConfigConstants.TYPE_SUBSCRIPTION -> {
+                        val subscription = SubscriptionConfigCodec.decode(row.key, row.value1)
+                        if (subscription != null) {
+                            localGateway.applyRemoteSubscription(
+                                subscription = subscription,
+                                updatedAt = epochMilli,
+                                deleted = row.deleted
+                            )
+                        }
+                    }
                     ConfigConstants.TYPE_PREF -> {
                         if (!ConfigConstants.isLocalOnlyPref(row.key)) {
                             localGateway.applyRemotePreference(
@@ -214,6 +224,19 @@ class SyncConfigUseCase(
                 )
             }
 
+            dirty.subscriptions.forEach {
+                dirtyRows.add(
+                    ConfigRow(
+                        type = ConfigConstants.TYPE_SUBSCRIPTION,
+                        key = it.id,
+                        values = listOf(SubscriptionConfigCodec.encode(it)),
+                        updatedAt = now,
+                        updatedBy = deviceId,
+                        deleted = false
+                    )
+                )
+            }
+
             dirty.preferences.forEach {
                 dirtyRows.add(
                     ConfigRow(
@@ -227,6 +250,31 @@ class SyncConfigUseCase(
                 )
             }
 
+            // Tombstone any leaked entity tokens (txn_, pay_, inf_, row_) present in remote Config tab
+            val remoteResult = configRepository.readAll(spreadsheetId)
+            if (remoteResult is Result.Success) {
+                for (remoteRow in remoteResult.data) {
+                    if (remoteRow.type == ConfigConstants.TYPE_PERSON &&
+                        !remoteRow.deleted &&
+                        (remoteRow.key.startsWith("txn_", ignoreCase = true) ||
+                         remoteRow.key.startsWith("pay_", ignoreCase = true) ||
+                         remoteRow.key.startsWith("inf_", ignoreCase = true) ||
+                         remoteRow.key.startsWith("row_", ignoreCase = true))
+                    ) {
+                        dirtyRows.add(
+                            ConfigRow(
+                                type = ConfigConstants.TYPE_PERSON,
+                                key = remoteRow.key,
+                                values = listOf("", ""),
+                                updatedAt = now,
+                                updatedBy = deviceId,
+                                deleted = true
+                            )
+                        )
+                    }
+                }
+            }
+
             val upsertResult = configRepository.upsert(spreadsheetId, dirtyRows)
             if (upsertResult is Result.Error) {
                 throw upsertResult.exception
@@ -238,6 +286,7 @@ class SyncConfigUseCase(
             localGateway.markCompanionsClean(dirty.companions.map { it.id })
             localGateway.markTripTagsClean(dirty.tripTags.map { it.id })
             localGateway.markPreferencesClean(dirty.preferences.map { it.key })
+            localGateway.markSubscriptionsClean(dirty.subscriptions.map { it.id })
         }
     }
 

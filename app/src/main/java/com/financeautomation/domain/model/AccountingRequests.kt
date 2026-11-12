@@ -46,7 +46,9 @@ data class LogRepaymentRequest(
 data class CarryForwardRequest(
     val targetTab: String,
     val sourceTab: String? = null,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val accounts: List<String> = emptyList(),
+    val categories: List<String> = emptyList()
 )
 
 /**

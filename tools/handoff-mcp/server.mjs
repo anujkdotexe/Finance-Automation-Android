@@ -7,11 +7,41 @@ import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
-const SERVER_NAME = "finance-handoff";
-const SERVER_VERSION = "1.0.0";
 const MAX_TEXT_BYTES = 200_000;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+// Optional named channel for a second worker (a parallel Claude Code session).
+// Without HANDOFF_CHANNEL this server behaves exactly as version 1.0.0, so the build agent's
+// channel is unchanged. A channel always needs its own HANDOFF_DIR so it never shares files.
+const CHANNEL_PATTERN = /^[a-z0-9][a-z0-9-]{0,23}$/;
+const channel = process.env.HANDOFF_CHANNEL ? process.env.HANDOFF_CHANNEL.trim() : "";
+if (channel && !CHANNEL_PATTERN.test(channel)) {
+  process.stderr.write(`Invalid HANDOFF_CHANNEL "${channel}": use lower case letters, digits and hyphens (1 to 24 characters).\n`);
+  process.exit(1);
+}
+if (channel && !process.env.HANDOFF_DIR) {
+  process.stderr.write("HANDOFF_CHANNEL requires HANDOFF_DIR so a channel never shares the build agent's folder.\n");
+  process.exit(1);
+}
+
+const SERVER_NAME = channel ? `finance-handoff-${channel}` : "finance-handoff";
+const SERVER_VERSION = channel ? "1.1.0" : "1.0.0";
+
+async function loadChannelInstructions() {
+  for (const name of [`${channel}.md`, "worker.md"]) {
+    try {
+      return await fs.readFile(path.join(here, "channels", name), "utf8");
+    } catch (error) {
+      if (!error || error.code !== "ENOENT") throw error;
+    }
+  }
+  return "";
+}
+
+// Standing rules for the worker session, sent to its client as MCP server instructions.
+const CHANNEL_INSTRUCTIONS = channel ? await loadChannelInstructions() : "";
+
 const handoffDir = process.env.HANDOFF_DIR
   ? path.resolve(process.env.HANDOFF_DIR)
   : path.resolve(here, "..", "..", "docs", "handoff");
@@ -23,7 +53,7 @@ const FILES = {
   status: path.join(handoffDir, "STATUS.md"),
 };
 
-const TOOLS = [
+const BASE_TOOLS = [
   {
     name: "read_inbox",
     description:
@@ -82,6 +112,14 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
 ];
+
+// In a channel the descriptions address the worker session, never the Antigravity build agent.
+const TOOLS = channel
+  ? BASE_TOOLS.map((tool) => ({
+      ...tool,
+      description: `[Channel ${channel}, for the parallel Claude Code worker session only] ${tool.description.replaceAll("the build agent", "the worker session")}`,
+    }))
+  : BASE_TOOLS;
 
 function log(message) {
   process.stderr.write(`[${SERVER_NAME}] ${message}\n`);
@@ -203,6 +241,7 @@ async function handle(request) {
             protocolVersion: params && params.protocolVersion ? params.protocolVersion : "2024-11-05",
             capabilities: { tools: {} },
             serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+            ...(CHANNEL_INSTRUCTIONS ? { instructions: CHANNEL_INSTRUCTIONS } : {}),
           },
         });
         return;

@@ -1,5 +1,6 @@
 package com.financeautomation.data.remote
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -11,8 +12,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Resolves the Google Sheets workbook ID for a given fiscal year.
@@ -23,10 +27,10 @@ import java.time.ZonedDateTime
  * For an existing workbook: pulls Config tab first from the resolved workbook and only then regenerates Dashboard.
  * If restore fails with a transport error, dashboard regeneration is skipped and a recoverable error returned.
  * If Config tab is empty or missing, pushes local defaults once and then regenerates.
- * For a newly created workbook: provisions Dashboard, Template and current month tab,
+ * For a newly created workbook: provisions Dashboard and the current month tab,
  * mirrors default configuration to the Config tab, and regenerates Dashboard.
  */
-class WorkbookResolver(
+open class WorkbookResolver(
     private val googleDriveClient: GoogleDriveClient,
     private val googleSheetsClient: GoogleSheetsClient,
     private val preferencesRepository: PreferencesRepository,
@@ -42,7 +46,7 @@ class WorkbookResolver(
      * Checks if a workbook exists for [year] without creating a new workbook or folder.
      * Queries local preferences first, then checks Google Drive via findWorkbookForYear.
      */
-    suspend fun findExisting(year: Int): Result<String?> = withContext(ioDispatcher) {
+    open suspend fun findExisting(year: Int): Result<String?> = withContext(ioDispatcher) {
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
         if (!storedId.isNullOrBlank()) {
             return@withContext Result.Success(storedId)
@@ -54,22 +58,85 @@ class WorkbookResolver(
         }
     }
 
-    suspend fun resolveForYear(year: Int): Result<String> = withContext(ioDispatcher) {
+    open suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean = false): Result<String> = withContext(ioDispatcher) {
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
-        if (!storedId.isNullOrBlank()) {
+        if (!storedId.isNullOrBlank() && !forceValidateTabs) {
             return@withContext Result.Success(storedId)
         }
 
         mutex.withLock {
             val lockedStoredId = preferencesRepository.getSpreadsheetIdForYearSync(year)
-            if (!lockedStoredId.isNullOrBlank()) {
+            if (!lockedStoredId.isNullOrBlank() && !forceValidateTabs) {
                 return@withContext Result.Success(lockedStoredId)
+            }
+
+            val candidateId = if (forceValidateTabs && !lockedStoredId.isNullOrBlank()) {
+                lockedStoredId
+            } else {
+                null
+            }
+
+            if (candidateId != null) {
+                // Check if workbook contains existing data rows before repair
+                val metadataRes = googleSheetsClient.getSheetTabsDetailed(candidateId)
+                if (metadataRes is Result.Success) {
+                    val tabTitles = metadataRes.data.keys.toList()
+                    val hasDataRes = googleSheetsClient.hasDataRows(candidateId, tabTitles)
+                    if (hasDataRes is Result.Success && hasDataRes.data) {
+                        val currentDate = LocalDate.now(ZoneId.of("Asia/Kolkata"))
+                        val backupName = "Finance$year (backup before repair $currentDate)"
+                        val copyRes = googleDriveClient.copyFile(candidateId, backupName)
+                        if (copyRes is Result.Error) {
+                            return@withContext Result.Error(
+                                Exception("Pre-repair backup copy failed: ${copyRes.exception.message}", copyRes.exception)
+                            )
+                        }
+                    }
+                }
+
+                val repairRes = ensureWorkbookTabs(candidateId)
+                if (repairRes is Result.Error) {
+                    return@withContext Result.Error(repairRes.exception)
+                }
+
+                // Never unconditionally overwrite cloud config with local defaults on repair
+                if (syncConfigUseCase != null) {
+                    when (val restoreRes = syncConfigUseCase.restoreFromCloud(candidateId)) {
+                        is Result.Success -> {
+                            regenerateDashboardUseCase?.invoke()
+                            return@withContext Result.Success(candidateId)
+                        }
+                        is Result.Error -> {
+                            if (restoreRes.exception is EmptyOrMissingConfigTabException) {
+                                syncConfigUseCase.mirrorToCloud(candidateId)
+                                regenerateDashboardUseCase?.invoke()
+                                return@withContext Result.Success(candidateId)
+                            } else {
+                                return@withContext Result.Error(
+                                    Exception(
+                                        "Workbook repair succeeded, but failed to restore configuration: ${restoreRes.exception.javaClass.simpleName}",
+                                        restoreRes.exception
+                                    )
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                } else {
+                    regenerateDashboardUseCase?.invoke()
+                    return@withContext Result.Success(candidateId)
+                }
             }
 
             when (val driveSearch = googleDriveClient.findWorkbookForYear(year)) {
                 is Result.Success -> {
                     val foundId = driveSearch.data
                     if (!foundId.isNullOrBlank()) {
+                        val repairRes = ensureWorkbookTabs(foundId)
+                        if (repairRes is Result.Error) {
+                            return@withContext Result.Error(repairRes.exception)
+                        }
+
                         preferencesRepository.setSpreadsheetIdForYear(year, foundId)
                         val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                         if (year == currentYear) {
@@ -154,5 +221,95 @@ class WorkbookResolver(
 
             Result.Success(newSpreadsheetId)
         }
+    }
+
+    /**
+     * Creates a brand new workbook for [year] and switches the app to it. Never searches for an existing
+     * workbook and leaves every old workbook untouched. The stored id changes only after the new workbook
+     * is created and provisioned; on any failure the previous id stays as it was.
+     */
+    open suspend fun createFreshWorkbook(year: Int): Result<String> = withContext(ioDispatcher) {
+        mutex.withLock {
+            val folderRes = googleDriveClient.findOrCreateFolder("Personal Finance")
+            if (folderRes is Result.Error) {
+                return@withContext Result.Error(folderRes.exception)
+            }
+            val folderId = (folderRes as Result.Success).data
+
+            val stamp = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.US))
+            val workbookName = "Finance$year (new $stamp)"
+            val createRes = googleDriveClient.createSpreadsheet(folderId, workbookName, year)
+            if (createRes is Result.Error) {
+                return@withContext Result.Error(createRes.exception)
+            }
+            val newId = (createRes as Result.Success).data
+
+            val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+            val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+            val provRes = googleSheetsClient.provisionMasterWorkbook(newId, accounts, categories)
+            if (provRes is Result.Error) {
+                return@withContext Result.Error(provRes.exception)
+            }
+
+            preferencesRepository.setSpreadsheetIdForYear(year, newId)
+            preferencesRepository.setSpreadsheetId(newId)
+
+            syncConfigUseCase?.mirrorToCloud(newId)
+            regenerateDashboardUseCase?.invoke()
+
+            Result.Success(newId)
+        }
+    }
+
+    private suspend fun checkTabHasValidLayout(spreadsheetId: String, tabTitle: String): Boolean {
+        val range = "$tabTitle!A3:AE3"
+        val res = googleSheetsClient.getRangeValues(spreadsheetId, range)
+        if (res !is Result.Success) return false
+        val rowValues = res.data.firstOrNull() ?: return false
+        val firstHeader = rowValues.firstOrNull()?.toString()?.trim()
+        val lastHeader = rowValues.lastOrNull()?.toString()?.trim()
+        val expectedFirst = SheetSchemaConstants.SHEET_COLUMN_HEADERS["A"]
+        val expectedLast = SheetSchemaConstants.SHEET_COLUMN_HEADERS["AE"]
+        return firstHeader == expectedFirst &&
+                lastHeader == expectedLast &&
+                rowValues.size >= SheetSchemaConstants.TOTAL_COLUMN_COUNT
+    }
+
+    private suspend fun ensureWorkbookTabs(spreadsheetId: String): Result<Unit> {
+        val tabsResult = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
+        if (tabsResult is Result.Error) {
+            return Result.Error(tabsResult.exception)
+        }
+        val tabsMap = (tabsResult as Result.Success).data
+        val hasDashboard = tabsMap.containsKey("Dashboard")
+
+        val currentMonthTab = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
+            .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
+
+        val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+        val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+
+        if (!hasDashboard) {
+            val provRes = googleSheetsClient.provisionMasterWorkbook(
+                spreadsheetId = spreadsheetId,
+                accounts = accounts,
+                categories = categories
+            )
+            if (provRes is Result.Error) {
+                return Result.Error(provRes.exception)
+            }
+        } else if (!tabsMap.containsKey(currentMonthTab) || !checkTabHasValidLayout(spreadsheetId, currentMonthTab)) {
+            val monthRes = googleSheetsClient.provisionMonthTab(
+                spreadsheetId = spreadsheetId,
+                tabName = currentMonthTab,
+                accounts = accounts,
+                categories = categories
+            )
+            if (monthRes is Result.Error) {
+                return Result.Error(monthRes.exception)
+            }
+        }
+        return Result.Success(Unit)
     }
 }

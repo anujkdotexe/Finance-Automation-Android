@@ -36,6 +36,22 @@ A small MCP server with no dependencies. It needs Node 18 or newer. It connects 
 
 Add the same entry to a `.mcp.json` file in the repository root, or run `claude mcp add finance-handoff -- node tools/handoff-mcp/server.mjs` from the repository root.
 
+## Second channel for a parallel Claude Code worker
+
+The build agent in Antigravity keeps the default server above and is not affected by anything in this section. A second Claude Code session that works in parallel gets its own channel: a second server entry with its own folder, its own name and its own standing rules.
+
+- The channel is selected with two environment variables: `HANDOFF_CHANNEL` (a name made of lower case letters, digits and hyphens) and `HANDOFF_DIR` (a folder of its own, which must not be the default `docs/handoff`). The server refuses to start if either is invalid or missing.
+- A channel server reports itself as `finance-handoff-<name>`, prefixes its tool descriptions with the channel name and the words "parallel Claude Code worker session only", and sends the rules in `channels/worker.md` to its client as MCP server instructions. Add `channels/<name>.md` to give one channel different rules.
+- The folder holds the same files as the default channel (`TO_AGENT.md`, `FROM_AGENT.md`, `STATUS.md`, `history/`). Put it outside the git tree so it never shows up as a change in a working copy.
+- Register it only in the worker session, not in the Antigravity configuration, so the build agent never sees these tools. Example for Claude Code, run from the worker's own worktree (replace the two placeholders):
+
+```text
+claude mcp add finance-handoff-claude2 --scope local -e HANDOFF_CHANNEL=claude2 -e HANDOFF_DIR=<CHANNEL_FOLDER> -- node <PROJECT_ROOT>/tools/handoff-mcp/server.mjs
+```
+
+- The reviewer uses the same tools on the channel server (`send_to_agent`, `read_report`, `wait_for_report`) once it is registered in the reviewer's session, or edits the channel files directly.
+- Check the server with `node tools/handoff-mcp/smoke-test.mjs`. It verifies that the default channel is unchanged and that channels do not share files.
+
 ## Notes
 
 - Set the `HANDOFF_DIR` environment variable to use a different folder.

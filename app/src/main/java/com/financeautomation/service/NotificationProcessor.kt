@@ -10,11 +10,17 @@ import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.data.local.entity.TransactionEntity
+import com.financeautomation.core.model.ReviewState
+import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
+import com.financeautomation.domain.usecase.SubscriptionMatcher
 import com.financeautomation.domain.usecase.WordingClass
 import kotlinx.coroutines.CancellationException
 import java.security.MessageDigest
@@ -37,11 +43,6 @@ sealed interface NotificationProcessingOutcome {
         val enriched: Boolean = false
     ) : NotificationProcessingOutcome
 
-    data class FallbackPrompt(
-        val message: String,
-        val sourcePackage: String
-    ) : NotificationProcessingOutcome
-
     data class Dismissed(
         val captureId: String
     ) : NotificationProcessingOutcome
@@ -60,7 +61,10 @@ class NotificationProcessor(
     private val handledNotificationDao: HandledNotificationDao? = null,
     private val accountDao: AccountDao? = null,
     private val preferenceDao: PreferenceDao? = null,
+    private val transactionDao: TransactionDao? = null,
+    private val subscriptionMatcher: SubscriptionMatcher? = null,
     private val parseUseCase: ParseNotificationUseCase = ParseNotificationUseCase(),
+    private val runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null,
     private val ownPackageName: String = "com.financeautomation"
 ) {
 
@@ -111,17 +115,17 @@ class NotificationProcessor(
             // Prune rows older than 24 hours
             val cutoff = postTime - 24L * 60L * 60L * 1000L
             handledNotificationDao.pruneOlderThan(cutoff)
-
-            // Record this alert in handled_notifications
-            handledNotificationDao.insert(
-                HandledNotificationEntity(
-                    key = key,
-                    postTime = postTime,
-                    contentHash = contentHash,
-                    handledAt = System.currentTimeMillis()
-                )
-            )
         }
+
+        // 5b. Expire WAITING captures older than 24 hours quietly to Needs Review
+        expireStaleWaitingCaptures(postTime)
+
+        val handledEntity = HandledNotificationEntity(
+            key = key,
+            postTime = postTime,
+            contentHash = contentHash,
+            handledAt = System.currentTimeMillis()
+        )
 
         // 6. Inferred account resolution from configured accounts
         val configuredAccounts: List<String> = try {
@@ -132,11 +136,11 @@ class NotificationProcessor(
             emptyList()
         }
         val defaultAccount: String = try {
-            preferenceDao?.getPreference("default_account") ?: CategoryConstants.ACCOUNT_SBI
+            preferenceDao?.getPreference("default_account") ?: CategoryConstants.ACCOUNT_OTHER
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: defaultAccount preference fallback")
-            CategoryConstants.ACCOUNT_SBI
+            CategoryConstants.ACCOUNT_OTHER
         }
 
         // 7. Parse financial alert candidate via domain ParseNotificationUseCase
@@ -170,19 +174,21 @@ class NotificationProcessor(
             }
             is NotificationParseResult.FallbackPrompt -> {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_UNREADABLE)
-                // Unreadable alert: amount = null, payee = "Unknown Payee", flags = NEEDS_AMOUNT
-                handleCaptureDecision(
+                val outcome = handleCaptureDecision(
                     sourcePackage = sourcePackage,
                     amount = null,
                     payee = "Unknown Payee",
                     inferredAccount = parseResult.inferredAccount,
                     kind = parseResult.kind,
                     wording = parseResult.wording,
-                    flags = PendingCaptureEntity.FLAG_NEEDS_AMOUNT,
+                    flags = parseResult.flags,
                     postTime = postTime,
                     sbnKey = sbnKey,
-                    contentHash = contentHash
+                    contentHash = contentHash,
+                    handledEntity = handledEntity,
+                    detectedAccountHint = parseResult.detectedAccountHint
                 )
+                outcome
             }
             is NotificationParseResult.Success -> {
                 val kind = if (parseResult.isCredit) PendingCaptureEntity.KIND_CREDIT else PendingCaptureEntity.KIND_DEBIT
@@ -191,20 +197,64 @@ class NotificationProcessor(
                 } else {
                     PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_OK_DEBIT)
                 }
-                handleCaptureDecision(
+                var flags = parseResult.flags
+                var inferredAccount = parseResult.inferredAccount
+                if (!parseResult.isCredit) {
+                    val match = matchSubscription(parseResult.transaction.totalAmount, fullContent, postTime)
+                    if (match != null) {
+                        if (match.isDuplicate) {
+                            flags = appendFlag(flags, PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+                            flags = appendFlag(flags, PendingCaptureEntity.FLAG_DUPLICATE_OF_PREFIX + match.duplicateOfTransactionId)
+                        } else {
+                            flags = appendFlag(flags, PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX + match.subscription.id)
+                            inferredAccount = match.subscription.account.ifBlank { inferredAccount }
+                        }
+                    }
+                }
+                val outcome = handleCaptureDecision(
                     sourcePackage = sourcePackage,
                     amount = parseResult.transaction.totalAmount,
                     payee = parseResult.transaction.merchant,
-                    inferredAccount = parseResult.inferredAccount,
+                    inferredAccount = inferredAccount,
                     kind = kind,
                     wording = parseResult.wording,
-                    flags = "",
+                    flags = flags,
                     postTime = postTime,
                     sbnKey = sbnKey,
-                    contentHash = contentHash
+                    contentHash = contentHash,
+                    handledEntity = handledEntity,
+                    detectedAccountHint = parseResult.detectedAccountHint
                 )
+                outcome
             }
         }
+    }
+
+    private suspend fun matchSubscription(
+        amount: Double,
+        alertText: String,
+        postTime: Long
+    ) = try {
+        val epochDay = java.time.Instant.ofEpochMilli(postTime)
+            .atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay()
+        subscriptionMatcher?.match(amount, alertText, epochDay)
+    } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: subscription match")
+        null
+    }
+
+    private fun appendFlag(flags: String, flag: String): String =
+        if (flags.isBlank()) flag else "$flags,$flag"
+
+    suspend fun expireStaleWaitingCaptures(now: Long = System.currentTimeMillis()) {
+        val pDao = pendingCaptureDao ?: return
+        expireStaleCaptures(
+            pendingCaptureDao = pDao,
+            transactionDao = transactionDao,
+            now = now,
+            runInTransaction = runInTransaction
+        )
     }
 
     private suspend fun handleCaptureDecision(
@@ -217,7 +267,9 @@ class NotificationProcessor(
         flags: String,
         postTime: Long,
         sbnKey: String,
-        contentHash: String
+        contentHash: String,
+        handledEntity: HandledNotificationEntity,
+        detectedAccountHint: String? = null
     ): NotificationProcessingOutcome {
         val targetState = if (wording == WordingClass.PROCESSING) {
             PendingCaptureEntity.STATE_AWAITING_SUCCESS
@@ -235,9 +287,14 @@ class NotificationProcessor(
                     inferredAccount = inferredAccount.ifBlank { existingByKey.inferredAccount },
                     state = if (targetState == PendingCaptureEntity.STATE_WAITING) PendingCaptureEntity.STATE_WAITING else existingByKey.state,
                     contentHash = contentHash,
+                    detectedAccountHint = detectedAccountHint ?: existingByKey.detectedAccountHint,
                     updatedAt = System.currentTimeMillis()
                 )
-                pendingCaptureDao.update(updated)
+                val updateOp: suspend () -> Unit = {
+                    handledNotificationDao?.insert(handledEntity)
+                    pendingCaptureDao.update(updated)
+                }
+                if (runInTransaction != null) runInTransaction.invoke(updateOp) else updateOp()
                 return NotificationProcessingOutcome.Updated(updated)
             }
         }
@@ -259,9 +316,14 @@ class NotificationProcessor(
                     val merged = mergeTarget.copy(
                         payee = if (mergeTarget.payee == "Unknown Payee" && payee != "Unknown Payee") payee else mergeTarget.payee,
                         inferredAccount = if (mergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else mergeTarget.inferredAccount,
+                        detectedAccountHint = mergeTarget.detectedAccountHint ?: detectedAccountHint,
                         updatedAt = System.currentTimeMillis()
                     )
-                    pendingCaptureDao.update(merged)
+                    val mergeOp: suspend () -> Unit = {
+                        handledNotificationDao?.insert(handledEntity)
+                        pendingCaptureDao.update(merged)
+                    }
+                    if (runInTransaction != null) runInTransaction.invoke(mergeOp) else mergeOp()
                     PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED)
                     return NotificationProcessingOutcome.Merged(merged.id, enriched = true)
                 }
@@ -294,10 +356,16 @@ class NotificationProcessor(
             state = targetState,
             notificationKey = sbnKey.takeIf { it.isNotBlank() },
             contentHash = contentHash,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            detectedAccountHint = detectedAccountHint
         )
 
-        pendingCaptureDao?.insert(capture)
+        val insertOp: suspend () -> Unit = {
+            handledNotificationDao?.insert(handledEntity)
+            pendingCaptureDao?.insert(capture)
+        }
+        if (runInTransaction != null) runInTransaction.invoke(insertOp) else insertOp()
+
         if (targetState == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
             PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.AWAITING_SUCCESS)
         } else {
@@ -321,6 +389,81 @@ class NotificationProcessor(
                 hex.append(Integer.toHexString(b))
             }
             return hex.toString()
+        }
+
+        /**
+         * Single canonical implementation for expiring stale WAITING captures (> 24 hours).
+         * - Captures with missing or zero amount (NEEDS_AMOUNT) are marked NEEDS_REVIEW without creating a 0-rupee transaction.
+         * - CREDIT captures are marked NEEDS_REVIEW without creating a debit expense.
+         * - DEBIT captures with valid amount (> 0.0) are converted into NEEDS_REVIEW transactions with CATEGORY_OTHER.
+         */
+        suspend fun expireStaleCaptures(
+            pendingCaptureDao: PendingCaptureDao,
+            transactionDao: TransactionDao?,
+            now: Long = System.currentTimeMillis(),
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
+            runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null
+        ) {
+            val cutoff = now - 24L * 60L * 60L * 1000L
+            val expired = pendingCaptureDao.getExpiredWaitingCaptures(cutoff)
+            for (cap in expired) {
+                val hasNoAmount = cap.amount == null || cap.amount <= 0.0 ||
+                    cap.flags.split(",").map { it.trim() }.contains(PendingCaptureEntity.FLAG_NEEDS_AMOUNT)
+                if (hasNoAmount) {
+                    pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_NEEDS_REVIEW)
+                    continue
+                }
+
+                if (cap.kind.equals(PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
+                    pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_NEEDS_REVIEW)
+                    continue
+                }
+
+                if (transactionDao != null) {
+                    val capAmount = cap.amount ?: 0.0
+                    val similar = transactionDao.getRecentSimilar(
+                        minTimestamp = cap.timestamp - 120_000L,
+                        maxTimestamp = cap.timestamp + 5_000L,
+                        minAmount = capAmount - 0.01,
+                        maxAmount = capAmount + 0.01
+                    ).firstOrNull { it.id != cap.id }
+
+                    val isDup = similar != null || cap.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+                    val duplicateOfId = similar?.id
+
+                    val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+                    val txn = TransactionEntity(
+                        id = txnId,
+                        timestamp = cap.timestamp,
+                        dateSerial = DateSerialUtils.toDateSerial(cap.timestamp),
+                        timeSerial = DateSerialUtils.toTimeSerial(cap.timestamp),
+                        merchant = cap.payee.ifBlank { "Expense" },
+                        category = CategoryConstants.CATEGORY_OTHER,
+                        account = cap.inferredAccount?.takeIf { it.isNotBlank() } ?: defaultAccount,
+                        totalAmount = cap.amount,
+                        myShare = cap.amount,
+                        owedToMe = 0.0,
+                        status = "Personal",
+                        companions = "Personal",
+                        reviewState = ReviewState.NEEDS_REVIEW.name,
+                        syncState = SyncState.PENDING.name,
+                        sourcePackage = cap.sourcePackage,
+                        isPossibleDuplicate = isDup,
+                        duplicateOfId = duplicateOfId
+                    )
+                    val op: suspend () -> Unit = {
+                        transactionDao.insert(txn)
+                        pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
+                    }
+                    if (runInTransaction != null) {
+                        runInTransaction.invoke(op)
+                    } else {
+                        op()
+                    }
+                } else {
+                    pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_NEEDS_REVIEW)
+                }
+            }
         }
     }
 }

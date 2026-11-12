@@ -5,10 +5,10 @@ import com.financeautomation.core.constants.SheetSchemaConstants
 
 /**
  * Generates Google Sheets API v4 batchUpdate requests to provision the complete
- * Master Ledger workbook and monthly tabs strictly matching Finance2026_Template_v2.xlsx:
+ * Master Ledger workbook and monthly tabs strictly matching the iOS master ledger layout:
  * 1. Dashboard: Title banner, last updated formula, 6 KPI cards with living burn formulas,
  *    Monthly summary trend table, Category spend breakdown table, and Active Settlements query table.
- * 2. Month tabs (Template & Nov26): 31-column schema, frozen headers, spacer columns,
+ * 2. Month tabs (for example Nov26): 31-column schema, frozen headers, spacer columns,
  *    currency number formats ("₹"#,##0.00), date formats (dd/mm/yyyy), time formats (hh:mm am/pm),
  *    dropdown data validations (Status, Repayment Status, Accounts, Categories),
  *    and conditional formatting (strikethrough on Void, italic on Carried).
@@ -27,6 +27,43 @@ object SheetProvisioner {
             "alpha" to 1.0f
         )
     }
+
+    /** A range to clear: 0-based start row, exclusive end row, 0-based column. */
+    data class ColumnRowRange(val startRow: Int, val endRow: Int, val column: Int)
+
+    /** Dashboard C7:C23, C26:C1000, F7:F23 and F26:F1000. */
+    val DASHBOARD_DROPDOWN_RANGES = listOf(
+        ColumnRowRange(6, 23, 2),
+        ColumnRowRange(25, 1000, 2),
+        ColumnRowRange(6, 23, 5),
+        ColumnRowRange(25, 1000, 5)
+    )
+
+    /** Month tab AB4:AB1000, C4:C1000, F4:F1000 and K4:K1000. */
+    val MONTH_TAB_DROPDOWN_RANGES = listOf(
+        ColumnRowRange(3, 1000, 27),
+        ColumnRowRange(3, 1000, 2),
+        ColumnRowRange(3, 1000, 5),
+        ColumnRowRange(3, 1000, 10)
+    )
+
+    /**
+     * A setDataValidation request with no rule clears validation on its range.
+     */
+    fun clearDataValidationRequests(sheetId: Int, ranges: List<ColumnRowRange>): List<Map<String, Any?>> =
+        ranges.map { r ->
+            mapOf(
+                "setDataValidation" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "startRowIndex" to r.startRow,
+                        "endRowIndex" to r.endRow,
+                        "startColumnIndex" to r.column,
+                        "endColumnIndex" to r.column + 1
+                    )
+                )
+            )
+        }
 
     private val whiteColor = mapOf("red" to 1f, "green" to 1f, "blue" to 1f, "alpha" to 1f)
     private val grayTextColor = hexToColorMap("747474")
@@ -52,15 +89,38 @@ object SheetProvisioner {
 
     /**
      * Builds complete batchUpdate requests to format and populate the Dashboard sheet
-     * matching Finance2026_Template_v2.xlsx.
+     * matching the iOS master ledger layout.
      */
     fun buildDashboardRequests(
         dashboardSheetId: Int,
-        categories: List<String> = emptyList()
+        categories: List<String> = emptyList(),
+        currentRowCount: Int = 1000,
+        currentColumnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
+        val targetRowCount = maxOf(currentRowCount, 1000)
+        val targetColumnCount = maxOf(currentColumnCount, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
 
-        // 1. Merged Ranges in Dashboard
+        // 0. Ensure grid dimensions (at least 1000 rows x 26 columns, never shrink)
+        requests.add(
+            mapOf(
+                "updateSheetProperties" to mapOf(
+                    "properties" to mapOf(
+                        "sheetId" to dashboardSheetId,
+                        "gridProperties" to mapOf(
+                            "rowCount" to targetRowCount,
+                            "columnCount" to targetColumnCount
+                        )
+                    ),
+                    "fields" to "gridProperties(rowCount,columnCount)"
+                )
+            )
+        )
+
+        // Clear any dropdowns left by earlier versions (the iOS reference has none)
+        requests.addAll(clearDataValidationRequests(dashboardSheetId, DASHBOARD_DROPDOWN_RANGES))
+
+        // 1. Merged Ranges in Dashboard (idempotent: unmerge preceding merge)
         val mergeRanges = listOf(
             // Title banner & subtitles
             listOf(0, 1, 0, 20),   // A1:T1
@@ -92,16 +152,18 @@ object SheetProvisioner {
         )
 
         mergeRanges.forEach { r ->
+            val range = mapOf(
+                "sheetId" to dashboardSheetId,
+                "startRowIndex" to r[0],
+                "endRowIndex" to r[1],
+                "startColumnIndex" to r[2],
+                "endColumnIndex" to r[3]
+            )
+            requests.add(mapOf("unmergeCells" to mapOf("range" to range)))
             requests.add(
                 mapOf(
                     "mergeCells" to mapOf(
-                        "range" to mapOf(
-                            "sheetId" to dashboardSheetId,
-                            "startRowIndex" to r[0],
-                            "endRowIndex" to r[1],
-                            "startColumnIndex" to r[2],
-                            "endColumnIndex" to r[3]
-                        ),
+                        "range" to range,
                         "mergeType" to "MERGE_ALL"
                     )
                 )
@@ -703,7 +765,26 @@ object SheetProvisioner {
             )
         )
 
-        // 12. Dashboard Row Heights
+        // 12. Dashboard Column Widths (matching iOS master reference)
+        val dashboardColWidths = listOf(
+            0 to 72, 1 to 108, 2 to 108, 3 to 108, 4 to 98, 5 to 72, 6 to 10,
+            7 to 110, 8 to 62, 9 to 75, 10 to 89, 11 to 72, 12 to 108, 13 to 108,
+            14 to 108, 15 to 108, 16 to 108, 17 to 108, 18 to 90, 19 to 22,
+            20 to 90, 21 to 104, 22 to 152, 23 to 101, 24 to 110, 25 to 90
+        )
+        dashboardColWidths.forEach { (colIdx, px) ->
+            requests.add(
+                createUpdateDimensionPropertiesRequest(
+                    sheetId = dashboardSheetId,
+                    dimension = "COLUMNS",
+                    startIndex = colIdx,
+                    endIndex = colIdx + 1,
+                    pixelSize = px
+                )
+            )
+        }
+
+        // 13. Dashboard Row Heights (matching iOS master reference)
         val dashboardRowHeights = listOf(
             0 to 24, 1 to 14, 2 to 14, 3 to 11, 4 to 21, 5 to 17,
             23 to 18, 24 to 17, 25 to 21
@@ -719,36 +800,66 @@ object SheetProvisioner {
                 )
             )
         }
+        // Rows 6 to 22 (7 to 23 in 1-based) = 14px
+        requests.add(
+            createUpdateDimensionPropertiesRequest(
+                sheetId = dashboardSheetId,
+                dimension = "ROWS",
+                startIndex = 6,
+                endIndex = 23,
+                pixelSize = 14
+            )
+        )
+        // Rows 26 to 36 (27 to 37 in 1-based) = 15px
+        requests.add(
+            createUpdateDimensionPropertiesRequest(
+                sheetId = dashboardSheetId,
+                dimension = "ROWS",
+                startIndex = 26,
+                endIndex = 37,
+                pixelSize = 15
+            )
+        )
 
         return requests
     }
 
     /**
      * Builds the complete list of Google Sheets v4 batchUpdate requests to provision a 31-column month tab
-     * or Template tab matching Finance2026_Template_v2.xlsx.
+     * matching the iOS master ledger layout.
      */
     fun buildProvisionRequests(
         sheetId: Int,
         tabTitle: String,
         accounts: List<String> = emptyList(),
-        categories: List<String> = emptyList()
+        categories: List<String> = emptyList(),
+        currentRowCount: Int = 1000,
+        currentColumnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT,
+        existingRuleFormulas: Set<String> = emptySet()
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
+        val targetRowCount = maxOf(currentRowCount, 1000)
+        val targetColumnCount = maxOf(currentColumnCount, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
 
-        // 1. Freeze top 3 rows
+        // 1. Ensure grid dimensions (at least 1000 rows x 31 columns, never shrink) and freeze top 3 rows
         requests.add(
             mapOf(
                 "updateSheetProperties" to mapOf(
                     "properties" to mapOf(
                         "sheetId" to sheetId,
                         "gridProperties" to mapOf(
+                            "rowCount" to targetRowCount,
+                            "columnCount" to targetColumnCount,
                             "frozenRowCount" to 3
                         )
                     ),
-                    "fields" to "gridProperties.frozenRowCount"
+                    "fields" to "gridProperties(rowCount,columnCount,frozenRowCount)"
                 )
             )
         )
+
+        // Clear any dropdowns left by earlier versions (the iOS reference has none)
+        requests.addAll(clearDataValidationRequests(sheetId, MONTH_TAB_DROPDOWN_RANGES))
 
         // 2. Set Column widths for Spacers (Col L = 11, Col U = 20) to 10px
         listOf(SheetSchemaConstants.SPACER_1_COL_INDEX, SheetSchemaConstants.SPACER_2_COL_INDEX).forEach { colIndex ->
@@ -770,18 +881,20 @@ object SheetProvisioner {
             )
         }
 
-        // 3. Merges:
+        // 3. Merges (idempotent: unmerge preceding merge to allow re-running):
         // Row 1 Title Banner: A1:AB1 (cols 0 to 28, row 0 to 1)
+        val row1BannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 0,
+            "endRowIndex" to 1,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 28
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to row1BannerRange)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 0,
-                        "endRowIndex" to 1,
-                        "startColumnIndex" to 0,
-                        "endColumnIndex" to 28
-                    ),
+                    "range" to row1BannerRange,
                     "mergeType" to "MERGE_ALL"
                 )
             )
@@ -789,48 +902,54 @@ object SheetProvisioner {
 
         // Row 2 Section Group Merges:
         // Table 1 Debits: A2:K2 (cols 0 to 11, row 1 to 2)
+        val table1Range = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to SheetSchemaConstants.TABLE_1_START_COL_INDEX,
+            "endColumnIndex" to SheetSchemaConstants.TABLE_1_END_COL_INDEX + 1
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to table1Range)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 1,
-                        "endRowIndex" to 2,
-                        "startColumnIndex" to SheetSchemaConstants.TABLE_1_START_COL_INDEX,
-                        "endColumnIndex" to SheetSchemaConstants.TABLE_1_END_COL_INDEX + 1
-                    ),
+                    "range" to table1Range,
                     "mergeType" to "MERGE_ALL"
                 )
             )
         )
 
         // Table 2 Inflows: M2:T2 (cols 12 to 20, row 1 to 2)
+        val table2Range = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to SheetSchemaConstants.TABLE_2_START_COL_INDEX,
+            "endColumnIndex" to SheetSchemaConstants.TABLE_2_END_COL_INDEX + 1
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to table2Range)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 1,
-                        "endRowIndex" to 2,
-                        "startColumnIndex" to SheetSchemaConstants.TABLE_2_START_COL_INDEX,
-                        "endColumnIndex" to SheetSchemaConstants.TABLE_2_END_COL_INDEX + 1
-                    ),
+                    "range" to table2Range,
                     "mergeType" to "MERGE_ALL"
                 )
             )
         )
 
         // Table 3 Payables: V2:AB2 (cols 21 to 28, row 1 to 2)
+        val table3Range = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to SheetSchemaConstants.TABLE_3_START_COL_INDEX,
+            "endColumnIndex" to SheetSchemaConstants.TABLE_3_END_COL_INDEX + 1
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to table3Range)))
         requests.add(
             mapOf(
                 "mergeCells" to mapOf(
-                    "range" to mapOf(
-                        "sheetId" to sheetId,
-                        "startRowIndex" to 1,
-                        "endRowIndex" to 2,
-                        "startColumnIndex" to SheetSchemaConstants.TABLE_3_START_COL_INDEX,
-                        "endColumnIndex" to SheetSchemaConstants.TABLE_3_END_COL_INDEX + 1
-                    ),
+                    "range" to table3Range,
                     "mergeType" to "MERGE_ALL"
                 )
             )
@@ -951,7 +1070,7 @@ object SheetProvisioner {
         val colWidths = listOf(
             0 to 95, 1 to 80, 2 to 85, 3 to 146, 4 to 106, 5 to 116,
             6 to 106, 7 to 125, 8 to 95, 9 to 109, 10 to 85, 11 to 10,
-            12 to 95, 13 to 80, 14 to 95, 15 to 106, 16 to 125, 17 to 130,
+            12 to 95, 13 to 118, 14 to 95, 15 to 118, 16 to 125, 17 to 130,
             18 to 120, 19 to 109, 20 to 10, 21 to 101, 22 to 80, 23 to 101,
             24 to 125, 25 to 116, 26 to 101, 27 to 120, 28 to 100, 29 to 100, 30 to 100
         )
@@ -1026,7 +1145,7 @@ object SheetProvisioner {
             )
         )
 
-        // 7. Column Number Formatting on Data Rows (Rows 4 to 1000)
+        // 7. Column Number Formatting on Data Rows (Rows 4 to targetRowCount)
         // Currency Columns: Total Amount (6), My Share (8), Owed To Me (9), Inflow Amount (18), Payable Amount (25)
         listOf(6, 8, 9, 18, 25).forEach { colIdx ->
             requests.add(
@@ -1036,7 +1155,8 @@ object SheetProvisioner {
                     endCol = colIdx + 1,
                     formatType = "CURRENCY",
                     pattern = "\"₹\"#,##0",
-                    align = "RIGHT"
+                    align = "RIGHT",
+                    endRow = targetRowCount
                 )
             )
         }
@@ -1050,7 +1170,8 @@ object SheetProvisioner {
                     endCol = colIdx + 1,
                     formatType = "DATE",
                     pattern = "dd/mm/yyyy",
-                    align = "CENTER"
+                    align = "CENTER",
+                    endRow = targetRowCount
                 )
             )
         }
@@ -1064,118 +1185,82 @@ object SheetProvisioner {
                     endCol = colIdx + 1,
                     formatType = "TIME",
                     pattern = "hh:mm am/pm",
-                    align = "CENTER"
+                    align = "CENTER",
+                    endRow = targetRowCount
                 )
             )
         }
 
-        // 8. Data Validation Dropdowns (Rows 4 to 1000)
-        // Col K (10): Status (Personal, Pending, Settled, Carried Fwd, Void)
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 10,
-                endCol = 11,
-                values = listOf("Personal", "Pending", "Settled", "Carried Fwd", "Void")
-            )
-        )
-
-        // Col AB (27): Repayment Status (Pending, Partial, Repaid, Carried Fwd, Void)
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 27,
-                endCol = 28,
-                values = listOf("Pending", "Partial", "Repaid", "Carried Fwd", "Void")
-            )
-        )
-
-        // Col C (2): Accounts
-        val effectiveAccounts = if (accounts.isNotEmpty()) accounts else CategoryConstants.DEFAULT_ACCOUNTS
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 2,
-                endCol = 3,
-                values = effectiveAccounts
-            )
-        )
-
-        // Col F (5): Categories
-        val effectiveCategories = if (categories.isNotEmpty()) categories else CategoryConstants.DEFAULT_CATEGORIES
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 5,
-                endCol = 6,
-                values = effectiveCategories
-            )
-        )
-
-        // 9. Conditional Formatting Rules (Rows 4 to 1000, Cols A-K)
+        // 8. Conditional Formatting Rules (Rows 4 to targetRowCount, Cols A-K)
         // Rule 1: Void -> Strikethrough, gray text #9E9E9E
-        requests.add(
-            mapOf(
-                "addConditionalFormatRule" to mapOf(
-                    "rule" to mapOf(
-                        "ranges" to listOf(
-                            mapOf(
-                                "sheetId" to sheetId,
-                                "startRowIndex" to 3,
-                                "endRowIndex" to 1000,
-                                "startColumnIndex" to 0,
-                                "endColumnIndex" to 11
-                            )
-                        ),
-                        "booleanRule" to mapOf(
-                            "condition" to mapOf(
-                                "type" to "CUSTOM_FORMULA",
-                                "values" to listOf(mapOf("userEnteredValue" to "=\$K4=\"Void\""))
+        val voidFormula = "=\$K4=\"Void\""
+        if (!existingRuleFormulas.contains(voidFormula)) {
+            requests.add(
+                mapOf(
+                    "addConditionalFormatRule" to mapOf(
+                        "rule" to mapOf(
+                            "ranges" to listOf(
+                                mapOf(
+                                    "sheetId" to sheetId,
+                                    "startRowIndex" to 3,
+                                    "endRowIndex" to targetRowCount,
+                                    "startColumnIndex" to 0,
+                                    "endColumnIndex" to 11
+                                )
                             ),
-                            "format" to mapOf(
-                                "textFormat" to mapOf(
-                                    "strikethrough" to true,
-                                    "foregroundColor" to voidGrayColor
+                            "booleanRule" to mapOf(
+                                "condition" to mapOf(
+                                    "type" to "CUSTOM_FORMULA",
+                                    "values" to listOf(mapOf("userEnteredValue" to voidFormula))
+                                ),
+                                "format" to mapOf(
+                                    "textFormat" to mapOf(
+                                        "strikethrough" to true,
+                                        "foregroundColor" to voidGrayColor
+                                    )
                                 )
                             )
-                        )
-                    ),
-                    "index" to 0
+                        ),
+                        "index" to 0
+                    )
                 )
             )
-        )
+        }
 
         // Rule 2: Carried Fwd -> Italic, gray text #9E9E9E
-        requests.add(
-            mapOf(
-                "addConditionalFormatRule" to mapOf(
-                    "rule" to mapOf(
-                        "ranges" to listOf(
-                            mapOf(
-                                "sheetId" to sheetId,
-                                "startRowIndex" to 3,
-                                "endRowIndex" to 1000,
-                                "startColumnIndex" to 0,
-                                "endColumnIndex" to 11
-                            )
-                        ),
-                        "booleanRule" to mapOf(
-                            "condition" to mapOf(
-                                "type" to "CUSTOM_FORMULA",
-                                "values" to listOf(mapOf("userEnteredValue" to "=OR(\$K4=\"Carried Fwd\", \$K4=\"Carried\")"))
+        val carriedFormula = "=OR(\$K4=\"Carried Fwd\", \$K4=\"Carried\")"
+        if (!existingRuleFormulas.contains(carriedFormula)) {
+            requests.add(
+                mapOf(
+                    "addConditionalFormatRule" to mapOf(
+                        "rule" to mapOf(
+                            "ranges" to listOf(
+                                mapOf(
+                                    "sheetId" to sheetId,
+                                    "startRowIndex" to 3,
+                                    "endRowIndex" to targetRowCount,
+                                    "startColumnIndex" to 0,
+                                    "endColumnIndex" to 11
+                                )
                             ),
-                            "format" to mapOf(
-                                "textFormat" to mapOf(
-                                    "italic" to true,
-                                    "foregroundColor" to voidGrayColor
+                            "booleanRule" to mapOf(
+                                "condition" to mapOf(
+                                    "type" to "CUSTOM_FORMULA",
+                                    "values" to listOf(mapOf("userEnteredValue" to carriedFormula))
+                                ),
+                                "format" to mapOf(
+                                    "textFormat" to mapOf(
+                                        "italic" to true,
+                                        "foregroundColor" to voidGrayColor
+                                    )
                                 )
                             )
-                        )
-                    ),
-                    "index" to 1
+                        ),
+                        "index" to 1
+                    )
                 )
             )
-        )
+        }
 
         return requests
     }
@@ -1249,14 +1334,15 @@ object SheetProvisioner {
         endCol: Int,
         formatType: String,
         pattern: String,
-        align: String
+        align: String,
+        endRow: Int = 1000
     ): Map<String, Any?> {
         return mapOf(
             "repeatCell" to mapOf(
                 "range" to mapOf(
                     "sheetId" to sheetId,
                     "startRowIndex" to 3,
-                    "endRowIndex" to 1000,
+                    "endRowIndex" to endRow,
                     "startColumnIndex" to startCol,
                     "endColumnIndex" to endCol
                 ),
@@ -1270,33 +1356,6 @@ object SheetProvisioner {
                     )
                 ),
                 "fields" to "userEnteredFormat(horizontalAlignment,numberFormat)"
-            )
-        )
-    }
-
-    private fun createDataValidationRequest(
-        sheetId: Int,
-        startCol: Int,
-        endCol: Int,
-        values: List<String>
-    ): Map<String, Any?> {
-        return mapOf(
-            "setDataValidation" to mapOf(
-                "range" to mapOf(
-                    "sheetId" to sheetId,
-                    "startRowIndex" to 3,
-                    "endRowIndex" to 1000,
-                    "startColumnIndex" to startCol,
-                    "endColumnIndex" to endCol
-                ),
-                "rule" to mapOf(
-                    "condition" to mapOf(
-                        "type" to "ONE_OF_LIST",
-                        "values" to values.map { mapOf("userEnteredValue" to it) }
-                    ),
-                    "strict" to true,
-                    "showCustomUi" to true
-                )
             )
         )
     }

@@ -145,7 +145,7 @@ class ConfigSheetManager(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "mirrorConfig failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "mirrorConfig failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_UPDATE)
                     )
                 }
                 Result.Success(Unit)

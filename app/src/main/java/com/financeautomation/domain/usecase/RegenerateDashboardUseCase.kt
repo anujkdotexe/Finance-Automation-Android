@@ -60,22 +60,6 @@ class RegenerateDashboardUseCase(
             )
             requests.addAll(dashboardRequests)
 
-            // 2. Data validation across monthly tabs and Template tab
-            val excludedTabs = setOf("Dashboard", "CarryFwd", "Config")
-            val targetSheetIds = sheetProperties
-                .filter { (title, _) -> !excludedTabs.contains(title) }
-                .values
-                .toList()
-
-            if (targetSheetIds.isNotEmpty()) {
-                val validationRequests = DashboardFormulaBuilder.buildDataValidationRequests(
-                    sheetIds = targetSheetIds,
-                    accounts = accounts,
-                    categories = categories
-                )
-                requests.addAll(validationRequests)
-            }
-
             if (requests.isEmpty()) {
                 return@withContext Result.Success(Unit)
             }

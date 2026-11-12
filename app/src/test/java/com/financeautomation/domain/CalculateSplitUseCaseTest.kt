@@ -73,6 +73,29 @@ class CalculateSplitUseCaseTest {
     }
 
     @Test
+    fun testCustomSplitZeroShareClamps() {
+        val split = useCase.calculateCustomSplit(600.00, 0.00, listOf("Dave"))
+        assertEquals(0.00, split.myShare, 0.001)
+        assertEquals(600.00, split.owedToMe, 0.001)
+        assertEquals(TransactionStatus.PENDING, split.status)
+        assertEquals(SplitMode.CUSTOM, split.splitMode)
+    }
+
+    @Test
+    fun testSplitEquallyWithThreeCompanions() {
+        // Total 1200 across user + 3 companions = 4 heads
+        val companions = listOf("Alice", "Bob", "Charlie")
+        val split = useCase.calculateSplitEqually(1200.00, companions)
+
+        assertEquals(1200.00, split.totalAmount, 0.001)
+        assertEquals(300.00, split.myShare, 0.001)
+        assertEquals(900.00, split.owedToMe, 0.001)
+        assertEquals("Alice, Bob, Charlie", split.companionsText)
+        assertEquals(TransactionStatus.PENDING, split.status)
+        assertEquals(SplitMode.SPLIT_EQUALLY, split.splitMode)
+    }
+
+    @Test
     fun testCustomSplitNegativeShareClamps() {
         val split = useCase.calculateCustomSplit(500.00, -50.00, listOf("Dave"))
         assertEquals(0.00, split.myShare, 0.001)

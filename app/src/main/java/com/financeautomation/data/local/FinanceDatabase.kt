@@ -15,9 +15,12 @@ import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PipelineEventDao
 import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.dao.SubscriptionCycleDao
+import com.financeautomation.data.local.dao.SubscriptionDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.dao.TripTagDao
@@ -27,9 +30,12 @@ import com.financeautomation.data.local.entity.CategoryStatEntity
 import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.LineageEntity
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.PipelineEventEntity
 import com.financeautomation.data.local.entity.PreferenceEntity
+import com.financeautomation.data.local.entity.SubscriptionCycleEntity
+import com.financeautomation.data.local.entity.SubscriptionEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.local.entity.TripTagEntity
@@ -67,9 +73,12 @@ import java.io.File
         PendingCaptureEntity::class,
         HandledNotificationEntity::class,
         CategoryStatEntity::class,
-        PipelineEventEntity::class
+        PipelineEventEntity::class,
+        PayableEntity::class,
+        SubscriptionEntity::class,
+        SubscriptionCycleEntity::class
     ],
-    version = 7,
+    version = 12,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -88,6 +97,9 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun handledNotificationDao(): HandledNotificationDao
     abstract fun categoryStatDao(): CategoryStatDao
     abstract fun pipelineEventDao(): PipelineEventDao
+    abstract fun payableDao(): PayableDao
+    abstract fun subscriptionDao(): SubscriptionDao
+    abstract fun subscriptionCycleDao(): SubscriptionCycleDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -105,6 +117,11 @@ abstract class FinanceDatabase : RoomDatabase() {
         val MIGRATION_4_5 = DatabaseMigrations.MIGRATION_4_5
         val MIGRATION_5_6 = DatabaseMigrations.MIGRATION_5_6
         val MIGRATION_6_7 = DatabaseMigrations.MIGRATION_6_7
+        val MIGRATION_7_8 = DatabaseMigrations.MIGRATION_7_8
+        val MIGRATION_8_9 = DatabaseMigrations.MIGRATION_8_9
+        val MIGRATION_9_10 = DatabaseMigrations.MIGRATION_9_10
+        val MIGRATION_10_11 = DatabaseMigrations.MIGRATION_10_11
+        val MIGRATION_11_12 = DatabaseMigrations.MIGRATION_11_12
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -227,7 +244,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .openHelperFactory(openHelperFactory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
                 .addCallback(DatabasePrepopulateCallback())
                 .build()
 
@@ -248,7 +265,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 context.applicationContext,
                 FinanceDatabase::class.java
             )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
                 .allowMainThreadQueries()
                 .build()
         }
@@ -285,36 +302,20 @@ abstract class FinanceDatabase : RoomDatabase() {
             if (accountDao.count() == 0) {
                 val presetAccounts = listOf(
                     AccountEntity(
-                        id = "acc_1",
-                        name = CategoryConstants.ACCOUNT_SBI,
-                        lastFourDigits = null,
-                        isDefault = true,
-                        isArchived = false,
-                        displayOrder = 0
-                    ),
-                    AccountEntity(
-                        id = "acc_2",
-                        name = CategoryConstants.ACCOUNT_CANARA,
-                        lastFourDigits = null,
-                        isDefault = false,
-                        isArchived = false,
-                        displayOrder = 1
-                    ),
-                    AccountEntity(
-                        id = "acc_3",
+                        id = "acc_cash",
                         name = "Cash",
                         lastFourDigits = null,
                         isDefault = false,
                         isArchived = false,
-                        displayOrder = 2
+                        displayOrder = 0
                     ),
                     AccountEntity(
-                        id = "acc_4",
-                        name = "Other",
+                        id = "acc_other",
+                        name = CategoryConstants.ACCOUNT_OTHER,
                         lastFourDigits = null,
                         isDefault = false,
                         isArchived = false,
-                        displayOrder = 3
+                        displayOrder = 1
                     )
                 )
                 accountDao.insertAll(presetAccounts)
@@ -325,7 +326,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 preferenceDao.setPreference(
                     PreferenceEntity(
                         key = "key_default_account",
-                        value = CategoryConstants.ACCOUNT_SBI
+                        value = CategoryConstants.ACCOUNT_OTHER
                     )
                 )
             }

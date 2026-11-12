@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.financeautomation.domain.model.ThemeMode
 
 /**
  * Standard Material 3 theme wrapper for Finance Automation.
@@ -21,7 +22,12 @@ import androidx.core.view.WindowCompat
  */
 @Composable
 fun FinanceAutomationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    darkTheme: Boolean = when (themeMode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    },
     dynamicColor: Boolean = false,
     transparentSystemBars: Boolean = false,
     content: @Composable () -> Unit

@@ -7,6 +7,7 @@ import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -33,11 +34,12 @@ import kotlinx.coroutines.launch
  */
 data class SettingsUiState(
     val spreadsheetId: String = "",
-    val defaultAccount: String = CategoryConstants.ACCOUNT_SBI,
+    val defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
     val activeTripTag: String = "",
     val settleDelaySeconds: Int = 120,
     val googleAccountEmail: String? = null,
     val accounts: List<Account> = emptyList(),
+    val accountTransactionCounts: Map<String, Int> = emptyMap(),
     val categories: List<Category> = emptyList(),
     val companions: List<Companion> = emptyList(),
     val tripTags: List<TripTag> = emptyList(),
@@ -47,7 +49,9 @@ data class SettingsUiState(
     val isProvisioning: Boolean = false,
     val syncResult: String? = null,
     val userMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val developerMode: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM
 )
 
 /**
@@ -103,6 +107,23 @@ class SettingsViewModel(
     init {
         observePreferences()
         customizationCoordinator.observeEntities()
+        observeAccountTransactionCounts()
+    }
+
+    /**
+     * Number of non-void transactions per account in the current month (Asia/Kolkata), for the Accounts screen.
+     */
+    private fun observeAccountTransactionCounts() {
+        val repo = accountRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            val zone = java.time.ZoneId.of("Asia/Kolkata")
+            val monthStart = java.time.LocalDate.now(zone).withDayOfMonth(1)
+            val from = monthStart.atStartOfDay(zone).toInstant().toEpochMilli()
+            val to = monthStart.plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            repo.getAccountTransactionCounts(from, to).collect { counts ->
+                _uiState.update { it.copy(accountTransactionCounts = counts) }
+            }
+        }
     }
 
     private fun observePreferences() {
@@ -131,6 +152,16 @@ class SettingsViewModel(
                 _uiState.update { it.copy(settleDelaySeconds = seconds) }
             }
         }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getDeveloperMode().collect { devMode ->
+                _uiState.update { it.copy(developerMode = devMode) }
+            }
+        }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getThemeMode().collect { mode ->
+                _uiState.update { it.copy(themeMode = mode) }
+            }
+        }
     }
 
     // --- Google Identity & Automated Provisioning ---
@@ -146,6 +177,8 @@ class SettingsViewModel(
     // --- Google Sheets Connection & Sync ---
 
     fun onSpreadsheetIdChanged(newId: String) = syncCoordinator.onSpreadsheetIdChanged(newId)
+
+    fun onCreateFreshWorkbook() = syncCoordinator.onCreateFreshWorkbook()
 
     fun onSyncNow() = syncCoordinator.onSyncNow()
 
@@ -188,6 +221,40 @@ class SettingsViewModel(
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.setSettleDelaySeconds(bounded)
             _uiState.update { it.copy(settleDelaySeconds = bounded, userMessage = "Settle delay set to ${bounded}s") }
+        }
+    }
+
+    // --- Developer Mode & Theme ---
+
+    fun setDeveloperMode(enabled: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setDeveloperMode(enabled)
+            _uiState.update { it.copy(developerMode = enabled) }
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setThemeMode(mode)
+            _uiState.update { it.copy(themeMode = mode) }
+        }
+    }
+
+    private var tapCount = 0
+    private var lastTapTimestamp = 0L
+
+    fun onVersionTapped(currentTimeMillis: Long = System.currentTimeMillis()) {
+        if (currentTimeMillis - lastTapTimestamp <= 3000L) {
+            tapCount++
+        } else {
+            tapCount = 1
+        }
+        lastTapTimestamp = currentTimeMillis
+
+        if (tapCount >= 7) {
+            tapCount = 0
+            setDeveloperMode(true)
+            _uiState.update { it.copy(userMessage = "Developer mode unlocked") }
         }
     }
 

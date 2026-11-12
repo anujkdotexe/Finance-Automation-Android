@@ -27,7 +27,7 @@ import java.util.Locale
  */
 class SettingsSyncCoordinator(
     private val preferencesRepository: PreferencesRepository,
-    private val transactionRepository: TransactionRepository,
+    private val transactionRepository: TransactionRepository? = null,
     private val syncConfigUseCase: SyncConfigUseCase?,
     private val regenerateDashboardUseCase: RegenerateDashboardUseCase?,
     private val googleDriveClient: GoogleDriveClient?,
@@ -72,13 +72,14 @@ class SettingsSyncCoordinator(
     }
 
     fun autoProvisionMasterSheet() {
+        if (uiState.value.isProvisioning) return
         val resolver = workbookResolver
         if (resolver != null) {
             scope.launch(ioDispatcher) {
                 uiState.update { it.copy(isProvisioning = true, errorMessage = null) }
                 val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                 val workbookName = "Finance$currentYear"
-                when (val res = resolver.resolveForYear(currentYear)) {
+                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true)) {
                     is Result.Success -> {
                         val spreadsheetId = res.data
                         preferencesRepository.setSpreadsheetId(spreadsheetId)
@@ -196,17 +197,74 @@ class SettingsSyncCoordinator(
         }
     }
 
+    /**
+     * Saves a typed spreadsheet id only if the app can open it. The app has only the drive.file scope,
+     * so a workbook created outside the app answers 403 or 404; such ids are rejected and not stored.
+     * On success the id is stored for the current year (which also sets the legacy key), because the
+     * resolver and the main screen read the per-year key first.
+     */
     fun onSpreadsheetIdChanged(newId: String) {
         scope.launch(ioDispatcher) {
-            preferencesRepository.setSpreadsheetId(newId.trim())
-            uiState.update { it.copy(userMessage = "Spreadsheet ID saved") }
+            val trimmed = newId.trim()
+            val sheetsClient = googleSheetsClient
+            if (trimmed.isBlank() || sheetsClient == null) {
+                uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_MESSAGE) }
+                return@launch
+            }
+            when (sheetsClient.getSheetTabsDetailed(trimmed)) {
+                is Result.Success -> {
+                    val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+                    preferencesRepository.setSpreadsheetIdForYear(currentYear, trimmed)
+                    uiState.update {
+                        it.copy(spreadsheetId = trimmed, errorMessage = null, userMessage = "Spreadsheet ID saved")
+                    }
+                }
+                is Result.Error -> {
+                    uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_MESSAGE) }
+                }
+                is Result.Loading -> {}
+            }
+        }
+    }
+
+    /**
+     * Creates a new empty workbook and switches the app to it. The old workbook stays in Google Drive.
+     * The stored id is changed only on success.
+     */
+    fun onCreateFreshWorkbook() {
+        val resolver = workbookResolver ?: return
+        if (uiState.value.isProvisioning) return
+        scope.launch(ioDispatcher) {
+            uiState.update { it.copy(isProvisioning = true, errorMessage = null) }
+            val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+            when (val res = resolver.createFreshWorkbook(currentYear)) {
+                is Result.Success -> {
+                    uiState.update {
+                        it.copy(
+                            spreadsheetId = res.data,
+                            isProvisioning = false,
+                            userMessage = "Created a fresh Finance$currentYear workbook and switched to it"
+                        )
+                    }
+                }
+                is Result.Error -> {
+                    uiState.update {
+                        it.copy(
+                            isProvisioning = false,
+                            errorMessage = res.message ?: "Failed to create a fresh workbook: ${res.throwable.message}"
+                        )
+                    }
+                }
+                is Result.Loading -> {}
+            }
         }
     }
 
     fun onSyncNow() {
+        val repo = transactionRepository ?: return
         scope.launch(ioDispatcher) {
             uiState.update { it.copy(isSyncing = true, syncResult = null, errorMessage = null) }
-            when (val result = transactionRepository.syncPendingTransactions()) {
+            when (val result = repo.syncPendingTransactions()) {
                 is Result.Success -> {
                     val count = result.data
                     uiState.update {
@@ -299,7 +357,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isRegeneratingDashboard = false,
-                            userMessage = "Master Workbook (Dashboard, Template, $currentMonthTab) formatted & updated to v2 template"
+                            userMessage = "Master Workbook (Dashboard, $currentMonthTab) formatted"
                         )
                     }
                 }
@@ -318,5 +376,9 @@ class SettingsSyncCoordinator(
             }
         }
     }
-}
 
+    companion object {
+        const val SPREADSHEET_ID_REJECTED_MESSAGE: String =
+            "The app can only open workbooks it created. Use Create a fresh workbook, or ask Google Drive to open the file with this app."
+    }
+}

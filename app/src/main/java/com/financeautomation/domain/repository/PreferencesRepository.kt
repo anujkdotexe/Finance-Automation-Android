@@ -1,5 +1,6 @@
 package com.financeautomation.domain.repository
 
+import com.financeautomation.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -104,6 +105,36 @@ interface PreferencesRepository {
     suspend fun getDeviceIdSync(): String?
 
     /**
+     * Observes whether developer diagnostics mode is enabled (default false).
+     */
+    fun getDeveloperMode(): Flow<Boolean>
+
+    /**
+     * Retrieves developer diagnostics mode status synchronously.
+     */
+    suspend fun getDeveloperModeSync(): Boolean
+
+    /**
+     * Updates developer diagnostics mode status.
+     */
+    suspend fun setDeveloperMode(enabled: Boolean)
+
+    /**
+     * Observes the active UI theme mode (SYSTEM, LIGHT, DARK, default SYSTEM).
+     */
+    fun getThemeMode(): Flow<ThemeMode>
+
+    /**
+     * Retrieves the active UI theme mode synchronously.
+     */
+    suspend fun getThemeModeSync(): ThemeMode
+
+    /**
+     * Updates the active UI theme mode.
+     */
+    suspend fun setThemeMode(mode: ThemeMode)
+
+    /**
      * Retrieves an arbitrary preference value synchronously.
      */
     suspend fun getPreference(key: String): String?
@@ -117,4 +148,40 @@ interface PreferencesRepository {
      * Deletes a preference by key.
      */
     suspend fun deletePreference(key: String)
+
+    /**
+     * Observes the local time (HH:mm, Asia/Kolkata) at which subscription reminders run (default 21:00).
+     * The default implementation is built on [getPreference]; implementations backed by a database override it.
+     */
+    fun getSubscriptionReminderTime(): Flow<String> = kotlinx.coroutines.flow.flow {
+        emit(getSubscriptionReminderTimeSync())
+    }
+
+    /** Retrieves the subscription reminder time (HH:mm), falling back to the default when unset or invalid. */
+    suspend fun getSubscriptionReminderTimeSync(): String =
+        normalizeReminderTime(getPreference(KEY_SUBSCRIPTION_REMINDER_TIME))
+
+    /** Updates the subscription reminder time. Invalid values are ignored. */
+    suspend fun setSubscriptionReminderTime(time: String) {
+        val normalized = parseReminderTime(time) ?: return
+        setPreference(KEY_SUBSCRIPTION_REMINDER_TIME, normalized, isDirty = true)
+    }
+
+    companion object {
+        const val KEY_SUBSCRIPTION_REMINDER_TIME: String = "subscription_reminder_time"
+        const val DEFAULT_SUBSCRIPTION_REMINDER_TIME: String = "21:00"
+
+        /** Returns the zero padded HH:mm form of [raw], or null when it is not a valid time. */
+        fun parseReminderTime(raw: String?): String? {
+            val parts = raw?.trim()?.split(":") ?: return null
+            if (parts.size != 2) return null
+            val h = parts[0].toIntOrNull() ?: return null
+            val m = parts[1].toIntOrNull() ?: return null
+            if (h !in 0..23 || m !in 0..59) return null
+            return "%02d:%02d".format(h, m)
+        }
+
+        fun normalizeReminderTime(raw: String?): String =
+            parseReminderTime(raw) ?: DEFAULT_SUBSCRIPTION_REMINDER_TIME
+    }
 }

@@ -73,49 +73,124 @@ class GoogleSheetsClientTest {
         assertNotNull(updateCellsReq)
     }
 
-    @Test
-    fun testAppendTransactionSuccess() = runBlocking {
-        var capturedAuthHeader: String? = null
-        var capturedUrl: String? = null
+    private fun createFakeSheetServer(
+        tabName: String = "Nov26",
+        existingDebits: List<List<Any?>> = emptyList(),
+        existingInflows: List<List<Any?>> = emptyList(),
+        existingPayables: List<List<Any?>> = emptyList(),
+        onPut: ((url: String, body: String) -> Unit)? = null
+    ): GoogleSheetsClient {
+        return createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
 
-        val client = createMockClient { request ->
-            capturedAuthHeader = request.header("Authorization")
-            capturedUrl = request.url.toString()
+            if (method == "GET" && url.contains("fields=sheets")) {
+                val body = """
+                    {
+                        "sheets": [
+                            {
+                                "properties": {
+                                    "sheetId": 0,
+                                    "title": "$tabName",
+                                    "gridProperties": {
+                                        "rowCount": 1000
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                """.trimIndent()
+                return@createMockClient Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(body.toResponseBody(jsonMediaType))
+                    .build()
+            }
 
-            val responseBody = """
-                {
-                    "spreadsheetId": "test_sheet_id",
-                    "tableRange": "Nov26!A3:K17",
-                    "updates": {
+            if (method == "GET" && url.contains("/values/")) {
+                val decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
+                val values = when {
+                    decodedUrl.contains("A4:A") -> existingDebits.map { listOf(it.getOrNull(0) ?: "") }
+                    decodedUrl.contains("AC4:AC") -> existingDebits.map { listOf(it.getOrNull(10) ?: "") }
+                    decodedUrl.contains("M4:M") -> existingInflows.map { listOf(it.getOrNull(0) ?: "") }
+                    decodedUrl.contains("AD4:AD") -> existingInflows.map { listOf(it.getOrNull(7) ?: "") }
+                    decodedUrl.contains("V4:V") -> existingPayables.map { listOf(it.getOrNull(0) ?: "") }
+                    decodedUrl.contains("AE4:AE") -> existingPayables.map { listOf(it.getOrNull(6) ?: "") }
+                    else -> emptyList<List<Any?>>()
+                }
+
+                val jsonValues = values.joinToString(",") { row ->
+                    "[" + row.joinToString(",") { "\"$it\"" } + "]"
+                }
+                val body = """{"range": "$tabName", "majorDimension": "ROWS", "values": [$jsonValues]}"""
+                return@createMockClient Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(body.toResponseBody(jsonMediaType))
+                    .build()
+            }
+
+            if (method == "PUT" && url.contains("/values/")) {
+                val decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
+                val requestBodyStr = request.body?.let { rb ->
+                    val buffer = okio.Buffer()
+                    rb.writeTo(buffer)
+                    buffer.readUtf8()
+                }.orEmpty()
+                onPut?.invoke(decodedUrl, requestBodyStr)
+
+                val rangeMatch = Regex("values/'?$tabName'?!([^\\?]+)").find(decodedUrl)?.groupValues?.get(1) ?: "A4:K4"
+                val body = """
+                    {
                         "spreadsheetId": "test_sheet_id",
-                        "updatedRange": "Nov26!A18:K18",
+                        "updatedRange": "$tabName!$rangeMatch",
                         "updatedRows": 1,
                         "updatedColumns": 11,
                         "updatedCells": 11
                     }
-                }
-            """.trimIndent()
+                """.trimIndent()
+                return@createMockClient Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(body.toResponseBody(jsonMediaType))
+                    .build()
+            }
 
             Response.Builder()
                 .request(request)
                 .protocol(Protocol.HTTP_1_1)
                 .code(200)
                 .message("OK")
-                .body(responseBody.toResponseBody(jsonMediaType))
+                .body("""{}""".toResponseBody(jsonMediaType))
                 .build()
         }
+    }
+
+    @Test
+    fun testAppendTransactionSuccess() = runBlocking {
+        var capturedPutUrl: String? = null
+        val client = createFakeSheetServer(
+            tabName = "Nov26",
+            existingDebits = emptyList(),
+            onPut = { url, _ -> capturedPutUrl = url }
+        )
 
         val row = listOf(46331, 0.5, "SBI", "Swiggy", "", "Food & Drink", 350.0, "Personal", 350.0, 0.0, "Settled")
         val result = client.appendTransaction("test_sheet_id", "Nov26", row)
 
         assertTrue(result is Result.Success)
         val rowIndex = (result as Result.Success).data
-        assertEquals(18, rowIndex)
+        assertEquals(4, rowIndex)
 
-        assertEquals("Bearer test_bearer_token_123", capturedAuthHeader)
-        val url = requireNotNull(capturedUrl)
-        assertTrue(url.contains("valueInputOption=USER_ENTERED") || url.contains("valueInputOption=RAW"))
-        assertTrue(url.contains("insertDataOption=OVERWRITE"))
+        val putUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Must use values.update to A4:K4", putUrl.contains("A4:K4"))
+        assertTrue("Must use RAW valueInputOption", putUrl.contains("valueInputOption=RAW"))
     }
 
     @Test
@@ -148,87 +223,120 @@ class GoogleSheetsClientTest {
 
     @Test
     fun testAppendTableScopedRoutingDebits() = runBlocking {
-        var capturedUrl: String? = null
-        val client = createMockClient { request ->
-            capturedUrl = request.url.toString()
-            val responseBody = """{"updates": {"updatedRange": "Nov26!A18:K18"}}"""
-            Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(responseBody.toResponseBody(jsonMediaType))
-                .build()
-        }
+        var capturedPutUrl: String? = null
+        // 4 existing debits: rows 4, 5, 6, 7 occupied
+        val existing = listOf(
+            listOf(46330, "d1"),
+            listOf(46331, "d2"),
+            listOf(46332, "d3"),
+            listOf(46333, "d4")
+        )
+        val client = createFakeSheetServer(
+            tabName = "Nov26",
+            existingDebits = existing,
+            onPut = { url, _ -> capturedPutUrl = url }
+        )
 
-        val debitRow = listOf(46331, 0.5, "SBI", "Lunch", "", "Food & Drink", 200.0, "Personal", 200.0, 0.0, "Settled")
+        val debitRow = listOf(46334, 0.5, "SBI", "Lunch", "", "Food & Drink", 200.0, "Personal", 200.0, 0.0, "Settled")
         val result = client.appendDebit("test_sheet_id", "Nov26", debitRow)
 
         assertTrue(result is Result.Success)
-        val url = requireNotNull(capturedUrl)
-        assertTrue(url.contains("A3%3AK") || url.contains("A3:K"))
+        assertEquals(8, (result as Result.Success).data)
+        val putUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Next debit must target A8:K8", putUrl.contains("A8:K8"))
     }
 
     @Test
     fun testAppendTableScopedRoutingInflows() = runBlocking {
-        var capturedUrl: String? = null
-        val client = createMockClient { request ->
-            capturedUrl = request.url.toString()
-            val responseBody = """{"updates": {"updatedRange": "Nov26!M18:T18"}}"""
-            Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(responseBody.toResponseBody(jsonMediaType))
-                .build()
-        }
+        var capturedPutUrl: String? = null
+        val client = createFakeSheetServer(
+            tabName = "Nov26",
+            existingInflows = emptyList(),
+            onPut = { url, _ -> capturedPutUrl = url }
+        )
 
         val inflowRow = listOf(46331, 0.5, "SBI", "Friend Repayment", "Alice", "Dinner share", 150.0, "txn_123")
         val result = client.appendInflow("test_sheet_id", "Nov26", inflowRow)
 
         assertTrue(result is Result.Success)
-        val url = requireNotNull(capturedUrl)
-        assertTrue(url.contains("M3%3AT") || url.contains("M3:T"))
+        assertEquals(4, (result as Result.Success).data)
+        val putUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Inflow must target M4:T4", putUrl.contains("M4:T4"))
     }
 
     @Test
     fun testAppendTableScopedRoutingPayables() = runBlocking {
-        var capturedUrl: String? = null
-        val client = createMockClient { request ->
-            capturedUrl = request.url.toString()
-            val responseBody = """{"updates": {"updatedRange": "Nov26!V18:AB18"}}"""
-            Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(responseBody.toResponseBody(jsonMediaType))
-                .build()
-        }
+        var capturedPutUrl: String? = null
+        val client = createFakeSheetServer(
+            tabName = "Nov26",
+            existingPayables = emptyList(),
+            onPut = { url, _ -> capturedPutUrl = url }
+        )
 
         val payableRow = listOf(46331, 0.5, "Bob", "Movie ticket", 250.0, "", "Pending")
         val result = client.appendPayable("test_sheet_id", "Nov26", payableRow)
 
         assertTrue(result is Result.Success)
-        val url = requireNotNull(capturedUrl)
-        assertTrue(url.contains("V3%3AAB") || url.contains("V3:AB"))
+        assertEquals(4, (result as Result.Success).data)
+        val putUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Payable must target V4:AB4", putUrl.contains("V4:AB4"))
+    }
+
+    @Test
+    fun testBug003EmptyInflowsAndPayablesDoNotFallBackToColumnA() = runBlocking {
+        var capturedPutUrl: String? = null
+        // Debits table has 4 rows (rows 4..7). Inflows (M:T) and Payables (V:AB) are EMPTY.
+        val existingDebits = listOf(
+            listOf(46330, "Breakfast"),
+            listOf(46331, "Dinner"),
+            listOf(46332, "Groceries"),
+            listOf(46333, "Lunch")
+        )
+        val client = createFakeSheetServer(
+            tabName = "Nov26",
+            existingDebits = existingDebits,
+            existingInflows = emptyList(),
+            existingPayables = emptyList(),
+            onPut = { url, _ -> capturedPutUrl = url }
+        )
+
+        // 1. Inflow append on empty Inflow table must write strictly to M4:T4, NEVER A8:H8
+        val inflowRow = listOf(46334, 0.5, "SBI", "Friend Repayment", "Charlie", "Settlement", 75.0, "txn_dinner")
+        val inflowRes = client.appendInflow("test_sheet_id", "Nov26", inflowRow)
+        assertTrue(inflowRes is Result.Success)
+        assertEquals(4, (inflowRes as Result.Success).data)
+        val inflowUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Inflow must write to M4:T4", inflowUrl.contains("M4:T4"))
+        assertTrue("Inflow must NEVER write to Column A", !inflowUrl.contains("A4:K4") && !inflowUrl.contains("A8:K8") && !inflowUrl.contains("A8:H8"))
+
+        // 2. Payable append on empty Payable table must write strictly to V4:AB4, NEVER A8:G8
+        capturedPutUrl = null
+        val payableRow = listOf(46334, 0.5, "Charlie", "Cab fare", 100.0, "", "Pending")
+        val payableRes = client.appendPayable("test_sheet_id", "Nov26", payableRow)
+        assertTrue(payableRes is Result.Success)
+        assertEquals(4, (payableRes as Result.Success).data)
+        val payableUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Payable must write to V4:AB4", payableUrl.contains("V4:AB4"))
+        assertTrue("Payable must NEVER write to Column A", !payableUrl.contains("A4:K4") && !payableUrl.contains("A8:K8") && !payableUrl.contains("A8:G8"))
+
+        // 3. Debit append must write to A8:K8 (next free debit row after 4 existing rows)
+        capturedPutUrl = null
+        val debitRow = listOf(46334, 0.5, "SBI", "Coffee", "", "Food & Drink", 50.0, "Personal", 50.0, 0.0, "Settled")
+        val debitRes = client.appendDebit("test_sheet_id", "Nov26", debitRow)
+        assertTrue(debitRes is Result.Success)
+        assertEquals(8, (debitRes as Result.Success).data)
+        val debitUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Debit must write to A8:K8", debitUrl.contains("A8:K8"))
     }
 
     @Test
     fun testNeverWritesAcrossSpacerColumnsFor31ColumnArray() = runBlocking {
-        var capturedUrl: String? = null
-        val client = createMockClient { request ->
-            capturedUrl = request.url.toString()
-            val responseBody = """{"updates": {"updatedRange": "Nov26!A18:K18"}}"""
-            Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(responseBody.toResponseBody(jsonMediaType))
-                .build()
-        }
+        var capturedPutUrl: String? = null
+        val client = createFakeSheetServer(
+            tabName = "Nov26",
+            existingDebits = emptyList(),
+            onPut = { url, _ -> capturedPutUrl = url }
+        )
 
         // 31-column row with Table 1 debit values and spacers
         val row31 = MutableList<Any?>(31) { "" }
@@ -242,9 +350,9 @@ class GoogleSheetsClientTest {
         val result = client.appendTransaction("test_sheet_id", "Nov26", row31)
 
         assertTrue(result is Result.Success)
-        val url = requireNotNull(capturedUrl)
-        assertTrue("Must target A3:K", url.contains("A3%3AK") || url.contains("A3:K"))
-        assertTrue("Must NEVER target A3:AE", !url.contains("A3:AE") && !url.contains("A3%3AAE"))
+        val putUrl = requireNotNull(capturedPutUrl)
+        assertTrue("Must target A4:K4", putUrl.contains("A4:K4"))
+        assertTrue("Must NEVER target A3:AE", !putUrl.contains("A3:AE") && !putUrl.contains("A4:AE4"))
     }
 
     @Test
@@ -464,5 +572,107 @@ class GoogleSheetsClientTest {
 
         assertTrue(result is Result.Success)
         assertEquals("POST", capturedMethod)
+    }
+
+    @Test
+    fun testProvisionMasterWorkbookLocaleBatchFailureResilience() = runBlocking {
+        var localeBatchCalled = false
+        var tabSetupBatchCalled = false
+
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                url.contains("fields=sheets.properties") && method == "GET" -> {
+                    // Initial getSheetTabsWithIds call
+                    val body = """
+                        {
+                          "sheets": [
+                            {
+                              "properties": {
+                                "sheetId": 0,
+                                "title": "Sheet1"
+                              }
+                            }
+                          ]
+                        }
+                    """.trimIndent()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                url.contains(":batchUpdate") && method == "POST" -> {
+                    val buffer = okio.Buffer()
+                    request.body?.writeTo(buffer)
+                    val bodyString = buffer.readUtf8()
+
+                    if (bodyString.contains("updateSpreadsheetProperties")) {
+                        // Cosmetic locale batch: simulate failure
+                        localeBatchCalled = true
+                        val errorJson = """
+                            {
+                              "error": {
+                                "code": 400,
+                                "message": "Invalid locale",
+                                "status": "INVALID_ARGUMENT"
+                              }
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(400)
+                            .message("Bad Request")
+                            .body(errorJson.toResponseBody(jsonMediaType))
+                            .build()
+                    } else {
+                        // Structural tab batch or formatting batch
+                        if (bodyString.contains("addSheet")) {
+                            tabSetupBatchCalled = true
+                        }
+                        val successJson = """
+                            {
+                              "replies": [
+                                {
+                                  "addSheet": {
+                                    "properties": {
+                                      "sheetId": 102,
+                                      "title": "Nov26"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(successJson.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        val result = client.provisionMasterWorkbook("test_sheet_id")
+        assertTrue("Expected provisioning to succeed even when locale batch fails", result is Result.Success)
+        assertTrue("Locale batch should have been attempted", localeBatchCalled)
+        assertTrue("Tab setup batch should have run", tabSetupBatchCalled)
     }
 }

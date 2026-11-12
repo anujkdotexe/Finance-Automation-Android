@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -98,10 +100,21 @@ fun QuickLogSheet(
         }
     }
 
+    LaunchedEffect(verticalScroll.isScrollInProgress) {
+        if (verticalScroll.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .imePadding()
             .padding(horizontal = 20.dp, vertical = 12.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { focusManager.clearFocus() }
             .verticalScroll(verticalScroll),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -168,6 +181,7 @@ fun QuickLogSheet(
                 value = state.amountText,
                 onValueChange = onAmountChanged,
                 label = { Text(stringResource(R.string.prompt_enter_amount)) },
+                enabled = !state.isFinancialLocked,
                 singleLine = true,
                 shape = FinanceTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(
@@ -215,7 +229,10 @@ fun QuickLogSheet(
                         1.dp,
                         if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                     ),
-                    modifier = Modifier.clickable { onAccountSelected(account.name) }
+                    modifier = Modifier.clickable {
+                        focusManager.clearFocus()
+                        onAccountSelected(account.name)
+                    }
                 ) {
                     Text(
                         text = account.name,
@@ -247,7 +264,10 @@ fun QuickLogSheet(
                         1.dp,
                         if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     ),
-                    modifier = Modifier.clickable { onCategorySelected(category.name) }
+                    modifier = Modifier.clickable {
+                        focusManager.clearFocus()
+                        onCategorySelected(category.name)
+                    }
                 ) {
                     Text(
                         text = category.name,
@@ -290,7 +310,10 @@ fun QuickLogSheet(
                         shadowElevation = if (isSelected) 2.dp else 0.dp,
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { onSplitModeChanged(mode) }
+                            .clickable(enabled = !state.isFinancialLocked) {
+                                focusManager.clearFocus()
+                                onSplitModeChanged(mode)
+                            }
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,

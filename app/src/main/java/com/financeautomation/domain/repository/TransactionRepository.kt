@@ -31,6 +31,20 @@ interface TransactionRepository {
     suspend fun insertTransaction(transaction: Transaction): Result<Unit>
 
     /**
+     * Persists a new transaction and runs [inSameTransaction] inside the same database
+     * transaction as the insert, so both succeed or both roll back. The default is a
+     * sequential fallback for implementations without transactional storage.
+     */
+    suspend fun insertTransactionWith(
+        transaction: Transaction,
+        inSameTransaction: suspend () -> Unit
+    ): Result<Unit> {
+        val result = insertTransaction(transaction)
+        if (result is Result.Success) inSameTransaction()
+        return result
+    }
+
+    /**
      * Updates an existing transaction in local storage.
      */
     suspend fun updateTransaction(transaction: Transaction): Result<Unit>
@@ -40,6 +54,19 @@ interface TransactionRepository {
      */
     suspend fun voidTransaction(id: String): Result<Unit>
 
+    /**
+     * Resolves a failed sync locally without writing to the sync queue.
+     * When [voidIt] is true the transaction is marked Void (amounts kept) because it never reached the sheet;
+     * otherwise it is marked synced and confirmed.
+     */
+    suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit>
+
+    /**
+     * Undoes a just-saved transaction. If it still waits in the sync queue as an insert and has no
+     * sheet row, the queue item is removed and the transaction is voided locally with no sheet write.
+     * Otherwise it falls back to [voidTransaction].
+     */
+    suspend fun undoRecentSave(id: String): Result<Unit>
 
     /**
      * Searches for transactions within [windowMillis] of the present with matching [amount].

@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * Handles execution and error classification for Choose Action flows dispatched from the overlay window.
@@ -44,8 +45,22 @@ class OverlayActionDispatcher(
                 )
                 mainScope.launch {
                     onDismiss()
-                    val message = if (res is Result.Success) "Saved, will sync" else "Failed to record income"
-                    resultPill.show(message)
+                    val formatted = String.format(Locale.US, "%.2f", amount)
+                    val message = if (res is Result.Success) {
+                        if (settler.isNotBlank()) "Recorded $formatted from $settler" else "Recorded $formatted"
+                    } else "Failed to record income"
+                    val txnId = (res as? Result.Success)?.data
+                    resultPill.show(
+                        message = message,
+                        transactionId = txnId,
+                        onUndo = if (txnId != null) {
+                            { id ->
+                                mainScope.launch(ioDispatcher) {
+                                    transactionRepository.undoRecentSave(id)
+                                }
+                            }
+                        } else null
+                    )
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -68,8 +83,22 @@ class OverlayActionDispatcher(
                 )
                 mainScope.launch {
                     onDismiss()
-                    val message = if (res is Result.Success) "Saved, will sync" else "Failed to record payable"
-                    resultPill.show(message)
+                    val formatted = String.format(Locale.US, "%.2f", amount)
+                    val message = if (res is Result.Success) {
+                        if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
+                    } else "Failed to record payable"
+                    val txnId = (res as? Result.Success)?.data
+                    resultPill.show(
+                        message = message,
+                        transactionId = txnId,
+                        onUndo = if (txnId != null) {
+                            { id ->
+                                mainScope.launch(ioDispatcher) {
+                                    transactionRepository.undoRecentSave(id)
+                                }
+                            }
+                        } else null
+                    )
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -93,8 +122,22 @@ class OverlayActionDispatcher(
                 )
                 mainScope.launch {
                     onDismiss()
-                    val message = if (res is Result.Success) "Saved, will sync" else "Failed to record repayment"
-                    resultPill.show(message)
+                    val formatted = String.format(Locale.US, "%.2f", amount)
+                    val message = if (res is Result.Success) {
+                        if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
+                    } else "Failed to record repayment"
+                    val txnId = (res as? Result.Success)?.data
+                    resultPill.show(
+                        message = message,
+                        transactionId = txnId,
+                        onUndo = if (txnId != null) {
+                            { id ->
+                                mainScope.launch(ioDispatcher) {
+                                    transactionRepository.undoRecentSave(id)
+                                }
+                            }
+                        } else null
+                    )
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e

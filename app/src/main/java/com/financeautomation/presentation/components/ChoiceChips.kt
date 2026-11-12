@@ -154,8 +154,8 @@ private fun ChoiceChipsPreviewLight() {
 private fun ChoiceChipsPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
         ChoiceChips(
-            items = listOf("SBI", "Canara", "Cash"),
-            selectedItem = "SBI",
+            items = listOf("Account 1", "Account 2", "Cash"),
+            selectedItem = "Account 1",
             onSelect = {}
         )
     }

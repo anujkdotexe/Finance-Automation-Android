@@ -153,7 +153,8 @@ class CalculateSplitUseCase {
         timeSerial: Double,
         tabName: String,
         openPayables: List<LedgerPayable> = emptyList(),
-        nettingUseCase: NettingUseCase = NettingUseCase()
+        nettingUseCase: NettingUseCase = NettingUseCase(),
+        uuid: String? = null
     ): AccountingPlan {
         require(amount > 0.0) { "Transaction amount must be strictly greater than zero" }
         require(merchant.isNotBlank()) { "Merchant description cannot be blank" }
@@ -181,7 +182,7 @@ class CalculateSplitUseCase {
 
         val status = resolveStatus(owed = owed, requestedStatus = splitResult.status, offsetTotal = offsetTotal)
         val normalizedCat = normalizeCategory(category)
-        val txnUuid = "txn_" + UUID.randomUUID().toString().replace("-", "").take(12)
+        val txnUuid = uuid ?: ("txn_" + UUID.randomUUID().toString().replace("-", "").take(12))
 
         val cells = listOf(
             dateSerial,

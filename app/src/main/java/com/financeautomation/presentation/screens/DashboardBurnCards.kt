@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.financeautomation.R
-import com.financeautomation.core.utils.formatRupees
+import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -68,8 +68,8 @@ fun HeroBurnCard(
             Text(
                 text = stringResource(
                     R.string.dashboard_burn_subtitle,
-                    formatRupees(dailyAverage),
-                    formatRupees(lastMonthBurn)
+                    formatRupeesAuto(dailyAverage),
+                    formatRupeesAuto(lastMonthBurn)
                 ),
                 style = FinanceTheme.typography.labelMedium,
                 color = FinanceTheme.colors.onSurfaceVariant
@@ -87,14 +87,17 @@ fun OwedSummaryCard(
     amount: Double,
     tone: AmountTone,
     topFriends: List<DebtSummary>,
-    onClick: () -> Unit,
+    onPersonClick: (personName: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         shape = FinanceTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
         border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
-        modifier = modifier.clickable(onClick = onClick)
+        modifier = modifier.clickable {
+            val primary = topFriends.firstOrNull()?.name ?: ""
+            onPersonClick(primary)
+        }
     ) {
         Column(
             modifier = Modifier
@@ -120,10 +123,13 @@ fun OwedSummaryCard(
             if (topFriends.isNotEmpty()) {
                 topFriends.take(3).forEach { friend ->
                     Text(
-                        text = "${friend.name} ${formatRupees(friend.amount)}",
+                        text = "${friend.name} ${formatRupeesAuto(friend.amount)}",
                         style = FinanceTheme.typography.labelMedium,
                         color = FinanceTheme.colors.onSurfaceVariant,
-                        maxLines = 1
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPersonClick(friend.name) }
                     )
                 }
             } else {
