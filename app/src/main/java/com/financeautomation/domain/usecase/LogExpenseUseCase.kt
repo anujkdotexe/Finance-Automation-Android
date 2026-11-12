@@ -6,6 +6,8 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.core.utils.TimeGuardConstants
+import com.financeautomation.core.utils.isFuture
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
 import java.util.UUID
@@ -36,6 +38,7 @@ class LogExpenseUseCase(
         duplicateOfId: String? = null
     ): Result<Transaction> {
         try {
+            if (isFuture(timestamp)) return Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             require(amount > 0.0) { "Transaction amount must be strictly greater than zero" }
             require(merchant.isNotBlank()) { "Merchant / Item description cannot be blank" }
 
