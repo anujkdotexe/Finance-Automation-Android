@@ -70,7 +70,6 @@ fun TransactionRow(
                 amount = amount,
                 tone = if (isExpense) AmountTone.MONEY_OUT else AmountTone.MONEY_IN,
                 style = FinanceTheme.typography.bodyMedium,
-                includeDecimals = true,
                 prefix = if (isExpense) "-" else "+"
             )
             StatusChip(status = status)

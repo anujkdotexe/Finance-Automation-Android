@@ -2,6 +2,7 @@ package com.financeautomation.core
 
 import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.core.utils.formatRupees
+import com.financeautomation.core.utils.formatRupeesAuto
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -28,6 +29,37 @@ class FormatRupeesTest {
     }
 
     @Test
+    fun formatRupeesAuto_reviewerTestCases() {
+        // 0.996 rounds to 100 paise -> ₹1
+        assertEquals("₹1", formatRupeesAuto(0.996))
+        assertEquals("₹1.00", formatRupees(0.996, includeDecimals = true))
+
+        // 19.999 rounds to 2000 paise -> ₹20
+        assertEquals("₹20", formatRupeesAuto(19.999))
+        assertEquals("₹20.00", formatRupees(19.999, includeDecimals = true))
+
+        // 442.5 has 50 paise -> ₹442.50
+        assertEquals("₹442.50", formatRupeesAuto(442.5))
+        assertEquals("₹442.50", formatRupees(442.5, includeDecimals = true))
+        assertEquals("₹442", formatRupees(442.5, includeDecimals = false))
+
+        // 5121.5 has 50 paise and comma grouping -> ₹5,121.50
+        assertEquals("₹5,121.50", formatRupeesAuto(5121.5))
+        assertEquals("₹5,121.50", formatRupees(5121.5, includeDecimals = true))
+        assertEquals("₹5,121", formatRupees(5121.5, includeDecimals = false))
+
+        // Negative values
+        assertEquals("-₹442.50", formatRupeesAuto(-442.5))
+        assertEquals("-₹20", formatRupeesAuto(-19.999))
+        assertEquals("-₹5,121.50", formatRupeesAuto(-5121.5))
+
+        // 1,00,000 grouping
+        assertEquals("₹1,00,000", formatRupeesAuto(100000.0))
+        assertEquals("₹1,00,000.50", formatRupeesAuto(100000.5))
+        assertEquals("₹1,00,000.00", formatRupees(100000.0, includeDecimals = true))
+    }
+
+    @Test
     fun formatAmountInput_variousAmounts() {
         assertEquals("", formatAmountInput(0.0))
         assertEquals("", formatAmountInput(-10.0))
@@ -36,4 +68,3 @@ class FormatRupeesTest {
         assertEquals("1234.56", formatAmountInput(1234.56))
     }
 }
-
