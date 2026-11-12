@@ -306,6 +306,17 @@ class PreferencesRepositoryImpl(
         }
     }
 
+    override fun getSubscriptionReminderTime(): Flow<String> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emit(getSubscriptionReminderTimeSync())
+        } else {
+            emitAll(dao.getPreferenceFlow(PreferencesRepository.KEY_SUBSCRIPTION_REMINDER_TIME).map {
+                PreferencesRepository.normalizeReminderTime(it)
+            })
+        }
+    }.flowOn(ioDispatcher)
+
     override suspend fun getPreference(key: String): String? = withContext(ioDispatcher) {
         val dao = resolveDao() ?: return@withContext memGenericPrefs[key]
         dao.getPreference(key)

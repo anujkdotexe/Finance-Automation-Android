@@ -20,7 +20,9 @@ import com.financeautomation.data.repository.ConfigRepositoryImpl
 import com.financeautomation.data.repository.PeopleListRebuilder
 import com.financeautomation.data.repository.PeopleRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
+import com.financeautomation.data.repository.SubscriptionRepositoryImpl
 import com.financeautomation.data.repository.TransactionRepositoryImpl
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.repository.TripTagRepositoryImpl
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
@@ -33,6 +35,7 @@ import com.financeautomation.domain.repository.ConfigRepository
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
+import com.financeautomation.domain.repository.SubscriptionRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
@@ -45,6 +48,9 @@ import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.domain.usecase.RegenerateDashboardUseCase
 import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
+import com.financeautomation.domain.usecase.SubscriptionActionUseCase
+import com.financeautomation.domain.usecase.SubscriptionMatcher
+import com.financeautomation.domain.usecase.SubscriptionScheduleUseCase
 import com.financeautomation.domain.usecase.SyncConfigUseCase
 import com.financeautomation.domain.usecase.SyncTransactionsUseCase
 import com.financeautomation.domain.usecase.VoidTransactionUseCase
@@ -105,6 +111,10 @@ interface AppContainer {
     val peopleListRebuilder: PeopleListRebuilder
     val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
+    val subscriptionRepository: SubscriptionRepository
+    val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
+    val subscriptionMatcher: SubscriptionMatcher
+    val subscriptionActionUseCase: SubscriptionActionUseCase
 }
 
 /**
@@ -269,6 +279,49 @@ class DefaultAppContainer(
         }
     }
 
+    override val subscriptionRepository: SubscriptionRepository by lazy {
+        SubscriptionRepositoryImpl(
+            subscriptionDaoProvider = { awaitDatabase().subscriptionDao() },
+            cycleDaoProvider = { awaitDatabase().subscriptionCycleDao() },
+            configSyncCoordinatorProvider = { configSyncCoordinator },
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val subscriptionScheduleUseCase: SubscriptionScheduleUseCase by lazy {
+        SubscriptionScheduleUseCase()
+    }
+
+    override val subscriptionMatcher: SubscriptionMatcher by lazy {
+        SubscriptionMatcher(subscriptionRepository)
+    }
+
+    override val subscriptionActionUseCase: SubscriptionActionUseCase by lazy {
+        SubscriptionActionUseCase(
+            repository = subscriptionRepository,
+            logExpenseUseCase = logExpenseUseCase,
+            createCapture = { sub, timestamp ->
+                val capture = PendingCaptureEntity(
+                    id = "cap_${java.util.UUID.randomUUID().toString().replace("-", "")}",
+                    sourcePackage = "manual",
+                    amount = null,
+                    payee = sub.name,
+                    inferredAccount = sub.account,
+                    timestamp = timestamp,
+                    kind = PendingCaptureEntity.KIND_DEBIT,
+                    flags = PendingCaptureEntity.FLAG_NEEDS_AMOUNT + "," +
+                        PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX + sub.id,
+                    state = PendingCaptureEntity.STATE_SHOWN,
+                    notificationKey = null,
+                    contentHash = null,
+                    updatedAt = System.currentTimeMillis()
+                )
+                awaitDatabase().pendingCaptureDao().insert(capture)
+                capture.id
+            }
+        )
+    }
+
     override val parseNotificationUseCase: ParseNotificationUseCase by lazy {
         ParseNotificationUseCase(ownPackageName = applicationContext.packageName)
     }
@@ -385,7 +438,8 @@ class DefaultAppContainer(
             predictCategoryUseCase = predictCategoryUseCase,
             getOpenDebtsForPersonUseCase = getOpenDebtsForPersonUseCase,
             ioDispatcher = ioDispatcher,
-            mainDispatcher = mainDispatcher
+            mainDispatcher = mainDispatcher,
+            subscriptionRepository = subscriptionRepository
         )
     }
 

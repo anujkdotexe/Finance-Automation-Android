@@ -139,6 +139,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                         accountDao = db.accountDao(),
                         preferenceDao = db.preferenceDao(),
                         transactionDao = db.transactionDao(),
+                        subscriptionMatcher = it.subscriptionMatcher,
                         parseUseCase = it.parseNotificationUseCase,
                         runInTransaction = { block -> db.withTransaction { block() } },
                         ownPackageName = packageName

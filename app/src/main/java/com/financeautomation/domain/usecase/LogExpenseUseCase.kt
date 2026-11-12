@@ -35,7 +35,8 @@ class LogExpenseUseCase(
         timestamp: Long = System.currentTimeMillis(),
         reviewState: ReviewState = ReviewState.CONFIRMED,
         isPossibleDuplicate: Boolean = false,
-        duplicateOfId: String? = null
+        duplicateOfId: String? = null,
+        afterInsert: (suspend (Transaction) -> Unit)? = null
     ): Result<Transaction> {
         try {
             if (isFuture(timestamp)) return Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
@@ -80,7 +81,12 @@ class LogExpenseUseCase(
                 duplicateOfId = duplicateOfId
             )
 
-            return when (val insertResult = transactionRepository.insertTransaction(transaction)) {
+            val insertResult = if (afterInsert != null) {
+                transactionRepository.insertTransactionWith(transaction) { afterInsert(transaction) }
+            } else {
+                transactionRepository.insertTransaction(transaction)
+            }
+            return when (insertResult) {
                 is Result.Success -> Result.Success(transaction)
                 is Result.Error -> Result.Error(insertResult.throwable, insertResult.message)
                 is Result.Loading -> Result.Loading

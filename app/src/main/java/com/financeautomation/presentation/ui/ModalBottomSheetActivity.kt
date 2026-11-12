@@ -62,7 +62,8 @@ class ModalBottomSheetActivity : ComponentActivity() {
             pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
             categoryStatDaoProvider = { app.appContainer.awaitDatabase().categoryStatDao() },
-            ioDispatcher = app.appContainer.ioDispatcher
+            ioDispatcher = app.appContainer.ioDispatcher,
+            subscriptionRepository = app.appContainer.subscriptionRepository
         )
     }
 

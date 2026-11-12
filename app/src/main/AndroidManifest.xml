@@ -124,6 +124,10 @@
         </receiver>
 
         <receiver
+            android:name=".service.SubscriptionActionReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".service.BootReceiver"
             android:exported="false">
             <intent-filter>

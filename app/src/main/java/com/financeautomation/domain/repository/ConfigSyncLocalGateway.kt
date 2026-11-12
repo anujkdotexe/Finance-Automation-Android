@@ -3,6 +3,7 @@ package com.financeautomation.domain.repository
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.TripTag
 
 /**
@@ -23,10 +24,12 @@ data class DirtyConfigSnapshot(
     val categories: List<Category>,
     val companions: List<Companion>,
     val tripTags: List<TripTag>,
-    val preferences: List<SyncedPreference>
+    val preferences: List<SyncedPreference>,
+    val subscriptions: List<Subscription> = emptyList()
 ) {
     val isEmpty: Boolean
-        get() = accounts.isEmpty() && categories.isEmpty() && companions.isEmpty() && tripTags.isEmpty() && preferences.isEmpty()
+        get() = accounts.isEmpty() && categories.isEmpty() && companions.isEmpty() && tripTags.isEmpty() &&
+            preferences.isEmpty() && subscriptions.isEmpty()
 }
 
 /**
@@ -65,6 +68,21 @@ interface ConfigSyncLocalGateway {
      * Clears dirty flags for preferences with keys in [keys].
      */
     suspend fun markPreferencesClean(keys: List<String>)
+
+    /**
+     * Clears dirty flags for subscriptions with IDs in [ids].
+     */
+    suspend fun markSubscriptionsClean(ids: List<String>)
+
+    /**
+     * Reconciles a remote subscription row against the local database.
+     * Updates or inserts only if the remote timestamp is newer. A deleted row pauses the subscription.
+     */
+    suspend fun applyRemoteSubscription(
+        subscription: Subscription,
+        updatedAt: Long,
+        deleted: Boolean
+    )
 
     /**
      * Reconciles a remote account row against local database.
