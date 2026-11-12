@@ -98,6 +98,7 @@ object AccountingPlanJsonAdapter {
             val valPrim = obj["value"]?.jsonPrimitive
             val rawVal: Any? = when {
                 valPrim == null || valPrim is JsonNull -> null
+                valPrim.isString -> valPrim.content
                 valPrim.booleanOrNull != null -> valPrim.booleanOrNull
                 valPrim.doubleOrNull != null -> valPrim.doubleOrNull
                 else -> valPrim.content
@@ -116,6 +117,7 @@ object AccountingPlanJsonAdapter {
                 val cPrim = cEl.jsonPrimitive
                 val v: Any? = when {
                     cPrim is JsonNull -> null
+                    cPrim.isString -> cPrim.content
                     cPrim.doubleOrNull != null -> {
                         val d = cPrim.doubleOrNull!!
                         if (d % 1.0 == 0.0 && d in Int.MIN_VALUE.toDouble()..Int.MAX_VALUE.toDouble()) {
