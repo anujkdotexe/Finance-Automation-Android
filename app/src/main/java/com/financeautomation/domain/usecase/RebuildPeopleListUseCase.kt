@@ -33,7 +33,7 @@ class RebuildPeopleListUseCase {
         for (debit in snapshot.debits) {
             if (debit.status.equals("Void", ignoreCase = true)) continue
             val tokens = AccountingUtils.tokens(debit.companions)
-                .filter { !it.equals("Personal", ignoreCase = true) }
+                .filter { isValidPersonToken(it) }
             val weight = if (debit.tab.equals(currentMonthTab, ignoreCase = true) ||
                 debit.tab.equals(previousMonthTab, ignoreCase = true)
             ) 1.0 else 0.5
@@ -50,6 +50,7 @@ class RebuildPeopleListUseCase {
         for (payable in snapshot.payables) {
             if (payable.status.equals("Void", ignoreCase = true)) continue
             val tokens = AccountingUtils.tokens(payable.paidBy)
+                .filter { isValidPersonToken(it) }
             val weight = if (payable.tab.equals(currentMonthTab, ignoreCase = true) ||
                 payable.tab.equals(previousMonthTab, ignoreCase = true)
             ) 1.0 else 0.5
@@ -70,6 +71,24 @@ class RebuildPeopleListUseCase {
             topChips = rankedNames.take(6),
             allNames = rankedNames
         )
+    }
+
+    companion object {
+        private val TRANSACTION_ID_REGEX = Regex("^(txn|pay|inf|row)_[a-f0-9]+$", RegexOption.IGNORE_CASE)
+        private val CELL_REF_REGEX = Regex(".*!.*", RegexOption.IGNORE_CASE)
+
+        fun isValidPersonToken(token: String): Boolean {
+            val trimmed = token.trim()
+            if (trimmed.isBlank()) return false
+            if (trimmed.equals("Personal", ignoreCase = true)) return false
+            if (TRANSACTION_ID_REGEX.matches(trimmed)) return false
+            if (CELL_REF_REGEX.matches(trimmed)) return false
+            if (trimmed.startsWith("txn_", ignoreCase = true) ||
+                trimmed.startsWith("pay_", ignoreCase = true) ||
+                trimmed.startsWith("inf_", ignoreCase = true)
+            ) return false
+            return true
+        }
     }
 }
 
