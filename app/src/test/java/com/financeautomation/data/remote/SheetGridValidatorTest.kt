@@ -123,4 +123,31 @@ class SheetGridValidatorTest {
             violations.isEmpty()
         )
     }
+
+    private fun clearedRanges(requests: List<Map<String, Any?>>, sheetId: Int): Set<String> =
+        requests.mapNotNull { it["setDataValidation"] as? Map<*, *> }
+            .filter { it["rule"] == null }
+            .map { it["range"] as Map<*, *> }
+            .filter { it["sheetId"] == sheetId }
+            .map {
+                val idx = it["startColumnIndex"] as Int
+                val col = if (idx < 26) ('A' + idx).toString() else "A" + ('A' + (idx - 26))
+                "$col${(it["startRowIndex"] as Int) + 1}:$col${it["endRowIndex"]}"
+            }
+            .toSet()
+
+    @Test
+    fun testDashboardRepairRequestsClearDropdowns() {
+        val requests = SheetProvisioner.buildDashboardRequests(dashboardSheetId = 5)
+        assertEquals(setOf("C7:C23", "C26:C1000", "F7:F23", "F26:F1000"), clearedRanges(requests, 5))
+        assertTrue(SheetGridValidator.validateRequests(requests, initialColumnCount = 26, initialRowCount = 1000).isEmpty())
+    }
+
+    @Test
+    fun testMonthTabRepairRequestsClearDropdowns() {
+        val requests = SheetProvisioner.buildProvisionRequests(sheetId = 7, tabTitle = "Nov26")
+        assertEquals(setOf("AB4:AB1000", "C4:C1000", "F4:F1000", "K4:K1000"), clearedRanges(requests, 7))
+        assertTrue(SheetGridValidator.validateRequests(requests, initialColumnCount = 26, initialRowCount = 1000).isEmpty())
+        assertTrue(SheetRepairSafetyValidator.validateRepairRequests(requests).isEmpty())
+    }
 }

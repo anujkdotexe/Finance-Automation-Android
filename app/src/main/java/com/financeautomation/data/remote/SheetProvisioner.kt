@@ -28,6 +28,43 @@ object SheetProvisioner {
         )
     }
 
+    /** A range to clear: 0-based start row, exclusive end row, 0-based column. */
+    data class ColumnRowRange(val startRow: Int, val endRow: Int, val column: Int)
+
+    /** Dashboard C7:C23, C26:C1000, F7:F23 and F26:F1000. */
+    val DASHBOARD_DROPDOWN_RANGES = listOf(
+        ColumnRowRange(6, 23, 2),
+        ColumnRowRange(25, 1000, 2),
+        ColumnRowRange(6, 23, 5),
+        ColumnRowRange(25, 1000, 5)
+    )
+
+    /** Month tab AB4:AB1000, C4:C1000, F4:F1000 and K4:K1000. */
+    val MONTH_TAB_DROPDOWN_RANGES = listOf(
+        ColumnRowRange(3, 1000, 27),
+        ColumnRowRange(3, 1000, 2),
+        ColumnRowRange(3, 1000, 5),
+        ColumnRowRange(3, 1000, 10)
+    )
+
+    /**
+     * A setDataValidation request with no rule clears validation on its range.
+     */
+    fun clearDataValidationRequests(sheetId: Int, ranges: List<ColumnRowRange>): List<Map<String, Any?>> =
+        ranges.map { r ->
+            mapOf(
+                "setDataValidation" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "startRowIndex" to r.startRow,
+                        "endRowIndex" to r.endRow,
+                        "startColumnIndex" to r.column,
+                        "endColumnIndex" to r.column + 1
+                    )
+                )
+            )
+        }
+
     private val whiteColor = mapOf("red" to 1f, "green" to 1f, "blue" to 1f, "alpha" to 1f)
     private val grayTextColor = hexToColorMap("747474")
     private val darkTextColor = hexToColorMap("202020")
@@ -79,6 +116,9 @@ object SheetProvisioner {
                 )
             )
         )
+
+        // Clear any dropdowns left by earlier versions (the iOS reference has none)
+        requests.addAll(clearDataValidationRequests(dashboardSheetId, DASHBOARD_DROPDOWN_RANGES))
 
         // 1. Merged Ranges in Dashboard (idempotent: unmerge preceding merge)
         val mergeRanges = listOf(
@@ -817,6 +857,9 @@ object SheetProvisioner {
                 )
             )
         )
+
+        // Clear any dropdowns left by earlier versions (the iOS reference has none)
+        requests.addAll(clearDataValidationRequests(sheetId, MONTH_TAB_DROPDOWN_RANGES))
 
         // 2. Set Column widths for Spacers (Col L = 11, Col U = 20) to 10px
         listOf(SheetSchemaConstants.SPACER_1_COL_INDEX, SheetSchemaConstants.SPACER_2_COL_INDEX).forEach { colIndex ->
