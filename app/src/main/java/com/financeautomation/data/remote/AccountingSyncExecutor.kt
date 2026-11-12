@@ -4,6 +4,7 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.dao.getByTabAndSheetRowIndex
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
@@ -385,20 +386,21 @@ class AccountingSyncExecutor(
         return Result.Success(Unit)
     }
 
-    private suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
+    suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
         try {
             val tDao = resolveTransactionDao() ?: return
-            val editsByRow = plan.edits.groupBy { it.row }
-            val allTargetRows = (editsByRow.keys + plan.settled.map { it.row }).distinct()
+            val editsByTabAndRow = plan.edits.groupBy { Pair(it.tab, it.row) }
+            val settledByTabAndRow = plan.settled.groupBy { Pair(it.tab, it.row) }
+            val allTargetTabRows = (editsByTabAndRow.keys + settledByTabAndRow.keys).distinct()
 
-            for (rowNum in allTargetRows) {
-                val settledRef = plan.settled.firstOrNull { it.row == rowNum }
+            for ((tab, rowNum) in allTargetTabRows) {
+                val settledRef = settledByTabAndRow[Pair(tab, rowNum)]?.firstOrNull()
                 val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
-                    ?: tDao.getBySheetRowIndex(rowNum)
+                    ?: tDao.getByTabAndSheetRowIndex(tab, rowNum)
 
                 if (existingTxn != null) {
                     var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn
-                    val rowEdits = editsByRow[rowNum].orEmpty()
+                    val rowEdits = editsByTabAndRow[Pair(tab, rowNum)].orEmpty()
                     for (edit in rowEdits) {
                         val col = edit.column.uppercase()
                         updated = when (col) {
