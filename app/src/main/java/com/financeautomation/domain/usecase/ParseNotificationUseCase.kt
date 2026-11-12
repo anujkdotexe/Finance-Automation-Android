@@ -45,7 +45,7 @@ sealed interface NotificationParseResult {
         val message: String,
         val sourcePackage: String,
         val wording: WordingClass = WordingClass.UNKNOWN,
-        val inferredAccount: String = "Other",
+        val inferredAccount: String = CategoryConstants.ACCOUNT_OTHER,
         val kind: String = "DEBIT",
         val flags: String = "NEEDS_AMOUNT",
         val timestamp: Long = System.currentTimeMillis()
@@ -97,11 +97,17 @@ class ParseNotificationUseCase(
             return WordingClass.UNKNOWN
         }
 
+        data class InferredAccountResult(
+            val account: String,
+            val isNewAccount: Boolean,
+            val detectedName: String? = null
+        )
+
         fun inferAccountWithFlag(
             text: String,
             configuredAccounts: List<String>,
-            defaultAccount: String = "Other"
-        ): Pair<String, Boolean> {
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
+        ): InferredAccountResult {
             val digitMatch = Regex("""(?i)(?:xx|x|ending\s+|a/c\s*no\.?\s*|\.\.)(\d{3,4})\b""").find(text)
             val extractedDigits = digitMatch?.groupValues?.get(1)
 
@@ -111,29 +117,30 @@ class ParseNotificationUseCase(
 
                 val wordPattern = Regex("""(?i)\b${Regex.escape(trimmedAccount)}\b""")
                 if (wordPattern.containsMatchIn(text)) {
-                    return Pair(trimmedAccount, false)
+                    return InferredAccountResult(trimmedAccount, false, null)
                 }
 
                 if (extractedDigits != null && trimmedAccount.contains(extractedDigits)) {
-                    return Pair(trimmedAccount, false)
+                    return InferredAccountResult(trimmedAccount, false, null)
                 }
             }
 
             // Check if text mentions an unconfigured/unknown account pattern (e.g. A/c XX4821 or HDFC Bank)
             val extractedUnknown = RegexPatterns.extractAccount(text)
+            val safeDefault = defaultAccount.ifBlank { CategoryConstants.ACCOUNT_OTHER }
             if (extractedUnknown != null) {
-                return Pair(extractedUnknown, true)
+                return InferredAccountResult(safeDefault, true, extractedUnknown)
             }
 
-            return Pair(defaultAccount, false)
+            return InferredAccountResult(safeDefault, false, null)
         }
 
         fun inferAccount(
             text: String,
             configuredAccounts: List<String>,
-            defaultAccount: String = "Other"
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
         ): String {
-            return inferAccountWithFlag(text, configuredAccounts, defaultAccount).first
+            return inferAccountWithFlag(text, configuredAccounts, defaultAccount).account
         }
     }
 
@@ -144,7 +151,7 @@ class ParseNotificationUseCase(
         appName: String? = null,
         timestamp: Long = System.currentTimeMillis(),
         configuredAccounts: List<String> = emptyList(),
-        defaultAccount: String = "Other"
+        defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
     ): NotificationParseResult {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
@@ -215,7 +222,10 @@ class ParseNotificationUseCase(
         val kind = if (isCredit) "CREDIT" else "DEBIT"
 
         // 8. Funding account inference
-        val (account, isNewAccount) = inferAccountWithFlag(fullContent, configuredAccounts, defaultAccount)
+        val inferred = inferAccountWithFlag(fullContent, configuredAccounts, defaultAccount)
+        val account = inferred.account
+        val isNewAccount = inferred.isNewAccount
+        val detectedAccount = inferred.detectedName ?: account
 
         // 9. Amount extraction
         val amount = RegexPatterns.extractAmount(fullContent)
@@ -232,7 +242,7 @@ class ParseNotificationUseCase(
                 message = "Payment detected, tap to enter amount",
                 sourcePackage = sourcePackage,
                 wording = wording,
-                inferredAccount = account,
+                inferredAccount = detectedAccount,
                 kind = kind,
                 flags = fallbackFlags,
                 timestamp = timestamp
@@ -277,7 +287,7 @@ class ParseNotificationUseCase(
             isCredit = isCredit,
             wording = wording,
             flags = flags,
-            inferredAccount = account
+            inferredAccount = detectedAccount
         )
     }
 }
