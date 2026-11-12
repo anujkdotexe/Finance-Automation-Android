@@ -5,6 +5,7 @@ import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.data.local.dao.PreferenceDao
 import com.financeautomation.data.local.entity.PreferenceEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
+import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,8 @@ class PreferencesRepositoryImpl(
     private val memGoogleEmail = MutableStateFlow<String?>(null)
     private val memSettleDelay = MutableStateFlow(DEFAULT_SETTLE_DELAY_SECONDS)
     private val memDeviceId = MutableStateFlow<String?>(null)
+    private val memDeveloperMode = MutableStateFlow(false)
+    private val memThemeMode = MutableStateFlow(ThemeMode.SYSTEM)
     private val memGenericPrefs = ConcurrentHashMap<String, String>()
 
     var configSyncCoordinator: ConfigSyncCoordinator?
@@ -242,6 +245,67 @@ class PreferencesRepositoryImpl(
         dao.getPreference(KEY_DEVICE_ID)
     }
 
+    override fun getDeveloperMode(): Flow<Boolean> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memDeveloperMode.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_DEVELOPER_MODE).map {
+                it?.toBooleanStrictOrNull() ?: false
+            })
+        }
+    }.flowOn(ioDispatcher)
+
+    override suspend fun getDeveloperModeSync(): Boolean = withContext(ioDispatcher) {
+        val dao = resolveDao() ?: return@withContext memDeveloperMode.value
+        dao.getPreference(KEY_DEVELOPER_MODE)?.toBooleanStrictOrNull() ?: false
+    }
+
+    override suspend fun setDeveloperMode(enabled: Boolean): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
+        if (dao != null) {
+            dao.setPreference(PreferenceEntity(KEY_DEVELOPER_MODE, enabled.toString(), updatedAt = System.currentTimeMillis(), dirty = 0))
+        } else {
+            memDeveloperMode.value = enabled
+        }
+    }
+
+    override fun getThemeMode(): Flow<ThemeMode> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memThemeMode.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_THEME_MODE).map { raw ->
+                raw?.let {
+                    try {
+                        ThemeMode.valueOf(it)
+                    } catch (_: Exception) {
+                        ThemeMode.SYSTEM
+                    }
+                } ?: ThemeMode.SYSTEM
+            })
+        }
+    }.flowOn(ioDispatcher)
+
+    override suspend fun getThemeModeSync(): ThemeMode = withContext(ioDispatcher) {
+        val dao = resolveDao() ?: return@withContext memThemeMode.value
+        val raw = dao.getPreference(KEY_THEME_MODE) ?: return@withContext ThemeMode.SYSTEM
+        try {
+            ThemeMode.valueOf(raw)
+        } catch (_: Exception) {
+            ThemeMode.SYSTEM
+        }
+    }
+
+    override suspend fun setThemeMode(mode: ThemeMode): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
+        if (dao != null) {
+            dao.setPreference(PreferenceEntity(KEY_THEME_MODE, mode.name, updatedAt = System.currentTimeMillis(), dirty = 0))
+        } else {
+            memThemeMode.value = mode
+        }
+    }
+
     override suspend fun getPreference(key: String): String? = withContext(ioDispatcher) {
         val dao = resolveDao() ?: return@withContext memGenericPrefs[key]
         dao.getPreference(key)
@@ -289,6 +353,8 @@ class PreferencesRepositoryImpl(
         const val KEY_GOOGLE_EMAIL: String = "key_google_email"
         const val KEY_SETTLE_DELAY_SECONDS: String = "key_settle_delay_seconds"
         const val KEY_DEVICE_ID: String = "device_id"
+        const val KEY_DEVELOPER_MODE: String = "key_developer_mode"
+        const val KEY_THEME_MODE: String = "key_theme_mode"
         const val DEFAULT_SETTLE_DELAY_SECONDS: Int = 120
     }
 }

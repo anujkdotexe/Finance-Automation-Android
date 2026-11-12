@@ -11,6 +11,7 @@ import com.financeautomation.data.local.entity.TripTagEntity
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
 import com.financeautomation.data.repository.TransactionRepositoryImpl
 import com.financeautomation.data.repository.TripTagRepositoryImpl
+import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
@@ -106,6 +107,12 @@ class TripModeLeakTest {
         override suspend fun setSettleDelaySeconds(seconds: Int) {}
         override suspend fun getOrCreateDeviceId(): String = "dev_123"
         override suspend fun getDeviceIdSync(): String? = "dev_123"
+        override fun getDeveloperMode(): Flow<Boolean> = flowOf(false)
+        override suspend fun getDeveloperModeSync(): Boolean = false
+        override suspend fun setDeveloperMode(enabled: Boolean) {}
+        override fun getThemeMode(): Flow<ThemeMode> = flowOf(ThemeMode.SYSTEM)
+        override suspend fun getThemeModeSync(): ThemeMode = ThemeMode.SYSTEM
+        override suspend fun setThemeMode(mode: ThemeMode) {}
         override suspend fun getPreference(key: String): String? = null
         override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {}
         override suspend fun deletePreference(key: String) {}

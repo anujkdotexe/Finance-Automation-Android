@@ -27,6 +27,7 @@ import com.financeautomation.domain.model.NewRow
 import com.financeautomation.domain.model.SettledRef
 import com.financeautomation.domain.model.TableType
 import com.financeautomation.domain.model.LogCreditRequest
+import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
@@ -222,6 +223,12 @@ class TransactionRepositorySyncTest {
         override suspend fun setSettleDelaySeconds(seconds: Int) {}
         override suspend fun getOrCreateDeviceId(): String = "device_123"
         override suspend fun getDeviceIdSync(): String? = "device_123"
+        override fun getDeveloperMode(): Flow<Boolean> = flowOf(false)
+        override suspend fun getDeveloperModeSync(): Boolean = false
+        override suspend fun setDeveloperMode(enabled: Boolean) {}
+        override fun getThemeMode(): Flow<ThemeMode> = flowOf(ThemeMode.SYSTEM)
+        override suspend fun getThemeModeSync(): ThemeMode = ThemeMode.SYSTEM
+        override suspend fun setThemeMode(mode: ThemeMode) {}
         override suspend fun getPreference(key: String): String? = null
         override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {}
         override suspend fun deletePreference(key: String) {}

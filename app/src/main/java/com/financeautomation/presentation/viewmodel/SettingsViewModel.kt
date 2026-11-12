@@ -7,6 +7,7 @@ import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -47,7 +48,9 @@ data class SettingsUiState(
     val isProvisioning: Boolean = false,
     val syncResult: String? = null,
     val userMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val developerMode: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM
 )
 
 /**
@@ -131,6 +134,16 @@ class SettingsViewModel(
                 _uiState.update { it.copy(settleDelaySeconds = seconds) }
             }
         }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getDeveloperMode().collect { devMode ->
+                _uiState.update { it.copy(developerMode = devMode) }
+            }
+        }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getThemeMode().collect { mode ->
+                _uiState.update { it.copy(themeMode = mode) }
+            }
+        }
     }
 
     // --- Google Identity & Automated Provisioning ---
@@ -188,6 +201,40 @@ class SettingsViewModel(
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.setSettleDelaySeconds(bounded)
             _uiState.update { it.copy(settleDelaySeconds = bounded, userMessage = "Settle delay set to ${bounded}s") }
+        }
+    }
+
+    // --- Developer Mode & Theme ---
+
+    fun setDeveloperMode(enabled: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setDeveloperMode(enabled)
+            _uiState.update { it.copy(developerMode = enabled) }
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setThemeMode(mode)
+            _uiState.update { it.copy(themeMode = mode) }
+        }
+    }
+
+    private var tapCount = 0
+    private var lastTapTimestamp = 0L
+
+    fun onVersionTapped(currentTimeMillis: Long = System.currentTimeMillis()) {
+        if (currentTimeMillis - lastTapTimestamp <= 3000L) {
+            tapCount++
+        } else {
+            tapCount = 1
+        }
+        lastTapTimestamp = currentTimeMillis
+
+        if (tapCount >= 7) {
+            tapCount = 0
+            setDeveloperMode(true)
+            _uiState.update { it.copy(userMessage = "Developer mode unlocked") }
         }
     }
 

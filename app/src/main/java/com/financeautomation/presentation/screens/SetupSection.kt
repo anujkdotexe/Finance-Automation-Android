@@ -17,6 +17,7 @@ fun SetupSection(
     setupHealthViewModel: SetupHealthViewModel?,
     overlayControllerProvider: (() -> OverlayController)? = null,
     onNavigateGoogleSignIn: (() -> Unit)? = null,
+    developerMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     setupHealthViewModel?.let { healthVm ->
@@ -26,7 +27,11 @@ fun SetupSection(
             onNavigateGoogleSignIn = onNavigateGoogleSignIn,
             modifier = modifier
         )
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
+        if (developerMode) {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
+        }
     }
-    AdvancedDiagnosticsCard(modifier = modifier)
+    if (developerMode) {
+        AdvancedDiagnosticsCard(modifier = modifier)
+    }
 }

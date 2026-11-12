@@ -213,6 +213,22 @@ Calm utility look, not decorative. Numbers are the hero; KPI first. Wording foll
 12.10 Transactions screen (new, missing today)
 Today "See all" under Recent opens Needs Review, which only lists items waiting for a decision, so there is no place to see every entry. Add a Transactions screen reachable from Recent "See all" and from the drawer. It lists every entry of the selected month, newest first, grouped by day, each row showing merchant, category, account, amount, my share, status chip and sync icon. Tap a row for a detail sheet with Edit and Void (Edit is limited for settled rows). Top controls: month switcher, search by merchant or friend, filters for category, account, person, trip tag and status. Empty state and no-results state are required. "Where it went" see-all only expands the category list; tapping a category opens this screen filtered to that category.
 
+12.11 Additions accepted from the design review
+- Offline state: when the phone has no connection, the Dashboard shows a banner "You are offline. Your expenses are saved on this phone and will sync when you are back online." and lists the queued items with "Waiting to sync". Needs a connectivity flow in the app.
+- Capture status line: Needs Review (including its empty state) shows one line, "Capture is on" or "Capture is off, tap to fix", from the existing listener check. No counts or percentages.
+- Empty month: one button "Go to current month".
+- No results: buttons "Search all months" and "Clear search". Search has two scopes, this month and all months.
+- Accounts list: each row also shows "N transactions this month" (real data, replaces the invented subtitles).
+- Capture and Permissions: a small line with the device ("Android 14, Samsung One UI") and a read-only "Apps we read" list (Google Pay, BHIM, Supermoney, PhonePe, Paytm, bank SMS) with the line "We never read WhatsApp, Telegram or OTP messages."
+- Dashboard: the Savings (SIPs and investments) and Income (total inflows) cards from the first brief come back under "Where it went", showing this month's totals.
+- Onboarding: one privacy line, "Your data stays on your phone and your Google Sheet."
+Rejected: retroactive expense dates (backlog for a later release), suggestion chips, capture integrity percentages, scrolling month chips.
+
+12.12 Later additions (not in the first release)
+- Voice search in Transactions: a microphone icon in the search field that uses Android's system speech prompt (no extra permission needed), filling the search text with the spoken merchant, friend or category.
+- Retroactive expense dates (add an expense for a past month), once month-tab and carry-forward handling is safe for past months.
+- Receipt scanning (OCR), sync history list.
+
 ## 13. Data the screens read and write (for realistic mock data)
 
 - Transaction: id, date and time, merchant, category, account, total amount, my share, owed to me, status (Personal, Pending, Settled, Void, Carried), companions, trip tag, source (UPI app, SMS, manual), review state, sync state (pending, synced, failed).
