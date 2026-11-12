@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -98,10 +99,20 @@ fun QuickLogSheet(
         }
     }
 
+    LaunchedEffect(verticalScroll.isScrollInProgress) {
+        if (verticalScroll.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 12.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { focusManager.clearFocus() }
             .verticalScroll(verticalScroll),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -215,7 +226,10 @@ fun QuickLogSheet(
                         1.dp,
                         if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                     ),
-                    modifier = Modifier.clickable { onAccountSelected(account.name) }
+                    modifier = Modifier.clickable {
+                        focusManager.clearFocus()
+                        onAccountSelected(account.name)
+                    }
                 ) {
                     Text(
                         text = account.name,
@@ -247,7 +261,10 @@ fun QuickLogSheet(
                         1.dp,
                         if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     ),
-                    modifier = Modifier.clickable { onCategorySelected(category.name) }
+                    modifier = Modifier.clickable {
+                        focusManager.clearFocus()
+                        onCategorySelected(category.name)
+                    }
                 ) {
                     Text(
                         text = category.name,
@@ -290,7 +307,10 @@ fun QuickLogSheet(
                         shadowElevation = if (isSelected) 2.dp else 0.dp,
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { onSplitModeChanged(mode) }
+                            .clickable {
+                                focusManager.clearFocus()
+                                onSplitModeChanged(mode)
+                            }
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
