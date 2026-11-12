@@ -159,7 +159,14 @@ open class GoogleSheetsClient(
         row: List<Any?>
     ): Result<Int> {
         val slice = if (row.size > 11) row.take(11) else row
-        return appendTableScoped(spreadsheetId, tabName, SheetSchemaConstants.TABLE_1_DEBITS_RANGE, slice)
+        return appendTableScoped(
+            spreadsheetId = spreadsheetId,
+            tabName = tabName,
+            tableRange = SheetSchemaConstants.TABLE_1_DEBITS_RANGE,
+            row = slice,
+            keyCol = "A",
+            uuidCol = SheetSchemaConstants.COL_LETTER_DEBIT_UUID
+        )
     }
 
     /**
@@ -177,7 +184,14 @@ open class GoogleSheetsClient(
         } else {
             row
         }
-        return appendTableScoped(spreadsheetId, tabName, SheetSchemaConstants.TABLE_2_INFLOWS_RANGE, slice)
+        return appendTableScoped(
+            spreadsheetId = spreadsheetId,
+            tabName = tabName,
+            tableRange = SheetSchemaConstants.TABLE_2_INFLOWS_RANGE,
+            row = slice,
+            keyCol = "M",
+            uuidCol = SheetSchemaConstants.COL_LETTER_INFLOW_UUID
+        )
     }
 
     /**
@@ -195,47 +209,131 @@ open class GoogleSheetsClient(
         } else {
             row
         }
-        return appendTableScoped(spreadsheetId, tabName, SheetSchemaConstants.TABLE_3_PAYABLES_RANGE, slice)
+        return appendTableScoped(
+            spreadsheetId = spreadsheetId,
+            tabName = tabName,
+            tableRange = SheetSchemaConstants.TABLE_3_PAYABLES_RANGE,
+            row = slice,
+            keyCol = "V",
+            uuidCol = SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
+        )
     }
 
     /**
-     * Appends values strictly within [tableRange] (e.g. A3:K, M3:T, V3:AB).
+     * Computes the next free row for a table by scanning the key column and optional UUID column
+     * from [minRow] downwards. Returns maxOf(minRow, lastOccupiedRow + 1).
+     */
+    suspend fun getNextFreeTableRow(
+        spreadsheetId: String,
+        tabName: String,
+        keyCol: String,
+        uuidCol: String? = null,
+        minRow: Int = 4
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            var lastOccupiedRow = minRow - 1
+
+            // 1. Scan key column (e.g. date)
+            val keyRange = "'$tabName'!$keyCol$minRow:$keyCol"
+            val keyRes = getRangeValuesRaw(spreadsheetId, keyRange)
+            if (keyRes is Result.Error) return@withContext Result.Error(keyRes.exception)
+            val keyRows = (keyRes as Result.Success).data
+            for (i in keyRows.indices.reversed()) {
+                val cell = keyRows[i].firstOrNull()?.toString()?.trim()
+                if (!cell.isNullOrEmpty()) {
+                    lastOccupiedRow = maxOf(lastOccupiedRow, minRow + i)
+                    break
+                }
+            }
+
+            // 2. Scan UUID column if specified
+            if (!uuidCol.isNullOrBlank()) {
+                val uuidRange = "'$tabName'!$uuidCol$minRow:$uuidCol"
+                val uuidRes = getRangeValues(spreadsheetId, uuidRange)
+                if (uuidRes is Result.Success) {
+                    val uuidRows = uuidRes.data
+                    for (i in uuidRows.indices.reversed()) {
+                        val cell = uuidRows[i].firstOrNull()?.toString()?.trim()
+                        if (!cell.isNullOrEmpty()) {
+                            lastOccupiedRow = maxOf(lastOccupiedRow, minRow + i)
+                            break
+                        }
+                    }
+                }
+            }
+
+            val nextRow = maxOf(minRow, lastOccupiedRow + 1)
+            Result.Success(nextRow)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Appends values strictly within [tableRange] (e.g. A3:K, M3:T, V3:AB) by computing the next free row
+     * and writing with values.update (PUT) to the explicit row range (e.g. A{r}:K{r}, M{r}:T{r}, V{r}:AB{r}).
      * Defaults to valueInputOption=RAW to guarantee formula injection immunity.
-     * Checks grid capacity before appending and automatically expands the grid by 100 rows
-     * if within 20 rows of full.
+     * Guarantees that empty secondary tables (Inflows/Payables) do NOT fall back into Column A.
      */
     suspend fun appendTableScoped(
         spreadsheetId: String,
         tabName: String,
         tableRange: String,
         row: List<Any?>,
-        valueInputOption: String = "RAW"
+        valueInputOption: String = "RAW",
+        keyCol: String? = null,
+        uuidCol: String? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            ensureGridCapacityBeforeAppend(spreadsheetId, tabName)
+            val parts = tableRange.split(":")
+            val rawStart = parts.getOrNull(0).orEmpty()
+            val rawEnd = parts.getOrNull(1).orEmpty()
+            val startCol = rawStart.filter { it.isLetter() }.ifEmpty { "A" }
+            val endCol = rawEnd.filter { it.isLetter() }.ifEmpty { startCol }
+            val startRowDigits = rawStart.filter { it.isDigit() }.toIntOrNull()
+            val minRow = when {
+                startRowDigits != null -> startRowDigits + 1
+                tabName.equals("Config", ignoreCase = true) -> 2
+                else -> 4
+            }
+            val resolvedKeyCol = keyCol ?: startCol
+            val resolvedUuidCol = uuidCol ?: when (startCol) {
+                "A" -> if (tabName.equals("Config", ignoreCase = true)) null else SheetSchemaConstants.COL_LETTER_DEBIT_UUID
+                "M" -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID
+                "V" -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
+                else -> null
+            }
 
-            val range = "'$tabName'!$tableRange"
-            val encodedRange = URLEncoder.encode(range, "UTF-8")
-            val url = "$baseUrl/$spreadsheetId/values/$encodedRange:append?valueInputOption=$valueInputOption&insertDataOption=OVERWRITE"
+            val nextRowRes = getNextFreeTableRow(spreadsheetId, tabName, resolvedKeyCol, resolvedUuidCol, minRow)
+            if (nextRowRes is Result.Error) return@withContext Result.Error(nextRowRes.exception)
+            val nextRow = (nextRowRes as Result.Success).data
+
+            ensureGridCapacityBeforeAppend(spreadsheetId, tabName, threshold = 20, expandBy = 100, requiredRow = nextRow)
+
+            val targetRange = "'$tabName'!$startCol$nextRow:$endCol$nextRow"
+            val encodedRange = URLEncoder.encode(targetRange, "UTF-8")
+            val url = "$baseUrl/$spreadsheetId/values/$encodedRange?valueInputOption=$valueInputOption"
 
             val rowElements = JsonArray(row.map { it.toJsonElement() })
             val valuesArray = JsonArray(listOf(rowElements))
 
             val requestBodyJson = buildJsonObject {
-                put("range", JsonPrimitive(range))
+                put("range", JsonPrimitive(targetRange))
                 put("majorDimension", JsonPrimitive("ROWS"))
                 put("values", valuesArray)
             }.toString()
 
             val request = newRequestBuilder(url)
-                .post(requestBodyJson.toRequestBody(jsonMediaType))
+                .put(requestBodyJson.toRequestBody(jsonMediaType))
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets appendTableScoped failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_APPEND)
+                        createHttpException(response.code, bodyString, "Sheets appendTableScoped (values.update) failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_UPDATE)
                     )
                 }
 
@@ -245,14 +343,18 @@ open class GoogleSheetsClient(
                     return@withContext Result.Error(MalformedResponseException("Failed to parse JSON response (code ${response.code})", e))
                 }
 
-                val updates = jsonResponse["updates"]?.jsonObject
-                val updatedRange = updates?.get("updatedRange")?.jsonPrimitive?.content.orEmpty()
+                val updatedRange = jsonResponse["updatedRange"]?.jsonPrimitive?.content
+                    ?: jsonResponse["updates"]?.jsonObject?.get("updatedRange")?.jsonPrimitive?.content
 
-                val rowIndex = parseRowIndexFromRange(updatedRange)
-                if (rowIndex != null) {
-                    Result.Success(rowIndex)
+                if (updatedRange != null) {
+                    val parsedRowIndex = parseRowIndexFromRange(updatedRange)
+                    if (parsedRowIndex != null) {
+                        Result.Success(parsedRowIndex)
+                    } else {
+                        Result.Error(MalformedResponseException("Could not parse row index from updatedRange: '$updatedRange'"))
+                    }
                 } else {
-                    Result.Error(MalformedResponseException("Could not parse row index from updatedRange"))
+                    Result.Success(nextRow)
                 }
             }
         } catch (e: CancellationException) {
@@ -270,7 +372,8 @@ open class GoogleSheetsClient(
         spreadsheetId: String,
         tabName: String,
         threshold: Int = 20,
-        expandBy: Int = 100
+        expandBy: Int = 100,
+        requiredRow: Int = -1
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2CgridProperties(rowCount)))"
@@ -301,7 +404,7 @@ open class GoogleSheetsClient(
 
                     val readResult = getRangeValuesRaw(spreadsheetId, "'$tabName'!A4:A")
                     val currentDataRows = if (readResult is Result.Success) readResult.data.size else 0
-                    val lastRow = currentDataRows + 3 // header occupies rows 1-3
+                    val lastRow = maxOf(currentDataRows + 3, requiredRow) // header occupies rows 1-3
 
                     if (lastRow >= totalRows - threshold) {
                         return@withContext appendDimension(spreadsheetId, sheetId, "ROWS", expandBy)
