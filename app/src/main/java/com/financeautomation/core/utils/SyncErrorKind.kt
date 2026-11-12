@@ -1,5 +1,6 @@
 package com.financeautomation.core.utils
 
+import com.financeautomation.data.remote.GoogleSheetsApiException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -23,30 +24,41 @@ enum class SyncErrorKind {
     }
 
     companion object {
+        private val STATUS_IN_TEXT = Regex("""(?:^\s*|\b(?:http|status|code)[\s:=]*)([1-5]\d\d)\b""")
+        private val QUOTA_OR_RATE = Regex("""\b(?:quota\w*|rate)\b""")
+        private val PERMISSION = Regex("""\b(?:insufficient|permission\w*)\b""")
+        private val AUTH_WORDS = Regex("""\b(?:unauthenticated|invalid credentials|authexpired|auth)\b""")
+        private val SERVER_WORDS = Regex("""\b(?:internal server error|backend error)\b""")
+        private val SHEET_WORDS = Regex("""\b(?:sheet changed|header mismatch|tab not found|tab missing|schema mismatch|permanent mismatch)\b""")
+        private val NETWORK_WORDS = Regex("""\b(?:unknownhost\w*|unable to resolve host|failed to connect|timeout|network unreachable)\b""")
+
         fun fromThrowable(throwable: Throwable?): SyncErrorKind {
             if (throwable == null) return UNKNOWN
 
             val msg = throwable.message?.lowercase() ?: ""
 
-            if (msg.contains("429") || msg.contains("quotaexceeded") || msg.contains("rate limit")) {
+            if (throwable is GoogleSheetsApiException) {
+                val byStatus = fromStatusCode(throwable.statusCode, msg)
+                if (byStatus != UNKNOWN) return byStatus
+            } else {
+                val code = STATUS_IN_TEXT.find(msg)?.groupValues?.get(1)?.toIntOrNull()
+                if (code != null) {
+                    val byCode = fromStatusCode(code, msg)
+                    if (byCode != UNKNOWN) return byCode
+                }
+            }
+
+            if (msg.contains("quotaexceeded") || msg.contains("rate limit")) {
                 return RATE_LIMITED
             }
-            if (msg.contains("401") || msg.contains("403") || msg.contains("unauthenticated") || msg.contains("auth") || msg.contains("invalid credentials") || msg.contains("authexpired")) {
-                return AUTH_EXPIRED
-            }
-            if (msg.contains("500") || msg.contains("502") || msg.contains("503") || msg.contains("504") || msg.contains("internal server error") || msg.contains("backend error")) {
-                return SERVER_BUSY
-            }
-            if (msg.contains("sheet changed") || msg.contains("header mismatch") || msg.contains("tab not found") || msg.contains("tab missing") || msg.contains("schema mismatch") || msg.contains("permanent mismatch")) {
-                return SHEET_CHANGED
-            }
+            if (AUTH_WORDS.containsMatchIn(msg)) return AUTH_EXPIRED
+            if (SERVER_WORDS.containsMatchIn(msg)) return SERVER_BUSY
+            if (SHEET_WORDS.containsMatchIn(msg)) return SHEET_CHANGED
 
             if (throwable is UnknownHostException || throwable is SocketTimeoutException || throwable is ConnectException || throwable is TimeoutException) {
                 return NO_NETWORK
             }
-            if (msg.contains("unknownhost") || msg.contains("unable to resolve host") || msg.contains("failed to connect") || msg.contains("timeout") || msg.contains("network unreachable")) {
-                return NO_NETWORK
-            }
+            if (NETWORK_WORDS.containsMatchIn(msg)) return NO_NETWORK
 
             val cause = throwable.cause
             if (cause != null && cause !== throwable) {
@@ -57,12 +69,23 @@ enum class SyncErrorKind {
             return UNKNOWN
         }
 
-        fun fromStatusCode(code: Int): SyncErrorKind = when (code) {
-            429 -> RATE_LIMITED
-            401, 403 -> AUTH_EXPIRED
-            in 500..599 -> SERVER_BUSY
-            else -> UNKNOWN
+        /**
+         * Maps an HTTP status code. A 403 is ambiguous (permission, quota, API not enabled),
+         * so it is classified from [message] and is UNKNOWN when the text does not say which.
+         */
+        fun fromStatusCode(code: Int, message: String = ""): SyncErrorKind {
+            val msg = message.lowercase()
+            return when (code) {
+                429 -> RATE_LIMITED
+                401 -> AUTH_EXPIRED
+                403 -> when {
+                    PERMISSION.containsMatchIn(msg) -> SHEET_CHANGED
+                    QUOTA_OR_RATE.containsMatchIn(msg) -> RATE_LIMITED
+                    else -> UNKNOWN
+                }
+                in 500..599 -> SERVER_BUSY
+                else -> UNKNOWN
+            }
         }
     }
 }
-
