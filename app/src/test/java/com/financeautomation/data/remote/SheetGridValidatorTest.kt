@@ -68,21 +68,21 @@ class SheetGridValidatorTest {
     }
 
     @Test
-    fun testProvisionRequestsPassValidationWithSelfExpandingGridProperties() {
-        val templateRequests = SheetProvisioner.buildProvisionRequests(
+    fun testMonthTabDec26ProvisionRequestsPassValidationWithSelfExpandingGridProperties() {
+        val monthRequests = SheetProvisioner.buildProvisionRequests(
             sheetId = 10,
-            tabTitle = "Template"
+            tabTitle = "Dec26"
         )
 
         // Starting from a default 26-column grid, the batch expands itself via updateSheetProperties
         val violations = SheetGridValidator.validateRequests(
-            requests = templateRequests,
+            requests = monthRequests,
             initialColumnCount = 26,
             initialRowCount = 1000
         )
 
         assertTrue(
-            "Expected 0 violations for Template provision batch with self-expanding grid, found: $violations",
+            "Expected 0 violations for month tab provision batch with self-expanding grid, found: $violations",
             violations.isEmpty()
         )
     }

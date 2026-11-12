@@ -1129,11 +1129,10 @@ open class GoogleSheetsClient(
     }
 
     /**
-     * Provisions the complete master workbook strictly matching Finance2026_Template_v2.xlsx:
+     * Provisions the complete master workbook:
      * 1. Dashboard: Title banner, last updated formula, 6 KPI cards with living burn formulas,
      *    monthly summary table, category spend table, and active settlements query table.
-     * 2. Template: 31-column master ledger schema with frozen rows, number formatting, validations, and conditional formatting.
-     * 3. Nov26: Active month tab matching Template.
+     * 2. Active month tab (e.g. Nov26): Programmatically created with 31-column master ledger schema from code.
      */
     suspend fun provisionMasterWorkbook(
         spreadsheetId: String,
@@ -1196,47 +1195,7 @@ open class GoogleSheetsClient(
                 )
             }
 
-            // 2. Ensure Template tab exists with at least 31 columns (never shrink existing rows or columns)
-            if (!tabsMap.containsKey("Template")) {
-                setupRequests.add(
-                    mapOf(
-                        "addSheet" to mapOf(
-                            "properties" to mapOf(
-                                "title" to "Template",
-                                "gridProperties" to mapOf(
-                                    "rowCount" to 1000,
-                                    "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
-                                )
-                            )
-                        )
-                    )
-                )
-            } else {
-                val templateSheetId = tabsMap["Template"]
-                val templInfo = detailedTabs["Template"]
-                val curRows = templInfo?.rowCount ?: 1000
-                val curCols = templInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
-                val targetRows = maxOf(curRows, 1000)
-                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
-                if (templateSheetId != null && (targetRows > curRows || targetCols > curCols)) {
-                    setupRequests.add(
-                        mapOf(
-                            "updateSheetProperties" to mapOf(
-                                "properties" to mapOf(
-                                    "sheetId" to templateSheetId,
-                                    "gridProperties" to mapOf(
-                                        "rowCount" to targetRows,
-                                        "columnCount" to targetCols
-                                    )
-                                ),
-                                "fields" to "gridProperties(rowCount,columnCount)"
-                            )
-                        )
-                    )
-                }
-            }
-
-            // 3. Ensure current month tab exists with at least 31 columns (never shrink existing rows or columns)
+            // 2. Ensure current month tab exists with at least 31 columns (never shrink existing rows or columns)
             val currentMonthTab = ZonedDateTime.now(DEFAULT_SHEET_ZONE_ID)
                 .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
 
@@ -1338,45 +1297,7 @@ open class GoogleSheetsClient(
                 }
             }
 
-            // 5. Format Template sheet (safe formatting: rows 1-3 only, skip existing rules, never shrink)
-            val templateId = tabsMap["Template"]
-            if (templateId != null) {
-                val templInfo = detailedTabs["Template"]
-                val curRows = templInfo?.rowCount ?: 1000
-                val curCols = templInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
-                val targetRows = maxOf(curRows, 1000)
-                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
-                val existingRules = templInfo?.existingRuleFormulas ?: emptySet()
-
-                val templateRequests = SheetProvisioner.buildProvisionRequests(
-                    sheetId = templateId,
-                    tabTitle = "Template",
-                    accounts = accounts,
-                    categories = categories,
-                    currentRowCount = targetRows,
-                    currentColumnCount = targetCols,
-                    existingRuleFormulas = existingRules
-                )
-
-                val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
-                    requests = templateRequests,
-                    isDataTab = true,
-                    currentGridRows = curRows,
-                    currentGridCols = curCols
-                )
-                if (safetyViolations.isNotEmpty()) {
-                    return@withContext Result.Error(
-                        IllegalStateException("Template repair safety violation: $safetyViolations")
-                    )
-                }
-
-                val templRes = batchUpdate(spreadsheetId, templateRequests)
-                if (templRes is Result.Error) {
-                    return@withContext Result.Error(templRes.exception)
-                }
-            }
-
-            // 6. Format current month sheet (safe formatting: rows 1-3 only, skip existing rules, never shrink)
+            // 4. Format current month sheet (safe formatting: rows 1-3 only, skip existing rules, never shrink)
             val currentMonthId = tabsMap[currentMonthTab]
             if (currentMonthId != null) {
                 val monthInfo = detailedTabs[currentMonthTab]

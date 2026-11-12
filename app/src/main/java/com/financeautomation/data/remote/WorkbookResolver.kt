@@ -243,21 +243,15 @@ open class WorkbookResolver(
             return Result.Error(tabsResult.exception)
         }
         val tabsMap = (tabsResult as Result.Success).data
-        val hasMasterTabs = tabsMap.containsKey("Dashboard") && tabsMap.containsKey("Template")
+        val hasDashboard = tabsMap.containsKey("Dashboard")
 
         val currentMonthTab = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
             .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
 
-        val hasTemplateLayout = if (hasMasterTabs) {
-            checkTabHasValidLayout(spreadsheetId, "Template")
-        } else {
-            false
-        }
-
         val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
         val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
 
-        if (!hasMasterTabs || !hasTemplateLayout) {
+        if (!hasDashboard) {
             val provRes = googleSheetsClient.provisionMasterWorkbook(
                 spreadsheetId = spreadsheetId,
                 accounts = accounts,
