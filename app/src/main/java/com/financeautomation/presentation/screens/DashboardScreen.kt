@@ -60,7 +60,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     modifier: Modifier = Modifier,
     onNavigateToReview: () -> Unit = {},
-    onNavigateToSettlements: () -> Unit = {},
+    onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit,
     onAddExpense: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -112,7 +112,7 @@ fun DashboardContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onNavigateToReview: () -> Unit,
-    onNavigateToSettlements: () -> Unit,
+    onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit,
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -166,7 +166,7 @@ fun DashboardContent(
                         amount = state.owedToMe,
                         tone = AmountTone.MONEY_IN,
                         topFriends = state.topOwedToMe,
-                        onClick = onNavigateToSettlements,
+                        onPersonClick = { personName -> onNavigateToSettlements(personName, true) },
                         modifier = Modifier.weight(1f)
                     )
                     OwedSummaryCard(
@@ -174,7 +174,7 @@ fun DashboardContent(
                         amount = state.iOwePeople,
                         tone = AmountTone.MONEY_OWED,
                         topFriends = state.topIOwe,
-                        onClick = onNavigateToSettlements,
+                        onPersonClick = { personName -> onNavigateToSettlements(personName, false) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -310,7 +310,7 @@ private fun DashboardScreenPreviewLight() {
             onPreviousMonth = {},
             onNextMonth = {},
             onNavigateToReview = {},
-            onNavigateToSettlements = {},
+            onNavigateToSettlements = { _, _ -> },
             onAddExpense = {}
         )
     }
@@ -336,7 +336,7 @@ private fun DashboardScreenPreviewDark() {
             onPreviousMonth = {},
             onNextMonth = {},
             onNavigateToReview = {},
-            onNavigateToSettlements = {},
+            onNavigateToSettlements = { _, _ -> },
             onAddExpense = {}
         )
     }

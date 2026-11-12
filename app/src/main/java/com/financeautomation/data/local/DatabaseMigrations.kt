@@ -73,12 +73,112 @@ object DatabaseMigrations {
         }
     }
 
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `payables` (
+                    `uuid` TEXT NOT NULL,
+                    `dateIncurredSerial` INTEGER,
+                    `timeSerial` REAL,
+                    `paidBy` TEXT NOT NULL,
+                    `whatFor` TEXT NOT NULL,
+                    `amountIOwe` REAL NOT NULL,
+                    `dateRepaidSerial` INTEGER,
+                    `repaymentStatus` TEXT NOT NULL,
+                    `tabName` TEXT NOT NULL,
+                    `sheetRowIndex` INTEGER,
+                    `updatedAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`uuid`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_payables_uuid` ON `payables` (`uuid`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_payables_paidBy` ON `payables` (`paidBy`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_payables_repaymentStatus` ON `payables` (`repaymentStatus`)")
+            db.execSQL("DELETE FROM companions WHERE LOWER(name) LIKE 'txn_%' OR LOWER(name) LIKE 'pay_%' OR LOWER(name) LIKE 'inf_%' OR LOWER(name) LIKE 'row_%'")
+            db.execSQL("UPDATE trip_tags SET isActive = 0, dirty = 1")
+            db.execSQL("UPDATE preferences_table SET value = NULL, dirty = 1 WHERE `key` = 'active_trip'")
+        }
+    }
+
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE pending_captures ADD COLUMN detectedAccountHint TEXT")
+        }
+    }
+
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN duplicateOfId TEXT")
+        }
+    }
+
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE sync_queue ADD COLUMN lastErrorKind TEXT")
+            db.execSQL("ALTER TABLE sync_queue ADD COLUMN lastErrorDetail TEXT")
+        }
+    }
+
+    val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `subscriptions` (
+                    `id` TEXT NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `amount` REAL,
+                    `frequency` TEXT NOT NULL,
+                    `anchorEpochDay` INTEGER NOT NULL,
+                    `account` TEXT NOT NULL,
+                    `category` TEXT NOT NULL,
+                    `remind` INTEGER NOT NULL,
+                    `keywords` TEXT NOT NULL,
+                    `active` INTEGER NOT NULL,
+                    `createdAt` INTEGER NOT NULL,
+                    `updatedAt` INTEGER NOT NULL DEFAULT 0,
+                    `dirty` INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `subscription_cycles` (
+                    `id` TEXT NOT NULL,
+                    `subscriptionId` TEXT NOT NULL,
+                    `dueEpochDay` INTEGER NOT NULL,
+                    `state` TEXT NOT NULL,
+                    `transactionId` TEXT,
+                    `remindCount` INTEGER NOT NULL DEFAULT 0,
+                    `updatedAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_subscription_cycles_subscriptionId_dueEpochDay` " +
+                    "ON `subscription_cycles` (`subscriptionId`, `dueEpochDay`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_subscription_cycles_subscriptionId` " +
+                    "ON `subscription_cycles` (`subscriptionId`)"
+            )
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_2_3,
         MIGRATION_3_4,
         MIGRATION_4_5,
         MIGRATION_5_6,
-        MIGRATION_6_7
+        MIGRATION_6_7,
+        MIGRATION_7_8,
+        MIGRATION_8_9,
+        MIGRATION_9_10,
+        MIGRATION_10_11,
+        MIGRATION_11_12
     )
 }
 

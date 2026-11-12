@@ -4,9 +4,12 @@ import android.app.PendingIntent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.data.remote.AuthResult
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
+import com.financeautomation.data.remote.GoogleDriveApiException
+import com.financeautomation.data.remote.GoogleSheetsApiException
 import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -33,7 +36,7 @@ data class OnboardingUiState(
     val step1State: StepState = StepState.NOT_STARTED,
     val step1Error: String? = null,
     val step2State: StepState = StepState.NOT_STARTED,
-    val step2Error: String? = null,
+    val step2Error: UiText? = null,
     val step3State: StepState = StepState.NOT_STARTED,
     val step4State: StepState = StepState.NOT_STARTED,
     val googleAccountEmail: String? = null,
@@ -150,10 +153,10 @@ class OnboardingViewModel(
         startWorkspaceProvisioning()
     }
 
-    fun startWorkspaceProvisioning() {
+    fun startWorkspaceProvisioning(forceValidateTabs: Boolean = false) {
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(step2State = StepState.IN_PROGRESS, step2Error = null) }
-            when (val res = workbookResolver.resolveForYear(currentYear)) {
+            when (val res = workbookResolver.resolveForYear(currentYear, forceValidateTabs = forceValidateTabs)) {
                 is Result.Success -> {
                     val id = res.data
                     _uiState.update {
@@ -168,7 +171,7 @@ class OnboardingViewModel(
                     _uiState.update {
                         it.copy(
                             step2State = StepState.ERROR,
-                            step2Error = res.exception.message ?: "Failed to resolve finance workspace"
+                            step2Error = formatFriendlyErrorMessage(res.exception)
                         )
                     }
                 }
@@ -200,6 +203,43 @@ class OnboardingViewModel(
     }
 
     companion object {
+        fun formatFriendlyErrorMessage(e: Throwable): UiText {
+            val apiError = when (e) {
+                is GoogleSheetsApiException -> e.apiError
+                is GoogleDriveApiException -> e.apiError
+                else -> null
+            }
+            if (apiError != null) {
+                val r = apiError.reason
+                return when {
+                    r == "SERVICE_DISABLED" || r == "accessNotConfigured" ->
+                        UiText(R.string.onboarding_error_api_disabled)
+                    apiError.httpStatus == 403 || r == "ACCESS_TOKEN_SCOPE_INSUFFICIENT" || r == "insufficientPermissions" ->
+                        UiText(R.string.onboarding_error_insufficient_scope)
+                    apiError.httpStatus == 429 || r == "RATE_LIMIT_EXCEEDED" || r == "rateLimitExceeded" || r == "userRateLimitExceeded" ->
+                        UiText(R.string.onboarding_error_rate_limited)
+                    else -> {
+                        val messagePart = if (apiError.message.isNotBlank()) ": ${apiError.message.take(300)}" else ""
+                        UiText(
+                            R.string.onboarding_error_generic,
+                            listOf(
+                                apiError.endpointId,
+                                apiError.httpStatus,
+                                apiError.reason ?: apiError.status ?: "UNKNOWN",
+                                messagePart
+                            )
+                        )
+                    }
+                }
+            }
+            val detail = e.message
+            return if (detail.isNullOrBlank()) {
+                UiText(R.string.onboarding_error_unknown)
+            } else {
+                UiText(R.string.onboarding_error_unknown_with_message, listOf(detail))
+            }
+        }
+
         fun provideFactory(
             googleAuthTokenProvider: GoogleAuthTokenProvider,
             workbookResolver: WorkbookResolver,

@@ -5,7 +5,7 @@ import com.financeautomation.domain.model.Category
 
 /**
  * Builds Google Sheets batchUpdate request payloads for dynamic formula generation
- * and cell validation dropdowns matching the iOS master template (Finance2026_Template.xlsx):
+ * and cell validation dropdowns matching the iOS master ledger layout:
  * - KPI cards (A5, D5, G5, J5, M5, P5)
  * - Monthly summary table (V6:V17 Personal Burn, W6:W17 Total Outflow)
  * - Category spend breakdown table (Y5:Z15 for 10 categories including Savings and Other)
@@ -241,74 +241,14 @@ object DashboardFormulaBuilder {
     }
 
     /**
-     * Builds setDataValidation requests on Column C (Account) and Column F (Category)
-     * across the provided list of sheet IDs (monthly sheets + template sheet).
+     * Builds data validation requests across sheet IDs (no-op to match iOS master template which has no dropdowns).
      */
     fun buildDataValidationRequests(
         sheetIds: List<Int>,
         accounts: List<Account>,
         categories: List<Category>
     ): List<Map<String, Any?>> {
-        val requests = mutableListOf<Map<String, Any?>>()
-
-        val activeAccountNames = accounts.filter { !it.isArchived }.map { it.name }
-        val activeCategoryNames = categories.filter { !it.isArchived }.map { it.name }
-
-        for (sheetId in sheetIds) {
-            // Data Validation on Column C (Account): Start row 3 (row 4), Col index 2
-            if (activeAccountNames.isNotEmpty()) {
-                requests.add(
-                    mapOf(
-                        "setDataValidation" to mapOf(
-                            "range" to mapOf(
-                                "sheetId" to sheetId,
-                                "startRowIndex" to 3,
-                                "startColumnIndex" to 2, // Col C
-                                "endColumnIndex" to 3
-                            ),
-                            "rule" to mapOf(
-                                "condition" to mapOf(
-                                    "type" to "ONE_OF_LIST",
-                                    "values" to activeAccountNames.map {
-                                        mapOf("userEnteredValue" to it)
-                                    }
-                                ),
-                                "strict" to true,
-                                "showCustomUi" to true
-                            )
-                        )
-                    )
-                )
-            }
-
-            // Data Validation on Column F (Category): Start row 3 (row 4), Col index 5
-            if (activeCategoryNames.isNotEmpty()) {
-                requests.add(
-                    mapOf(
-                        "setDataValidation" to mapOf(
-                            "range" to mapOf(
-                                "sheetId" to sheetId,
-                                "startRowIndex" to 3,
-                                "startColumnIndex" to 5, // Col F
-                                "endColumnIndex" to 6
-                            ),
-                            "rule" to mapOf(
-                                "condition" to mapOf(
-                                    "type" to "ONE_OF_LIST",
-                                    "values" to activeCategoryNames.map {
-                                        mapOf("userEnteredValue" to it)
-                                    }
-                                ),
-                                "strict" to true,
-                                "showCustomUi" to true
-                            )
-                        )
-                    )
-                )
-            }
-        }
-
-        return requests
+        return emptyList()
     }
 
     private fun createUpdateCellFormulaRequest(

@@ -19,8 +19,17 @@ object RegexPatterns {
 
     // Merchant / Payee regex extracting business names or VPAs
     val MERCHANT_REGEX: Regex = Regex(
-        """(?:to|at|paid to|vpa|transferred to)\s+([A-Za-z0-9\s&._\-@]+?)(?:\s+on|\.(?!\d)|$|\s+ref|\s+using|\s+via|\s+through|\s+utr|\s+a/c|\s+avl|\s+bal|\b\d{12}\b)""",
+        """(?:paid\s+to|sent\s+to|transferred\s+to|trf\s+to|to|at|vpa)\s+([A-Za-z0-9\s&._\-@]+?)(?:,\s*|\s+on\b|\.(?!\d)|$|\s+ref\b|\s+using\b|\s+via\b|\s+through\b|\s+utr\b|\s+a/c\b|\s+avl\b|\s+bal\b|\b\d{12}\b)""",
         RegexOption.IGNORE_CASE
+    )
+
+    private val INVALID_MERCHANT_REGEX: Regex = Regex(
+        """(?i)^(?:[#\d\s\-+]+|.*your\s+account.*|.*your\s+a/c.*|.*blockupi.*|.*call\b.*)$"""
+    )
+
+    // Financial transaction keywords check for SMS filtering
+    val FINANCIAL_KEYWORDS_REGEX: Regex = Regex(
+        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c|account|spent|paid\s+thru|paid\s+to|received)\b"""
     )
 
     // UPI Virtual Payment Address (VPA) regex
@@ -71,12 +80,32 @@ object RegexPatterns {
         val vpaMatch = VPA_REGEX.find(text)
         if (vpaMatch != null) {
             val vpa = vpaMatch.groupValues[1].trim()
-            if (!vpa.contains("ref", ignoreCase = true)) {
+            if (!vpa.contains("ref", ignoreCase = true) && !INVALID_MERCHANT_REGEX.matches(vpa)) {
                 return vpa
             }
         }
-        val match = MERCHANT_REGEX.find(text)
-        return match?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
+        for (match in MERCHANT_REGEX.findAll(text)) {
+            val candidate = match.groupValues.getOrNull(1)?.trim()?.trim(' ', '.', ',', '-') ?: continue
+            if (candidate.isNotBlank() && !INVALID_MERCHANT_REGEX.matches(candidate)) {
+                return candidate
+            }
+        }
+        return null
+    }
+
+    /**
+     * Checks if sender identifier is a personal phone number rather than an institutional/bank handle.
+     */
+    fun isPersonalSender(sender: String): Boolean {
+        val cleaned = sender.replace(" ", "").replace("-", "")
+        return cleaned.startsWith("+") || (cleaned.length >= 7 && cleaned.all { it.isDigit() })
+    }
+
+    /**
+     * Checks if text contains financial transaction keywords.
+     */
+    fun hasFinancialKeywords(text: String): Boolean {
+        return FINANCIAL_KEYWORDS_REGEX.containsMatchIn(text)
     }
 
     private val PREPOSITION_PREFIX_REGEX: Regex = Regex(
@@ -97,7 +126,7 @@ object RegexPatterns {
     }
 
     /**
-     * Extracts funding account information (e.g. "SBI XX1234").
+     * Extracts funding account information (e.g. "Bank XX1234").
      */
     fun extractAccount(text: String): String? {
         val match = ACCOUNT_REGEX.find(text)

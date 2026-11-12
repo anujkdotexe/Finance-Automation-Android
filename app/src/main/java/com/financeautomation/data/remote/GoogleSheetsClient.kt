@@ -42,13 +42,22 @@ open class GoogleSheetsException(message: String, cause: Throwable? = null) : IO
 class SheetNotFoundException(val spreadsheetId: String, message: String) : GoogleSheetsException(message)
 class AuthExpiredException(message: String) : GoogleSheetsException(message)
 class MalformedResponseException(message: String, cause: Throwable? = null) : GoogleSheetsException(message, cause)
-class GoogleSheetsApiException(val statusCode: Int, message: String) : GoogleSheetsException(message)
+class GoogleSheetsApiException(val statusCode: Int, message: String, val apiError: GoogleApiError? = null) : GoogleSheetsException(message)
 
-internal fun createHttpException(code: Int, body: String, context: String, spreadsheetId: String = ""): IOException = when (code) {
-    401 -> AuthExpiredException("$context: HTTP 401 Unauthorized - OAuth access token expired or invalid. Details: $body")
-    404 -> SheetNotFoundException(spreadsheetId, "$context: HTTP 404 Spreadsheet or Tab not found ($spreadsheetId). Details: $body")
-    in 500..599 -> GoogleSheetsApiException(code, "$context: HTTP $code Google Sheets server error. Details: $body")
-    else -> GoogleSheetsApiException(code, "$context: HTTP $code $body")
+internal fun createHttpException(
+    code: Int,
+    body: String,
+    context: String,
+    spreadsheetId: String = "",
+    endpointId: String = GoogleEndpoint.SHEETS_OPERATION
+): IOException {
+    val apiError = GoogleApiError.parse(endpointId, code, body)
+    return when (code) {
+        401 -> AuthExpiredException("$context: HTTP 401 Unauthorized - OAuth access token expired or invalid. Details: ${apiError.message}")
+        404 -> SheetNotFoundException(spreadsheetId, "$context: HTTP 404 Spreadsheet or Tab not found ($spreadsheetId). Details: ${apiError.message}")
+        in 500..599 -> GoogleSheetsApiException(code, "$context: HTTP $code Google Sheets server error. Details: ${apiError.message}", apiError)
+        else -> GoogleSheetsApiException(code, "$context: HTTP $code (${apiError.reason ?: apiError.status ?: "UNKNOWN"}) - ${apiError.message}", apiError)
+    }
 }
 
 internal fun <T> Throwable.toDataResult(spreadsheetId: String = ""): DataResult<T> = when (this) {
@@ -66,7 +75,7 @@ internal fun <T> Throwable.toDataResult(spreadsheetId: String = ""): DataResult<
  * Direct OkHttp client for Google Sheets v4 REST API.
  * Executes atomic RAW appends, in-place updates, and batch provisioning.
  */
-class GoogleSheetsClient(
+open class GoogleSheetsClient(
     private val okHttpClient: OkHttpClient,
     private val tokenProvider: TokenProvider? = null,
     private val baseUrl: String = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -147,10 +156,19 @@ class GoogleSheetsClient(
     suspend fun appendDebit(
         spreadsheetId: String,
         tabName: String,
-        row: List<Any?>
+        row: List<Any?>,
+        uuid: String? = null
     ): Result<Int> {
         val slice = if (row.size > 11) row.take(11) else row
-        return appendTableScoped(spreadsheetId, tabName, SheetSchemaConstants.TABLE_1_DEBITS_RANGE, slice)
+        return appendTableScoped(
+            spreadsheetId = spreadsheetId,
+            tabName = tabName,
+            tableRange = SheetSchemaConstants.TABLE_1_DEBITS_RANGE,
+            row = slice,
+            keyCol = "A",
+            uuidCol = SheetSchemaConstants.COL_LETTER_DEBIT_UUID,
+            uuid = uuid
+        )
     }
 
     /**
@@ -159,7 +177,8 @@ class GoogleSheetsClient(
     suspend fun appendInflow(
         spreadsheetId: String,
         tabName: String,
-        row: List<Any?>
+        row: List<Any?>,
+        uuid: String? = null
     ): Result<Int> {
         val slice = if (row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT) {
             row.subList(12, 20)
@@ -168,7 +187,15 @@ class GoogleSheetsClient(
         } else {
             row
         }
-        return appendTableScoped(spreadsheetId, tabName, SheetSchemaConstants.TABLE_2_INFLOWS_RANGE, slice)
+        return appendTableScoped(
+            spreadsheetId = spreadsheetId,
+            tabName = tabName,
+            tableRange = SheetSchemaConstants.TABLE_2_INFLOWS_RANGE,
+            row = slice,
+            keyCol = "M",
+            uuidCol = SheetSchemaConstants.COL_LETTER_INFLOW_UUID,
+            uuid = uuid
+        )
     }
 
     /**
@@ -177,7 +204,8 @@ class GoogleSheetsClient(
     suspend fun appendPayable(
         spreadsheetId: String,
         tabName: String,
-        row: List<Any?>
+        row: List<Any?>,
+        uuid: String? = null
     ): Result<Int> {
         val slice = if (row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT) {
             row.subList(21, 28)
@@ -186,47 +214,146 @@ class GoogleSheetsClient(
         } else {
             row
         }
-        return appendTableScoped(spreadsheetId, tabName, SheetSchemaConstants.TABLE_3_PAYABLES_RANGE, slice)
+        return appendTableScoped(
+            spreadsheetId = spreadsheetId,
+            tabName = tabName,
+            tableRange = SheetSchemaConstants.TABLE_3_PAYABLES_RANGE,
+            row = slice,
+            keyCol = "V",
+            uuidCol = SheetSchemaConstants.COL_LETTER_PAYABLE_UUID,
+            uuid = uuid
+        )
     }
 
     /**
-     * Appends values strictly within [tableRange] (e.g. A3:K, M3:T, V3:AB).
+     * Computes the next free row for a table by scanning the key column and optional UUID column
+     * from [minRow] downwards. Returns maxOf(minRow, lastOccupiedRow + 1).
+     */
+    suspend fun getNextFreeTableRow(
+        spreadsheetId: String,
+        tabName: String,
+        keyCol: String,
+        uuidCol: String? = null,
+        minRow: Int = 4
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            var lastOccupiedRow = minRow - 1
+
+            // 1. Scan key column (e.g. date)
+            val keyRange = "'$tabName'!$keyCol$minRow:$keyCol"
+            val keyRes = getRangeValuesRaw(spreadsheetId, keyRange)
+            if (keyRes is Result.Error) return@withContext Result.Error(keyRes.exception)
+            val keyRows = (keyRes as Result.Success).data
+            for (i in keyRows.indices.reversed()) {
+                val cell = keyRows[i].firstOrNull()?.toString()?.trim()
+                if (!cell.isNullOrEmpty()) {
+                    lastOccupiedRow = maxOf(lastOccupiedRow, minRow + i)
+                    break
+                }
+            }
+
+            // 2. Scan UUID column if specified
+            if (!uuidCol.isNullOrBlank()) {
+                val uuidRange = "'$tabName'!$uuidCol$minRow:$uuidCol"
+                val uuidRes = getRangeValues(spreadsheetId, uuidRange)
+                if (uuidRes is Result.Success) {
+                    val uuidRows = uuidRes.data
+                    for (i in uuidRows.indices.reversed()) {
+                        val cell = uuidRows[i].firstOrNull()?.toString()?.trim()
+                        if (!cell.isNullOrEmpty()) {
+                            lastOccupiedRow = maxOf(lastOccupiedRow, minRow + i)
+                            break
+                        }
+                    }
+                }
+            }
+
+            val nextRow = maxOf(minRow, lastOccupiedRow + 1)
+            Result.Success(nextRow)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Appends values strictly within [tableRange] (e.g. A3:K, M3:T, V3:AB) by computing the next free row
+     * and writing with values.update (PUT) to the explicit row range (e.g. A{r}:K{r}, M{r}:T{r}, V{r}:AB{r}).
      * Defaults to valueInputOption=RAW to guarantee formula injection immunity.
-     * Checks grid capacity before appending and automatically expands the grid by 100 rows
-     * if within 20 rows of full.
+     * Guarantees that empty secondary tables (Inflows/Payables) do NOT fall back into Column A.
      */
     suspend fun appendTableScoped(
         spreadsheetId: String,
         tabName: String,
         tableRange: String,
         row: List<Any?>,
-        valueInputOption: String = "RAW"
+        valueInputOption: String = "RAW",
+        keyCol: String? = null,
+        uuidCol: String? = null,
+        uuid: String? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            ensureGridCapacityBeforeAppend(spreadsheetId, tabName)
+            val parts = tableRange.split(":")
+            val rawStart = parts.getOrNull(0).orEmpty()
+            val rawEnd = parts.getOrNull(1).orEmpty()
+            val startCol = rawStart.filter { it.isLetter() }.ifEmpty { "A" }
+            val endCol = rawEnd.filter { it.isLetter() }.ifEmpty { startCol }
+            val startRowDigits = rawStart.filter { it.isDigit() }.toIntOrNull()
+            val minRow = when {
+                startRowDigits != null -> startRowDigits + 1
+                tabName.equals("Config", ignoreCase = true) -> 2
+                else -> 4
+            }
+            val resolvedKeyCol = keyCol ?: startCol
+            val resolvedUuidCol = uuidCol ?: when (startCol) {
+                "A" -> if (tabName.equals("Config", ignoreCase = true)) null else SheetSchemaConstants.COL_LETTER_DEBIT_UUID
+                "M" -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID
+                "V" -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
+                else -> null
+            }
 
-            val range = "'$tabName'!$tableRange"
-            val encodedRange = URLEncoder.encode(range, "UTF-8")
-            val url = "$baseUrl/$spreadsheetId/values/$encodedRange:append?valueInputOption=$valueInputOption&insertDataOption=OVERWRITE"
+            val nextRowRes = getNextFreeTableRow(spreadsheetId, tabName, resolvedKeyCol, resolvedUuidCol, minRow)
+            if (nextRowRes is Result.Error) return@withContext Result.Error(nextRowRes.exception)
+            val nextRow = (nextRowRes as Result.Success).data
+
+            ensureGridCapacityBeforeAppend(spreadsheetId, tabName, threshold = 20, expandBy = 100, requiredRow = nextRow)
+
+            val targetRange = "'$tabName'!$startCol$nextRow:$endCol$nextRow"
+
+            // Item 2.4: Write table cells and UUID in one atomic values:batchUpdate request
+            if (!uuid.isNullOrBlank() && resolvedUuidCol != null) {
+                val uuidRange = "'$tabName'!$resolvedUuidCol$nextRow"
+                val updatesMap = mapOf(
+                    targetRange to listOf(row),
+                    uuidRange to listOf(listOf(uuid))
+                )
+                val batchRes = batchUpdateValues(spreadsheetId, updatesMap, valueInputOption)
+                if (batchRes is Result.Error) return@withContext Result.Error(batchRes.exception)
+                return@withContext Result.Success(nextRow)
+            }
+
+            val encodedRange = URLEncoder.encode(targetRange, "UTF-8")
+            val url = "$baseUrl/$spreadsheetId/values/$encodedRange?valueInputOption=$valueInputOption"
 
             val rowElements = JsonArray(row.map { it.toJsonElement() })
             val valuesArray = JsonArray(listOf(rowElements))
 
             val requestBodyJson = buildJsonObject {
-                put("range", JsonPrimitive(range))
+                put("range", JsonPrimitive(targetRange))
                 put("majorDimension", JsonPrimitive("ROWS"))
                 put("values", valuesArray)
             }.toString()
 
             val request = newRequestBuilder(url)
-                .post(requestBodyJson.toRequestBody(jsonMediaType))
+                .put(requestBodyJson.toRequestBody(jsonMediaType))
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets appendTableScoped failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "Sheets appendTableScoped (values.update) failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_UPDATE)
                     )
                 }
 
@@ -236,14 +363,18 @@ class GoogleSheetsClient(
                     return@withContext Result.Error(MalformedResponseException("Failed to parse JSON response (code ${response.code})", e))
                 }
 
-                val updates = jsonResponse["updates"]?.jsonObject
-                val updatedRange = updates?.get("updatedRange")?.jsonPrimitive?.content.orEmpty()
+                val updatedRange = jsonResponse["updatedRange"]?.jsonPrimitive?.content
+                    ?: jsonResponse["updates"]?.jsonObject?.get("updatedRange")?.jsonPrimitive?.content
 
-                val rowIndex = parseRowIndexFromRange(updatedRange)
-                if (rowIndex != null) {
-                    Result.Success(rowIndex)
+                if (updatedRange != null) {
+                    val parsedRowIndex = parseRowIndexFromRange(updatedRange)
+                    if (parsedRowIndex != null) {
+                        Result.Success(parsedRowIndex)
+                    } else {
+                        Result.Error(MalformedResponseException("Could not parse row index from updatedRange: '$updatedRange'"))
+                    }
                 } else {
-                    Result.Error(MalformedResponseException("Could not parse row index from updatedRange"))
+                    Result.Success(nextRow)
                 }
             }
         } catch (e: CancellationException) {
@@ -261,7 +392,8 @@ class GoogleSheetsClient(
         spreadsheetId: String,
         tabName: String,
         threshold: Int = 20,
-        expandBy: Int = 100
+        expandBy: Int = 100,
+        requiredRow: Int = -1
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2CgridProperties(rowCount)))"
@@ -271,7 +403,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "ensureGridCapacity failed to fetch properties", spreadsheetId)
+                        createHttpException(response.code, bodyString, "ensureGridCapacity failed to fetch properties", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                     )
                 }
 
@@ -292,7 +424,7 @@ class GoogleSheetsClient(
 
                     val readResult = getRangeValuesRaw(spreadsheetId, "'$tabName'!A4:A")
                     val currentDataRows = if (readResult is Result.Success) readResult.data.size else 0
-                    val lastRow = currentDataRows + 3 // header occupies rows 1-3
+                    val lastRow = maxOf(currentDataRows + 3, requiredRow) // header occupies rows 1-3
 
                     if (lastRow >= totalRows - threshold) {
                         return@withContext appendDimension(spreadsheetId, sheetId, "ROWS", expandBy)
@@ -341,7 +473,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "updateCell failed on $cellCoordinate", spreadsheetId)
+                        createHttpException(response.code, bodyString, "updateCell failed on $cellCoordinate", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_UPDATE)
                     )
                 }
                 Result.Success(Unit)
@@ -457,30 +589,31 @@ class GoogleSheetsClient(
 
     /**
      * Checks if [tabName] exists in [spreadsheetId]; if missing, provisions it.
-     * Safe to repeat: if tab already exists, completes immediately with success.
+     * Safe to repeat: if tab already exists, returns Result.Success(false).
+     * If tab was newly provisioned, returns Result.Success(true).
      */
     suspend fun ensureMonthTabExists(
         spreadsheetId: String,
         tabName: String,
         accounts: List<String> = emptyList(),
         categories: List<String> = emptyList()
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
         val tabsResult = getSheetTabsWithIds(spreadsheetId)
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
         val tabsMap = (tabsResult as Result.Success).data
         if (tabsMap.containsKey(tabName)) {
-            return@withContext Result.Success(Unit)
+            return@withContext Result.Success(false)
         }
         val provResult = provisionMonthTab(spreadsheetId, tabName, accounts, categories)
         if (provResult is Result.Error) {
             // Check if another concurrent call created it
             val recheck = getSheetTabsWithIds(spreadsheetId)
             if (recheck is Result.Success && recheck.data.containsKey(tabName)) {
-                return@withContext Result.Success(Unit)
+                return@withContext Result.Success(false)
             }
-            return@withContext provResult
+            return@withContext Result.Error(provResult.exception)
         }
-        Result.Success(Unit)
+        Result.Success(true)
     }
 
     /**
@@ -545,7 +678,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "updateLinkedDebitSettlement failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "updateLinkedDebitSettlement failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_BATCH_UPDATE)
                     )
                 }
                 Result.Success(remaining)
@@ -574,7 +707,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "getRangeValuesRaw failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "getRangeValuesRaw failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_GET)
                     )
                 }
 
@@ -620,7 +753,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "getRangeValues failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "getRangeValues failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_GET)
                     )
                 }
 
@@ -673,7 +806,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "batchGetValues failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "batchGetValues failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_BATCH_GET)
                     )
                 }
 
@@ -748,7 +881,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "batchUpdateValues failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "batchUpdateValues failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_BATCH_UPDATE)
                     )
                 }
                 Result.Success(Unit)
@@ -793,7 +926,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets updateRow failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "Sheets updateRow failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_UPDATE)
                     )
                 }
                 Result.Success(Unit)
@@ -851,7 +984,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets batchUpdate failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "Sheets batchUpdate failed", spreadsheetId, GoogleEndpoint.SHEETS_BATCH_UPDATE)
                     )
                 }
                 Result.Success(bodyString)
@@ -900,20 +1033,21 @@ class GoogleSheetsClient(
      * Creates the tab if missing, extracts the sheetId, and formats headers,
      * banners, column styles, frozen rows, validations, and conditional formatting via SheetProvisioner.
      */
-    suspend fun provisionMonthTab(
+    open suspend fun provisionMonthTab(
         spreadsheetId: String,
         tabName: String,
         accounts: List<String> = emptyList(),
         categories: List<String> = emptyList()
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val tabsResult = getSheetTabsWithIds(spreadsheetId)
-            if (tabsResult is Result.Error) {
-                return@withContext Result.Error(tabsResult.exception)
+            val detailedRes = getSheetTabsDetailed(spreadsheetId)
+            if (detailedRes is Result.Error) {
+                return@withContext Result.Error(detailedRes.exception)
             }
 
-            val tabsMap = (tabsResult as Result.Success).data
-            val existingSheetId = tabsMap[tabName]
+            val detailedMap = (detailedRes as Result.Success).data
+            val existingTabInfo = detailedMap[tabName]
+            val existingSheetId = existingTabInfo?.sheetId
 
             val targetSheetId = if (existingSheetId != null) {
                 existingSheetId
@@ -923,7 +1057,11 @@ class GoogleSheetsClient(
                     mapOf(
                         "addSheet" to mapOf(
                             "properties" to mapOf(
-                                "title" to tabName
+                                "title" to tabName,
+                                "gridProperties" to mapOf(
+                                    "rowCount" to 1000,
+                                    "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                )
                             )
                         )
                     )
@@ -953,7 +1091,35 @@ class GoogleSheetsClient(
                 newSheetId
             }
 
-            val provisionRequests = SheetProvisioner.buildProvisionRequests(targetSheetId, tabName, accounts, categories)
+            val curRows = existingTabInfo?.rowCount ?: 1000
+            val curCols = existingTabInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+            val targetRows = maxOf(curRows, 1000)
+            val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+            val existingRules = existingTabInfo?.existingRuleFormulas ?: emptySet()
+
+            val provisionRequests = SheetProvisioner.buildProvisionRequests(
+                sheetId = targetSheetId,
+                tabTitle = tabName,
+                accounts = accounts,
+                categories = categories,
+                currentRowCount = targetRows,
+                currentColumnCount = targetCols,
+                existingRuleFormulas = existingRules
+            )
+
+            // Validate safety: must not shrink grid, write to row index >= 3, or use destructive operations
+            val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
+                requests = provisionRequests,
+                isDataTab = true,
+                currentGridRows = curRows,
+                currentGridCols = curCols
+            )
+            if (safetyViolations.isNotEmpty()) {
+                return@withContext Result.Error(
+                    IllegalStateException("Month tab repair safety violation: $safetyViolations")
+                )
+            }
+
             batchUpdate(spreadsheetId, provisionRequests)
         } catch (e: CancellationException) {
             throw e
@@ -963,13 +1129,12 @@ class GoogleSheetsClient(
     }
 
     /**
-     * Provisions the complete master workbook strictly matching Finance2026_Template_v2.xlsx:
+     * Provisions the complete master workbook:
      * 1. Dashboard: Title banner, last updated formula, 6 KPI cards with living burn formulas,
      *    monthly summary table, category spend table, and active settlements query table.
-     * 2. Template: 31-column master ledger schema with frozen rows, number formatting, validations, and conditional formatting.
-     * 3. Nov26: Active month tab matching Template.
+     * 2. Active month tab (e.g. Nov26): Programmatically created with 31-column master ledger schema from code.
      */
-    suspend fun provisionMasterWorkbook(
+    open suspend fun provisionMasterWorkbook(
         spreadsheetId: String,
         accounts: List<String> = emptyList(),
         categories: List<String> = emptyList()
@@ -977,14 +1142,31 @@ class GoogleSheetsClient(
         try {
             val tabsResult = getSheetTabsWithIds(spreadsheetId)
             if (tabsResult is Result.Error) {
+                com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Failed to query tabs: ${tabsResult.exception.message}")
                 return@withContext Result.Error(tabsResult.exception)
             }
             var tabsMap = (tabsResult as Result.Success).data.toMutableMap()
+            com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Initial tabs: ${tabsMap.keys.toList()}")
+
+            // Read detailed metadata to inspect existing grid sizes and conditional format rules
+            val detailedTabsResult = getSheetTabsDetailed(spreadsheetId)
+            val detailedTabs = if (detailedTabsResult is Result.Success) detailedTabsResult.data else emptyMap()
+
+            // 0. Cosmetic properties (en_GB locale and Asia/Kolkata timezone) in their OWN isolated batch.
+            // If this fails, record in Diagnostics and proceed; cosmetic properties must never block provisioning.
+            try {
+                val localeRequest = ChartManager.buildLocaleAndTimeZoneRequest("en_GB", "Asia/Kolkata")
+                val localeRes = executeBatchUpdate(spreadsheetId, listOf(localeRequest))
+                if (localeRes is Result.Error) {
+                    com.financeautomation.core.utils.Diagnostics.record("SheetsLocale", "Locale batch skipped: ${localeRes.exception.message}")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.financeautomation.core.utils.Diagnostics.record("SheetsLocale", "Locale batch error: ${e.javaClass.simpleName}")
+            }
 
             val setupRequests = mutableListOf<Map<String, Any?>>()
-
-            // 0. Enforce en_IN locale and Asia/Kolkata timezone before any formulas are written
-            setupRequests.add(ChartManager.buildLocaleAndTimeZoneRequest("en_IN", "Asia/Kolkata"))
 
             // 1. Rename Sheet1 to Dashboard if Sheet1 exists, or add Dashboard
             if (tabsMap.containsKey("Sheet1") && !tabsMap.containsKey("Dashboard")) {
@@ -1004,24 +1186,16 @@ class GoogleSheetsClient(
                 setupRequests.add(
                     mapOf(
                         "addSheet" to mapOf(
-                            "properties" to mapOf("title" to "Dashboard")
+                            "properties" to mapOf(
+                                "title" to "Dashboard",
+                                "gridProperties" to mapOf("rowCount" to 1000, "columnCount" to 26)
+                            )
                         )
                     )
                 )
             }
 
-            // 2. Ensure Template tab exists
-            if (!tabsMap.containsKey("Template")) {
-                setupRequests.add(
-                    mapOf(
-                        "addSheet" to mapOf(
-                            "properties" to mapOf("title" to "Template")
-                        )
-                    )
-                )
-            }
-
-            // 3. Ensure current month tab exists (e.g. Nov26, Dec26, Jan27)
+            // 2. Ensure current month tab exists with at least 31 columns (never shrink existing rows or columns)
             val currentMonthTab = ZonedDateTime.now(DEFAULT_SHEET_ZONE_ID)
                 .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
 
@@ -1029,10 +1203,39 @@ class GoogleSheetsClient(
                 setupRequests.add(
                     mapOf(
                         "addSheet" to mapOf(
-                            "properties" to mapOf("title" to currentMonthTab)
+                            "properties" to mapOf(
+                                "title" to currentMonthTab,
+                                "gridProperties" to mapOf(
+                                    "rowCount" to 1000,
+                                    "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                )
+                            )
                         )
                     )
                 )
+            } else {
+                val monthSheetId = tabsMap[currentMonthTab]
+                val monthInfo = detailedTabs[currentMonthTab]
+                val curRows = monthInfo?.rowCount ?: 1000
+                val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val targetRows = maxOf(curRows, 1000)
+                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                if (monthSheetId != null && (targetRows > curRows || targetCols > curCols)) {
+                    setupRequests.add(
+                        mapOf(
+                            "updateSheetProperties" to mapOf(
+                                "properties" to mapOf(
+                                    "sheetId" to monthSheetId,
+                                    "gridProperties" to mapOf(
+                                        "rowCount" to targetRows,
+                                        "columnCount" to targetCols
+                                    )
+                                ),
+                                "fields" to "gridProperties(rowCount,columnCount)"
+                            )
+                        )
+                    )
+                }
             }
 
             if (setupRequests.isNotEmpty()) {
@@ -1070,25 +1273,66 @@ class GoogleSheetsClient(
                 }
 
                 if (deleteRequests.isNotEmpty()) {
-                    batchUpdate(spreadsheetId, deleteRequests)
+                    val delRes = batchUpdate(spreadsheetId, deleteRequests)
+                    if (delRes is Result.Error) {
+                        return@withContext Result.Error(delRes.exception)
+                    }
                 }
 
-                val dashboardRequests = SheetProvisioner.buildDashboardRequests(dashboardId, categories)
-                batchUpdate(spreadsheetId, dashboardRequests)
+                val dashInfo = detailedTabs["Dashboard"]
+                val dashCurRows = dashInfo?.rowCount ?: 1000
+                val dashCurCols = dashInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val dashTargetRows = maxOf(dashCurRows, 1000)
+                val dashTargetCols = maxOf(dashCurCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+
+                val dashboardRequests = SheetProvisioner.buildDashboardRequests(
+                    dashboardSheetId = dashboardId,
+                    categories = categories,
+                    currentRowCount = dashTargetRows,
+                    currentColumnCount = dashTargetCols
+                )
+                val dashRes = batchUpdate(spreadsheetId, dashboardRequests)
+                if (dashRes is Result.Error) {
+                    return@withContext Result.Error(dashRes.exception)
+                }
             }
 
-            // 5. Format Template sheet
-            val templateId = tabsMap["Template"]
-            if (templateId != null) {
-                val templateRequests = SheetProvisioner.buildProvisionRequests(templateId, "Template", accounts, categories)
-                batchUpdate(spreadsheetId, templateRequests)
-            }
-
-            // 6. Format current month sheet
+            // 4. Format current month sheet (safe formatting: rows 1-3 only, skip existing rules, never shrink)
             val currentMonthId = tabsMap[currentMonthTab]
             if (currentMonthId != null) {
-                val currentMonthRequests = SheetProvisioner.buildProvisionRequests(currentMonthId, currentMonthTab, accounts, categories)
-                batchUpdate(spreadsheetId, currentMonthRequests)
+                val monthInfo = detailedTabs[currentMonthTab]
+                val curRows = monthInfo?.rowCount ?: 1000
+                val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                val targetRows = maxOf(curRows, 1000)
+                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                val existingRules = monthInfo?.existingRuleFormulas ?: emptySet()
+
+                val currentMonthRequests = SheetProvisioner.buildProvisionRequests(
+                    sheetId = currentMonthId,
+                    tabTitle = currentMonthTab,
+                    accounts = accounts,
+                    categories = categories,
+                    currentRowCount = targetRows,
+                    currentColumnCount = targetCols,
+                    existingRuleFormulas = existingRules
+                )
+
+                val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
+                    requests = currentMonthRequests,
+                    isDataTab = true,
+                    currentGridRows = curRows,
+                    currentGridCols = curCols
+                )
+                if (safetyViolations.isNotEmpty()) {
+                    return@withContext Result.Error(
+                        IllegalStateException("Month tab repair safety violation: $safetyViolations")
+                    )
+                }
+
+                val monthRes = batchUpdate(spreadsheetId, currentMonthRequests)
+                if (monthRes is Result.Error) {
+                    return@withContext Result.Error(monthRes.exception)
+                }
             }
 
             Result.Success(Unit)
@@ -1100,9 +1344,110 @@ class GoogleSheetsClient(
     }
 
     /**
+     * Detailed metadata for a sheet tab, including grid dimensions and existing conditional format formulas.
+     */
+    data class SheetTabInfo(
+        val sheetId: Int,
+        val title: String,
+        val rowCount: Int = 1000,
+        val columnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT,
+        val existingRuleFormulas: Set<String> = emptySet()
+    )
+
+    /**
+     * Retrieves detailed metadata for all sheets in [spreadsheetId], including gridProperties
+     * (rowCount, columnCount) and existing conditional format formulas.
+     */
+    open suspend fun getSheetTabsDetailed(spreadsheetId: String): Result<Map<String, SheetTabInfo>> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2CgridProperties(rowCount%2CcolumnCount))%2CconditionalFormats(booleanRule(condition(values(userEnteredValue)))))"
+            val request = newRequestBuilder(url).get().build()
+
+            okHttpClient.newCall(request).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@withContext Result.Error(
+                        createHttpException(response.code, bodyString, "Sheets getSheetTabsDetailed failed", spreadsheetId, GoogleEndpoint.SHEETS_GET)
+                    )
+                }
+
+                val jsonResponse = try {
+                    json.parseToJsonElement(bodyString).jsonObject
+                } catch (e: Exception) {
+                    return@withContext Result.Error(MalformedResponseException("Failed to parse getSheetTabsDetailed response JSON (code ${response.code})", e))
+                }
+                val sheetsArray = jsonResponse["sheets"]?.jsonArray.orEmpty()
+                val map = mutableMapOf<String, SheetTabInfo>()
+                sheetsArray.forEach { sheetElem ->
+                    val sheetObj = sheetElem.jsonObject
+                    val props = sheetObj["properties"]?.jsonObject
+                    val title = props?.get("title")?.jsonPrimitive?.content
+                    val id = props?.get("sheetId")?.jsonPrimitive?.content?.toIntOrNull()
+                    if (title != null && id != null) {
+                        val gridProps = props["gridProperties"]?.jsonObject
+                        val rowCount = gridProps?.get("rowCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 1000
+                        val colCount = gridProps?.get("columnCount")?.jsonPrimitive?.content?.toIntOrNull() ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+
+                        val formulas = mutableSetOf<String>()
+                        val cFormats = sheetObj["conditionalFormats"]?.jsonArray.orEmpty()
+                        for (cf in cFormats) {
+                            val boolRule = cf.jsonObject["booleanRule"]?.jsonObject
+                            val cond = boolRule?.get("condition")?.jsonObject
+                            val values = cond?.get("values")?.jsonArray.orEmpty()
+                            for (v in values) {
+                                val uev = v.jsonObject["userEnteredValue"]?.jsonPrimitive?.content
+                                if (uev != null) formulas.add(uev)
+                            }
+                        }
+
+                        map[title] = SheetTabInfo(
+                            sheetId = id,
+                            title = title,
+                            rowCount = rowCount,
+                            columnCount = colCount,
+                            existingRuleFormulas = formulas
+                        )
+                    }
+                }
+                Result.Success(map)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Checks if any month tab in [spreadsheetId] contains data rows (any values in row 4 or below).
+     */
+    open suspend fun hasDataRows(spreadsheetId: String, tabTitles: List<String>): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val monthRegex = Regex("^[A-Z][a-z]{2}\\d{2}$")
+            val monthTabs = tabTitles.filter { it.matches(monthRegex) }
+            if (monthTabs.isEmpty()) {
+                return@withContext Result.Success(false)
+            }
+            val ranges = monthTabs.map { "'$it'!A4:A5" }
+            return@withContext when (val batchRes = batchGetValues(spreadsheetId, ranges)) {
+                is Result.Success -> {
+                    val hasData = batchRes.data.values.any { rows -> rows.isNotEmpty() }
+                    Result.Success(hasData)
+                }
+                is Result.Error -> Result.Error(batchRes.exception)
+                else -> Result.Error(Exception("Unexpected batchGetValues state"))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
      * Retrieves titles and sheet IDs of all sheet tabs in [spreadsheetId].
      */
-    suspend fun getSheetTabsWithIds(spreadsheetId: String): Result<Map<String, Int>> = withContext(Dispatchers.IO) {
+    open suspend fun getSheetTabsWithIds(spreadsheetId: String): Result<Map<String, Int>> = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle))"
             val request = newRequestBuilder(url).get().build()
@@ -1111,7 +1456,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets getSheetTabsWithIds failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "Sheets getSheetTabsWithIds failed", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                     )
                 }
 
@@ -1151,7 +1496,7 @@ class GoogleSheetsClient(
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return@withContext Result.Error(
-                        createHttpException(response.code, bodyString, "Sheets getSheetMetadata failed", spreadsheetId)
+                        createHttpException(response.code, bodyString, "Sheets getSheetMetadata failed", spreadsheetId, GoogleEndpoint.SHEETS_GET)
                     )
                 }
 
@@ -1220,11 +1565,14 @@ class GoogleSheetsClient(
 
             // Construct batch ranges for all sorted month tabs:
             // Table 1: 'Tab'!A4:K and 'Tab'!AC4:AC
+            // Table 2: 'Tab'!M4:T and 'Tab'!AD4:AD
             // Table 3: 'Tab'!V4:AB and 'Tab'!AE4:AE
             val batchRanges = mutableListOf<String>()
             sortedTabs.forEach { tab ->
                 batchRanges.add("'$tab'!A4:K")
                 batchRanges.add("'$tab'!AC4:AC")
+                batchRanges.add("'$tab'!M4:T")
+                batchRanges.add("'$tab'!AD4:AD")
                 batchRanges.add("'$tab'!V4:AB")
                 batchRanges.add("'$tab'!AE4:AE")
             }
@@ -1253,6 +1601,8 @@ class GoogleSheetsClient(
                 val sheetId = tabsMap[tab] ?: 0
                 val debitsData = getValuesForRange(tab, "A4:K")
                 val debitsUuids = getValuesForRange(tab, "AC4:AC")
+                val inflowsData = getValuesForRange(tab, "M4:T")
+                val inflowsUuids = getValuesForRange(tab, "AD4:AD")
                 val payablesData = getValuesForRange(tab, "V4:AB")
                 val payablesUuids = getValuesForRange(tab, "AE4:AE")
 
@@ -1295,6 +1645,39 @@ class GoogleSheetsClient(
                     }
                 }
 
+                val inflowsList = mutableListOf<LedgerInflowRow>()
+                for (i in inflowsData.indices) {
+                    val row = inflowsData[i]
+                    if (row.isEmpty()) continue
+                    val dateSerial = row.getOrNull(0)?.toString()?.toDoubleOrNull()?.toInt()
+                    val timeSerial = row.getOrNull(1)?.toString()?.toDoubleOrNull()
+                    val account = row.getOrNull(2)?.toString().orEmpty()
+                    val inflowType = row.getOrNull(3)?.toString().orEmpty()
+                    val sender = row.getOrNull(4)?.toString().orEmpty()
+                    val reason = row.getOrNull(5)?.toString().orEmpty()
+                    val amountReceived = row.getOrNull(6)?.toString()?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+                    val linkedDebits = row.getOrNull(7)?.toString().orEmpty()
+                    val uuid = inflowsUuids.getOrNull(i)?.firstOrNull()?.toString()?.trim()?.takeIf { it.isNotBlank() }
+
+                    val isBlankRow = dateSerial == null && reason.isBlank() && amountReceived == 0.0
+                    if (!isBlankRow) {
+                        inflowsList.add(
+                            LedgerInflowRow(
+                                rowNumber = i + 4,
+                                dateSerial = dateSerial,
+                                timeSerial = timeSerial,
+                                account = account,
+                                inflowType = inflowType,
+                                sender = sender,
+                                reason = reason,
+                                amountReceived = amountReceived,
+                                linkedDebits = linkedDebits,
+                                uuid = uuid
+                            )
+                        )
+                    }
+                }
+
                 val payablesList = mutableListOf<LedgerPayableRow>()
                 for (i in payablesData.indices) {
                     val row = payablesData[i]
@@ -1331,7 +1714,8 @@ class GoogleSheetsClient(
                         tabName = tab,
                         sheetId = sheetId,
                         debits = debitsList,
-                        payables = payablesList
+                        payables = payablesList,
+                        inflows = inflowsList
                     )
                 )
             }

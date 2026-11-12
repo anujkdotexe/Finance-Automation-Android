@@ -6,9 +6,11 @@ import com.financeautomation.data.local.FinanceDatabase
 import com.financeautomation.data.remote.AccountingSyncExecutor
 import com.financeautomation.data.remote.ConfigSheetManager
 import com.financeautomation.data.remote.ConfigSyncCoordinator
+import com.financeautomation.data.remote.GoogleApiError
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.RawHttpErrorStore
 import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.data.remote.TokenRecoveryInterceptor
 import com.financeautomation.data.remote.WorkbookResolver
@@ -18,7 +20,9 @@ import com.financeautomation.data.repository.ConfigRepositoryImpl
 import com.financeautomation.data.repository.PeopleListRebuilder
 import com.financeautomation.data.repository.PeopleRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
+import com.financeautomation.data.repository.SubscriptionRepositoryImpl
 import com.financeautomation.data.repository.TransactionRepositoryImpl
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.repository.TripTagRepositoryImpl
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
@@ -31,6 +35,7 @@ import com.financeautomation.domain.repository.ConfigRepository
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
+import com.financeautomation.domain.repository.SubscriptionRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
@@ -43,6 +48,9 @@ import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.domain.usecase.RegenerateDashboardUseCase
 import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
+import com.financeautomation.domain.usecase.SubscriptionActionUseCase
+import com.financeautomation.domain.usecase.SubscriptionMatcher
+import com.financeautomation.domain.usecase.SubscriptionScheduleUseCase
 import com.financeautomation.domain.usecase.SyncConfigUseCase
 import com.financeautomation.domain.usecase.SyncTransactionsUseCase
 import com.financeautomation.domain.usecase.VoidTransactionUseCase
@@ -102,6 +110,12 @@ interface AppContainer {
     val overlayController: OverlayController
     val peopleListRebuilder: PeopleListRebuilder
     val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase
+    val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
+    val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
+    val subscriptionRepository: SubscriptionRepository
+    val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
+    val subscriptionMatcher: SubscriptionMatcher
+    val subscriptionActionUseCase: SubscriptionActionUseCase
 }
 
 /**
@@ -109,7 +123,8 @@ interface AppContainer {
  */
 class DefaultAppContainer(
     override val applicationContext: Context,
-    providedTokenProvider: TokenProvider? = null
+    providedTokenProvider: TokenProvider? = null,
+    providedDatabaseReady: Deferred<FinanceDatabase>? = null
 ) : AppContainer {
 
     override val tokenProvider: TokenProvider = providedTokenProvider
@@ -122,6 +137,18 @@ class DefaultAppContainer(
     override val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
     override val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 
+    override val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver by lazy {
+        com.financeautomation.core.utils.ConnectivityObserver(applicationContext)
+    }
+
+    override val rawHttpErrorStore: RawHttpErrorStore by lazy {
+        RawHttpErrorStore(applicationContext.filesDir)
+    }
+
+    init {
+        GoogleApiError.rawHttpErrorStore = rawHttpErrorStore
+    }
+
     override val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addInterceptor(TokenRecoveryInterceptor(tokenProvider))
@@ -132,9 +159,10 @@ class DefaultAppContainer(
             .build()
     }
 
-    override val databaseReady: Deferred<FinanceDatabase> = CoroutineScope(SupervisorJob() + Dispatchers.IO).async {
-        FinanceDatabase.getInstance(applicationContext)
-    }
+    override val databaseReady: Deferred<FinanceDatabase> = providedDatabaseReady
+        ?: CoroutineScope(SupervisorJob() + Dispatchers.IO).async {
+            FinanceDatabase.getInstance(applicationContext)
+        }
 
     override suspend fun awaitDatabase(): FinanceDatabase = databaseReady.await()
 
@@ -155,16 +183,15 @@ class DefaultAppContainer(
     override val preferencesRepository: PreferencesRepository by lazy {
         PreferencesRepositoryImpl(
             preferenceDaoProvider = { awaitDatabase().preferenceDao() },
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
-        ).also { impl ->
-            impl.configSyncCoordinator = configSyncCoordinator
-        }
+        )
     }
 
     override val peopleRepository: PeopleRepository by lazy {
         PeopleRepositoryImpl(
             companionDaoProvider = { awaitDatabase().companionDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
         )
     }
@@ -172,7 +199,8 @@ class DefaultAppContainer(
     override val accountRepository: AccountRepository by lazy {
         AccountRepositoryImpl(
             accountDaoProvider = { awaitDatabase().accountDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
+            transactionDaoProvider = { awaitDatabase().transactionDao() },
             ioDispatcher = ioDispatcher
         )
     }
@@ -180,7 +208,7 @@ class DefaultAppContainer(
     override val categoryRepository: CategoryRepository by lazy {
         CategoryRepositoryImpl(
             categoryDaoProvider = { awaitDatabase().categoryDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
         )
     }
@@ -188,7 +216,8 @@ class DefaultAppContainer(
     override val tripTagRepository: TripTagRepository by lazy {
         TripTagRepositoryImpl(
             tripTagDaoProvider = { awaitDatabase().tripTagDao() },
-            configSyncCoordinator = configSyncCoordinator,
+            configSyncCoordinatorProvider = { configSyncCoordinator },
+            preferencesRepositoryProvider = { preferencesRepository },
             ioDispatcher = ioDispatcher
         )
     }
@@ -233,6 +262,9 @@ class DefaultAppContainer(
         TransactionRepositoryImpl(
             transactionDaoProvider = { awaitDatabase().transactionDao() },
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            payableDaoProvider = { awaitDatabase().payableDao() },
+            lineageDaoProvider = { awaitDatabase().lineageDao() },
+            databaseProvider = { awaitDatabase() },
             googleSheetsClient = googleSheetsClient,
             preferencesRepository = preferencesRepository,
             workbookResolver = workbookResolver,
@@ -251,6 +283,49 @@ class DefaultAppContainer(
                 }
             }
         }
+    }
+
+    override val subscriptionRepository: SubscriptionRepository by lazy {
+        SubscriptionRepositoryImpl(
+            subscriptionDaoProvider = { awaitDatabase().subscriptionDao() },
+            cycleDaoProvider = { awaitDatabase().subscriptionCycleDao() },
+            configSyncCoordinatorProvider = { configSyncCoordinator },
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val subscriptionScheduleUseCase: SubscriptionScheduleUseCase by lazy {
+        SubscriptionScheduleUseCase()
+    }
+
+    override val subscriptionMatcher: SubscriptionMatcher by lazy {
+        SubscriptionMatcher(subscriptionRepository)
+    }
+
+    override val subscriptionActionUseCase: SubscriptionActionUseCase by lazy {
+        SubscriptionActionUseCase(
+            repository = subscriptionRepository,
+            logExpenseUseCase = logExpenseUseCase,
+            createCapture = { sub, timestamp ->
+                val capture = PendingCaptureEntity(
+                    id = "cap_${java.util.UUID.randomUUID().toString().replace("-", "")}",
+                    sourcePackage = "manual",
+                    amount = null,
+                    payee = sub.name,
+                    inferredAccount = sub.account,
+                    timestamp = timestamp,
+                    kind = PendingCaptureEntity.KIND_DEBIT,
+                    flags = PendingCaptureEntity.FLAG_NEEDS_AMOUNT + "," +
+                        PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX + sub.id,
+                    state = PendingCaptureEntity.STATE_SHOWN,
+                    notificationKey = null,
+                    contentHash = null,
+                    updatedAt = System.currentTimeMillis()
+                )
+                awaitDatabase().pendingCaptureDao().insert(capture)
+                capture.id
+            }
+        )
     }
 
     override val parseNotificationUseCase: ParseNotificationUseCase by lazy {
@@ -344,6 +419,9 @@ class DefaultAppContainer(
             googleDriveClient = googleDriveClient,
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             lineageDaoProvider = { awaitDatabase().lineageDao() },
+            transactionDaoProvider = { awaitDatabase().transactionDao() },
+            accountsProvider = { accountRepository.getAllAccounts(includeArchived = false).map { it.name } },
+            categoriesProvider = { categoryRepository.getAllCategories(includeArchived = false).map { it.name } },
             settlementWaterfallUseCase = settlementWaterfallUseCase,
             repaymentWaterfallUseCase = repaymentWaterfallUseCase,
             carryForwardUseCase = carryForwardUseCase,
@@ -366,7 +444,8 @@ class DefaultAppContainer(
             predictCategoryUseCase = predictCategoryUseCase,
             getOpenDebtsForPersonUseCase = getOpenDebtsForPersonUseCase,
             ioDispatcher = ioDispatcher,
-            mainDispatcher = mainDispatcher
+            mainDispatcher = mainDispatcher,
+            subscriptionRepository = subscriptionRepository
         )
     }
 
@@ -374,6 +453,7 @@ class DefaultAppContainer(
         ForegroundWatcher(
             context = applicationContext,
             pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
+            transactionDaoProvider = { awaitDatabase().transactionDao() },
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
             predictCategoryUseCase = predictCategoryUseCase,
             overlayControllerProvider = { overlayController }

@@ -23,7 +23,7 @@ import java.io.IOException
  * Direct OkHttp client for Google Drive v3 REST API.
  * Interacts with Google Drive to locate or provision folders and monthly workbooks.
  */
-class GoogleDriveClient(
+open class GoogleDriveClient(
     private val okHttpClient: OkHttpClient,
     private val tokenProvider: TokenProvider? = null,
     private val baseUrl: String = "https://www.googleapis.com/drive/v3"
@@ -44,7 +44,7 @@ class GoogleDriveClient(
      * Searches for a folder with [folderName] or creates it under Drive root if not found.
      * Returns the Drive folder ID on success.
      */
-    suspend fun findOrCreateFolder(folderName: String): Result<String> = withContext(Dispatchers.IO) {
+    open suspend fun findOrCreateFolder(folderName: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val escapedFolderName = folderName.replace("'", "\\'")
             val query = "(appProperties has { key='app' and value='FinanceAutomation' } or name = '$escapedFolderName') and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
@@ -58,8 +58,9 @@ class GoogleDriveClient(
             okHttpClient.newCall(searchRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
                     return@withContext Result.Error(
-                        IOException("Failed to query folder '$folderName': HTTP ${response.code}")
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to query folder '$folderName'"), apiError)
                     )
                 }
 
@@ -92,8 +93,9 @@ class GoogleDriveClient(
             okHttpClient.newCall(createRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_CREATE, response.code, bodyString)
                     return@withContext Result.Error(
-                        IOException("Failed to create folder '$folderName': HTTP ${response.code}")
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to create folder '$folderName'"), apiError)
                     )
                 }
 
@@ -178,6 +180,23 @@ class GoogleDriveClient(
             }
 
             // Spreadsheet does not exist, create it with parent folder ID and appProperties
+            return@withContext createSpreadsheet(folderId, spreadsheetName, resolvedYear)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Always creates a new spreadsheet in [folderId] without searching for an existing one.
+     * The name must be unique; the caller is responsible for that.
+     */
+    open suspend fun createSpreadsheet(
+        folderId: String,
+        spreadsheetName: String,
+        year: Int? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val resolvedYear = year ?: Regex("""\d{4}""").find(spreadsheetName)?.value?.toIntOrNull()
             val createUrl = "$baseUrl/files"
             val fiscalYearValue = resolvedYear?.toString() ?: ""
             val requestBodyJson = """
@@ -199,8 +218,9 @@ class GoogleDriveClient(
             okHttpClient.newCall(createRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_CREATE, response.code, bodyString)
                     return@withContext Result.Error(
-                        IOException("Failed to create spreadsheet '$spreadsheetName': HTTP ${response.code}")
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to create spreadsheet '$spreadsheetName'"), apiError)
                     )
                 }
 
@@ -234,8 +254,9 @@ class GoogleDriveClient(
             okHttpClient.newCall(searchRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
                     return@withContext Result.Error(
-                        IOException("Failed to find workbook for year $year: HTTP ${response.code}")
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to find workbook for year $year"), apiError)
                     )
                 }
 
@@ -274,8 +295,9 @@ class GoogleDriveClient(
             okHttpClient.newCall(searchRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
                     return@withContext Result.Error(
-                        IOException("Failed to search spreadsheet '$spreadsheetName': HTTP ${response.code}")
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to search spreadsheet '$spreadsheetName'"), apiError)
                     )
                 }
 
@@ -335,8 +357,12 @@ class GoogleDriveClient(
                     .build()
 
                 okHttpClient.newCall(patchRequest).execute().use { response ->
+                    val bodyString = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        return@withContext Result.Error(IOException("Failed to update file: HTTP ${response.code}"))
+                        val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_UPDATE, response.code, bodyString)
+                        return@withContext Result.Error(
+                            GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to update file"), apiError)
+                        )
                     }
                     Result.Success(existingFileId)
                 }
@@ -366,13 +392,55 @@ class GoogleDriveClient(
                     .build()
 
                 okHttpClient.newCall(postRequest).execute().use { response ->
+                    val bodyString = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        return@withContext Result.Error(IOException("Failed to create file: HTTP ${response.code}"))
+                        val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_CREATE, response.code, bodyString)
+                        return@withContext Result.Error(
+                            GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to create file"), apiError)
+                        )
                     }
-                    val body = response.body?.string().orEmpty()
-                    val jsonResponse = json.parseToJsonElement(body).jsonObject
+                    val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
                     val newId = jsonResponse["id"]?.jsonPrimitive?.content.orEmpty()
                     Result.Success(newId)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Copies an existing file [fileId] in Google Drive giving it [backupName].
+     * The copy retains the same parent directory and permissions.
+     */
+    open suspend fun copyFile(
+        fileId: String,
+        backupName: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val copyUrl = "$baseUrl/files/$fileId/copy?fields=id%2Cname"
+            val requestBodyJson = """{"name":"${backupName.replace("\"", "\\\"")}"}"""
+            val copyRequest = newRequestBuilder(copyUrl)
+                .post(requestBodyJson.toRequestBody(jsonMediaType))
+                .build()
+
+            okHttpClient.newCall(copyRequest).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_COPY, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to copy file '$fileId' to '$backupName'"), apiError)
+                    )
+                }
+
+                val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
+                val copiedId = jsonResponse["id"]?.jsonPrimitive?.content
+                if (!copiedId.isNullOrBlank()) {
+                    Result.Success(copiedId)
+                } else {
+                    Result.Error(IOException("Drive API returned empty id for copied file '$backupName'"))
                 }
             }
         } catch (e: CancellationException) {

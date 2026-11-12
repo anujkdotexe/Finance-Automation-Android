@@ -4,6 +4,8 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.dao.getByTabAndSheetRowIndex
+import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.AccountingPlan
@@ -21,7 +23,10 @@ import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
 import com.financeautomation.domain.usecase.YearCloseUseCase
 import com.financeautomation.domain.utils.AccountingUtils
+import java.util.Locale
 import java.util.UUID
+
+private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
 
 /**
  * Handles two-phase durable execution of complex accounting operations in the sync queue:
@@ -33,8 +38,12 @@ class AccountingSyncExecutor(
     private val googleDriveClient: GoogleDriveClient,
     private val syncQueueDao: SyncQueueDao? = null,
     private val lineageDao: LineageDao? = null,
+    private val transactionDao: TransactionDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
+    private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
+    private val accountsProvider: (suspend () -> List<String>)? = null,
+    private val categoriesProvider: (suspend () -> List<String>)? = null,
     private val settlementWaterfallUseCase: SettlementWaterfallUseCase = SettlementWaterfallUseCase(),
     private val repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
     private val carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
@@ -56,8 +65,12 @@ class AccountingSyncExecutor(
         googleDriveClient = googleDriveClient,
         syncQueueDao = syncQueueDao,
         lineageDao = lineageDao,
+        transactionDao = null,
         syncQueueDaoProvider = null,
         lineageDaoProvider = null,
+        transactionDaoProvider = null,
+        accountsProvider = null,
+        categoriesProvider = null,
         settlementWaterfallUseCase = settlementWaterfallUseCase,
         repaymentWaterfallUseCase = repaymentWaterfallUseCase,
         carryForwardUseCase = carryForwardUseCase,
@@ -73,6 +86,9 @@ class AccountingSyncExecutor(
         lineageDao ?: lineageDaoProvider?.invoke()
             ?: throw IllegalStateException("LineageDao or provider must be supplied")
 
+    private suspend fun resolveTransactionDao(): TransactionDao? =
+        transactionDao ?: transactionDaoProvider?.invoke()
+
     suspend fun executeLogCredit(
         item: SyncQueueEntity,
         spreadsheetId: String,
@@ -87,11 +103,10 @@ class AccountingSyncExecutor(
             val timeSerial = DateSerialUtils.toTimeSerial(req.timestamp)
 
             val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
-            val allDebits = if (snapRes is Result.Success) {
-                mapDebitsFromSnapshot(snapRes.data)
-            } else {
-                emptyList()
+            if (snapRes is Result.Error) {
+                return Result.Error(snapRes.exception)
             }
+            val allDebits = mapDebitsFromSnapshot((snapRes as Result.Success).data)
 
             val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
             val resolveCarriedFn: (LedgerDebit) -> LedgerDebit? = { carriedRow ->
@@ -133,11 +148,10 @@ class AccountingSyncExecutor(
             val timeSerial = DateSerialUtils.toTimeSerial(req.timestamp)
 
             val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
-            val allDebits = if (snapRes is Result.Success) {
-                mapDebitsFromSnapshot(snapRes.data)
-            } else {
-                emptyList()
+            if (snapRes is Result.Error) {
+                return Result.Error(snapRes.exception)
             }
+            val allDebits = mapDebitsFromSnapshot((snapRes as Result.Success).data)
 
             val nettingRes = nettingUseCase.nettingOnPayable(
                 creditor = req.creditor,
@@ -198,11 +212,10 @@ class AccountingSyncExecutor(
             val timeSerial = DateSerialUtils.toTimeSerial(req.timestamp)
 
             val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
-            val allPayables = if (snapRes is Result.Success) {
-                mapPayablesFromSnapshot(snapRes.data)
-            } else {
-                emptyList()
+            if (snapRes is Result.Error) {
+                return Result.Error(snapRes.exception)
             }
+            val allPayables = mapPayablesFromSnapshot((snapRes as Result.Success).data)
 
             val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
             val resolveCarriedFn: (LedgerPayable) -> LedgerPayable? = { carriedRow ->
@@ -232,11 +245,21 @@ class AccountingSyncExecutor(
         spreadsheetId: String
     ): Result<Unit> {
         val req = AccountingRequestJsonAdapter.carryForwardRequestFromJson(item.payloadJson)
+        val targetTab = req.targetTab
+
+        // 1. Ensure target tab exists with accounts and categories dropdowns
+        val accounts = if (req.accounts.isNotEmpty()) req.accounts else accountsProvider?.invoke().orEmpty()
+        val categories = if (req.categories.isNotEmpty()) req.categories else categoriesProvider?.invoke().orEmpty()
+        val tabEnsureRes = googleSheetsClient.ensureMonthTabExists(spreadsheetId, targetTab, accounts, categories)
+        if (tabEnsureRes is Result.Error) {
+            return Result.Error(tabEnsureRes.exception)
+        }
+
+        // 2. Read snapshot of workbook
         val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
         if (snapRes is Result.Error) return Result.Error(snapRes.exception)
         val snapshot = (snapRes as Result.Success).data
 
-        val targetTab = req.targetTab
         val sourceTab = req.sourceTab ?: findPrecedingTab(targetTab, snapshot.monthTabs.map { it.tabName })
         if (sourceTab == null) {
             return Result.Success(Unit)
@@ -338,17 +361,13 @@ class AccountingSyncExecutor(
             }
 
             val appendRes = when (append.table) {
-                TableType.DEBIT -> googleSheetsClient.appendDebit(spreadsheetId, append.tab, append.cells)
-                TableType.INFLOW -> googleSheetsClient.appendInflow(spreadsheetId, append.tab, append.cells)
-                TableType.PAYABLE -> googleSheetsClient.appendPayable(spreadsheetId, append.tab, append.cells)
+                TableType.DEBIT -> googleSheetsClient.appendDebit(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
+                TableType.INFLOW -> googleSheetsClient.appendInflow(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
+                TableType.PAYABLE -> googleSheetsClient.appendPayable(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
             }
 
-            if (appendRes is Result.Success) {
-                val rowIdx = appendRes.data
-                val uuidRes = googleSheetsClient.updateCell(spreadsheetId, append.tab, "$colUuid$rowIdx", append.uuid)
-                if (uuidRes is Result.Error) return Result.Error(uuidRes.exception)
-            } else {
-                return Result.Error((appendRes as Result.Error).exception)
+            if (appendRes is Result.Error) {
+                return Result.Error(appendRes.exception)
             }
         }
 
@@ -361,7 +380,69 @@ class AccountingSyncExecutor(
             if (editRes is Result.Error) return Result.Error(editRes.exception)
         }
 
+        // Apply plan edits and settled references locally to Room database
+        applyPlanToLocalDatabase(plan)
+
         return Result.Success(Unit)
+    }
+
+    suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
+        try {
+            val tDao = resolveTransactionDao() ?: return
+            val editsByTabAndRow = plan.edits.groupBy { Pair(it.tab, it.row) }
+            val settledByTabAndRow = plan.settled.groupBy { Pair(it.tab, it.row) }
+            val allTargetTabRows = (editsByTabAndRow.keys + settledByTabAndRow.keys).distinct()
+
+            for ((tab, rowNum) in allTargetTabRows) {
+                val settledRef = settledByTabAndRow[Pair(tab, rowNum)]?.firstOrNull()
+                val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
+                    ?: tDao.getByTabAndSheetRowIndex(tab, rowNum)
+
+                if (existingTxn != null) {
+                    var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn
+                    val rowEdits = editsByTabAndRow[Pair(tab, rowNum)].orEmpty()
+                    for (edit in rowEdits) {
+                        val col = edit.column.uppercase()
+                        updated = when (col) {
+                            "D" -> updated.copy(merchant = edit.value?.toString() ?: updated.merchant)
+                            "G" -> {
+                                val amt = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.totalAmount
+                                updated.copy(totalAmount = amt)
+                            }
+                            "H" -> updated.copy(companions = edit.value?.toString() ?: updated.companions)
+                            "I" -> {
+                                val share = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.myShare
+                                updated.copy(myShare = share)
+                            }
+                            "J" -> {
+                                val owed = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.owedToMe
+                                updated.copy(owedToMe = owed)
+                            }
+                            "K" -> updated.copy(status = edit.value?.toString() ?: updated.status)
+                            else -> updated
+                        }
+                    }
+                    if (settledRef != null) {
+                        val owed = settledRef.remaining
+                        val st = if (owed <= 0.0) "Settled" else "Pending"
+                        updated = updated.copy(owedToMe = owed, status = st)
+                    }
+                    tDao.update(updated)
+                }
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            com.financeautomation.core.utils.Diagnostics.record(
+                "AccountingSyncExecutor",
+                "applyPlanToLocalDatabase failed: ${e.message}"
+            )
+        }
     }
 
     private fun mapDebitsFromSnapshot(snapshot: LedgerWorkbookSnapshot): List<LedgerDebit> {
@@ -410,7 +491,36 @@ class AccountingSyncExecutor(
         )
     }
 
+    fun parseMonthKey(tabName: String): Int? {
+        val match = MONTH_TAB_REGEX.find(tabName.trim()) ?: return null
+        val mmm = match.groupValues[1].lowercase(Locale.US)
+        val yy = match.groupValues[2].toIntOrNull() ?: return null
+        val monthIdx = when (mmm) {
+            "jan" -> 1
+            "feb" -> 2
+            "mar" -> 3
+            "apr" -> 4
+            "may" -> 5
+            "jun" -> 6
+            "jul" -> 7
+            "aug" -> 8
+            "sep" -> 9
+            "oct" -> 10
+            "nov" -> 11
+            "dec" -> 12
+            else -> return null
+        }
+        return (2000 + yy) * 12 + monthIdx
+    }
+
     fun findPrecedingTab(targetTab: String, availableTabs: List<String>): String? {
+        val targetKey = parseMonthKey(targetTab)
+        if (targetKey != null) {
+            val precedingTabs = availableTabs
+                .mapNotNull { tab -> parseMonthKey(tab)?.let { key -> tab to key } }
+                .filter { (_, key) -> key < targetKey }
+            return precedingTabs.maxByOrNull { (_, key) -> key }?.first
+        }
         val targetIdx = availableTabs.indexOfFirst { it.equals(targetTab, ignoreCase = true) }
         return if (targetIdx > 0) {
             availableTabs[targetIdx - 1]

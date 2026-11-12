@@ -281,9 +281,9 @@ Do: make `SheetProvisioner` produce the iOS layout plus hidden `AC`, `AD`, `AE`.
 
 How:
 
-1. Spreadsheet properties first, once per workbook: `updateSpreadsheetProperties` with `locale = "en_IN"` and
-   `timeZone = "Asia/Kolkata"`, `fields = "locale,timeZone"`. The Dashboard formulas use `TEXT(TODAY(), "mmm")`, which
-   gives English month names only in an English locale.
+1. Spreadsheet properties first, once per workbook: `updateSpreadsheetProperties` with `locale = "en_GB"` and
+   `timeZone = "Asia/Kolkata"`, `fields = "locale,timeZone"`, executed in an isolated `batchUpdate` before tab creation.
+   On-device verification confirmed that `locale = "en_GB"` with `timeZone = "Asia/Kolkata"` is accepted by Google Sheets API without error (0 failures logged in Diagnostics or logcat for the locale batch). We use `en_GB` to ensure English month names in `TEXT(TODAY(), "mmm")`, `DD/MM/YYYY` date parsing, and comma formula argument separators, while `timeZone = "Asia/Kolkata"` anchors date functions to IST. All rupee values use explicit custom number formats (`"₹"#,##0`), rendering currency display independent of sheet locale defaults. If the cosmetic properties batch ever fails, it is recorded in Diagnostics and tab provisioning continues uninterrupted.
 2. Ledger tabs (`Template` and every `MmmYY` tab), all in one `batchUpdate`:
    - Grid size: 1000 rows by 31 columns (`updateSheetProperties` with `gridProperties.rowCount` and `columnCount`, fields
      `gridProperties.rowCount,gridProperties.columnCount`).
@@ -1279,9 +1279,11 @@ Status of all fifteen audit items from Section 12 of [ANDROID_V8_ENGINEERING_AND
 
 The following five files exceed 400 lines in the codebase. Per reviewer instructions and guide guidance, they are intentionally kept intact without splitting in this round:
 
-1. `app/src/main/java/com/financeautomation/data/remote/GoogleSheetsClient.kt` (1375 lines): Central low-level Google Sheets API client implementing raw append, batch dimension formatting, cell updates, and error handling. Pre-existing foundational client permitted by the guide.
-2. `app/src/main/java/com/financeautomation/data/remote/SheetProvisioner.kt` (1303 lines): Implements 28-column master sheet provisioning, formula generation, styling requests, and multi-table layouts. Pre-existing foundational provisioner permitted by the guide.
+1. `app/src/main/java/com/financeautomation/data/remote/GoogleSheetsClient.kt` (1675 lines): Central low-level Google Sheets API client implementing raw append, batch dimension formatting, cell updates, and error handling. Pre-existing foundational client permitted by the guide.
+2. `app/src/main/java/com/financeautomation/data/remote/SheetProvisioner.kt` (1355 lines): Implements 28-column master sheet provisioning, formula generation, styling requests, and multi-table layouts. Pre-existing foundational provisioner permitted by the guide.
 3. `app/src/main/java/com/financeautomation/data/repository/TransactionRepositoryImpl.kt` (968 lines): Implements offline queue management, netting logs, Room persistence, and remote synchronization coordination. Pre-existing repository permitted by the guide.
 4. `app/src/main/java/com/financeautomation/data/remote/AccountingSyncExecutor.kt` (422 lines): Coordinates split execution, repayment waterfalls, and remote row mutations. Kept intact to preserve coherent transactional semantics across accounting steps.
-5. `app/src/main/java/com/financeautomation/di/AppContainer.kt` (407 lines): Manual dependency injection container providing singletons across database, repositories, use cases, and coordinators. Kept in a single container for direct wiring visibility.
+5. `app/src/main/java/com/financeautomation/di/AppContainer.kt` (419 lines): Manual dependency injection container providing singletons across database, repositories, use cases, and coordinators. Kept in a single container for direct wiring visibility.
+
+The repair, safety-validation and backup work added about 300 lines to `GoogleSheetsClient.kt` and `SheetProvisioner.kt`, against the rule that new code goes into new files. The closure phase extracts the workbook repair, tab provisioning and range-read code into separate files; until then new Google client code goes into new files.
 

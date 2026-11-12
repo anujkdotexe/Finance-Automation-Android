@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,6 +25,12 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,8 +47,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
@@ -53,9 +65,23 @@ import java.time.format.DateTimeParseException
  * Flow sheet for recording debt repayments to friends (Phase 5.6 point 4).
  * Reconciles open payables in Table 3 via RepaymentWaterfallUseCase.
  */
+private val SHEET_ZONE: java.time.ZoneId = java.time.ZoneId.of("Asia/Kolkata")
+
+/** Date picker rule: nothing after today (Asia/Kolkata). Picker dates are UTC midnights. */
+@OptIn(ExperimentalMaterial3Api::class)
+internal object NoFutureSelectableDates : SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+        val today = LocalDate.now(SHEET_ZONE).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        return utcTimeMillis <= today
+    }
+    override fun isSelectableYear(year: Int): Boolean = year <= LocalDate.now(SHEET_ZONE).year
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RepaidFriendFlowSheet(
     companions: List<Companion>,
+    preselectedFriend: String? = null,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (amount: Double, person: String, timestamp: Long) -> Unit,
@@ -63,16 +89,33 @@ fun RepaidFriendFlowSheet(
     modifier: Modifier = Modifier
 ) {
     var amountText by remember { mutableStateOf("") }
-    var personName by remember { mutableStateOf("") }
-    val todayFormatted = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
+    var personName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
+    val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
     var dateText by remember { mutableStateOf(todayFormatted) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val dateInteraction = remember { MutableInteractionSource() }
+    LaunchedEffect(dateInteraction) {
+        dateInteraction.interactions.collect { if (it is androidx.compose.foundation.interaction.PressInteraction.Release) showDatePicker = true }
+    }
 
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .imePadding()
             .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { focusManager.clearFocus() }
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -155,7 +198,10 @@ fun RepaidFriendFlowSheet(
                 companions.take(6).forEach { companion ->
                     FilterChip(
                         selected = (personName.equals(companion.name, ignoreCase = true)),
-                        onClick = { personName = companion.name },
+                        onClick = {
+                            focusManager.clearFocus()
+                            personName = companion.name
+                        },
                         label = { Text(companion.name) }
                     )
                 }
@@ -167,7 +213,10 @@ fun RepaidFriendFlowSheet(
             value = personName,
             onValueChange = { personName = it },
             label = { Text(stringResource(R.string.hint_friends_name)) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Words,
+                imeAction = ImeAction.Next
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -186,7 +235,10 @@ fun RepaidFriendFlowSheet(
                 }
             },
             label = { Text(stringResource(R.string.prompt_enter_amount)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Next
+            ),
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -196,17 +248,39 @@ fun RepaidFriendFlowSheet(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
-        // Date Field (Defaults to today)
+        // Date field (defaults to today); opens a picker that rejects future dates
         OutlinedTextField(
             value = dateText,
-            onValueChange = { dateText = it },
+            onValueChange = {},
+            readOnly = true,
             label = { Text(stringResource(R.string.prompt_date_repaid)) },
             singleLine = true,
+            interactionSource = dateInteraction,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
             shape = FinanceTheme.shapes.large
         )
+        if (showDatePicker) {
+            val pickerState = rememberDatePickerState(
+                initialSelectedDateMillis = LocalDate.parse(dateText).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                selectableDates = NoFutureSelectableDates
+            )
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pickerState.selectedDateMillis?.let { ms ->
+                            dateText = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+                        }
+                        showDatePicker = false
+                    }) { Text(stringResource(android.R.string.ok)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) { Text(stringResource(android.R.string.cancel)) }
+                }
+            ) { DatePicker(state = pickerState) }
+        }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
@@ -217,7 +291,7 @@ fun RepaidFriendFlowSheet(
         Button(
             onClick = {
                 val timestamp = try {
-                    LocalDate.parse(dateText).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    LocalDate.parse(dateText).atStartOfDay(SHEET_ZONE).toInstant().toEpochMilli()
                 } catch (e: DateTimeParseException) {
                     Diagnostics.record("RepaidFriendFlowSheet", "parseDate: ${e.javaClass.simpleName}")
                     System.currentTimeMillis()

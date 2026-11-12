@@ -16,6 +16,7 @@ import com.financeautomation.service.QuickLogWidgetProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -32,6 +33,7 @@ class FinanceApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Diagnostics.initialize(this)
         LocalCrashRecorder.install(this, BuildConfig.VERSION_NAME)
         CrashlyticsManager.initAtAppStart(this)
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
@@ -97,6 +99,20 @@ class FinanceApplication : Application() {
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
         com.financeautomation.service.worker.CapturePipelineHealthWorker.schedule(applicationContext)
+
+        // 3a. Schedule the daily subscription reminder; a changed reminder time reschedules it
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                appContainer.preferencesRepository.getSubscriptionReminderTime()
+                    .distinctUntilChanged()
+                    .collect { time ->
+                        com.financeautomation.service.worker.SubscriptionReminderWorker.schedule(applicationContext, time)
+                    }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: subscription reminder schedule")
+            }
+        }
 
         // 3b. Verify notification listener health and update persistent alert if access missing (Phase 7.4)
         com.financeautomation.service.NotificationAccessAlertManager.checkAndSyncAlert(applicationContext)

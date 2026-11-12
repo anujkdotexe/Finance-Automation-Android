@@ -5,6 +5,7 @@ import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.data.local.dao.PreferenceDao
 import com.financeautomation.data.local.entity.PreferenceEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
+import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 class PreferencesRepositoryImpl(
     private val preferenceDao: PreferenceDao? = null,
     private val preferenceDaoProvider: (suspend () -> PreferenceDao)? = null,
+    private var configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : PreferencesRepository {
 
@@ -36,6 +38,7 @@ class PreferencesRepositoryImpl(
     constructor(isTestHeadless: Boolean = true) : this(
         preferenceDao = null,
         preferenceDaoProvider = null,
+        configSyncCoordinatorProvider = null,
         ioDispatcher = Dispatchers.IO
     )
 
@@ -46,14 +49,20 @@ class PreferencesRepositoryImpl(
 
     // In-memory fallbacks when running headless without Room database
     private val memSpreadsheetId = MutableStateFlow<String?>(null)
-    private val memDefaultAccount = MutableStateFlow(CategoryConstants.ACCOUNT_SBI)
+    private val memDefaultAccount = MutableStateFlow(CategoryConstants.ACCOUNT_OTHER)
     private val memActiveTrip = MutableStateFlow<String?>(null)
     private val memGoogleEmail = MutableStateFlow<String?>(null)
     private val memSettleDelay = MutableStateFlow(DEFAULT_SETTLE_DELAY_SECONDS)
     private val memDeviceId = MutableStateFlow<String?>(null)
+    private val memDeveloperMode = MutableStateFlow(false)
+    private val memThemeMode = MutableStateFlow(ThemeMode.SYSTEM)
     private val memGenericPrefs = ConcurrentHashMap<String, String>()
 
-    var configSyncCoordinator: ConfigSyncCoordinator? = null
+    var configSyncCoordinator: ConfigSyncCoordinator?
+        get() = configSyncCoordinatorProvider?.invoke()
+        set(value) {
+            configSyncCoordinatorProvider = value?.let { { it } }
+        }
 
     override fun getSpreadsheetId(): Flow<String?> = flow {
         val dao = resolveDao()
@@ -117,13 +126,13 @@ class PreferencesRepositoryImpl(
         if (dao == null) {
             emitAll(memDefaultAccount.asStateFlow())
         } else {
-            emitAll(dao.getPreferenceFlow(KEY_DEFAULT_ACCOUNT).map { it ?: CategoryConstants.ACCOUNT_SBI })
+            emitAll(dao.getPreferenceFlow(KEY_DEFAULT_ACCOUNT).map { it ?: CategoryConstants.ACCOUNT_OTHER })
         }
     }.flowOn(ioDispatcher)
 
     override suspend fun getDefaultAccountSync(): String = withContext(ioDispatcher) {
         val dao = resolveDao() ?: return@withContext memDefaultAccount.value
-        dao.getPreference(KEY_DEFAULT_ACCOUNT) ?: CategoryConstants.ACCOUNT_SBI
+        dao.getPreference(KEY_DEFAULT_ACCOUNT) ?: CategoryConstants.ACCOUNT_OTHER
     }
 
     override suspend fun setDefaultAccount(account: String): Unit = withContext(ioDispatcher) {
@@ -236,6 +245,78 @@ class PreferencesRepositoryImpl(
         dao.getPreference(KEY_DEVICE_ID)
     }
 
+    override fun getDeveloperMode(): Flow<Boolean> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memDeveloperMode.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_DEVELOPER_MODE).map {
+                it?.toBooleanStrictOrNull() ?: false
+            })
+        }
+    }.flowOn(ioDispatcher)
+
+    override suspend fun getDeveloperModeSync(): Boolean = withContext(ioDispatcher) {
+        val dao = resolveDao() ?: return@withContext memDeveloperMode.value
+        dao.getPreference(KEY_DEVELOPER_MODE)?.toBooleanStrictOrNull() ?: false
+    }
+
+    override suspend fun setDeveloperMode(enabled: Boolean): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
+        if (dao != null) {
+            dao.setPreference(PreferenceEntity(KEY_DEVELOPER_MODE, enabled.toString(), updatedAt = System.currentTimeMillis(), dirty = 0))
+        } else {
+            memDeveloperMode.value = enabled
+        }
+    }
+
+    override fun getThemeMode(): Flow<ThemeMode> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memThemeMode.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_THEME_MODE).map { raw ->
+                raw?.let {
+                    try {
+                        ThemeMode.valueOf(it)
+                    } catch (_: Exception) {
+                        ThemeMode.SYSTEM
+                    }
+                } ?: ThemeMode.SYSTEM
+            })
+        }
+    }.flowOn(ioDispatcher)
+
+    override suspend fun getThemeModeSync(): ThemeMode = withContext(ioDispatcher) {
+        val dao = resolveDao() ?: return@withContext memThemeMode.value
+        val raw = dao.getPreference(KEY_THEME_MODE) ?: return@withContext ThemeMode.SYSTEM
+        try {
+            ThemeMode.valueOf(raw)
+        } catch (_: Exception) {
+            ThemeMode.SYSTEM
+        }
+    }
+
+    override suspend fun setThemeMode(mode: ThemeMode): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
+        if (dao != null) {
+            dao.setPreference(PreferenceEntity(KEY_THEME_MODE, mode.name, updatedAt = System.currentTimeMillis(), dirty = 0))
+        } else {
+            memThemeMode.value = mode
+        }
+    }
+
+    override fun getSubscriptionReminderTime(): Flow<String> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emit(getSubscriptionReminderTimeSync())
+        } else {
+            emitAll(dao.getPreferenceFlow(PreferencesRepository.KEY_SUBSCRIPTION_REMINDER_TIME).map {
+                PreferencesRepository.normalizeReminderTime(it)
+            })
+        }
+    }.flowOn(ioDispatcher)
+
     override suspend fun getPreference(key: String): String? = withContext(ioDispatcher) {
         val dao = resolveDao() ?: return@withContext memGenericPrefs[key]
         dao.getPreference(key)
@@ -283,6 +364,8 @@ class PreferencesRepositoryImpl(
         const val KEY_GOOGLE_EMAIL: String = "key_google_email"
         const val KEY_SETTLE_DELAY_SECONDS: String = "key_settle_delay_seconds"
         const val KEY_DEVICE_ID: String = "device_id"
+        const val KEY_DEVELOPER_MODE: String = "key_developer_mode"
+        const val KEY_THEME_MODE: String = "key_theme_mode"
         const val DEFAULT_SETTLE_DELAY_SECONDS: Int = 120
     }
 }

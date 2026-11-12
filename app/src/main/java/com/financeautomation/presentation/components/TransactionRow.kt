@@ -70,7 +70,6 @@ fun TransactionRow(
                 amount = amount,
                 tone = if (isExpense) AmountTone.MONEY_OUT else AmountTone.MONEY_IN,
                 style = FinanceTheme.typography.bodyMedium,
-                includeDecimals = true,
                 prefix = if (isExpense) "-" else "+"
             )
             StatusChip(status = status)
@@ -85,7 +84,7 @@ private fun TransactionRowPreviewLight() {
         TransactionRow(
             description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
             dateText = "10 Nov",
-            account = "SBI",
+            account = "Primary Account",
             amount = 240.0,
             status = "Personal"
         )
@@ -99,7 +98,7 @@ private fun TransactionRowPreviewDark() {
         TransactionRow(
             description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
             dateText = "09 Nov",
-            account = "Canara",
+            account = "Secondary Account",
             amount = 1850.0,
             status = "Pending"
         )
@@ -113,7 +112,7 @@ private fun TransactionRowPreviewLargeFont() {
         TransactionRow(
             description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
             dateText = "08 Nov",
-            account = "SBI",
+            account = "Primary Account",
             amount = 640.0,
             status = "Settled"
         )

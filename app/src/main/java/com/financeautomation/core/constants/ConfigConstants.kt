@@ -15,6 +15,7 @@ object ConfigConstants {
     const val TYPE_PERSON = "person"
     const val TYPE_TRIP = "trip"
     const val TYPE_PREF = "pref"
+    const val TYPE_SUBSCRIPTION = "subscription"
 
     // Meta Keys
     const val KEY_SCHEMA_VERSION = "schemaVersion"
@@ -33,7 +34,11 @@ object ConfigConstants {
         "setup_health_results",
         "widget_state",
         "permissions_granted",
-        "oem_setup_completed"
+        "oem_setup_completed",
+        "developer_mode",
+        "key_developer_mode",
+        "theme_mode",
+        "key_theme_mode"
     )
 
     fun isLocalOnlyPref(key: String): Boolean {

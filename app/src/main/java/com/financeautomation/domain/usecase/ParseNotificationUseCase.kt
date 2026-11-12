@@ -34,7 +34,8 @@ sealed interface NotificationParseResult {
         val isCredit: Boolean,
         val wording: WordingClass = WordingClass.SUCCESS,
         val flags: String = "",
-        val inferredAccount: String = transaction.account
+        val inferredAccount: String = transaction.account,
+        val detectedAccountHint: String? = null
     ) : NotificationParseResult
 
     /**
@@ -45,10 +46,11 @@ sealed interface NotificationParseResult {
         val message: String,
         val sourcePackage: String,
         val wording: WordingClass = WordingClass.UNKNOWN,
-        val inferredAccount: String = CategoryConstants.ACCOUNT_SBI,
+        val inferredAccount: String = CategoryConstants.ACCOUNT_OTHER,
         val kind: String = "DEBIT",
         val flags: String = "NEEDS_AMOUNT",
-        val timestamp: Long = System.currentTimeMillis()
+        val timestamp: Long = System.currentTimeMillis(),
+        val detectedAccountHint: String? = null
     ) : NotificationParseResult
 
     /**
@@ -97,14 +99,17 @@ class ParseNotificationUseCase(
             return WordingClass.UNKNOWN
         }
 
-        fun inferAccount(
+        data class InferredAccountResult(
+            val account: String,
+            val isNewAccount: Boolean,
+            val detectedName: String? = null
+        )
+
+        fun inferAccountWithFlag(
             text: String,
             configuredAccounts: List<String>,
-            defaultAccount: String = CategoryConstants.ACCOUNT_SBI
-        ): String {
-            if (configuredAccounts.isEmpty()) {
-                return RegexPatterns.extractAccount(text) ?: defaultAccount
-            }
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
+        ): InferredAccountResult {
             val digitMatch = Regex("""(?i)(?:xx|x|ending\s+|a/c\s*no\.?\s*|\.\.)(\d{3,4})\b""").find(text)
             val extractedDigits = digitMatch?.groupValues?.get(1)
 
@@ -114,15 +119,30 @@ class ParseNotificationUseCase(
 
                 val wordPattern = Regex("""(?i)\b${Regex.escape(trimmedAccount)}\b""")
                 if (wordPattern.containsMatchIn(text)) {
-                    return trimmedAccount
+                    return InferredAccountResult(trimmedAccount, false, null)
                 }
 
                 if (extractedDigits != null && trimmedAccount.contains(extractedDigits)) {
-                    return trimmedAccount
+                    return InferredAccountResult(trimmedAccount, false, null)
                 }
             }
 
-            return RegexPatterns.extractAccount(text) ?: defaultAccount
+            // Check if text mentions an unconfigured/unknown account pattern (e.g. A/c XX4821 or HDFC Bank)
+            val extractedUnknown = RegexPatterns.extractAccount(text)
+            val safeDefault = defaultAccount.ifBlank { CategoryConstants.ACCOUNT_OTHER }
+            if (extractedUnknown != null) {
+                return InferredAccountResult(safeDefault, true, extractedUnknown)
+            }
+
+            return InferredAccountResult(safeDefault, false, null)
+        }
+
+        fun inferAccount(
+            text: String,
+            configuredAccounts: List<String>,
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
+        ): String {
+            return inferAccountWithFlag(text, configuredAccounts, defaultAccount).account
         }
     }
 
@@ -133,7 +153,7 @@ class ParseNotificationUseCase(
         appName: String? = null,
         timestamp: Long = System.currentTimeMillis(),
         configuredAccounts: List<String> = emptyList(),
-        defaultAccount: String = CategoryConstants.ACCOUNT_SBI
+        defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
     ): NotificationParseResult {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
@@ -169,7 +189,27 @@ class ParseNotificationUseCase(
             )
         }
 
-        // 5. Wording classification
+        val isSms = PackageWhitelist.isSmsPackage(sourcePackage)
+
+        // 5. SMS privacy and financial content guard
+        if (isSms) {
+            // Drop SMS from personal numbers or contacts
+            if (RegexPatterns.isPersonalSender(title)) {
+                return NotificationParseResult.Dropped(
+                    reason = DropReason.NOT_WHITELISTED,
+                    sourcePackage = sourcePackage
+                )
+            }
+            // Drop SMS that lack financial transaction indicators
+            if (!RegexPatterns.hasFinancialKeywords(fullContent)) {
+                return NotificationParseResult.Dropped(
+                    reason = DropReason.NOT_WHITELISTED,
+                    sourcePackage = sourcePackage
+                )
+            }
+        }
+
+        // 6. Wording classification
         val wording = classifyWording(fullContent)
         if (wording == WordingClass.FAILURE) {
             return NotificationParseResult.FailureAlert(
@@ -178,29 +218,41 @@ class ParseNotificationUseCase(
             )
         }
 
-        // 6. Direction discrimination
+        // 7. Direction discrimination
         val isCredit = RegexPatterns.isCredit(fullContent)
         val isDebit = RegexPatterns.isDebit(fullContent) || !isCredit
         val kind = if (isCredit) "CREDIT" else "DEBIT"
 
-        // 7. Funding account inference
-        val account = inferAccount(fullContent, configuredAccounts, defaultAccount)
+        // 8. Funding account inference
+        val inferred = inferAccountWithFlag(fullContent, configuredAccounts, defaultAccount)
+        val account = inferred.account
+        val isNewAccount = inferred.isNewAccount
+        val detectedAccount = inferred.detectedName ?: account
 
-        // 8. Amount extraction
+        // 9. Amount extraction
         val amount = RegexPatterns.extractAmount(fullContent)
         if (amount == null || amount <= 0.0) {
+            if (isSms) {
+                // SMS without an explicit currency amount is non-transactional (e.g. promo, advisory)
+                return NotificationParseResult.Dropped(
+                    reason = DropReason.NOT_WHITELISTED,
+                    sourcePackage = sourcePackage
+                )
+            }
+            val fallbackFlags = if (isNewAccount) "NEEDS_AMOUNT,NEW_ACCOUNT" else "NEEDS_AMOUNT"
             return NotificationParseResult.FallbackPrompt(
                 message = "Payment detected, tap to enter amount",
                 sourcePackage = sourcePackage,
                 wording = wording,
                 inferredAccount = account,
                 kind = kind,
-                flags = "NEEDS_AMOUNT",
-                timestamp = timestamp
+                flags = fallbackFlags,
+                timestamp = timestamp,
+                detectedAccountHint = inferred.detectedName
             )
         }
 
-        // 9. Merchant / Payee extraction
+        // 10. Merchant / Payee extraction
         val merchant = (if (title.isNotBlank()) RegexPatterns.extractMerchant(title) else null)
             ?: RegexPatterns.extractMerchant(text)
             ?: RegexPatterns.extractMerchant(fullContent)
@@ -231,13 +283,15 @@ class ParseNotificationUseCase(
             isPossibleDuplicate = false
         )
 
+        val flags = if (isNewAccount) "NEW_ACCOUNT" else ""
         return NotificationParseResult.Success(
             transaction = transaction,
             isDebit = isDebit,
             isCredit = isCredit,
             wording = wording,
-            flags = "",
-            inferredAccount = account
+            flags = flags,
+            inferredAccount = account,
+            detectedAccountHint = inferred.detectedName
         )
     }
 }

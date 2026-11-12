@@ -6,6 +6,7 @@ import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
+import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.data.local.dao.CategoryStatDao
@@ -50,7 +51,8 @@ class QuickLogViewModel(
     private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(QuickLogUiState())
@@ -68,7 +70,7 @@ class QuickLogViewModel(
             launch {
                 accountRepository.getAccounts().collect { accs ->
                     _uiState.update { curr ->
-                        val acc = if (accs.any { it.name.equals(curr.selectedAccount, ignoreCase = true) }) curr.selectedAccount else accs.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_SBI
+                        val acc = if (accs.any { it.name.equals(curr.selectedAccount, ignoreCase = true) }) curr.selectedAccount else accs.firstOrNull { it.isDefault }?.name ?: accs.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_OTHER
                         curr.copy(availableAccounts = accs, selectedAccount = acc)
                     }
                 }
@@ -88,19 +90,37 @@ class QuickLogViewModel(
                 val amountVal = capture.amount ?: 0.0
                 val amountStr = formatAmountInput(amountVal)
                 val isNeedsAmount = capture.flags.contains(PendingCaptureEntity.FLAG_NEEDS_AMOUNT) || amountVal <= 0.0
-                val isPossibleDup = capture.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+
+                val recentSimilar = if (amountVal > 0.0) {
+                    try {
+                        transactionRepository.findRecentSimilar(amountVal, 120_000L)
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } else emptyList()
+                val dupTxn = recentSimilar.firstOrNull()
+                val isPossibleDup = capture.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE) || dupTxn != null
+                val duplicateOfId = PendingCaptureEntity.flagValue(capture.flags, PendingCaptureEntity.FLAG_DUPLICATE_OF_PREFIX)
+                    ?: dupTxn?.id
+                val subscriptionId = PendingCaptureEntity.flagValue(capture.flags, PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX)
 
                 _uiState.update { current ->
                     val resolvedAccount = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: current.selectedAccount
                     current.copy(
                         captureId = capture.id,
+                        captureTimestamp = capture.timestamp,
                         sourcePackage = capture.sourcePackage,
                         amountText = amountStr,
                         amount = amountVal,
                         payee = capture.payee,
                         selectedAccount = resolvedAccount,
                         isNeedsAmount = isNeedsAmount,
-                        isPossibleDuplicate = isPossibleDup
+                        isPossibleDuplicate = isPossibleDup,
+                        duplicateOfId = duplicateOfId,
+                        subscriptionId = subscriptionId,
+                        selectedCategory = if (subscriptionId != null) {
+                            com.financeautomation.core.constants.CategoryConstants.CATEGORY_SUBSCRIPTIONS
+                        } else current.selectedCategory
                     )
                 }
                 recalculateSplit()
@@ -162,9 +182,9 @@ class QuickLogViewModel(
     }
 
     fun onAmountChanged(text: String) {
-        val sanitized = text.filter { it.isDigit() || it == '.' }
-        val parsed = sanitized.toDoubleOrNull() ?: 0.0
-        _uiState.update { it.copy(amountText = sanitized, amount = parsed) }
+        if (!AmountInputSanitizer.isValidAmountInput(text)) return
+        val parsed = text.toDoubleOrNull() ?: 0.0
+        _uiState.update { it.copy(amountText = text, amount = parsed) }
         recalculateSplit()
     }
 
@@ -212,9 +232,9 @@ class QuickLogViewModel(
     }
 
     fun onCustomShareChanged(shareText: String) {
-        val sanitized = shareText.filter { it.isDigit() || it == '.' }
-        val parsed = sanitized.toDoubleOrNull()
-        _uiState.update { it.copy(customShareText = sanitized, customShare = parsed) }
+        if (!AmountInputSanitizer.isValidAmountInput(shareText)) return
+        val parsed = shareText.toDoubleOrNull()
+        _uiState.update { it.copy(customShareText = shareText, customShare = parsed) }
         recalculateSplit()
     }
 
@@ -251,10 +271,17 @@ class QuickLogViewModel(
      * 3. Marks pending capture as DONE.
      * 4. Notifies completion callback for result pill display.
      */
-    fun onConfirmAndSave(onSaved: (String) -> Unit) {
+    fun onConfirmAndSave(onSaved: (message: String, transactionId: String?) -> Unit) {
         val state = _uiState.value
         if (state.amount <= 0.0) {
             _uiState.update { it.copy(errorMessage = "Amount must be greater than zero") }
+            return
+        }
+        val captureTs = state.captureTimestamp
+        if (captureTs != null && com.financeautomation.core.utils.isFuture(captureTs)) {
+            _uiState.update {
+                it.copy(errorMessage = com.financeautomation.core.utils.TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            }
             return
         }
 
@@ -266,7 +293,7 @@ class QuickLogViewModel(
                     when (val res = QuickLogTransactionHelper.updateExisting(txnId, state, transactionRepository)) {
                         is Result.Success -> {
                             _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = "Updated") }
-                            onSaved("Updated")
+                            onSaved("Updated", txnId)
                         }
                         is Result.Error -> {
                             _uiState.update { it.copy(isSaving = false, errorMessage = res.message) }
@@ -290,12 +317,15 @@ class QuickLogViewModel(
                     logExpenseUseCase = logExpenseUseCase,
                     pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     categoryStatDaoProvider = categoryStatDaoProvider,
-                    predictCategoryUseCase = predictCategoryUseCase
+                    predictCategoryUseCase = predictCategoryUseCase,
+                    subscriptionRepository = subscriptionRepository
                 )) {
                     is Result.Success -> {
-                        val message = "Saved, will sync"
-                        _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = message) }
-                        onSaved(message)
+                        val loggedTxn = result.data
+                        val formattedAmount = String.format(java.util.Locale.US, "%.2f", state.amount)
+                        val message = "Saved $formattedAmount, will sync"
+                        _uiState.update { it.copy(isSaving = false, isSaved = true, transactionId = loggedTxn.id, resultMessage = message) }
+                        onSaved(message, loggedTxn.id)
                     }
                     is Result.Error -> {
                         _uiState.update { it.copy(isSaving = false, errorMessage = result.message) }
@@ -308,6 +338,10 @@ class QuickLogViewModel(
                 _uiState.update { it.copy(isSaving = false, errorMessage = "Save failed: ${e.message}") }
             }
         }
+    }
+
+    fun onConfirmAndSave(onSaved: (String) -> Unit) {
+        onConfirmAndSave { message, _ -> onSaved(message) }
     }
 
     /**

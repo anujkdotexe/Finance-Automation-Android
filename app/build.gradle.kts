@@ -63,6 +63,13 @@ android {
             signingConfig = signingConfigs.getByName("releaseSigning")
             buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "true")
             buildConfigField("Boolean", "ENABLE_SIMULATOR", "false")
+            if (project.hasProperty("devFast")) {
+                // Development builds only (-PdevFast): one ABI. Never used for the final proof or for friends.
+                ndk {
+                    abiFilters.clear()
+                    abiFilters += listOf("arm64-v8a")
+                }
+            }
         }
         debug {
             isMinifyEnabled = false
@@ -93,6 +100,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -165,3 +176,12 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.firebase.crashlytics")
 }
 
+
+if (project.hasProperty("devFast")) {
+    // Development builds only (-PdevFast): skip the lint checks that run inside assembleBeta.
+    tasks.configureEach {
+        if (name.contains("lintvital", ignoreCase = true) && name.contains("Beta")) {
+            enabled = false
+        }
+    }
+}

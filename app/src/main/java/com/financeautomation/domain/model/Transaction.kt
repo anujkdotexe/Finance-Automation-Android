@@ -26,7 +26,8 @@ data class Transaction(
     val reviewState: ReviewState = ReviewState.NEEDS_REVIEW,
     val syncState: SyncState = SyncState.PENDING,
     val sheetRowIndex: Int? = null,
-    val isPossibleDuplicate: Boolean = false
+    val isPossibleDuplicate: Boolean = false,
+    val duplicateOfId: String? = null
 ) {
     val itemDescription: String get() = merchant
     val packageName: String get() = sourcePackage

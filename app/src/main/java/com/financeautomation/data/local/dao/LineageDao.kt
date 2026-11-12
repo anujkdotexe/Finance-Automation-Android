@@ -26,5 +26,14 @@ interface LineageDao {
 
     @Query("SELECT * FROM lineage")
     suspend fun getAll(): List<LineageEntity>
+
+    @Query("UPDATE lineage SET uuid = :newUuid WHERE uuid = :oldUuid")
+    suspend fun updateUuid(oldUuid: String, newUuid: String)
+
+    @Query("UPDATE lineage SET carried_from_uuid = :newUuid WHERE carried_from_uuid = :oldUuid")
+    suspend fun updateCarriedFromUuid(oldUuid: String, newUuid: String)
+
+    @Query("UPDATE lineage SET root_uuid = :newUuid WHERE root_uuid = :oldUuid")
+    suspend fun updateRootUuid(oldUuid: String, newUuid: String)
 }
 

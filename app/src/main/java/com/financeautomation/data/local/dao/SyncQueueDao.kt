@@ -21,6 +21,9 @@ interface SyncQueueDao {
     @Query("SELECT * FROM sync_queue ORDER BY createdAt DESC")
     fun getAllQueueFlow(): Flow<List<SyncQueueEntity>>
 
+    @Query("SELECT * FROM sync_queue WHERE status = 'FAILED' OR retryCount >= 8 ORDER BY createdAt DESC")
+    fun getFailedQueueFlow(): Flow<List<SyncQueueEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: SyncQueueEntity): Long
 
@@ -32,6 +35,9 @@ interface SyncQueueDao {
 
     @Query("DELETE FROM sync_queue WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM sync_queue WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): SyncQueueEntity?
 
     @Query("DELETE FROM sync_queue WHERE transactionId = :transactionId")
     suspend fun deleteByTransactionId(transactionId: String)
@@ -51,9 +57,27 @@ interface SyncQueueDao {
     @Query("UPDATE sync_queue SET status = :status, retryCount = :retryCount WHERE id = :id")
     suspend fun setStatusAndRetryCount(id: Long, status: String, retryCount: Int)
 
+    @Query("UPDATE sync_queue SET status = :status, retryCount = :retryCount, lastErrorKind = :kind, lastErrorDetail = :detail WHERE id = :id")
+    suspend fun setStatusError(id: Long, status: String, retryCount: Int, kind: String?, detail: String?)
+
+    @Query("UPDATE sync_queue SET status = :status, retryCount = retryCount + :retryIncrement, lastErrorKind = :kind, lastErrorDetail = :detail WHERE id = :id")
+    suspend fun updateStatusError(id: Long, status: String, retryIncrement: Int, kind: String?, detail: String?)
+
+    @Query("UPDATE sync_queue SET status = 'PENDING', retryCount = 0, lastErrorKind = NULL, lastErrorDetail = NULL WHERE id = :id")
+    suspend fun resetQueueItem(id: Long)
+
     @Query("SELECT COUNT(*) FROM sync_queue WHERE operationType = :opType AND (status = 'PENDING' OR status = 'IN_PROGRESS')")
     suspend fun countPendingOperations(opType: String): Int
 
     @Query("UPDATE sync_queue SET planJson = :planJson WHERE id = :id")
     suspend fun updatePlanJson(id: Long, planJson: String?)
+
+    @Query("UPDATE sync_queue SET transactionId = :newTransactionId WHERE transactionId = :oldTransactionId")
+    suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String)
+
+    @Query("UPDATE sync_queue SET payloadJson = REPLACE(payloadJson, :oldId, :newId) WHERE payloadJson LIKE '%' || :oldId || '%'")
+    suspend fun updatePayloadJsonId(oldId: String, newId: String)
+
+    @Query("UPDATE sync_queue SET planJson = REPLACE(planJson, :oldId, :newId) WHERE planJson IS NOT NULL AND planJson LIKE '%' || :oldId || '%'")
+    suspend fun updatePlanJsonId(oldId: String, newId: String)
 }

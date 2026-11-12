@@ -12,7 +12,9 @@ import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PeopleRepository
+import com.financeautomation.domain.repository.SubscriptionRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.LogExpenseUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
@@ -95,6 +97,9 @@ object QuickLogTransactionHelper {
         val determinedMode = determineSplitMode(
             txn.companions, txn.owedToMe, txn.totalAmount, txn.myShare, companionsList
         )
+        val isSettledOrCarried = txn.status.value.equals("Settled", ignoreCase = true) ||
+            txn.status.value.equals("Carried Fwd", ignoreCase = true) ||
+            (txn.owedToMe > 0.0 && txn.owedToMe < (txn.totalAmount - txn.myShare - 0.01))
 
         return currentState.copy(
             transactionId = txn.id,
@@ -109,7 +114,9 @@ object QuickLogTransactionHelper {
             customShareText = if (determinedMode == SplitMode.CUSTOM) formatAmountInput(txn.myShare) else "",
             myShare = txn.myShare,
             owedToMe = txn.owedToMe,
+            isFinancialLocked = isSettledOrCarried,
             isPossibleDuplicate = txn.isPossibleDuplicate,
+            duplicateOfId = txn.duplicateOfId,
             isSaved = false,
             isVoided = false,
             errorMessage = null
@@ -124,22 +131,40 @@ object QuickLogTransactionHelper {
         val existing = transactionRepository.getTransactionById(txnId)
             ?: return Result.Error("Transaction not found")
 
-        val selectedCompanions = state.availableCompanions
-            .filter { state.selectedCompanionIds.contains(it.id) }
-            .map { it.name }
-        val companionsText = if (state.splitMode == SplitMode.JUST_ME) "Personal" else selectedCompanions.joinToString(", ")
-        val updated = existing.copy(
-            merchant = state.payee.ifBlank { "Expense" },
-            category = state.selectedCategory,
-            totalAmount = state.amount,
-            myShare = state.myShare,
-            owedToMe = state.owedToMe,
-            companions = companionsText,
-            account = state.selectedAccount,
-            tripTag = state.activeTripTag?.name ?: existing.tripTag,
-            reviewState = ReviewState.CONFIRMED,
-            isPossibleDuplicate = false
-        )
+        val isSettledOrCarried = existing.status.value.equals("Settled", ignoreCase = true) ||
+            existing.status.value.equals("Carried Fwd", ignoreCase = true) ||
+            (existing.owedToMe > 0.0 && existing.owedToMe < (existing.totalAmount - existing.myShare - 0.01))
+
+        val updated = if (isSettledOrCarried) {
+            // Item 2.2: For Settled/Carried Fwd rows or modified owed, allow only description, category, and account edits
+            existing.copy(
+                merchant = state.payee.ifBlank { existing.merchant },
+                category = state.selectedCategory,
+                account = state.selectedAccount,
+                tripTag = state.activeTripTag?.name ?: existing.tripTag,
+                reviewState = ReviewState.CONFIRMED,
+                isPossibleDuplicate = false,
+                duplicateOfId = null
+            )
+        } else {
+            val selectedCompanions = state.availableCompanions
+                .filter { state.selectedCompanionIds.contains(it.id) }
+                .map { it.name }
+            val companionsText = if (state.splitMode == SplitMode.JUST_ME) "Personal" else selectedCompanions.joinToString(", ")
+            existing.copy(
+                merchant = state.payee.ifBlank { "Expense" },
+                category = state.selectedCategory,
+                totalAmount = state.amount,
+                myShare = state.myShare,
+                owedToMe = state.owedToMe,
+                companions = companionsText,
+                account = state.selectedAccount,
+                tripTag = state.activeTripTag?.name ?: existing.tripTag,
+                reviewState = ReviewState.CONFIRMED,
+                isPossibleDuplicate = false,
+                duplicateOfId = null
+            )
+        }
         return when (val res = transactionRepository.updateTransaction(updated)) {
             is Result.Success -> Result.Success(Unit)
             is Result.Error -> Result.Error(res.message ?: "Failed to update")
@@ -147,13 +172,31 @@ object QuickLogTransactionHelper {
         }
     }
 
+    /**
+     * A capture that carries the SUBSCRIPTION flag marks its subscription cycle PAID inside the same
+     * database transaction as the expense insert. A dismissed capture never reaches this point,
+     * so its cycle stays open.
+     */
+    private fun subscriptionPaidHook(
+        state: QuickLogUiState,
+        repository: SubscriptionRepository?
+    ): (suspend (Transaction) -> Unit)? {
+        val subscriptionId = state.subscriptionId ?: return null
+        if (repository == null) return null
+        val captureTs = state.captureTimestamp ?: System.currentTimeMillis()
+        val epochDay = java.time.Instant.ofEpochMilli(captureTs)
+            .atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay()
+        return { txn -> repository.markCyclePaidForSubscription(subscriptionId, epochDay, txn.id) }
+    }
+
     suspend fun logNewExpense(
         state: QuickLogUiState,
         logExpenseUseCase: LogExpenseUseCase,
         pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
         categoryStatDaoProvider: (suspend () -> CategoryStatDao)?,
-        predictCategoryUseCase: PredictCategoryUseCase
-    ): Result<Unit> {
+        predictCategoryUseCase: PredictCategoryUseCase,
+        subscriptionRepository: SubscriptionRepository? = null
+    ): Result<Transaction> {
         val selectedCompanions = state.availableCompanions
             .filter { state.selectedCompanionIds.contains(it.id) }
             .map { it.name }
@@ -168,11 +211,15 @@ object QuickLogTransactionHelper {
             customShare = state.customShare,
             tripTag = state.activeTripTag?.name ?: "",
             sourcePackage = state.sourcePackage,
-            timestamp = System.currentTimeMillis(),
-            reviewState = ReviewState.CONFIRMED
+            timestamp = state.captureTimestamp ?: System.currentTimeMillis(),
+            reviewState = ReviewState.CONFIRMED,
+            isPossibleDuplicate = state.isPossibleDuplicate,
+            duplicateOfId = state.duplicateOfId,
+            afterInsert = subscriptionPaidHook(state, subscriptionRepository)
         )
 
         if (result is Result.Success) {
+            val loggedTxn = result.data
             PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.DONE)
             state.captureId?.let { cid ->
                 try {
@@ -192,7 +239,7 @@ object QuickLogTransactionHelper {
                 if (statEx is CancellationException) throw statEx
                 Diagnostics.record("QuickLogTransactionHelper", "${statEx.javaClass.simpleName}: incrementStat")
             }
-            return Result.Success(Unit)
+            return Result.Success(loggedTxn)
         }
         return if (result is Result.Error) Result.Error(result.message ?: "Failed to log expense") else Result.Loading
     }

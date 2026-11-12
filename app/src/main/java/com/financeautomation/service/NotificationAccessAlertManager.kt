@@ -47,22 +47,17 @@ object NotificationAccessAlertManager {
 
             ensureChannel(context)
 
-            val fixIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).apply {
-                    putExtra(
-                        Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
-                        ComponentName(context, NotificationListenerServiceImpl::class.java).flattenToString()
-                    )
-                }
-            } else {
-                Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("extra_route", "capturePermissions")
+            } ?: Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            fixIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
 
             val pendingIntent = PendingIntent.getActivity(
                 context,
                 NOTIFICATION_ID_CAPTURE_OFF,
-                fixIntent,
+                launchIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 

@@ -1,10 +1,21 @@
 package com.financeautomation.data.repository
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.isFuture
+import com.financeautomation.core.utils.TimeGuardConstants
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.core.utils.SyncErrorKind
+import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
+import com.financeautomation.data.local.dao.getByTabAndSheetRowIndex
+import com.financeautomation.data.local.FinanceDatabase
+import androidx.room.withTransaction
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.remote.AccountingPlanJsonAdapter
@@ -40,10 +51,13 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
@@ -59,6 +73,11 @@ class TransactionRepositoryImpl(
     private val syncQueueDao: SyncQueueDao? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+    private val payableDao: PayableDao? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
+    private val lineageDao: LineageDao? = null,
+    private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
+    private val databaseProvider: (suspend () -> FinanceDatabase)? = null,
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val preferencesRepository: PreferencesRepository? = null,
     private val workbookResolver: WorkbookResolver? = null,
@@ -76,6 +95,8 @@ class TransactionRepositoryImpl(
     constructor(
         transactionDao: TransactionDao,
         syncQueueDao: SyncQueueDao,
+        payableDao: PayableDao? = null,
+        lineageDao: LineageDao? = null,
         googleSheetsClient: GoogleSheetsClient? = null,
         preferencesRepository: PreferencesRepository? = null,
         workbookResolver: WorkbookResolver? = null,
@@ -93,6 +114,11 @@ class TransactionRepositoryImpl(
         syncQueueDao = syncQueueDao,
         transactionDaoProvider = null,
         syncQueueDaoProvider = null,
+        payableDao = payableDao,
+        payableDaoProvider = null,
+        lineageDao = lineageDao,
+        lineageDaoProvider = null,
+        databaseProvider = null,
         googleSheetsClient = googleSheetsClient,
         preferencesRepository = preferencesRepository,
         workbookResolver = workbookResolver,
@@ -107,6 +133,17 @@ class TransactionRepositoryImpl(
         ioDispatcher = ioDispatcher
     )
 
+    private val syncMutex = Mutex()
+
+    private suspend inline fun <T> runInDbTransaction(crossinline block: suspend () -> T): T {
+        val db = databaseProvider?.invoke()
+        return if (db != null) {
+            db.withTransaction { block() }
+        } else {
+            block()
+        }
+    }
+
     private suspend fun resolveTransactionDao(): TransactionDao =
         transactionDao ?: transactionDaoProvider?.invoke()
             ?: throw IllegalStateException("TransactionDao or provider must be supplied")
@@ -114,6 +151,30 @@ class TransactionRepositoryImpl(
     private suspend fun resolveSyncQueueDao(): SyncQueueDao =
         syncQueueDao ?: syncQueueDaoProvider?.invoke()
             ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")
+
+    private suspend fun resolvePayableDao(): PayableDao? =
+        payableDao ?: payableDaoProvider?.invoke()
+
+    private suspend fun resolveLineageDao(): LineageDao? =
+        lineageDao ?: lineageDaoProvider?.invoke() ?: databaseProvider?.invoke()?.lineageDao()
+
+    private fun resolveExecutor(): AccountingSyncExecutor {
+        accountingSyncExecutor?.let { return it }
+        val dummyTokenProvider = object : com.financeautomation.data.remote.TokenProvider {
+            override fun getAccessToken(): String? = null
+            override fun refreshAccessToken(): String? = null
+        }
+        val sheets = googleSheetsClient ?: GoogleSheetsClient(okhttp3.OkHttpClient(), dummyTokenProvider)
+        val drive = com.financeautomation.data.remote.GoogleDriveClient(okhttp3.OkHttpClient(), dummyTokenProvider)
+        return AccountingSyncExecutor(
+            googleSheetsClient = sheets,
+            googleDriveClient = drive,
+            syncQueueDao = syncQueueDao,
+            transactionDao = transactionDao,
+            syncQueueDaoProvider = syncQueueDaoProvider,
+            transactionDaoProvider = transactionDaoProvider
+        )
+    }
 
     override fun getTransactions(): Flow<List<Transaction>> = flow {
         val dao = resolveTransactionDao()
@@ -129,20 +190,30 @@ class TransactionRepositoryImpl(
         resolveTransactionDao().getById(id)?.toDomain()
     }
 
-    override suspend fun insertTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun insertTransaction(transaction: Transaction): Result<Unit> =
+        insertTransactionWith(transaction) {}
+
+    override suspend fun insertTransactionWith(
+        transaction: Transaction,
+        inSameTransaction: suspend () -> Unit
+    ): Result<Unit> = withContext(ioDispatcher) {
         try {
+            if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
-            tDao.insert(entity)
+            runInDbTransaction {
+                tDao.insert(entity)
+                inSameTransaction()
 
-            if (transaction.syncState == SyncState.PENDING) {
-                val queueItem = SyncQueueEntity(
-                    transactionId = transaction.id,
-                    operationType = SyncQueueEntity.OP_INSERT,
-                    payloadJson = transaction.id
-                )
-                qDao.insert(queueItem)
+                if (transaction.syncState == SyncState.PENDING) {
+                    val queueItem = SyncQueueEntity(
+                        transactionId = transaction.id,
+                        operationType = SyncQueueEntity.OP_INSERT,
+                        payloadJson = transaction.id
+                    )
+                    qDao.insert(queueItem)
+                }
             }
             Result.Success(Unit)
         } catch (e: Exception) {
@@ -152,17 +223,20 @@ class TransactionRepositoryImpl(
 
     override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
         try {
+            if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
-            tDao.update(entity)
+            runInDbTransaction {
+                tDao.update(entity)
 
-            val queueItem = SyncQueueEntity(
-                transactionId = transaction.id,
-                operationType = SyncQueueEntity.OP_UPDATE,
-                payloadJson = transaction.id
-            )
-            qDao.insert(queueItem)
+                val queueItem = SyncQueueEntity(
+                    transactionId = transaction.id,
+                    operationType = SyncQueueEntity.OP_UPDATE,
+                    payloadJson = transaction.id
+                )
+                qDao.insert(queueItem)
+            }
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -179,6 +253,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "cred_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogCreditRequest(
                 requestId = reqId,
@@ -210,6 +285,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "pay_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogPayableRequest(
                 requestId = reqId,
@@ -238,6 +314,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "rep_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogRepaymentRequest(
                 requestId = reqId,
@@ -265,7 +342,14 @@ class TransactionRepositoryImpl(
     ): Result<Unit> = withContext(ioDispatcher) {
         try {
             val reqId = "cf_${UUID.randomUUID().toString().replace("-", "").take(12)}"
-            val req = CarryForwardRequest(targetTab = targetTab, sourceTab = sourceTab)
+            val accs = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+            val cats = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+            val req = CarryForwardRequest(
+                targetTab = targetTab,
+                sourceTab = sourceTab,
+                accounts = accs,
+                categories = cats
+            )
             val queueItem = SyncQueueEntity(
                 transactionId = reqId,
                 operationType = SyncQueueEntity.OP_CARRY_FORWARD,
@@ -309,14 +393,75 @@ class TransactionRepositoryImpl(
                 "[Void] ${existing.merchant}"
             }
 
-            tDao.voidTransaction(id, voidTitle)
+            runInDbTransaction {
+                tDao.voidTransaction(id, voidTitle)
 
-            val queueItem = SyncQueueEntity(
-                transactionId = id,
-                operationType = SyncQueueEntity.OP_VOID,
-                payloadJson = id
-            )
-            qDao.insert(queueItem)
+                val queueItem = SyncQueueEntity(
+                    transactionId = id,
+                    operationType = SyncQueueEntity.OP_VOID,
+                    payloadJson = id
+                )
+                qDao.insert(queueItem)
+            }
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    override suspend fun undoRecentSave(id: String): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val tDao = resolveTransactionDao()
+            val qDao = resolveSyncQueueDao()
+            val existing = tDao.getById(id)
+                ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+
+            val pendingInsert = qDao.getAllPending().any {
+                it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT
+            }
+            if (pendingInsert && existing.sheetRowIndex == null) {
+                val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
+                    existing.merchant
+                } else {
+                    "[Void] ${existing.merchant}"
+                }
+                runInDbTransaction {
+                    qDao.deleteByTransactionId(id)
+                    tDao.voidTransaction(id, voidTitle)
+                }
+                Result.Success(Unit)
+            } else {
+                voidTransaction(id)
+            }
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val tDao = resolveTransactionDao()
+            val existing = tDao.getById(id)
+                ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            val updated = if (voidIt) {
+                val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
+                    existing.merchant
+                } else {
+                    "[Void] ${existing.merchant}"
+                }
+                existing.copy(
+                    status = TransactionStatus.VOID.value,
+                    merchant = voidTitle,
+                    reviewState = ReviewState.CONFIRMED.name,
+                    syncState = SyncState.VOID.name
+                )
+            } else {
+                existing.copy(
+                    reviewState = ReviewState.CONFIRMED.name,
+                    syncState = SyncState.SYNCED.name
+                )
+            }
+            tDao.update(updated)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -352,30 +497,34 @@ class TransactionRepositoryImpl(
         else -> false
     }
 
-    private suspend fun markTransportFailure(item: SyncQueueEntity, txn: Transaction) {
+    private suspend fun markTransportFailure(item: SyncQueueEntity, txn: Transaction, throwable: Throwable? = null) {
         val tDao = resolveTransactionDao()
         val qDao = resolveSyncQueueDao()
         val newRetry = item.retryCount + 1
+        val kind = SyncErrorKind.fromThrowable(throwable).name
+        val detail = throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure"
         if (newRetry >= MAX_SYNC_RETRIES) {
-            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetry)
+            qDao.setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, newRetry, kind, detail)
             tDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
         } else {
-            qDao.updateStatus(item.id, SyncQueueEntity.STATUS_FAILED, 1)
+            qDao.updateStatusError(item.id, SyncQueueEntity.STATUS_FAILED, 1, kind, detail)
         }
     }
 
     override suspend fun syncPendingTransactions(): Result<Int> = withContext(ioDispatcher) {
-        try {
-            if (googleSheetsClient == null || preferencesRepository == null) {
-                return@withContext Result.Success(0)
-            }
+        syncMutex.withLock {
+            try {
+                if (googleSheetsClient == null || preferencesRepository == null) {
+                    return@withLock Result.Success(0)
+                }
 
             val transactionDao = resolveTransactionDao()
             val syncQueueDao = resolveSyncQueueDao()
 
             val pendingItems = syncQueueDao.getPendingQueueFifo(maxRetries = MAX_SYNC_RETRIES)
             if (pendingItems.isEmpty()) {
-                return@withContext Result.Success(0)
+                reconcileWithSheet()
+                return@withLock Result.Success(0)
             }
 
             val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
@@ -613,16 +762,25 @@ class TransactionRepositoryImpl(
                             continue
                         }
                     }
-                    val precedingTab = accountingSyncExecutor?.findPrecedingTab(tabName, knownTabs.toList())
-                    if (precedingTab != null) {
-                        val cfItem = SyncQueueEntity(
-                            transactionId = "cf_${System.currentTimeMillis()}",
-                            operationType = SyncQueueEntity.OP_CARRY_FORWARD,
-                            payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(
-                                CarryForwardRequest(targetTab = tabName, sourceTab = precedingTab)
-                            )
+                    val wasCreated = (tabCheckResult as Result.Success).data
+                    if (wasCreated) {
+                        val reqId = "cf_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+                        val cfReq = CarryForwardRequest(
+                            targetTab = tabName,
+                            sourceTab = null,
+                            accounts = accounts,
+                            categories = categories
                         )
-                        accountingSyncExecutor?.executeCarryForward(cfItem, spreadsheetId)
+                        val cfQueueItem = SyncQueueEntity(
+                            transactionId = reqId,
+                            operationType = SyncQueueEntity.OP_CARRY_FORWARD,
+                            payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(cfReq)
+                        )
+                        syncQueueDao.insert(cfQueueItem)
+                        val cfRes = accountingSyncExecutor?.executeCarryForward(cfQueueItem, spreadsheetId)
+                        if (cfRes is Result.Success) {
+                            syncQueueDao.deleteById(cfQueueItem.id)
+                        }
                     }
                     knownTabs.add(tabName)
                 }
@@ -713,15 +871,25 @@ class TransactionRepositoryImpl(
                                             )
                                         }
                                     }
+                                } else if (snapRes is Result.Error) {
+                                    val err = snapRes.exception
+                                    if (isTransportOrServerError(err)) {
+                                        markTransportFailure(item, txn)
+                                        hasTransportFailure = true
+                                        break
+                                    } else {
+                                        syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
+                                        transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
+                                        continue
+                                    }
                                 }
                             }
 
+                            // 2.1: Rebuild sheet row from stored numbers (CUSTOM with myShare = txn.myShare)
                             val splitMode = if (companionTokens.isEmpty() || txn.companions.equals("Personal", ignoreCase = true)) {
                                 com.financeautomation.core.model.SplitMode.JUST_ME
-                            } else if (txn.myShare > 0.0 && txn.myShare != txn.totalAmount) {
-                                com.financeautomation.core.model.SplitMode.CUSTOM
                             } else {
-                                com.financeautomation.core.model.SplitMode.SPLIT_EQUALLY
+                                com.financeautomation.core.model.SplitMode.CUSTOM
                             }
 
                             plan = calculateSplitUseCase(
@@ -737,7 +905,8 @@ class TransactionRepositoryImpl(
                                 timeSerial = txn.timeSerial ?: com.financeautomation.core.utils.DateSerialUtils.toTimeSerial(txn.timestamp),
                                 tabName = tabName,
                                 openPayables = openPayables,
-                                nettingUseCase = nettingUseCase
+                                nettingUseCase = nettingUseCase,
+                                uuid = txn.id
                             )
 
                             // Store plan before writing anything to guarantee idempotent retries
@@ -880,11 +1049,203 @@ class TransactionRepositoryImpl(
             if (hasTransportFailure) {
                 Result.Error(com.financeautomation.data.remote.GoogleSheetsException("Transport failure occurred during synchronization; scheduled for exponential backoff retry"))
             } else {
+                reconcileWithSheet()
                 Result.Success(syncedCount)
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+}
+
+    suspend fun reconcileWithSheet(targetSpreadsheetId: String? = null): Result<Int> = withContext(ioDispatcher) {
+        try {
+            val sheets = googleSheetsClient ?: return@withContext Result.Success(0)
+            val tDao = resolveTransactionDao()
+            val pDao = resolvePayableDao()
+
+            val spreadsheetId = targetSpreadsheetId ?: run {
+                val currentYear = java.time.ZonedDateTime.now(sheetTimeZone).year
+                when (val res = workbookResolver?.resolveForYear(currentYear)) {
+                    is Result.Success -> res.data
+                    else -> preferencesRepository?.getSpreadsheetIdSync()
+                }
+            } ?: return@withContext Result.Success(0)
+
+            val snapRes = sheets.readLedgerSnapshot(spreadsheetId)
+            if (snapRes is Result.Error) {
+                return@withContext Result.Error(snapRes.exception)
+            }
+            val snapshot = (snapRes as Result.Success).data
+            var reconciledCount = 0
+
+            val remotePayables = mutableListOf<PayableEntity>()
+
+            runInDbTransaction {
+                for (month in snapshot.monthTabs) {
+                    for (sheetDebit in month.debits) {
+                        val uuid = sheetDebit.uuid
+                        val localTxn = (if (!uuid.isNullOrBlank()) {
+                            tDao.getById(uuid)
+                        } else null) ?: tDao.getByTabAndSheetRowIndex(month.tabName, sheetDebit.rowNumber)
+
+                        if (localTxn != null) {
+                            val newTotal = sheetDebit.totalAmount
+                            val newMerchant = sheetDebit.description
+                            val newCategory = sheetDebit.category
+                            val newMyShare = sheetDebit.myShare
+                            val newOwed = sheetDebit.owedToMe
+                            val newStatus = sheetDebit.status
+                            val newCompanions = sheetDebit.companions
+                            val newRow = sheetDebit.rowNumber
+
+                            // Align local ID with non-blank sheet UUID if matched by tab/row to avoid orphan divergence
+                            if (!uuid.isNullOrBlank() && localTxn.id != uuid) {
+                                val oldId = localTxn.id
+                                val qDao = resolveSyncQueueDao()
+                                val aligned = localTxn.copy(
+                                    id = uuid,
+                                    totalAmount = newTotal,
+                                    merchant = newMerchant,
+                                    category = newCategory,
+                                    myShare = newMyShare,
+                                    owedToMe = newOwed,
+                                    status = newStatus,
+                                    companions = newCompanions,
+                                    sheetRowIndex = newRow,
+                                    syncState = SyncState.SYNCED.name
+                                )
+                                tDao.insert(aligned)
+                                qDao.updateTransactionId(oldId, uuid)
+                                qDao.updatePayloadJsonId(oldId, uuid)
+                                qDao.updatePlanJsonId(oldId, uuid)
+
+                                val lDao = resolveLineageDao()
+                                lDao?.let {
+                                    it.updateUuid(oldId, uuid)
+                                    it.updateCarriedFromUuid(oldId, uuid)
+                                    it.updateRootUuid(oldId, uuid)
+                                }
+
+                                tDao.deleteById(oldId)
+                                reconciledCount++
+                            } else if (localTxn.totalAmount != newTotal ||
+                                localTxn.merchant != newMerchant ||
+                                localTxn.category != newCategory ||
+                                localTxn.myShare != newMyShare ||
+                                localTxn.owedToMe != newOwed ||
+                                localTxn.status != newStatus ||
+                                localTxn.companions != newCompanions ||
+                                localTxn.sheetRowIndex != newRow
+                            ) {
+                                tDao.update(
+                                    localTxn.copy(
+                                        totalAmount = newTotal,
+                                        merchant = newMerchant,
+                                        category = newCategory,
+                                        myShare = newMyShare,
+                                        owedToMe = newOwed,
+                                        status = newStatus,
+                                        companions = newCompanions,
+                                        sheetRowIndex = newRow,
+                                        syncState = SyncState.SYNCED.name
+                                    )
+                                )
+                                reconciledCount++
+                            }
+                        } else {
+                            // 2.7: Sheet as source of truth: import debits by UUID into Room when local DB empty
+                            val effectiveUuid = if (!uuid.isNullOrBlank()) uuid else "sheet_${month.tabName}_${sheetDebit.rowNumber}"
+                            val existingByEffective = tDao.getById(effectiveUuid)
+                            if (existingByEffective != null) {
+                                tDao.update(
+                                    existingByEffective.copy(
+                                        totalAmount = sheetDebit.totalAmount,
+                                        merchant = sheetDebit.description,
+                                        category = sheetDebit.category,
+                                        myShare = sheetDebit.myShare,
+                                        owedToMe = sheetDebit.owedToMe,
+                                        status = sheetDebit.status,
+                                        companions = sheetDebit.companions,
+                                        sheetRowIndex = sheetDebit.rowNumber,
+                                        syncState = SyncState.SYNCED.name
+                                    )
+                                )
+                                reconciledCount++
+                            } else {
+                                val effectiveDateSerial = sheetDebit.dateSerial ?: DateSerialUtils.toDateSerial(System.currentTimeMillis())
+                                val effectiveTimeSerial = sheetDebit.timeSerial ?: DateSerialUtils.toTimeSerial(System.currentTimeMillis())
+                                val ld = DateSerialUtils.fromDateSerial(effectiveDateSerial)
+                                val lt = DateSerialUtils.fromTimeSerial(effectiveTimeSerial)
+                                val txnTimestamp = ld.atTime(lt).atZone(sheetTimeZone).toInstant().toEpochMilli()
+
+                                val imported = TransactionEntity(
+                                    id = effectiveUuid,
+                                    timestamp = txnTimestamp,
+                                    dateSerial = effectiveDateSerial,
+                                    timeSerial = effectiveTimeSerial,
+                                    merchant = sheetDebit.description.ifBlank { "Expense" },
+                                    category = sheetDebit.category.ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER },
+                                    account = sheetDebit.account.ifBlank { "Cash" },
+                                    totalAmount = sheetDebit.totalAmount,
+                                    myShare = sheetDebit.myShare,
+                                    owedToMe = sheetDebit.owedToMe,
+                                    companions = sheetDebit.companions.orEmpty().ifBlank { "Personal" },
+                                    status = sheetDebit.status.orEmpty().ifBlank { com.financeautomation.core.model.TransactionStatus.PERSONAL.value },
+                                    tripTag = sheetDebit.tripTag.orEmpty(),
+                                    sheetRowIndex = sheetDebit.rowNumber,
+                                    syncState = SyncState.SYNCED.name,
+                                    reviewState = ReviewState.CONFIRMED.name
+                                )
+                                tDao.insert(imported)
+                                reconciledCount++
+                            }
+                        }
+                    }
+
+                    for (sheetPayable in month.payables) {
+                        val pUuid = sheetPayable.uuid ?: continue
+                        remotePayables.add(
+                            PayableEntity(
+                                uuid = pUuid,
+                                dateIncurredSerial = sheetPayable.dateIncurredSerial,
+                                timeSerial = sheetPayable.timeSerial,
+                                paidBy = sheetPayable.paidBy,
+                                whatFor = sheetPayable.whatFor,
+                                amountIOwe = sheetPayable.amountIOwe,
+                                dateRepaidSerial = sheetPayable.dateRepaidSerial,
+                                repaymentStatus = sheetPayable.repaymentStatus,
+                                tabName = month.tabName,
+                                sheetRowIndex = sheetPayable.rowNumber,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+
+                if (pDao != null) {
+                    val remoteUuids = remotePayables.map { it.uuid }.toSet()
+                    val localPayables = pDao.getAll()
+                    for (local in localPayables) {
+                        if (!remoteUuids.contains(local.uuid)) {
+                            pDao.deleteByUuid(local.uuid)
+                        }
+                    }
+                    if (remotePayables.isNotEmpty()) {
+                        pDao.upsertAll(remotePayables)
+                    }
+                }
+            }
+
+            Result.Success(reconciledCount)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            com.financeautomation.core.utils.Diagnostics.record(
+                "TransactionRepositoryImpl",
+                "reconcileWithSheet failed: ${e.message}"
+            )
             Result.Error(e)
         }
     }
@@ -895,6 +1256,7 @@ class TransactionRepositoryImpl(
     ): Result<Int?> {
         val sheets = googleSheetsClient ?: return Result.Error(IllegalStateException("GoogleSheetsClient unavailable"))
         var lastAppendedRow: Int? = null
+        var debitRow: Int? = null
 
         // Step 1: Appends first (with UUID in second step)
         for (append in plan.appends) {
@@ -905,7 +1267,9 @@ class TransactionRepositoryImpl(
             }
             val existingCheck = sheets.findRowByUuid(spreadsheetId, append.tab, colUuid, append.uuid)
             if (existingCheck is Result.Success && existingCheck.data != null) {
-                lastAppendedRow = existingCheck.data
+                val row = existingCheck.data
+                lastAppendedRow = row
+                if (append.table == TableType.DEBIT) debitRow = row
                 continue
             } else if (existingCheck is Result.Error) {
                 val err = existingCheck.exception
@@ -913,19 +1277,15 @@ class TransactionRepositoryImpl(
             }
 
             val appendRes = when (append.table) {
-                TableType.DEBIT -> sheets.appendDebit(spreadsheetId, append.tab, append.cells)
-                TableType.INFLOW -> sheets.appendInflow(spreadsheetId, append.tab, append.cells)
-                TableType.PAYABLE -> sheets.appendPayable(spreadsheetId, append.tab, append.cells)
+                TableType.DEBIT -> sheets.appendDebit(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
+                TableType.INFLOW -> sheets.appendInflow(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
+                TableType.PAYABLE -> sheets.appendPayable(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
             }
 
             if (appendRes is Result.Success) {
-                val rowIdx = appendRes.data
-                lastAppendedRow = rowIdx
-                val uuidRes = sheets.updateCell(spreadsheetId, append.tab, "$colUuid$rowIdx", append.uuid)
-                if (uuidRes is Result.Error) {
-                    val err = uuidRes.exception
-                    if (isTransportOrServerError(err)) return Result.Error(err)
-                }
+                val row = appendRes.data
+                lastAppendedRow = row
+                if (append.table == TableType.DEBIT) debitRow = row
             } else {
                 val err = (appendRes as Result.Error).exception
                 return Result.Error(err)
@@ -943,16 +1303,21 @@ class TransactionRepositoryImpl(
             }
         }
 
-        return Result.Success(lastAppendedRow)
+        // Step 3: Apply plan edits and settled references locally to Room database via executor
+        resolveExecutor().applyPlanToLocalDatabase(plan)
+
+        return Result.Success(debitRow ?: lastAppendedRow)
     }
 
-    private suspend fun handleItemTransportFailure(item: SyncQueueEntity) {
+    private suspend fun handleItemTransportFailure(item: SyncQueueEntity, throwable: Throwable? = null) {
         val qDao = resolveSyncQueueDao()
         val newRetries = item.retryCount + 1
+        val kind = SyncErrorKind.fromThrowable(throwable).name
+        val detail = throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure"
         if (newRetries >= MAX_SYNC_RETRIES) {
-            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetries)
+            qDao.setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, newRetries, kind, detail)
         } else {
-            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_PENDING, newRetries)
+            qDao.setStatusError(item.id, SyncQueueEntity.STATUS_PENDING, newRetries, kind, detail)
         }
     }
 
