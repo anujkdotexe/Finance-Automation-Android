@@ -395,6 +395,35 @@ class TransactionRepositoryImpl(
         }
     }
 
+    override suspend fun undoRecentSave(id: String): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val tDao = resolveTransactionDao()
+            val qDao = resolveSyncQueueDao()
+            val existing = tDao.getById(id)
+                ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+
+            val pendingInsert = qDao.getAllPending().any {
+                it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT
+            }
+            if (pendingInsert && existing.sheetRowIndex == null) {
+                val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
+                    existing.merchant
+                } else {
+                    "[Void] ${existing.merchant}"
+                }
+                runInDbTransaction {
+                    qDao.deleteByTransactionId(id)
+                    tDao.voidTransaction(id, voidTitle)
+                }
+                Result.Success(Unit)
+            } else {
+                voidTransaction(id)
+            }
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
     override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = withContext(ioDispatcher) {
         try {
             val tDao = resolveTransactionDao()

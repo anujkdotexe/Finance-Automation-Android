@@ -56,7 +56,7 @@ class OverlayActionDispatcher(
                         onUndo = if (txnId != null) {
                             { id ->
                                 mainScope.launch(ioDispatcher) {
-                                    transactionRepository.voidTransaction(id)
+                                    transactionRepository.undoRecentSave(id)
                                 }
                             }
                         } else null
@@ -94,7 +94,7 @@ class OverlayActionDispatcher(
                         onUndo = if (txnId != null) {
                             { id ->
                                 mainScope.launch(ioDispatcher) {
-                                    transactionRepository.voidTransaction(id)
+                                    transactionRepository.undoRecentSave(id)
                                 }
                             }
                         } else null
@@ -133,7 +133,7 @@ class OverlayActionDispatcher(
                         onUndo = if (txnId != null) {
                             { id ->
                                 mainScope.launch(ioDispatcher) {
-                                    transactionRepository.voidTransaction(id)
+                                    transactionRepository.undoRecentSave(id)
                                 }
                             }
                         } else null

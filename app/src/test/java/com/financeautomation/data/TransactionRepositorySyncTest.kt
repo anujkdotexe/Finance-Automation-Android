@@ -1331,6 +1331,76 @@ class TransactionRepositorySyncTest {
         assertEquals(0.0, finalTxn.totalAmount, 0.001)
     }
 
+    private fun undoTestTxn(id: String, sheetRowIndex: Int?) = TransactionEntity(
+        id = id,
+        timestamp = 1794380000000L,
+        dateSerial = 46338,
+        timeSerial = 0.5,
+        account = "SBI",
+        merchant = "Coffee",
+        tripTag = "",
+        category = "Food & Drink",
+        totalAmount = 150.0,
+        companions = "Personal",
+        myShare = 150.0,
+        owedToMe = 0.0,
+        status = "Personal",
+        sourcePackage = "manual",
+        reviewState = ReviewState.CONFIRMED.name,
+        syncState = SyncState.PENDING.name,
+        sheetRowIndex = sheetRowIndex,
+        isPossibleDuplicate = false
+    )
+
+    @Test
+    fun testUndoRecentSave_pendingInsertIsDroppedWithoutSheetWrite() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            ioDispatcher = Dispatchers.IO
+        )
+        tDao.insert(undoTestTxn("txn_undo_1", sheetRowIndex = null))
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = "txn_undo_1",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "txn_undo_1"
+            )
+        )
+
+        val res = repo.undoRecentSave("txn_undo_1")
+        assertTrue(res is Result.Success)
+
+        // The insert item is gone and no void operation was queued
+        assertEquals(0, qDao.queue.size)
+        val local = tDao.getById("txn_undo_1")!!
+        assertEquals("Void", local.status)
+        assertEquals("[Void] Coffee", local.merchant)
+        assertEquals(SyncState.VOID.name, local.syncState)
+    }
+
+    @Test
+    fun testUndoRecentSave_fallsBackToVoidWhenAlreadyInSheet() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            ioDispatcher = Dispatchers.IO
+        )
+        tDao.insert(undoTestTxn("txn_undo_2", sheetRowIndex = 7).copy(syncState = SyncState.SYNCED.name))
+
+        val res = repo.undoRecentSave("txn_undo_2")
+        assertTrue(res is Result.Success)
+
+        val ops = qDao.queue.values.toList()
+        assertEquals(1, ops.size)
+        assertEquals(SyncQueueEntity.OP_VOID, ops.first().operationType)
+        assertEquals("Void", tDao.getById("txn_undo_2")!!.status)
+    }
+
     @Test
     fun testFirstExpenseInNextMonth_rollsOverDebtsAndDoesNotDuplicateOnRepeat() = runBlocking {
         val tDao = FakeTransactionDao()

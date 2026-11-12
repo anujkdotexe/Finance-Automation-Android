@@ -48,6 +48,13 @@ interface TransactionRepository {
     suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit>
 
     /**
+     * Undoes a just-saved transaction. If it still waits in the sync queue as an insert and has no
+     * sheet row, the queue item is removed and the transaction is voided locally with no sheet write.
+     * Otherwise it falls back to [voidTransaction].
+     */
+    suspend fun undoRecentSave(id: String): Result<Unit>
+
+    /**
      * Searches for transactions within [windowMillis] of the present with matching [amount].
      */
     suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction>
