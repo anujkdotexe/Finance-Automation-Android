@@ -5,6 +5,8 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
+import java.util.Locale
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -131,7 +133,10 @@ class ModalBottomSheetActivity : ComponentActivity() {
                             }
                         },
                         onConfirmExpense = {
-                            quickLogViewModel.onConfirmAndSave { dismissSafely() }
+                            quickLogViewModel.onConfirmAndSave { msg ->
+                                Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                dismissSafely()
+                            }
                         },
                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
                             lifecycleScope.launch(Dispatchers.IO) {
@@ -143,7 +148,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                     inflowType = inflowType,
                                     reason = reason
                                 )
-                                withContext(Dispatchers.Main) { dismissSafely() }
+                                withContext(Dispatchers.Main) {
+                                    val formatted = String.format(Locale.US, "%.2f", amount)
+                                    val msg = if (settler.isNotBlank()) "Recorded $formatted from $settler" else "Recorded $formatted"
+                                    Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                    dismissSafely()
+                                }
                             }
                         },
                         onConfirmFriendPaid = { amount, creditor, whatFor ->
@@ -153,7 +163,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                     amount = amount,
                                     whatFor = whatFor
                                 )
-                                withContext(Dispatchers.Main) { dismissSafely() }
+                                withContext(Dispatchers.Main) {
+                                    val formatted = String.format(Locale.US, "%.2f", amount)
+                                    val msg = if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
+                                    Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                    dismissSafely()
+                                }
                             }
                         },
                         onConfirmRepaid = { amount, person, timestamp ->
@@ -164,7 +179,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                     explicitRef = null,
                                     timestamp = timestamp
                                 )
-                                withContext(Dispatchers.Main) { dismissSafely() }
+                                withContext(Dispatchers.Main) {
+                                    val formatted = String.format(Locale.US, "%.2f", amount)
+                                    val msg = if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
+                                    Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                    dismissSafely()
+                                }
                             }
                         },
                         onStartTrip = { tagName ->

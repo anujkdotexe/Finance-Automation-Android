@@ -293,7 +293,8 @@ class QuickLogViewModel(
                     predictCategoryUseCase = predictCategoryUseCase
                 )) {
                     is Result.Success -> {
-                        val message = "Saved, will sync"
+                        val formattedAmount = String.format(java.util.Locale.US, "%.2f", state.amount)
+                        val message = "Saved $formattedAmount, will sync"
                         _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = message) }
                         onSaved(message)
                     }
