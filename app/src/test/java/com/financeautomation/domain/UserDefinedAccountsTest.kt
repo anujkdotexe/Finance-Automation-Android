@@ -95,6 +95,31 @@ class UserDefinedAccountsTest {
         val success = result as NotificationParseResult.Success
         assertEquals("NEW_ACCOUNT", success.flags)
         assertTrue(success.inferredAccount.contains("9988"))
+        // Transaction account MUST be the safe defaultAccount ("Other"), NOT the unconfigured pattern
+        assertEquals("Other", success.transaction.account)
+    }
+
+    @Test
+    fun testParseNotification_unknownAccountPattern_savesTransactionUnderDefaultAccountAndKeepsDetectedInCapture() {
+        val configured = listOf("ICICI Bank", "Cash", "Other")
+        val defaultAccount = "ICICI Bank"
+
+        val result = parseUseCase(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Paid to Swiggy",
+            text = "Paid Rs 420 from A/c XX4821 to Swiggy",
+            configuredAccounts = configured,
+            defaultAccount = defaultAccount
+        )
+
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        // Flags indicate new account detected
+        assertEquals("NEW_ACCOUNT", success.flags)
+        // Transaction is saved under defaultAccount so only configured accounts reach the sheet
+        assertEquals("ICICI Bank", success.transaction.account)
+        // Detected name is preserved in capture's inferredAccount
+        assertTrue(success.inferredAccount.contains("4821"))
     }
 
     @Test
