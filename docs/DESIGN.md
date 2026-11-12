@@ -207,6 +207,9 @@ Material 3, light and dark themes, edge-to-edge, predictive back, correct keyboa
 12.9 Look and feel
 Calm utility look, not decorative. Numbers are the hero; KPI first. Wording follows the iOS prompts exactly where they exist (Choose Action, Enter Amount, Select Account, What was this for, Select Category, Split Mode, Just Me, Split Equally, Custom Split, Add New Friend).
 
+12.10 Transactions screen (new, missing today)
+Today "See all" under Recent opens Needs Review, which only lists items waiting for a decision, so there is no place to see every entry. Add a Transactions screen reachable from Recent "See all" and from the drawer. It lists every entry of the selected month, newest first, grouped by day, each row showing merchant, category, account, amount, my share, status chip and sync icon. Tap a row for a detail sheet with Edit and Void (Edit is limited for settled rows). Top controls: month switcher, search by merchant or friend, filters for category, account, person, trip tag and status. Empty state and no-results state are required. "Where it went" see-all only expands the category list; tapping a category opens this screen filtered to that category.
+
 ## 13. Data the screens read and write (for realistic mock data)
 
 - Transaction: id, date and time, merchant, category, account, total amount, my share, owed to me, status (Personal, Pending, Settled, Void, Carried), companions, trip tag, source (UPI app, SMS, manual), review state, sync state (pending, synced, failed).
