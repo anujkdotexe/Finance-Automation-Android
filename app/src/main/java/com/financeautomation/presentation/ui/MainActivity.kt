@@ -266,7 +266,16 @@ fun MainScreen(
             if (currentDestination == MainNavDestination.INBOX) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java))
+                        val authIntent = android.app.PendingIntent.getActivity(
+                            context,
+                            0,
+                            Intent(),
+                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java).apply {
+                            putExtra(ModalBottomSheetActivity.EXTRA_FLOW, "MENU")
+                            putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
+                        })
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
