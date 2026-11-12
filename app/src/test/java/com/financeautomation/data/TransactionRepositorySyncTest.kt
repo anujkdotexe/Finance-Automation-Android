@@ -756,6 +756,105 @@ class TransactionRepositorySyncTest {
     }
 
     @Test
+    fun testReconcileWithSheet_importsMissingRowsAndCorrectsFields() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+
+        // Existing local row with wrong amount, merchant, and category
+        val staleRow = Transaction(
+            id = "txn_to_correct_1",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.5,
+            account = "SBI",
+            merchant = "Old Merchant",
+            category = "Old Category",
+            totalAmount = 100.0,
+            companions = "Personal",
+            myShare = 100.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED,
+            syncState = SyncState.SYNCED,
+            reviewState = ReviewState.CONFIRMED,
+            sheetRowIndex = 4
+        )
+        tDao.insert(TransactionEntity.fromDomain(staleRow))
+
+        // Remote sheet has updated row 4, plus a brand new row 5 missing locally
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46338, 0.5, "SBI", "New Merchant", "", "Groceries", 250.0, "Personal", 250.0, 0.0, "Settled"],
+                        [46338, 0.6, "Cash", "Imported Missing", "", "Shopping", 400.0, "Alice", 200.0, 200.0, "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        ["txn_to_correct_1"],
+                        ["txn_imported_missing_2"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                }
+            ]
+        }"""
+
+        val sheets = mock.createClient()
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val res = repo.reconcileWithSheet("test_sheet_id")
+        assertTrue(res is Result.Success)
+
+        // Verify corrected fields
+        val corrected = tDao.getById("txn_to_correct_1")
+        assertNotNull(corrected)
+        assertEquals("New Merchant", corrected!!.merchant)
+        assertEquals("Groceries", corrected.category)
+        assertEquals(250.0, corrected.totalAmount, 0.001)
+
+        // Verify imported missing row
+        val imported = tDao.getById("txn_imported_missing_2")
+        assertNotNull(imported)
+        assertEquals("Imported Missing", imported!!.merchant)
+        assertEquals("Shopping", imported.category)
+        assertEquals(400.0, imported.totalAmount, 0.001)
+        assertEquals(200.0, imported.owedToMe, 0.001)
+    }
+
+    @Test
     fun testFailedSnapshotRead_doesNotSavePlanAndRetries() = runBlocking {
         val tDao = FakeTransactionDao()
         val qDao = FakeSyncQueueDao()
