@@ -9,7 +9,9 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.CategoryRepository
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -76,6 +79,8 @@ class DashboardViewModel(
     private val transactionRepository: TransactionRepository,
     private val directSyncQueueDao: SyncQueueDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+    private val directPayableDao: PayableDao? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val categoryRepository: CategoryRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
@@ -89,6 +94,24 @@ class DashboardViewModel(
         transactionRepository = transactionRepository,
         directSyncQueueDao = syncQueueDao,
         syncQueueDaoProvider = null,
+        directPayableDao = null,
+        payableDaoProvider = null,
+        categoryRepository = categoryRepository,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDao: SyncQueueDao,
+        payableDao: PayableDao?,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = syncQueueDao,
+        syncQueueDaoProvider = null,
+        directPayableDao = payableDao,
+        payableDaoProvider = null,
         categoryRepository = categoryRepository,
         ioDispatcher = ioDispatcher
     )
@@ -102,6 +125,24 @@ class DashboardViewModel(
         transactionRepository = transactionRepository,
         directSyncQueueDao = null,
         syncQueueDaoProvider = syncQueueDaoProvider,
+        directPayableDao = null,
+        payableDaoProvider = null,
+        categoryRepository = categoryRepository,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDaoProvider: suspend () -> SyncQueueDao,
+        payableDaoProvider: (suspend () -> PayableDao)?,
+        categoryRepository: CategoryRepository? = null,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = null,
+        syncQueueDaoProvider = syncQueueDaoProvider,
+        directPayableDao = null,
+        payableDaoProvider = payableDaoProvider,
         categoryRepository = categoryRepository,
         ioDispatcher = ioDispatcher
     )
@@ -119,15 +160,23 @@ class DashboardViewModel(
             ?: throw IllegalStateException("SyncQueueDao not available")
     }
 
+    private suspend fun resolvePayableDao(): PayableDao? {
+        return directPayableDao ?: payableDaoProvider?.invoke()
+    }
+
     private fun observeData() {
         viewModelScope.launch(ioDispatcher) {
             val syncQueueDao = resolveSyncQueueDao()
+            val payableDao = resolvePayableDao()
+            val payablesFlow = payableDao?.observePending() ?: flowOf(emptyList())
+
             combine(
                 transactionRepository.getTransactions(),
                 syncQueueDao.getAllQueueFlow(),
+                payablesFlow,
                 monthOffsetFlow
-            ) { transactions, queueItems, monthOffset ->
-                calculateDashboardMetrics(transactions, queueItems, monthOffset)
+            ) { transactions, queueItems, pendingPayables, monthOffset ->
+                calculateDashboardMetrics(transactions, queueItems, pendingPayables, monthOffset)
             }.collect { calculatedState ->
                 _uiState.update { current ->
                     calculatedState.copy(
@@ -155,6 +204,7 @@ class DashboardViewModel(
     private fun calculateDashboardMetrics(
         transactions: List<Transaction>,
         queueItems: List<SyncQueueEntity>,
+        pendingPayables: List<PayableEntity>,
         monthOffset: Int
     ): DashboardUiState {
         val nowCal = Calendar.getInstance()
@@ -256,6 +306,13 @@ class DashboardViewModel(
             .sortedByDescending { it.amount }
             .take(3)
 
+        val totalIOwe = pendingPayables.sumOf { it.amountIOwe }
+        val topIOwe = pendingPayables
+            .groupBy { it.paidBy }
+            .map { (person, list) -> DebtSummary(name = person, amount = list.sumOf { it.amountIOwe }) }
+            .sortedByDescending { it.amount }
+            .take(3)
+
         val recentTransactions = monthTransactions
             .sortedByDescending { it.timestamp }
             .take(5)
@@ -267,8 +324,8 @@ class DashboardViewModel(
             lastMonthBurn = lastMonthBurn,
             owedToMe = totalOwedToMe,
             topOwedToMe = topOwedToMe,
-            iOwePeople = 0.0,
-            topIOwe = emptyList(),
+            iOwePeople = totalIOwe,
+            topIOwe = topIOwe,
             needsReviewCount = needsReviewCount,
             topCategories = topCategories,
             allCategories = allCategories,
@@ -318,6 +375,7 @@ class DashboardViewModel(
         fun provideFactory(
             transactionRepository: TransactionRepository,
             syncQueueDao: SyncQueueDao,
+            payableDao: PayableDao? = null,
             categoryRepository: CategoryRepository? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -326,6 +384,7 @@ class DashboardViewModel(
                 return DashboardViewModel(
                     transactionRepository = transactionRepository,
                     syncQueueDao = syncQueueDao,
+                    payableDao = payableDao,
                     categoryRepository = categoryRepository,
                     ioDispatcher = ioDispatcher
                 ) as T
@@ -335,6 +394,7 @@ class DashboardViewModel(
         fun provideFactory(
             transactionRepository: TransactionRepository,
             syncQueueDaoProvider: suspend () -> SyncQueueDao,
+            payableDaoProvider: (suspend () -> PayableDao)? = null,
             categoryRepository: CategoryRepository? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -343,6 +403,7 @@ class DashboardViewModel(
                 return DashboardViewModel(
                     transactionRepository = transactionRepository,
                     syncQueueDaoProvider = syncQueueDaoProvider,
+                    payableDaoProvider = payableDaoProvider,
                     categoryRepository = categoryRepository,
                     ioDispatcher = ioDispatcher
                 ) as T

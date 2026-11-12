@@ -16,7 +16,8 @@ data class MonthTabSnapshot(
     val tabName: String,
     val sheetId: Int,
     val debits: List<LedgerDebitRow>,
-    val payables: List<LedgerPayableRow>
+    val payables: List<LedgerPayableRow>,
+    val inflows: List<LedgerInflowRow> = emptyList()
 )
 
 /**
@@ -50,6 +51,22 @@ data class LedgerPayableRow(
     val amountIOwe: Double,
     val dateRepaidSerial: Int?,
     val repaymentStatus: String,
+    val uuid: String?
+)
+
+/**
+ * A row from Table 2 (Cols M to T plus AD hidden UUID) carrying its 1-based sheet row coordinate.
+ */
+data class LedgerInflowRow(
+    val rowNumber: Int,
+    val dateSerial: Int?,
+    val timeSerial: Double?,
+    val account: String,
+    val inflowType: String,
+    val sender: String,
+    val reason: String,
+    val amountReceived: Double,
+    val linkedDebits: String,
     val uuid: String?
 )
 

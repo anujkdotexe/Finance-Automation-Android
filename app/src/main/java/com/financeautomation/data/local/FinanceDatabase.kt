@@ -15,6 +15,7 @@ import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PipelineEventDao
 import com.financeautomation.data.local.dao.PreferenceDao
@@ -27,6 +28,7 @@ import com.financeautomation.data.local.entity.CategoryStatEntity
 import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.LineageEntity
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.PipelineEventEntity
 import com.financeautomation.data.local.entity.PreferenceEntity
@@ -67,9 +69,10 @@ import java.io.File
         PendingCaptureEntity::class,
         HandledNotificationEntity::class,
         CategoryStatEntity::class,
-        PipelineEventEntity::class
+        PipelineEventEntity::class,
+        PayableEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -88,6 +91,7 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun handledNotificationDao(): HandledNotificationDao
     abstract fun categoryStatDao(): CategoryStatDao
     abstract fun pipelineEventDao(): PipelineEventDao
+    abstract fun payableDao(): PayableDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -105,6 +109,7 @@ abstract class FinanceDatabase : RoomDatabase() {
         val MIGRATION_4_5 = DatabaseMigrations.MIGRATION_4_5
         val MIGRATION_5_6 = DatabaseMigrations.MIGRATION_5_6
         val MIGRATION_6_7 = DatabaseMigrations.MIGRATION_6_7
+        val MIGRATION_7_8 = DatabaseMigrations.MIGRATION_7_8
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {

@@ -82,6 +82,7 @@ class MainActivity : ComponentActivity() {
         DashboardViewModel.provideFactory(
             transactionRepository = app.appContainer.transactionRepository,
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
+            payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
             categoryRepository = app.appContainer.categoryRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )

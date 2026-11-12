@@ -3,8 +3,10 @@ package com.financeautomation.data.repository
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.remote.AccountingPlanJsonAdapter
@@ -61,6 +63,8 @@ class TransactionRepositoryImpl(
     private val syncQueueDao: SyncQueueDao? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+    private val payableDao: PayableDao? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val preferencesRepository: PreferencesRepository? = null,
     private val workbookResolver: WorkbookResolver? = null,
@@ -78,6 +82,7 @@ class TransactionRepositoryImpl(
     constructor(
         transactionDao: TransactionDao,
         syncQueueDao: SyncQueueDao,
+        payableDao: PayableDao? = null,
         googleSheetsClient: GoogleSheetsClient? = null,
         preferencesRepository: PreferencesRepository? = null,
         workbookResolver: WorkbookResolver? = null,
@@ -95,6 +100,8 @@ class TransactionRepositoryImpl(
         syncQueueDao = syncQueueDao,
         transactionDaoProvider = null,
         syncQueueDaoProvider = null,
+        payableDao = payableDao,
+        payableDaoProvider = null,
         googleSheetsClient = googleSheetsClient,
         preferencesRepository = preferencesRepository,
         workbookResolver = workbookResolver,
@@ -118,6 +125,9 @@ class TransactionRepositoryImpl(
     private suspend fun resolveSyncQueueDao(): SyncQueueDao =
         syncQueueDao ?: syncQueueDaoProvider?.invoke()
             ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")
+
+    private suspend fun resolvePayableDao(): PayableDao? =
+        payableDao ?: payableDaoProvider?.invoke()
 
     override fun getTransactions(): Flow<List<Transaction>> = flow {
         val dao = resolveTransactionDao()
@@ -380,6 +390,7 @@ class TransactionRepositoryImpl(
 
             val pendingItems = syncQueueDao.getPendingQueueFifo(maxRetries = MAX_SYNC_RETRIES)
             if (pendingItems.isEmpty()) {
+                reconcileWithSheet()
                 return@withLock Result.Success(0)
             }
 
@@ -886,6 +897,7 @@ class TransactionRepositoryImpl(
             if (hasTransportFailure) {
                 Result.Error(com.financeautomation.data.remote.GoogleSheetsException("Transport failure occurred during synchronization; scheduled for exponential backoff retry"))
             } else {
+                reconcileWithSheet()
                 Result.Success(syncedCount)
             }
         } catch (e: CancellationException) {
@@ -895,6 +907,105 @@ class TransactionRepositoryImpl(
         }
     }
 }
+
+    suspend fun reconcileWithSheet(targetSpreadsheetId: String? = null): Result<Int> = withContext(ioDispatcher) {
+        try {
+            val sheets = googleSheetsClient ?: return@withContext Result.Success(0)
+            val tDao = resolveTransactionDao()
+            val pDao = resolvePayableDao()
+
+            val spreadsheetId = targetSpreadsheetId ?: run {
+                val currentYear = java.time.ZonedDateTime.now(sheetTimeZone).year
+                when (val res = workbookResolver?.resolveForYear(currentYear)) {
+                    is Result.Success -> res.data
+                    else -> preferencesRepository?.getSpreadsheetIdSync()
+                }
+            } ?: return@withContext Result.Success(0)
+
+            val snapRes = sheets.readLedgerSnapshot(spreadsheetId)
+            if (snapRes is Result.Error) {
+                return@withContext Result.Error(snapRes.exception)
+            }
+            val snapshot = (snapRes as Result.Success).data
+            var reconciledCount = 0
+
+            val remotePayables = mutableListOf<PayableEntity>()
+
+            for (month in snapshot.monthTabs) {
+                for (sheetDebit in month.debits) {
+                    val uuid = sheetDebit.uuid
+                    val localTxn = if (!uuid.isNullOrBlank()) {
+                        tDao.getById(uuid)
+                    } else null
+
+                    if (localTxn != null) {
+                        val newOwed = sheetDebit.owedToMe
+                        val newStatus = sheetDebit.status
+                        val newCompanions = sheetDebit.companions
+                        val newRow = sheetDebit.rowNumber
+
+                        if (localTxn.owedToMe != newOwed ||
+                            localTxn.status != newStatus ||
+                            localTxn.companions != newCompanions ||
+                            localTxn.sheetRowIndex != newRow
+                        ) {
+                            tDao.update(
+                                localTxn.copy(
+                                    owedToMe = newOwed,
+                                    status = newStatus,
+                                    companions = newCompanions,
+                                    sheetRowIndex = newRow,
+                                    syncState = SyncState.SYNCED.name
+                                )
+                            )
+                            reconciledCount++
+                        }
+                    }
+                }
+
+                for (sheetPayable in month.payables) {
+                    val pUuid = sheetPayable.uuid ?: continue
+                    remotePayables.add(
+                        PayableEntity(
+                            uuid = pUuid,
+                            dateIncurredSerial = sheetPayable.dateIncurredSerial,
+                            timeSerial = sheetPayable.timeSerial,
+                            paidBy = sheetPayable.paidBy,
+                            whatFor = sheetPayable.whatFor,
+                            amountIOwe = sheetPayable.amountIOwe,
+                            dateRepaidSerial = sheetPayable.dateRepaidSerial,
+                            repaymentStatus = sheetPayable.repaymentStatus,
+                            tabName = month.tabName,
+                            sheetRowIndex = sheetPayable.rowNumber,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            }
+
+            if (pDao != null) {
+                val remoteUuids = remotePayables.map { it.uuid }.toSet()
+                val localPayables = pDao.getAll()
+                for (local in localPayables) {
+                    if (!remoteUuids.contains(local.uuid)) {
+                        pDao.deleteByUuid(local.uuid)
+                    }
+                }
+                if (remotePayables.isNotEmpty()) {
+                    pDao.upsertAll(remotePayables)
+                }
+            }
+
+            Result.Success(reconciledCount)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            com.financeautomation.core.utils.Diagnostics.record(
+                "TransactionRepositoryImpl",
+                "reconcileWithSheet failed: ${e.message}"
+            )
+            Result.Error(e)
+        }
+    }
 
     private suspend fun applyPlan(
         spreadsheetId: String,
