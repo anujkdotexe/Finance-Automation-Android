@@ -201,6 +201,7 @@ class DefaultAppContainer(
         TripTagRepositoryImpl(
             tripTagDaoProvider = { awaitDatabase().tripTagDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
+            preferencesRepositoryProvider = { preferencesRepository },
             ioDispatcher = ioDispatcher
         )
     }
@@ -356,6 +357,7 @@ class DefaultAppContainer(
             googleDriveClient = googleDriveClient,
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             lineageDaoProvider = { awaitDatabase().lineageDao() },
+            transactionDaoProvider = { awaitDatabase().transactionDao() },
             settlementWaterfallUseCase = settlementWaterfallUseCase,
             repaymentWaterfallUseCase = repaymentWaterfallUseCase,
             carryForwardUseCase = carryForwardUseCase,

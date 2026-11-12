@@ -950,7 +950,68 @@ class TransactionRepositoryImpl(
             }
         }
 
+        // Step 3: Apply plan edits and settled references locally to Room database
+        applyPlanToLocalDatabase(plan)
+
         return Result.Success(lastAppendedRow)
+    }
+
+    private suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
+        try {
+            val tDao = resolveTransactionDao()
+            val editsByRow = plan.edits.groupBy { it.row }
+            val allTargetRows = (editsByRow.keys + plan.settled.map { it.row }).distinct()
+
+            for (rowNum in allTargetRows) {
+                val settledRef = plan.settled.firstOrNull { it.row == rowNum }
+                val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
+                    ?: tDao.getBySheetRowIndex(rowNum)
+
+                if (existingTxn != null) {
+                    var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn
+                    val rowEdits = editsByRow[rowNum].orEmpty()
+                    for (edit in rowEdits) {
+                        val col = edit.column.uppercase()
+                        updated = when (col) {
+                            "D" -> updated.copy(merchant = edit.value?.toString() ?: updated.merchant)
+                            "G" -> {
+                                val amt = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.totalAmount
+                                updated.copy(totalAmount = amt)
+                            }
+                            "H" -> updated.copy(companions = edit.value?.toString() ?: updated.companions)
+                            "I" -> {
+                                val share = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.myShare
+                                updated.copy(myShare = share)
+                            }
+                            "J" -> {
+                                val owed = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.owedToMe
+                                updated.copy(owedToMe = owed)
+                            }
+                            "K" -> updated.copy(status = edit.value?.toString() ?: updated.status)
+                            else -> updated
+                        }
+                    }
+                    if (settledRef != null) {
+                        val owed = settledRef.remaining
+                        val st = if (owed <= 0.0) "Settled" else "Pending"
+                        updated = updated.copy(owedToMe = owed, status = st)
+                    }
+                    tDao.update(updated)
+                }
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            com.financeautomation.core.utils.Diagnostics.record(
+                "TransactionRepositoryImpl",
+                "applyPlanToLocalDatabase failed: ${e.message}"
+            )
+        }
     }
 
     private suspend fun handleItemTransportFailure(item: SyncQueueEntity) {
