@@ -56,6 +56,7 @@ data class PendingCaptureEntity(
         const val STATE_SHOWN: String = "SHOWN"
         const val STATE_DONE: String = "DONE"
         const val STATE_DISMISSED: String = "DISMISSED"
+        const val STATE_NEEDS_REVIEW: String = "NEEDS_REVIEW"
 
         const val FLAG_NEEDS_AMOUNT: String = "NEEDS_AMOUNT"
         const val FLAG_POSSIBLE_DUPLICATE: String = "POSSIBLE_DUPLICATE"

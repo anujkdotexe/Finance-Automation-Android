@@ -1,5 +1,6 @@
 package com.financeautomation.service
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -160,7 +161,88 @@ class NotificationProcessorTest {
         val txn = tDao.txns.values.first()
         assertEquals(350.0, txn.totalAmount, 0.001)
         assertEquals("Swiggy", txn.merchant)
+        assertEquals(CategoryConstants.CATEGORY_OTHER, txn.category)
         assertEquals(ReviewState.NEEDS_REVIEW.name, txn.reviewState)
+    }
+
+    @Test
+    fun testExpiredCaptureWithNullOrZeroAmount_marksNeedsReviewAndCreatesNoTransaction() = runBlocking {
+        val pDao = FakePendingCaptureDao()
+        val hDao = FakeHandledNotificationDao()
+        val tDao = FakeTestTransactionDao()
+
+        val proc = NotificationProcessor(
+            pendingCaptureDao = pDao,
+            handledNotificationDao = hDao,
+            transactionDao = tDao
+        )
+
+        val now = 100_000_000L
+        val staleCapture = PendingCaptureEntity(
+            id = "cap_null_amt",
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            amount = null,
+            payee = "Unknown Payee",
+            inferredAccount = "Cash",
+            timestamp = now - (25 * 3600_000L),
+            kind = "DEBIT",
+            flags = PendingCaptureEntity.FLAG_NEEDS_AMOUNT,
+            state = "WAITING",
+            notificationKey = "key_null",
+            contentHash = "hash_null",
+            updatedAt = now - (25 * 3600_000L)
+        )
+        pDao.insert(staleCapture)
+
+        proc.expireStaleWaitingCaptures(now = now)
+
+        // Capture state must become NEEDS_REVIEW, NOT DONE
+        val capAfter = pDao.getById("cap_null_amt")
+        assertNotNull(capAfter)
+        assertEquals(PendingCaptureEntity.STATE_NEEDS_REVIEW, capAfter!!.state)
+
+        // Zero rupee transaction must NOT be inserted into ledger
+        assertEquals(0, tDao.txns.size)
+    }
+
+    @Test
+    fun testExpiredCreditCapture_marksNeedsReviewAndCreatesNoTransaction() = runBlocking {
+        val pDao = FakePendingCaptureDao()
+        val hDao = FakeHandledNotificationDao()
+        val tDao = FakeTestTransactionDao()
+
+        val proc = NotificationProcessor(
+            pendingCaptureDao = pDao,
+            handledNotificationDao = hDao,
+            transactionDao = tDao
+        )
+
+        val now = 100_000_000L
+        val staleCredit = PendingCaptureEntity(
+            id = "cap_credit_1",
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            amount = 1200.0,
+            payee = "Friend",
+            inferredAccount = "Cash",
+            timestamp = now - (25 * 3600_000L),
+            kind = PendingCaptureEntity.KIND_CREDIT,
+            flags = "",
+            state = "WAITING",
+            notificationKey = "key_credit",
+            contentHash = "hash_credit",
+            updatedAt = now - (25 * 3600_000L)
+        )
+        pDao.insert(staleCredit)
+
+        proc.expireStaleWaitingCaptures(now = now)
+
+        // Credit capture must become NEEDS_REVIEW and must NEVER become a debit expense
+        val capAfter = pDao.getById("cap_credit_1")
+        assertNotNull(capAfter)
+        assertEquals(PendingCaptureEntity.STATE_NEEDS_REVIEW, capAfter!!.state)
+
+        // Must NOT create a debit transaction
+        assertEquals(0, tDao.txns.size)
     }
 
     @Test
