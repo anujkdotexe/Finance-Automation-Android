@@ -110,6 +110,7 @@ class TransactionRepositorySyncTest {
         override suspend fun update(item: SyncQueueEntity) { queue[item.id] = item }
         override suspend fun delete(item: SyncQueueEntity) { queue.remove(item.id) }
         override suspend fun deleteById(id: Long) { queue.remove(id) }
+        override suspend fun getById(id: Long): SyncQueueEntity? = queue[id]
         override suspend fun deleteByTransactionId(transactionId: String) {
             queue.values.filter { it.transactionId == transactionId }.forEach { queue.remove(it.id) }
         }
@@ -124,6 +125,15 @@ class TransactionRepositorySyncTest {
         }
         override suspend fun setStatusAndRetryCount(id: Long, status: String, retryCount: Int) {
             queue[id]?.let { queue[id] = it.copy(status = status, retryCount = retryCount) }
+        }
+        override suspend fun setStatusError(id: Long, status: String, retryCount: Int, kind: String?, detail: String?) {
+            queue[id]?.let { queue[id] = it.copy(status = status, retryCount = retryCount, lastErrorKind = kind, lastErrorDetail = detail) }
+        }
+        override suspend fun updateStatusError(id: Long, status: String, retryIncrement: Int, kind: String?, detail: String?) {
+            queue[id]?.let { queue[id] = it.copy(status = status, retryCount = it.retryCount + retryIncrement, lastErrorKind = kind, lastErrorDetail = detail) }
+        }
+        override suspend fun resetQueueItem(id: Long) {
+            queue[id]?.let { queue[id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0, lastErrorKind = null, lastErrorDetail = null) }
         }
         override suspend fun countPendingOperations(opType: String): Int =
             queue.values.count { it.operationType == opType && it.status == SyncQueueEntity.STATUS_PENDING }

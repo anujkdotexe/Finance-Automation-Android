@@ -36,6 +36,9 @@ interface SyncQueueDao {
     @Query("DELETE FROM sync_queue WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("SELECT * FROM sync_queue WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): SyncQueueEntity?
+
     @Query("DELETE FROM sync_queue WHERE transactionId = :transactionId")
     suspend fun deleteByTransactionId(transactionId: String)
 
@@ -53,6 +56,15 @@ interface SyncQueueDao {
 
     @Query("UPDATE sync_queue SET status = :status, retryCount = :retryCount WHERE id = :id")
     suspend fun setStatusAndRetryCount(id: Long, status: String, retryCount: Int)
+
+    @Query("UPDATE sync_queue SET status = :status, retryCount = :retryCount, lastErrorKind = :kind, lastErrorDetail = :detail WHERE id = :id")
+    suspend fun setStatusError(id: Long, status: String, retryCount: Int, kind: String?, detail: String?)
+
+    @Query("UPDATE sync_queue SET status = :status, retryCount = retryCount + :retryIncrement, lastErrorKind = :kind, lastErrorDetail = :detail WHERE id = :id")
+    suspend fun updateStatusError(id: Long, status: String, retryIncrement: Int, kind: String?, detail: String?)
+
+    @Query("UPDATE sync_queue SET status = 'PENDING', retryCount = 0, lastErrorKind = NULL, lastErrorDetail = NULL WHERE id = :id")
+    suspend fun resetQueueItem(id: Long)
 
     @Query("SELECT COUNT(*) FROM sync_queue WHERE operationType = :opType AND (status = 'PENDING' OR status = 'IN_PROGRESS')")
     suspend fun countPendingOperations(opType: String): Int

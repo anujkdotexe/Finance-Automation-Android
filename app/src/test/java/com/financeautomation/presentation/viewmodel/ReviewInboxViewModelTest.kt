@@ -91,12 +91,24 @@ class ReviewInboxViewModelTest {
         override suspend fun update(item: SyncQueueEntity) { queue[item.id] = item; refreshFlow() }
         override suspend fun delete(item: SyncQueueEntity) { queue.remove(item.id); refreshFlow() }
         override suspend fun deleteById(id: Long) { queue.remove(id); refreshFlow() }
+        override suspend fun getById(id: Long): SyncQueueEntity? = queue[id]
         override suspend fun deleteByTransactionId(transactionId: String) {}
         override suspend fun getNextPending(maxRetries: Int): SyncQueueEntity? = null
         override suspend fun getAllPending(maxRetries: Int): List<SyncQueueEntity> = emptyList()
         override suspend fun getPendingQueueFifo(maxRetries: Int): List<SyncQueueEntity> = emptyList()
         override suspend fun updateStatus(id: Long, status: String, retryIncrement: Int) {}
-        override suspend fun setStatusAndRetryCount(id: Long, status: String, retryCount: Int) {}
+        override suspend fun setStatusAndRetryCount(id: Long, status: String, retryCount: Int) {
+            queue[id]?.let { queue[id] = it.copy(status = status, retryCount = retryCount); refreshFlow() }
+        }
+        override suspend fun setStatusError(id: Long, status: String, retryCount: Int, kind: String?, detail: String?) {
+            queue[id]?.let { queue[id] = it.copy(status = status, retryCount = retryCount, lastErrorKind = kind, lastErrorDetail = detail); refreshFlow() }
+        }
+        override suspend fun updateStatusError(id: Long, status: String, retryIncrement: Int, kind: String?, detail: String?) {
+            queue[id]?.let { queue[id] = it.copy(status = status, retryCount = it.retryCount + retryIncrement, lastErrorKind = kind, lastErrorDetail = detail); refreshFlow() }
+        }
+        override suspend fun resetQueueItem(id: Long) {
+            queue[id]?.let { queue[id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0, lastErrorKind = null, lastErrorDetail = null); refreshFlow() }
+        }
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) {}
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
@@ -448,6 +460,103 @@ class ReviewInboxViewModelTest {
 
         // Newer one must be voided
         assertEquals(TransactionStatus.VOID, rNewer.status)
+    }
+
+    @Test
+    fun testDiscardQueueItem_insertVoidsLocally() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cDao = FakePendingCaptureDao()
+        val aRepo = FakeAccountRepo()
+
+        val txn = Transaction(
+            id = "txn_failed_insert",
+            timestamp = 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Cafe",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW
+        )
+        tRepo.insertTransaction(txn)
+
+        val queueItem = SyncQueueEntity(
+            id = 10L,
+            transactionId = "txn_failed_insert",
+            operationType = SyncQueueEntity.OP_INSERT,
+            payloadJson = "{}",
+            status = SyncQueueEntity.STATUS_FAILED,
+            retryCount = 8,
+            lastErrorKind = "AUTH_EXPIRED",
+            lastErrorDetail = "401 Unauthenticated"
+        )
+        qDao.insert(queueItem)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = cDao,
+            accountRepository = aRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.discardQueueItem(10L)
+        advanceUntilIdle()
+
+        // Queue item must be deleted
+        assertNull(qDao.getById(10L))
+
+        // Transaction must be marked VOID locally, not in NEEDS_REVIEW
+        val updatedTxn = tRepo.getTransactionById("txn_failed_insert")!!
+        assertEquals(TransactionStatus.VOID, updatedTxn.status)
+        assertEquals(0.0, updatedTxn.totalAmount, 0.001)
+        assertEquals(ReviewState.CONFIRMED, updatedTxn.reviewState)
+        assertEquals(com.financeautomation.core.model.SyncState.VOID, updatedTxn.syncState)
+    }
+
+    @Test
+    fun testRetryQueueItem_resetsStatusAndErrors() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cDao = FakePendingCaptureDao()
+        val aRepo = FakeAccountRepo()
+
+        val queueItem = SyncQueueEntity(
+            id = 20L,
+            transactionId = "txn_20",
+            operationType = SyncQueueEntity.OP_INSERT,
+            payloadJson = "{}",
+            status = SyncQueueEntity.STATUS_FAILED,
+            retryCount = 8,
+            lastErrorKind = "RATE_LIMITED",
+            lastErrorDetail = "429 Too Many Requests"
+        )
+        qDao.insert(queueItem)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = cDao,
+            accountRepository = aRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.retryQueueItem(20L)
+        advanceUntilIdle()
+
+        val updatedQueue = qDao.getById(20L)!!
+        assertEquals(SyncQueueEntity.STATUS_PENDING, updatedQueue.status)
+        assertEquals(0, updatedQueue.retryCount)
+        assertNull(updatedQueue.lastErrorKind)
+        assertNull(updatedQueue.lastErrorDetail)
     }
 }
 

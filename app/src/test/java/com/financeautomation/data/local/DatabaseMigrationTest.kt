@@ -105,4 +105,38 @@ class DatabaseMigrationTest {
         val createSql = transactionsEntity["createSql"]!!.jsonPrimitive.content
         assertTrue(createSql.contains("`duplicateOfId` TEXT"))
     }
+
+    @Test
+    fun testMigration10to11_matchesSchema11Json() {
+        assertEquals(10, DatabaseMigrations.MIGRATION_10_11.startVersion)
+        assertEquals(11, DatabaseMigrations.MIGRATION_10_11.endVersion)
+        assertTrue(DatabaseMigrations.ALL_MIGRATIONS.contains(DatabaseMigrations.MIGRATION_10_11))
+
+        val schemaFile = File("schemas/com.financeautomation.data.local.FinanceDatabase/11.json")
+        val altFile = File("app/schemas/com.financeautomation.data.local.FinanceDatabase/11.json")
+        val targetFile = if (schemaFile.exists()) schemaFile else altFile
+        assertTrue("Schema 11.json must exist", targetFile.exists())
+
+        val json = Json { ignoreUnknownKeys = true }
+        val root = json.parseToJsonElement(targetFile.readText()).jsonObject
+        val entities = root["database"]!!.jsonObject["entities"]!!.jsonArray
+
+        val syncQueueEntity = entities.find { it.jsonObject["tableName"]?.jsonPrimitive?.content == "sync_queue" }?.jsonObject
+        assertNotNull("sync_queue table must exist in schema 11.json", syncQueueEntity)
+
+        val fields = syncQueueEntity!!["fields"]!!.jsonArray
+        val kindField = fields.find { it.jsonObject["columnName"]?.jsonPrimitive?.content == "lastErrorKind" }?.jsonObject
+        assertNotNull("lastErrorKind column must exist in schema 11.json sync_queue table", kindField)
+        assertEquals("TEXT", kindField!!["affinity"]?.jsonPrimitive?.content)
+        assertEquals("false", kindField["notNull"]?.jsonPrimitive?.content)
+
+        val detailField = fields.find { it.jsonObject["columnName"]?.jsonPrimitive?.content == "lastErrorDetail" }?.jsonObject
+        assertNotNull("lastErrorDetail column must exist in schema 11.json sync_queue table", detailField)
+        assertEquals("TEXT", detailField!!["affinity"]?.jsonPrimitive?.content)
+        assertEquals("false", detailField["notNull"]?.jsonPrimitive?.content)
+
+        val createSql = syncQueueEntity["createSql"]!!.jsonPrimitive.content
+        assertTrue(createSql.contains("`lastErrorKind` TEXT"))
+        assertTrue(createSql.contains("`lastErrorDetail` TEXT"))
+    }
 }

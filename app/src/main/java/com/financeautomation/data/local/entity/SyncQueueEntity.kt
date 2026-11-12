@@ -41,7 +41,13 @@ data class SyncQueueEntity(
     val status: String = STATUS_PENDING,
 
     @ColumnInfo(name = "planJson")
-    val planJson: String? = null
+    val planJson: String? = null,
+
+    @ColumnInfo(name = "lastErrorKind")
+    val lastErrorKind: String? = null,
+
+    @ColumnInfo(name = "lastErrorDetail")
+    val lastErrorDetail: String? = null
 ) {
     companion object {
         const val OP_INSERT: String = "INSERT"

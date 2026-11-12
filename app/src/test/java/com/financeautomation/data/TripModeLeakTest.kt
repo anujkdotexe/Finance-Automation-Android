@@ -146,6 +146,7 @@ class TripModeLeakTest {
         override suspend fun update(item: SyncQueueEntity) { items[item.id] = item }
         override suspend fun delete(item: SyncQueueEntity) { items.remove(item.id) }
         override suspend fun deleteById(id: Long) { items.remove(id) }
+        override suspend fun getById(id: Long): SyncQueueEntity? = items[id]
         override suspend fun deleteByTransactionId(transactionId: String) { items.values.removeIf { it.transactionId == transactionId } }
         override suspend fun getNextPending(maxRetries: Int): SyncQueueEntity? = items.values.firstOrNull { it.status == SyncQueueEntity.STATUS_PENDING }
         override suspend fun getAllPending(maxRetries: Int): List<SyncQueueEntity> = items.values.filter { it.status == SyncQueueEntity.STATUS_PENDING }
@@ -155,6 +156,15 @@ class TripModeLeakTest {
         }
         override suspend fun setStatusAndRetryCount(id: Long, status: String, retryCount: Int) {
             items[id]?.let { items[id] = it.copy(status = status, retryCount = retryCount) }
+        }
+        override suspend fun setStatusError(id: Long, status: String, retryCount: Int, kind: String?, detail: String?) {
+            items[id]?.let { items[id] = it.copy(status = status, retryCount = retryCount, lastErrorKind = kind, lastErrorDetail = detail) }
+        }
+        override suspend fun updateStatusError(id: Long, status: String, retryIncrement: Int, kind: String?, detail: String?) {
+            items[id]?.let { items[id] = it.copy(status = status, retryCount = it.retryCount + retryIncrement, lastErrorKind = kind, lastErrorDetail = detail) }
+        }
+        override suspend fun resetQueueItem(id: Long) {
+            items[id]?.let { items[id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0, lastErrorKind = null, lastErrorDetail = null) }
         }
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) { items[id]?.let { items[id] = it.copy(planJson = planJson) } }
