@@ -9,20 +9,45 @@ import com.financeautomation.data.remote.GoogleSheetsApiException
 import com.financeautomation.data.remote.GoogleSheetsClient
 import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.data.remote.WorkbookResolver
+import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.ThemeMode
+import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
+import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
     private val fakeTokenProvider = object : TokenProvider {
         override fun getAccessToken(): String = "test_token"
@@ -33,6 +58,8 @@ class SettingsViewModelTest {
         var email: String? = "test@example.com"
         var activeSpreadsheetId: String? = "sheet_123"
         val yearMap = mutableMapOf<Int, String>()
+        val devModeFlow = MutableStateFlow(false)
+        val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
 
         override fun getSpreadsheetId(): Flow<String?> = flowOf(activeSpreadsheetId)
         override suspend fun getSpreadsheetIdSync(): String? = activeSpreadsheetId
@@ -65,6 +92,12 @@ class SettingsViewModelTest {
 
         override suspend fun getOrCreateDeviceId(): String = "test_device_id"
         override suspend fun getDeviceIdSync(): String? = "test_device_id"
+        override fun getDeveloperMode(): Flow<Boolean> = devModeFlow.asStateFlow()
+        override suspend fun getDeveloperModeSync(): Boolean = devModeFlow.value
+        override suspend fun setDeveloperMode(enabled: Boolean) { devModeFlow.value = enabled }
+        override fun getThemeMode(): Flow<ThemeMode> = themeModeFlow.asStateFlow()
+        override suspend fun getThemeModeSync(): ThemeMode = themeModeFlow.value
+        override suspend fun setThemeMode(mode: ThemeMode) { themeModeFlow.value = mode }
         override suspend fun getPreference(key: String): String? = null
         override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {}
         override suspend fun deletePreference(key: String) {}
@@ -247,5 +280,112 @@ class SettingsViewModelTest {
 
         val withoutMessage = OnboardingViewModel.formatFriendlyErrorMessage(java.io.IOException())
         assertEquals(R.string.onboarding_error_unknown, withoutMessage.resId)
+    }
+
+    private class FakePeopleRepo : PeopleRepository {
+        override fun getCompanions(): Flow<List<Companion>> = flowOf(emptyList())
+        override suspend fun getAllCompanions(): List<Companion> = emptyList()
+        override suspend fun getCompanionById(id: String): Companion? = null
+        override suspend fun getCompanionByName(name: String): Companion? = null
+        override suspend fun insertCompanion(companion: Companion) {}
+        override suspend fun updateCompanion(companion: Companion) {}
+        override suspend fun updateCompanionName(id: String, newName: String) {}
+        override suspend fun deleteCompanion(companion: Companion) {}
+        override suspend fun deleteCompanionById(id: String) {}
+    }
+
+    private class FakeTransactionRepo : TransactionRepository {
+        override fun getTransactions(): Flow<List<Transaction>> = flowOf(emptyList())
+        override fun getNeedsReview(): Flow<List<Transaction>> = flowOf(emptyList())
+        override suspend fun getTransactionById(id: String): Transaction? = null
+        override suspend fun insertTransaction(transaction: Transaction): Result<Unit> = Result.Success(Unit)
+        override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = Result.Success(Unit)
+        override suspend fun voidTransaction(id: String): Result<Unit> = Result.Success(Unit)
+        override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
+        override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
+        override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
+        override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
+    }
+
+    @Test
+    fun testOnVersionTapped_unlocksDeveloperModeAfter7TapsWithinWindow() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        assertFalse(prefs.getDeveloperModeSync())
+        assertFalse(vm.uiState.value.developerMode)
+
+        val t0 = 100_000L
+        for (i in 0 until 6) {
+            vm.onVersionTapped(t0 + (i * 1000L))
+            assertFalse("Developer mode should not unlock before 7 taps", prefs.getDeveloperModeSync())
+            assertFalse(vm.uiState.value.developerMode)
+        }
+
+        // 7th tap within 3s of 6th tap
+        vm.onVersionTapped(t0 + 6000L)
+        assertTrue("Developer mode must unlock on the 7th tap", prefs.getDeveloperModeSync())
+        assertTrue(vm.uiState.value.developerMode)
+        assertEquals("Developer mode unlocked", vm.uiState.value.userMessage)
+    }
+
+    @Test
+    fun testOnVersionTapped_resetsCounterIfGapExceeds3Seconds() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        val t0 = 100_000L
+        // 6 rapid taps
+        for (i in 0 until 6) {
+            vm.onVersionTapped(t0 + (i * 500L))
+        }
+        assertFalse(prefs.getDeveloperModeSync())
+
+        // 7th tap delayed by 3500ms (> 3000ms threshold)
+        vm.onVersionTapped(t0 + 2500L + 3500L)
+        assertFalse("Counter should have reset because interval exceeded 3s", prefs.getDeveloperModeSync())
+        assertFalse(vm.uiState.value.developerMode)
+    }
+
+    @Test
+    fun testThemeModeAndDeveloperMode_roundTrip() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        assertEquals(ThemeMode.SYSTEM, vm.uiState.value.themeMode)
+        vm.setThemeMode(ThemeMode.DARK)
+        assertEquals(ThemeMode.DARK, vm.uiState.value.themeMode)
+        assertEquals(ThemeMode.DARK, prefs.getThemeModeSync())
+
+        vm.setThemeMode(ThemeMode.LIGHT)
+        assertEquals(ThemeMode.LIGHT, vm.uiState.value.themeMode)
+        assertEquals(ThemeMode.LIGHT, prefs.getThemeModeSync())
+
+        assertFalse(vm.uiState.value.developerMode)
+        vm.setDeveloperMode(true)
+        assertTrue(vm.uiState.value.developerMode)
+        assertTrue(prefs.getDeveloperModeSync())
+
+        vm.setDeveloperMode(false)
+        assertFalse(vm.uiState.value.developerMode)
+        assertFalse(prefs.getDeveloperModeSync())
     }
 }

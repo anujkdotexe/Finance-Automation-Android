@@ -236,7 +236,7 @@ fun SettingsSyncSection(
                 )
             }
 
-            if (BuildConfig.DEBUG || BuildConfig.BUILD_TYPE == "beta") {
+            if ((BuildConfig.DEBUG || BuildConfig.BUILD_TYPE == "beta") && state.developerMode) {
                 OutlinedButton(
                     onClick = { CrashlyticsManager.triggerTestCrash() },
                     shape = FinanceTheme.shapes.medium,

@@ -1,5 +1,6 @@
 package com.financeautomation.domain.repository
 
+import com.financeautomation.domain.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -102,6 +103,36 @@ interface PreferencesRepository {
      * Retrieves the stored device UUID synchronously, or null if not yet created.
      */
     suspend fun getDeviceIdSync(): String?
+
+    /**
+     * Observes whether developer diagnostics mode is enabled (default false).
+     */
+    fun getDeveloperMode(): Flow<Boolean>
+
+    /**
+     * Retrieves developer diagnostics mode status synchronously.
+     */
+    suspend fun getDeveloperModeSync(): Boolean
+
+    /**
+     * Updates developer diagnostics mode status.
+     */
+    suspend fun setDeveloperMode(enabled: Boolean)
+
+    /**
+     * Observes the active UI theme mode (SYSTEM, LIGHT, DARK, default SYSTEM).
+     */
+    fun getThemeMode(): Flow<ThemeMode>
+
+    /**
+     * Retrieves the active UI theme mode synchronously.
+     */
+    suspend fun getThemeModeSync(): ThemeMode
+
+    /**
+     * Updates the active UI theme mode.
+     */
+    suspend fun setThemeMode(mode: ThemeMode)
 
     /**
      * Retrieves an arbitrary preference value synchronously.

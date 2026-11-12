@@ -1,22 +1,30 @@
 package com.financeautomation.presentation.screens
 
 import android.content.res.Configuration
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.financeautomation.BuildConfig
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.screens.settings.SettingsAccountSection
 import com.financeautomation.presentation.screens.settings.SettingsCaptureSection
@@ -80,6 +88,7 @@ fun SettingsScreen(
             onRestoreConfigFromCloud = viewModel::onRestoreConfigFromCloud,
             onRegenerateDashboard = viewModel::onRegenerateDashboard,
             onRepairWorkbook = viewModel::autoProvisionMasterSheet,
+            onVersionTapped = viewModel::onVersionTapped,
             modifier = Modifier.padding(innerPadding)
         )
     }
@@ -111,6 +120,7 @@ fun SettingsContent(
     onRestoreConfigFromCloud: () -> Unit,
     onRegenerateDashboard: () -> Unit,
     onRepairWorkbook: () -> Unit = {},
+    onVersionTapped: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -123,7 +133,12 @@ fun SettingsContent(
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
     ) {
         // 1. Setup Health Checklist & System Hardening
-        SetupSection(setupHealthViewModel, overlayControllerProvider, onReRunSetup)
+        SetupSection(
+            setupHealthViewModel = setupHealthViewModel,
+            overlayControllerProvider = overlayControllerProvider,
+            onNavigateGoogleSignIn = onReRunSetup,
+            developerMode = state.developerMode
+        )
 
         // 2. Home Screen 1-Tap Widget & Shortcuts
         HomeScreenIconCard()
@@ -160,6 +175,35 @@ fun SettingsContent(
             onAddTripTag = onAddTripTag,
             onToggleTripTagActive = onToggleTripTagActive
         )
+
+        // 6. Version & Diagnostics Unlock
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onVersionTapped() },
+            colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surfaceVariant),
+            shape = FinanceTheme.shapes.medium
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(FinanceTheme.spacing.m),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Finance Automation v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (state.developerMode) {
+                    Text(
+                        text = "Developer mode active",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
     }
 }
 
