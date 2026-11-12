@@ -62,7 +62,18 @@ class TransactionRepositorySyncTest {
         override suspend fun update(transaction: TransactionEntity) { transactions[transaction.id] = transaction }
         override suspend fun delete(transaction: TransactionEntity) { transactions.remove(transaction.id) }
         override suspend fun deleteById(id: String) { transactions.remove(id) }
-        override suspend fun voidTransaction(id: String, voidTitle: String) {}
+        override suspend fun voidTransaction(id: String, voidTitle: String) {
+            transactions[id]?.let {
+                transactions[id] = it.copy(
+                    totalAmount = 0.0,
+                    myShare = 0.0,
+                    owedToMe = 0.0,
+                    status = "Void",
+                    syncState = SyncState.VOID.name,
+                    merchant = voidTitle
+                )
+            }
+        }
         override suspend fun updateSyncState(id: String, syncState: String, sheetRowIndex: Int?) {
             transactions[id]?.let {
                 transactions[id] = it.copy(syncState = syncState, sheetRowIndex = sheetRowIndex ?: it.sheetRowIndex)
