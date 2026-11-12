@@ -266,7 +266,9 @@ fun MainScreen(
             if (currentDestination == MainNavDestination.INBOX) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java))
+                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java).apply {
+                            putExtra(ModalBottomSheetActivity.EXTRA_FLOW, "MENU")
+                        })
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
