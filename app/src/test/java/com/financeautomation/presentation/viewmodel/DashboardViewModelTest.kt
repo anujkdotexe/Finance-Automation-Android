@@ -576,4 +576,70 @@ class DashboardViewModelTest {
         assertEquals(1, state.needsReviewCount)
         assertEquals(1, state.needsReviewTotal)
     }
+
+    private fun offlineTxn(id: String, merchant: String, amount: Double) = Transaction(
+        id = id,
+        timestamp = System.currentTimeMillis(),
+        dateSerial = 46330,
+        timeSerial = 0.5,
+        account = "UPI",
+        merchant = merchant,
+        category = "Food & Drink",
+        totalAmount = amount,
+        companions = "Personal",
+        myShare = amount,
+        owedToMe = 0.0,
+        status = TransactionStatus.PERSONAL,
+        reviewState = ReviewState.CONFIRMED
+    )
+
+    @Test
+    fun testOfflineFlagFollowsConnectivityState() = runTest {
+        val online = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val vm = DashboardViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            onlineState = online,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isOffline)
+
+        online.value = true
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isOffline)
+    }
+
+    @Test
+    fun testQueuedItemsMatchPendingQueueJoinedToTransactions() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        tRepo.insertTransaction(offlineTxn("t_a", "Cafe", 120.0))
+        tRepo.insertTransaction(offlineTxn("t_b", "Taxi", 340.5))
+        tRepo.insertTransaction(offlineTxn("t_c", "Done Already", 10.0))
+        qDao.insert(SyncQueueEntity(id = 1L, transactionId = "t_a", operationType = SyncQueueEntity.OP_INSERT, payloadJson = "t_a", status = SyncQueueEntity.STATUS_PENDING, createdAt = 100L))
+        qDao.insert(SyncQueueEntity(id = 2L, transactionId = "t_b", operationType = SyncQueueEntity.OP_INSERT, payloadJson = "t_b", status = SyncQueueEntity.STATUS_PENDING, createdAt = 200L))
+        qDao.insert(SyncQueueEntity(id = 3L, transactionId = "t_c", operationType = SyncQueueEntity.OP_INSERT, payloadJson = "t_c", status = SyncQueueEntity.STATUS_FAILED, createdAt = 300L))
+        // A queue item with no transaction (for example a credit request) is not listed
+        qDao.insert(SyncQueueEntity(id = 4L, transactionId = "cred_1", operationType = SyncQueueEntity.OP_LOG_CREDIT, payloadJson = "{}", status = SyncQueueEntity.STATUS_PENDING, createdAt = 400L))
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            onlineState = kotlinx.coroutines.flow.MutableStateFlow(false),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(QueuedItem("Cafe", 120.0, 100L), QueuedItem("Taxi", 340.5, 200L)),
+            vm.uiState.value.queuedItems
+        )
+    }
 }
