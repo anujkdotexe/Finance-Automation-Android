@@ -1,5 +1,10 @@
 package com.financeautomation.presentation.overlay
 
+data class SettlementFlowExtras(
+    val flow: String,
+    val preselectedFriend: String
+)
+
 /**
  * Pure Kotlin gate validating flow selection authorizations (Item 4).
  * Completely instrumentation-free and testable in JVM unit tests.
@@ -40,5 +45,16 @@ object FlowAuthGate {
             else -> OverlayFlowScreen.EXPENSE
         }
     }
-}
 
+    /**
+     * Maps companion name and settlement direction (owed to me vs I owe)
+     * to flow extras for ModalBottomSheetActivity.
+     */
+    fun mapSettlementToExtras(personName: String, owedToMe: Boolean): SettlementFlowExtras {
+        val flow = if (owedToMe) "INCOME" else "REPAID"
+        return SettlementFlowExtras(
+            flow = flow,
+            preselectedFriend = personName
+        )
+    }
+}

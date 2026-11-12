@@ -62,6 +62,7 @@ import java.time.format.DateTimeParseException
 @Composable
 fun RepaidFriendFlowSheet(
     companions: List<Companion>,
+    preselectedFriend: String? = null,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (amount: Double, person: String, timestamp: Long) -> Unit,
@@ -69,7 +70,7 @@ fun RepaidFriendFlowSheet(
     modifier: Modifier = Modifier
 ) {
     var amountText by remember { mutableStateOf("") }
-    var personName by remember { mutableStateOf("") }
+    var personName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
     val todayFormatted = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
     var dateText by remember { mutableStateOf(todayFormatted) }
 

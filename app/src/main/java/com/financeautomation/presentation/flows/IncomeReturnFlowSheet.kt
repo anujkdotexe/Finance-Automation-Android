@@ -80,6 +80,7 @@ fun IncomeReturnFlowSheet(
     accounts: List<Account>,
     companions: List<Companion>,
     openDebts: List<OpenDebtItem>,
+    preselectedFriend: String? = null,
     onPersonChanged: (String) -> Unit,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
@@ -100,8 +101,14 @@ fun IncomeReturnFlowSheet(
     }
     var selectedInflowType by remember { mutableStateOf(friendSettlement) }
 
-    var settlerName by remember { mutableStateOf("") }
+    var settlerName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
     var reasonText by remember { mutableStateOf("") }
+
+    LaunchedEffect(preselectedFriend) {
+        if (!preselectedFriend.isNullOrBlank()) {
+            onPersonChanged(preselectedFriend)
+        }
+    }
 
     // Bill picker state for Friend Settlement
     var autoSettleAll by remember { mutableStateOf(true) }
