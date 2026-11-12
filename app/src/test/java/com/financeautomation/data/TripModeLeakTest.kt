@@ -118,6 +118,7 @@ class TripModeLeakTest {
         override fun getConfirmedUnsyncedFlow(): Flow<List<TransactionEntity>> = emptyFlow()
         override suspend fun getById(id: String): TransactionEntity? = txns[id]
         override suspend fun getBySheetRowIndex(rowIndex: Int): TransactionEntity? = txns.values.firstOrNull { it.sheetRowIndex == rowIndex }
+        override suspend fun getAllBySheetRowIndex(rowIndex: Int): List<TransactionEntity> = txns.values.filter { it.sheetRowIndex == rowIndex }
         override suspend fun getRecentSimilar(minTimestamp: Long, maxTimestamp: Long, minAmount: Double, maxAmount: Double): List<TransactionEntity> = emptyList()
         override suspend fun insert(transaction: TransactionEntity) { txns[transaction.id] = transaction }
         override suspend fun insertAll(transactions: List<TransactionEntity>) { transactions.forEach { insert(it) } }

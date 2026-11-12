@@ -30,6 +30,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE sheetRowIndex = :rowIndex LIMIT 1")
     suspend fun getBySheetRowIndex(rowIndex: Int): TransactionEntity?
 
+    @Query("SELECT * FROM transactions WHERE sheetRowIndex = :rowIndex")
+    suspend fun getAllBySheetRowIndex(rowIndex: Int): List<TransactionEntity>
+
     @Query("SELECT * FROM transactions WHERE timestamp BETWEEN :minTimestamp AND :maxTimestamp AND totalAmount BETWEEN :minAmount AND :maxAmount ORDER BY timestamp DESC")
     suspend fun getRecentSimilar(
         minTimestamp: Long,
@@ -61,4 +64,14 @@ interface TransactionDao {
 
     @Query("UPDATE transactions SET reviewState = :reviewState, category = COALESCE(:category, category) WHERE id = :id")
     suspend fun updateReviewState(id: String, reviewState: String, category: String? = null)
+}
+
+suspend fun TransactionDao.getByTabAndSheetRowIndex(tab: String, rowIndex: Int): com.financeautomation.data.local.entity.TransactionEntity? {
+    if (tab.isBlank()) return getBySheetRowIndex(rowIndex)
+    val candidates = getAllBySheetRowIndex(rowIndex)
+    val zone = java.time.ZoneId.of("Asia/Kolkata")
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMyy", java.util.Locale.US)
+    return candidates.firstOrNull { txn ->
+        java.time.Instant.ofEpochMilli(txn.timestamp).atZone(zone).format(formatter).equals(tab, ignoreCase = true)
+    }
 }

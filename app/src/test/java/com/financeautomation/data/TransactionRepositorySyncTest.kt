@@ -20,6 +20,9 @@ import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
 import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.data.repository.TransactionRepositoryImpl
+import com.financeautomation.domain.model.AccountingPlan
+import com.financeautomation.domain.model.CellEdit
+import com.financeautomation.domain.model.SettledRef
 import com.financeautomation.domain.model.LogCreditRequest
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PreferencesRepository
@@ -56,6 +59,8 @@ class TransactionRepositorySyncTest {
         override suspend fun getById(id: String): TransactionEntity? = transactions[id]
         override suspend fun getBySheetRowIndex(rowIndex: Int): TransactionEntity? =
             transactions.values.firstOrNull { it.sheetRowIndex == rowIndex }
+        override suspend fun getAllBySheetRowIndex(rowIndex: Int): List<TransactionEntity> =
+            transactions.values.filter { it.sheetRowIndex == rowIndex }
         override suspend fun getRecentSimilar(minTimestamp: Long, maxTimestamp: Long, minAmount: Double, maxAmount: Double): List<TransactionEntity> = emptyList()
         override suspend fun insert(transaction: TransactionEntity) { transactions[transaction.id] = transaction }
         override suspend fun insertAll(transactions: List<TransactionEntity>) { transactions.forEach { insert(it) } }
@@ -1249,5 +1254,90 @@ class TransactionRepositorySyncTest {
 
         // Lineage still has only 1 record (no duplicate)
         assertEquals(1, lineageDao.getAll().size)
+    }
+
+    @Test
+    fun testApplyPlan_editForOct26Row5_doesNotAffectNov26Row5Transaction() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val lineageDao = FakeLineageDao()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val executor = AccountingSyncExecutor(
+            googleSheetsClient = sheets,
+            googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
+            syncQueueDao = qDao,
+            lineageDao = lineageDao,
+            transactionDao = tDao
+        )
+
+        // Oct26 transaction at row 5 (timestamp: mid-October 2026, 1792000000000L)
+        val octTxn = TransactionEntity(
+            id = "txn_oct_row5",
+            timestamp = 1792000000000L,
+            dateSerial = 46310,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Oct Groceries",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Charlie",
+            myShare = 250.0,
+            owedToMe = 250.0,
+            status = "Pending",
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED.name,
+            syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 5
+        )
+
+        // Nov26 transaction at row 5 (timestamp: mid-November 2026, 1794600000000L)
+        val novTxn = TransactionEntity(
+            id = "txn_nov_row5",
+            timestamp = 1794600000000L,
+            dateSerial = 46340,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Nov Dinner",
+            category = "Food & Drink",
+            totalAmount = 300.0,
+            companions = "Charlie",
+            myShare = 150.0,
+            owedToMe = 150.0,
+            status = "Pending",
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED.name,
+            syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 5
+        )
+
+        tDao.insert(octTxn)
+        tDao.insert(novTxn)
+
+        // Create an AccountingPlan that settles/edits Oct26 row 5 (without UUID)
+        val plan = AccountingPlan(
+            edits = listOf(
+                CellEdit(tab = "Oct26", row = 5, column = "J", value = 150.0),
+                CellEdit(tab = "Oct26", row = 5, column = "K", value = "Pending")
+            ),
+            settled = listOf(
+                SettledRef(tab = "Oct26", row = 5, uuid = null, applied = 100.0, remaining = 150.0)
+            )
+        )
+
+        executor.applyPlanToLocalDatabase(plan)
+
+        // Oct26 transaction must be updated
+        val updatedOct = tDao.getById(octTxn.id)
+        assertNotNull(updatedOct)
+        assertEquals(150.0, updatedOct!!.owedToMe, 0.001)
+
+        // Nov26 transaction at row 5 must remain completely untouched
+        val untouchedNov = tDao.getById(novTxn.id)
+        assertNotNull(untouchedNov)
+        assertEquals("Nov Dinner", untouchedNov!!.merchant)
+        assertEquals(150.0, untouchedNov.owedToMe, 0.001)
+        assertEquals(300.0, untouchedNov.totalAmount, 0.001)
     }
 }
