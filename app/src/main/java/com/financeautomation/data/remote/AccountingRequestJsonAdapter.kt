@@ -103,16 +103,22 @@ object AccountingRequestJsonAdapter {
             put("targetTab", JsonPrimitive(req.targetTab))
             put("sourceTab", req.sourceTab?.let { JsonPrimitive(it) } ?: JsonNull)
             put("timestamp", JsonPrimitive(req.timestamp))
+            put("accounts", buildJsonArray { req.accounts.forEach { add(JsonPrimitive(it)) } })
+            put("categories", buildJsonArray { req.categories.forEach { add(JsonPrimitive(it)) } })
         }.toString()
     }
 
     fun carryForwardRequestFromJson(jsonStr: String): CarryForwardRequest {
         val obj = json.parseToJsonElement(jsonStr).jsonObject
         val source = obj["sourceTab"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content
+        val accounts = obj["accounts"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content }.orEmpty()
+        val categories = obj["categories"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content }.orEmpty()
         return CarryForwardRequest(
             targetTab = obj["targetTab"]?.jsonPrimitive?.content.orEmpty(),
             sourceTab = source,
-            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
+            accounts = accounts,
+            categories = categories
         )
     }
 

@@ -1073,4 +1073,181 @@ class TransactionRepositorySyncTest {
         assertEquals(SyncState.VOID.name, finalTxn!!.syncState)
         assertEquals(0.0, finalTxn.totalAmount, 0.001)
     }
+
+    @Test
+    fun testFirstExpenseInNextMonth_rollsOverDebtsAndDoesNotDuplicateOnRepeat() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val lineageDao = FakeLineageDao()
+        val prefs = FakePreferencesRepository("test_sheet_id")
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val executor = AccountingSyncExecutor(
+            googleSheetsClient = sheets,
+            googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
+            syncQueueDao = qDao,
+            lineageDao = lineageDao,
+            transactionDao = tDao
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = executor,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        // Snapshot has Nov26 with open debit for Charlie (owed 100)
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [["txn_nov_charlie_1"]]
+                },
+                {
+                    "range": "'Nov26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                }
+            ]
+        }"""
+
+        // Dec 2026 timestamp: 1796120000000L (~Dec 1, 2026)
+        val decTxn = TransactionEntity(
+            id = "txn_dec_1",
+            timestamp = 1796120000000L,
+            dateSerial = 46358,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Dec Coffee",
+            category = "Food & Drink",
+            totalAmount = 50.0,
+            companions = "Personal",
+            myShare = 50.0,
+            owedToMe = 0.0,
+            status = "Personal",
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED.name,
+            syncState = SyncState.PENDING.name,
+            sheetRowIndex = null
+        )
+        tDao.insert(decTxn)
+        qDao.insert(SyncQueueEntity(transactionId = decTxn.id, operationType = SyncQueueEntity.OP_INSERT, payloadJson = ""))
+
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue("Sync of first Dec26 expense should succeed", syncRes is Result.Success)
+
+        // Lineage records created for carried debit
+        val lineage = lineageDao.getAll()
+        assertEquals(1, lineage.size)
+        assertEquals("txn_nov_charlie_1", lineage[0].carriedFromUuid)
+
+        // After first carry forward, update mock snapshot:
+        // Nov26 row status is now "Carried Fwd" and Dec26 contains the carried debit
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Carried Fwd"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [["txn_nov_charlie_1"]]
+                },
+                {
+                    "range": "'Nov26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46358, 0.0, "Cash", "Carried Fwd: Dinner", "", "Food & Drink", 100.0, "Charlie", 0.0, 100.0, "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Dec26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [["${lineage[0].uuid}"]]
+                },
+                {
+                    "range": "'Dec26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                }
+            ]
+        }"""
+
+        // Repeating carry-forward does not duplicate
+        val repeatRes = repo.carryForward(targetTab = "Dec26")
+        assertTrue(repeatRes is Result.Success)
+        val repeatSync = repo.syncPendingTransactions()
+        assertTrue(repeatSync is Result.Success)
+
+        // Lineage still has only 1 record (no duplicate)
+        assertEquals(1, lineageDao.getAll().size)
+    }
 }
