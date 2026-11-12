@@ -297,7 +297,14 @@ class TransactionRepositoryImpl(
     ): Result<Unit> = withContext(ioDispatcher) {
         try {
             val reqId = "cf_${UUID.randomUUID().toString().replace("-", "").take(12)}"
-            val req = CarryForwardRequest(targetTab = targetTab, sourceTab = sourceTab)
+            val accs = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+            val cats = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+            val req = CarryForwardRequest(
+                targetTab = targetTab,
+                sourceTab = sourceTab,
+                accounts = accs,
+                categories = cats
+            )
             val queueItem = SyncQueueEntity(
                 transactionId = reqId,
                 operationType = SyncQueueEntity.OP_CARRY_FORWARD,
@@ -647,6 +654,26 @@ class TransactionRepositoryImpl(
                             syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
                             transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
                             continue
+                        }
+                    }
+                    val wasCreated = (tabCheckResult as Result.Success).data
+                    if (wasCreated) {
+                        val reqId = "cf_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+                        val cfReq = CarryForwardRequest(
+                            targetTab = tabName,
+                            sourceTab = null,
+                            accounts = accounts,
+                            categories = categories
+                        )
+                        val cfQueueItem = SyncQueueEntity(
+                            transactionId = reqId,
+                            operationType = SyncQueueEntity.OP_CARRY_FORWARD,
+                            payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(cfReq)
+                        )
+                        syncQueueDao.insert(cfQueueItem)
+                        val cfRes = accountingSyncExecutor?.executeCarryForward(cfQueueItem, spreadsheetId)
+                        if (cfRes is Result.Success) {
+                            syncQueueDao.deleteById(cfQueueItem.id)
                         }
                     }
                     knownTabs.add(tabName)

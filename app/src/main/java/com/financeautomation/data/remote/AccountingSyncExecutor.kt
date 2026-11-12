@@ -41,6 +41,8 @@ class AccountingSyncExecutor(
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
+    private val accountsProvider: (suspend () -> List<String>)? = null,
+    private val categoriesProvider: (suspend () -> List<String>)? = null,
     private val settlementWaterfallUseCase: SettlementWaterfallUseCase = SettlementWaterfallUseCase(),
     private val repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
     private val carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
@@ -66,6 +68,8 @@ class AccountingSyncExecutor(
         syncQueueDaoProvider = null,
         lineageDaoProvider = null,
         transactionDaoProvider = null,
+        accountsProvider = null,
+        categoriesProvider = null,
         settlementWaterfallUseCase = settlementWaterfallUseCase,
         repaymentWaterfallUseCase = repaymentWaterfallUseCase,
         carryForwardUseCase = carryForwardUseCase,
@@ -242,8 +246,10 @@ class AccountingSyncExecutor(
         val req = AccountingRequestJsonAdapter.carryForwardRequestFromJson(item.payloadJson)
         val targetTab = req.targetTab
 
-        // 1. Ensure target tab exists
-        val tabEnsureRes = googleSheetsClient.ensureMonthTabExists(spreadsheetId, targetTab)
+        // 1. Ensure target tab exists with accounts and categories dropdowns
+        val accounts = if (req.accounts.isNotEmpty()) req.accounts else accountsProvider?.invoke().orEmpty()
+        val categories = if (req.categories.isNotEmpty()) req.categories else categoriesProvider?.invoke().orEmpty()
+        val tabEnsureRes = googleSheetsClient.ensureMonthTabExists(spreadsheetId, targetTab, accounts, categories)
         if (tabEnsureRes is Result.Error) {
             return Result.Error(tabEnsureRes.exception)
         }

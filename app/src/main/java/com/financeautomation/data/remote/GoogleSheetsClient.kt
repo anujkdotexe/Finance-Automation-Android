@@ -589,30 +589,31 @@ open class GoogleSheetsClient(
 
     /**
      * Checks if [tabName] exists in [spreadsheetId]; if missing, provisions it.
-     * Safe to repeat: if tab already exists, completes immediately with success.
+     * Safe to repeat: if tab already exists, returns Result.Success(false).
+     * If tab was newly provisioned, returns Result.Success(true).
      */
     suspend fun ensureMonthTabExists(
         spreadsheetId: String,
         tabName: String,
         accounts: List<String> = emptyList(),
         categories: List<String> = emptyList()
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
         val tabsResult = getSheetTabsWithIds(spreadsheetId)
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
         val tabsMap = (tabsResult as Result.Success).data
         if (tabsMap.containsKey(tabName)) {
-            return@withContext Result.Success(Unit)
+            return@withContext Result.Success(false)
         }
         val provResult = provisionMonthTab(spreadsheetId, tabName, accounts, categories)
         if (provResult is Result.Error) {
             // Check if another concurrent call created it
             val recheck = getSheetTabsWithIds(spreadsheetId)
             if (recheck is Result.Success && recheck.data.containsKey(tabName)) {
-                return@withContext Result.Success(Unit)
+                return@withContext Result.Success(false)
             }
-            return@withContext provResult
+            return@withContext Result.Error(provResult.exception)
         }
-        Result.Success(Unit)
+        Result.Success(true)
     }
 
     /**
