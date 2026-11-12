@@ -48,6 +48,7 @@ class ReviewInboxViewModelTest {
 
     private class FakeTransactionRepo : TransactionRepository {
         val txns = MutableStateFlow<List<Transaction>>(emptyList())
+        var updateCalls = 0
         override fun getTransactions(): Flow<List<Transaction>> = txns
         override fun getNeedsReview(): Flow<List<Transaction>> = flowOf(txns.value.filter { it.reviewState == ReviewState.NEEDS_REVIEW })
         override suspend fun getTransactionById(id: String): Transaction? = txns.value.find { it.id == id }
@@ -56,11 +57,27 @@ class ReviewInboxViewModelTest {
             return Result.Success(Unit)
         }
         override suspend fun updateTransaction(transaction: Transaction): Result<Unit> {
+            updateCalls++
             txns.value = txns.value.map { if (it.id == transaction.id) transaction else it }
             return Result.Success(Unit)
         }
         override suspend fun voidTransaction(id: String): Result<Unit> {
             txns.value = txns.value.map { if (it.id == id) it.copy(status = TransactionStatus.VOID) else it }
+            return Result.Success(Unit)
+        }
+        override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> {
+            txns.value = txns.value.map {
+                if (it.id != id) it
+                else if (voidIt) it.copy(
+                    status = TransactionStatus.VOID,
+                    merchant = if (it.merchant.startsWith("[Void] ")) it.merchant else "[Void] ${it.merchant}",
+                    reviewState = ReviewState.CONFIRMED,
+                    syncState = com.financeautomation.core.model.SyncState.VOID
+                ) else it.copy(
+                    reviewState = ReviewState.CONFIRMED,
+                    syncState = com.financeautomation.core.model.SyncState.SYNCED
+                )
+            }
             return Result.Success(Unit)
         }
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
@@ -516,9 +533,53 @@ class ReviewInboxViewModelTest {
         // Transaction must be marked VOID locally, not in NEEDS_REVIEW
         val updatedTxn = tRepo.getTransactionById("txn_failed_insert")!!
         assertEquals(TransactionStatus.VOID, updatedTxn.status)
-        assertEquals(0.0, updatedTxn.totalAmount, 0.001)
+        assertEquals(500.0, updatedTxn.totalAmount, 0.001)
+        assertEquals(500.0, updatedTxn.myShare, 0.001)
+        assertTrue(updatedTxn.merchant.startsWith("[Void] "))
         assertEquals(ReviewState.CONFIRMED, updatedTxn.reviewState)
         assertEquals(com.financeautomation.core.model.SyncState.VOID, updatedTxn.syncState)
+        // No updateTransaction call means no new sync_queue row can have been created
+        assertEquals(0, tRepo.updateCalls)
+        assertTrue(qDao.queue.isEmpty())
+    }
+
+    @Test
+    fun testDiscardQueueItem_updateMarksSyncedWithoutNewQueueRow() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cDao = FakePendingCaptureDao()
+        val aRepo = FakeAccountRepo()
+
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_failed_update", timestamp = 1000L, dateSerial = 46330, timeSerial = 0.5,
+                account = "HDFC", merchant = "Cafe", category = "Food & Drink", totalAmount = 500.0,
+                companions = "Personal", myShare = 500.0, owedToMe = 0.0,
+                status = TransactionStatus.PENDING, reviewState = ReviewState.NEEDS_REVIEW
+            )
+        )
+        qDao.insert(
+            SyncQueueEntity(
+                id = 11L, transactionId = "txn_failed_update", operationType = SyncQueueEntity.OP_UPDATE,
+                payloadJson = "{}", status = SyncQueueEntity.STATUS_FAILED, retryCount = 8
+            )
+        )
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo, directSyncQueueDao = qDao, directPendingCaptureDao = cDao,
+            accountRepository = aRepo, ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.discardQueueItem(11L)
+        advanceUntilIdle()
+
+        assertNull(qDao.getById(11L))
+        assertTrue(qDao.queue.isEmpty())
+        val t = tRepo.getTransactionById("txn_failed_update")!!
+        assertEquals(com.financeautomation.core.model.SyncState.SYNCED, t.syncState)
+        assertEquals(ReviewState.CONFIRMED, t.reviewState)
+        assertEquals(500.0, t.totalAmount, 0.001)
+        assertEquals(0, tRepo.updateCalls)
     }
 
     @Test

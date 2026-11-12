@@ -33,6 +33,7 @@ class MonthlyRolloverWorkerTest {
         override suspend fun insertTransaction(transaction: Transaction): Result<Unit> = Result.Success(Unit)
         override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = Result.Success(Unit)
         override suspend fun voidTransaction(id: String): Result<Unit> = Result.Success(Unit)
+        override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = Result.Success(Unit)
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
