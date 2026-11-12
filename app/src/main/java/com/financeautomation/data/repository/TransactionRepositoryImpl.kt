@@ -629,17 +629,6 @@ class TransactionRepositoryImpl(
                             continue
                         }
                     }
-                    val precedingTab = accountingSyncExecutor?.findPrecedingTab(tabName, knownTabs.toList())
-                    if (precedingTab != null) {
-                        val cfItem = SyncQueueEntity(
-                            transactionId = "cf_${System.currentTimeMillis()}",
-                            operationType = SyncQueueEntity.OP_CARRY_FORWARD,
-                            payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(
-                                CarryForwardRequest(targetTab = tabName, sourceTab = precedingTab)
-                            )
-                        )
-                        accountingSyncExecutor?.executeCarryForward(cfItem, spreadsheetId)
-                    }
                     knownTabs.add(tabName)
                 }
 
