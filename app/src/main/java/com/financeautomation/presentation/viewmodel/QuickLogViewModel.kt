@@ -264,7 +264,7 @@ class QuickLogViewModel(
      * 3. Marks pending capture as DONE.
      * 4. Notifies completion callback for result pill display.
      */
-    fun onConfirmAndSave(onSaved: (String) -> Unit) {
+    fun onConfirmAndSave(onSaved: (message: String, transactionId: String?) -> Unit) {
         val state = _uiState.value
         if (state.amount <= 0.0) {
             _uiState.update { it.copy(errorMessage = "Amount must be greater than zero") }
@@ -279,7 +279,7 @@ class QuickLogViewModel(
                     when (val res = QuickLogTransactionHelper.updateExisting(txnId, state, transactionRepository)) {
                         is Result.Success -> {
                             _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = "Updated") }
-                            onSaved("Updated")
+                            onSaved("Updated", txnId)
                         }
                         is Result.Error -> {
                             _uiState.update { it.copy(isSaving = false, errorMessage = res.message) }
@@ -306,10 +306,11 @@ class QuickLogViewModel(
                     predictCategoryUseCase = predictCategoryUseCase
                 )) {
                     is Result.Success -> {
+                        val loggedTxn = result.data
                         val formattedAmount = String.format(java.util.Locale.US, "%.2f", state.amount)
                         val message = "Saved $formattedAmount, will sync"
-                        _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = message) }
-                        onSaved(message)
+                        _uiState.update { it.copy(isSaving = false, isSaved = true, transactionId = loggedTxn.id, resultMessage = message) }
+                        onSaved(message, loggedTxn.id)
                     }
                     is Result.Error -> {
                         _uiState.update { it.copy(isSaving = false, errorMessage = result.message) }
@@ -322,6 +323,10 @@ class QuickLogViewModel(
                 _uiState.update { it.copy(isSaving = false, errorMessage = "Save failed: ${e.message}") }
             }
         }
+    }
+
+    fun onConfirmAndSave(onSaved: (String) -> Unit) {
+        onConfirmAndSave { message, _ -> onSaved(message) }
     }
 
     /**

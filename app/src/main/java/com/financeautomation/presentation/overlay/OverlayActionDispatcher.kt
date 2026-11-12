@@ -49,7 +49,18 @@ class OverlayActionDispatcher(
                     val message = if (res is Result.Success) {
                         if (settler.isNotBlank()) "Recorded $formatted from $settler" else "Recorded $formatted"
                     } else "Failed to record income"
-                    resultPill.show(message)
+                    val txnId = (res as? Result.Success)?.data
+                    resultPill.show(
+                        message = message,
+                        transactionId = txnId,
+                        onUndo = if (txnId != null) {
+                            { id ->
+                                mainScope.launch(ioDispatcher) {
+                                    transactionRepository.voidTransaction(id)
+                                }
+                            }
+                        } else null
+                    )
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -76,7 +87,18 @@ class OverlayActionDispatcher(
                     val message = if (res is Result.Success) {
                         if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
                     } else "Failed to record payable"
-                    resultPill.show(message)
+                    val txnId = (res as? Result.Success)?.data
+                    resultPill.show(
+                        message = message,
+                        transactionId = txnId,
+                        onUndo = if (txnId != null) {
+                            { id ->
+                                mainScope.launch(ioDispatcher) {
+                                    transactionRepository.voidTransaction(id)
+                                }
+                            }
+                        } else null
+                    )
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -104,7 +126,18 @@ class OverlayActionDispatcher(
                     val message = if (res is Result.Success) {
                         if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
                     } else "Failed to record repayment"
-                    resultPill.show(message)
+                    val txnId = (res as? Result.Success)?.data
+                    resultPill.show(
+                        message = message,
+                        transactionId = txnId,
+                        onUndo = if (txnId != null) {
+                            { id ->
+                                mainScope.launch(ioDispatcher) {
+                                    transactionRepository.voidTransaction(id)
+                                }
+                            }
+                        } else null
+                    )
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
