@@ -729,6 +729,17 @@ class TransactionRepositoryImpl(
                                             )
                                         }
                                     }
+                                } else if (snapRes is Result.Error) {
+                                    val err = snapRes.exception
+                                    if (isTransportOrServerError(err)) {
+                                        markTransportFailure(item, txn)
+                                        hasTransportFailure = true
+                                        break
+                                    } else {
+                                        syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
+                                        transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
+                                        continue
+                                    }
                                 }
                             }
 

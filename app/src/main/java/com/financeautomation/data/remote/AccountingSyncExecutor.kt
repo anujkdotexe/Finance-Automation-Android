@@ -95,11 +95,10 @@ class AccountingSyncExecutor(
             val timeSerial = DateSerialUtils.toTimeSerial(req.timestamp)
 
             val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
-            val allDebits = if (snapRes is Result.Success) {
-                mapDebitsFromSnapshot(snapRes.data)
-            } else {
-                emptyList()
+            if (snapRes is Result.Error) {
+                return Result.Error(snapRes.exception)
             }
+            val allDebits = mapDebitsFromSnapshot((snapRes as Result.Success).data)
 
             val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
             val resolveCarriedFn: (LedgerDebit) -> LedgerDebit? = { carriedRow ->
@@ -141,11 +140,10 @@ class AccountingSyncExecutor(
             val timeSerial = DateSerialUtils.toTimeSerial(req.timestamp)
 
             val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
-            val allDebits = if (snapRes is Result.Success) {
-                mapDebitsFromSnapshot(snapRes.data)
-            } else {
-                emptyList()
+            if (snapRes is Result.Error) {
+                return Result.Error(snapRes.exception)
             }
+            val allDebits = mapDebitsFromSnapshot((snapRes as Result.Success).data)
 
             val nettingRes = nettingUseCase.nettingOnPayable(
                 creditor = req.creditor,
@@ -206,11 +204,10 @@ class AccountingSyncExecutor(
             val timeSerial = DateSerialUtils.toTimeSerial(req.timestamp)
 
             val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
-            val allPayables = if (snapRes is Result.Success) {
-                mapPayablesFromSnapshot(snapRes.data)
-            } else {
-                emptyList()
+            if (snapRes is Result.Error) {
+                return Result.Error(snapRes.exception)
             }
+            val allPayables = mapPayablesFromSnapshot((snapRes as Result.Success).data)
 
             val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
             val resolveCarriedFn: (LedgerPayable) -> LedgerPayable? = { carriedRow ->
