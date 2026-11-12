@@ -7,6 +7,8 @@ import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
+import com.financeautomation.data.local.FinanceDatabase
+import androidx.room.withTransaction
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
@@ -66,6 +68,7 @@ class TransactionRepositoryImpl(
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val payableDao: PayableDao? = null,
     private val payableDaoProvider: (suspend () -> PayableDao)? = null,
+    private val databaseProvider: (suspend () -> FinanceDatabase)? = null,
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val preferencesRepository: PreferencesRepository? = null,
     private val workbookResolver: WorkbookResolver? = null,
@@ -103,6 +106,7 @@ class TransactionRepositoryImpl(
         syncQueueDaoProvider = null,
         payableDao = payableDao,
         payableDaoProvider = null,
+        databaseProvider = null,
         googleSheetsClient = googleSheetsClient,
         preferencesRepository = preferencesRepository,
         workbookResolver = workbookResolver,
@@ -118,6 +122,15 @@ class TransactionRepositoryImpl(
     )
 
     private val syncMutex = Mutex()
+
+    private suspend inline fun <T> runInDbTransaction(crossinline block: suspend () -> T): T {
+        val db = databaseProvider?.invoke()
+        return if (db != null) {
+            db.withTransaction { block() }
+        } else {
+            block()
+        }
+    }
 
     private suspend fun resolveTransactionDao(): TransactionDao =
         transactionDao ?: transactionDaoProvider?.invoke()
@@ -149,15 +162,17 @@ class TransactionRepositoryImpl(
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
-            tDao.insert(entity)
+            runInDbTransaction {
+                tDao.insert(entity)
 
-            if (transaction.syncState == SyncState.PENDING) {
-                val queueItem = SyncQueueEntity(
-                    transactionId = transaction.id,
-                    operationType = SyncQueueEntity.OP_INSERT,
-                    payloadJson = transaction.id
-                )
-                qDao.insert(queueItem)
+                if (transaction.syncState == SyncState.PENDING) {
+                    val queueItem = SyncQueueEntity(
+                        transactionId = transaction.id,
+                        operationType = SyncQueueEntity.OP_INSERT,
+                        payloadJson = transaction.id
+                    )
+                    qDao.insert(queueItem)
+                }
             }
             Result.Success(Unit)
         } catch (e: Exception) {
@@ -170,14 +185,16 @@ class TransactionRepositoryImpl(
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
-            tDao.update(entity)
+            runInDbTransaction {
+                tDao.update(entity)
 
-            val queueItem = SyncQueueEntity(
-                transactionId = transaction.id,
-                operationType = SyncQueueEntity.OP_UPDATE,
-                payloadJson = transaction.id
-            )
-            qDao.insert(queueItem)
+                val queueItem = SyncQueueEntity(
+                    transactionId = transaction.id,
+                    operationType = SyncQueueEntity.OP_UPDATE,
+                    payloadJson = transaction.id
+                )
+                qDao.insert(queueItem)
+            }
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -324,14 +341,16 @@ class TransactionRepositoryImpl(
                 "[Void] ${existing.merchant}"
             }
 
-            tDao.voidTransaction(id, voidTitle)
+            runInDbTransaction {
+                tDao.voidTransaction(id, voidTitle)
 
-            val queueItem = SyncQueueEntity(
-                transactionId = id,
-                operationType = SyncQueueEntity.OP_VOID,
-                payloadJson = id
-            )
-            qDao.insert(queueItem)
+                val queueItem = SyncQueueEntity(
+                    transactionId = id,
+                    operationType = SyncQueueEntity.OP_VOID,
+                    payloadJson = id
+                )
+                qDao.insert(queueItem)
+            }
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -931,109 +950,111 @@ class TransactionRepositoryImpl(
 
             val remotePayables = mutableListOf<PayableEntity>()
 
-            for (month in snapshot.monthTabs) {
-                for (sheetDebit in month.debits) {
-                    val uuid = sheetDebit.uuid
-                    val localTxn = (if (!uuid.isNullOrBlank()) {
-                        tDao.getById(uuid)
-                    } else null) ?: tDao.getBySheetRowIndex(sheetDebit.rowNumber)
+            runInDbTransaction {
+                for (month in snapshot.monthTabs) {
+                    for (sheetDebit in month.debits) {
+                        val uuid = sheetDebit.uuid
+                        val localTxn = (if (!uuid.isNullOrBlank()) {
+                            tDao.getById(uuid)
+                        } else null) ?: tDao.getBySheetRowIndex(sheetDebit.rowNumber)
 
-                    if (localTxn != null) {
-                        val newTotal = sheetDebit.totalAmount
-                        val newMerchant = sheetDebit.description
-                        val newCategory = sheetDebit.category
-                        val newMyShare = sheetDebit.myShare
-                        val newOwed = sheetDebit.owedToMe
-                        val newStatus = sheetDebit.status
-                        val newCompanions = sheetDebit.companions
-                        val newRow = sheetDebit.rowNumber
+                        if (localTxn != null) {
+                            val newTotal = sheetDebit.totalAmount
+                            val newMerchant = sheetDebit.description
+                            val newCategory = sheetDebit.category
+                            val newMyShare = sheetDebit.myShare
+                            val newOwed = sheetDebit.owedToMe
+                            val newStatus = sheetDebit.status
+                            val newCompanions = sheetDebit.companions
+                            val newRow = sheetDebit.rowNumber
 
-                        if (localTxn.totalAmount != newTotal ||
-                            localTxn.merchant != newMerchant ||
-                            localTxn.category != newCategory ||
-                            localTxn.myShare != newMyShare ||
-                            localTxn.owedToMe != newOwed ||
-                            localTxn.status != newStatus ||
-                            localTxn.companions != newCompanions ||
-                            localTxn.sheetRowIndex != newRow
-                        ) {
-                            tDao.update(
-                                localTxn.copy(
-                                    totalAmount = newTotal,
-                                    merchant = newMerchant,
-                                    category = newCategory,
-                                    myShare = newMyShare,
-                                    owedToMe = newOwed,
-                                    status = newStatus,
-                                    companions = newCompanions,
-                                    sheetRowIndex = newRow,
-                                    syncState = SyncState.SYNCED.name
+                            if (localTxn.totalAmount != newTotal ||
+                                localTxn.merchant != newMerchant ||
+                                localTxn.category != newCategory ||
+                                localTxn.myShare != newMyShare ||
+                                localTxn.owedToMe != newOwed ||
+                                localTxn.status != newStatus ||
+                                localTxn.companions != newCompanions ||
+                                localTxn.sheetRowIndex != newRow
+                            ) {
+                                tDao.update(
+                                    localTxn.copy(
+                                        totalAmount = newTotal,
+                                        merchant = newMerchant,
+                                        category = newCategory,
+                                        myShare = newMyShare,
+                                        owedToMe = newOwed,
+                                        status = newStatus,
+                                        companions = newCompanions,
+                                        sheetRowIndex = newRow,
+                                        syncState = SyncState.SYNCED.name
+                                    )
                                 )
+                                reconciledCount++
+                            }
+                        } else {
+                            // 2.7: Sheet as source of truth: import debits by UUID into Room when local DB empty
+                            val effectiveUuid = if (!uuid.isNullOrBlank()) uuid else "sheet_${month.tabName}_${sheetDebit.rowNumber}"
+                            val effectiveDateSerial = sheetDebit.dateSerial ?: DateSerialUtils.toDateSerial(System.currentTimeMillis())
+                            val effectiveTimeSerial = sheetDebit.timeSerial ?: DateSerialUtils.toTimeSerial(System.currentTimeMillis())
+                            val ld = DateSerialUtils.fromDateSerial(effectiveDateSerial)
+                            val lt = DateSerialUtils.fromTimeSerial(effectiveTimeSerial)
+                            val txnTimestamp = ld.atTime(lt).atZone(sheetTimeZone).toInstant().toEpochMilli()
+
+                            val imported = TransactionEntity(
+                                id = effectiveUuid,
+                                timestamp = txnTimestamp,
+                                dateSerial = effectiveDateSerial,
+                                timeSerial = effectiveTimeSerial,
+                                merchant = sheetDebit.description.ifBlank { "Expense" },
+                                category = sheetDebit.category.ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER },
+                                account = sheetDebit.account.ifBlank { "Cash" },
+                                totalAmount = sheetDebit.totalAmount,
+                                myShare = sheetDebit.myShare,
+                                owedToMe = sheetDebit.owedToMe,
+                                companions = sheetDebit.companions.orEmpty().ifBlank { "Personal" },
+                                status = sheetDebit.status.orEmpty().ifBlank { com.financeautomation.core.model.TransactionStatus.PERSONAL.value },
+                                tripTag = sheetDebit.tripTag.orEmpty(),
+                                sheetRowIndex = sheetDebit.rowNumber,
+                                syncState = SyncState.SYNCED.name,
+                                reviewState = ReviewState.CONFIRMED.name
                             )
+                            tDao.insert(imported)
                             reconciledCount++
                         }
-                    } else {
-                        // 2.7: Sheet as source of truth: import debits by UUID into Room when local DB empty
-                        val effectiveUuid = if (!uuid.isNullOrBlank()) uuid else "sheet_${month.tabName}_${sheetDebit.rowNumber}"
-                        val effectiveDateSerial = sheetDebit.dateSerial ?: DateSerialUtils.toDateSerial(System.currentTimeMillis())
-                        val effectiveTimeSerial = sheetDebit.timeSerial ?: DateSerialUtils.toTimeSerial(System.currentTimeMillis())
-                        val ld = DateSerialUtils.fromDateSerial(effectiveDateSerial)
-                        val lt = DateSerialUtils.fromTimeSerial(effectiveTimeSerial)
-                        val txnTimestamp = ld.atTime(lt).atZone(sheetTimeZone).toInstant().toEpochMilli()
+                    }
 
-                        val imported = TransactionEntity(
-                            id = effectiveUuid,
-                            timestamp = txnTimestamp,
-                            dateSerial = effectiveDateSerial,
-                            timeSerial = effectiveTimeSerial,
-                            merchant = sheetDebit.description.ifBlank { "Expense" },
-                            category = sheetDebit.category.ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER },
-                            account = sheetDebit.account.ifBlank { "Cash" },
-                            totalAmount = sheetDebit.totalAmount,
-                            myShare = sheetDebit.myShare,
-                            owedToMe = sheetDebit.owedToMe,
-                            companions = sheetDebit.companions.orEmpty().ifBlank { "Personal" },
-                            status = sheetDebit.status.orEmpty().ifBlank { com.financeautomation.core.model.TransactionStatus.PERSONAL.value },
-                            tripTag = sheetDebit.tripTag.orEmpty(),
-                            sheetRowIndex = sheetDebit.rowNumber,
-                            syncState = SyncState.SYNCED.name,
-                            reviewState = ReviewState.CONFIRMED.name
+                    for (sheetPayable in month.payables) {
+                        val pUuid = sheetPayable.uuid ?: continue
+                        remotePayables.add(
+                            PayableEntity(
+                                uuid = pUuid,
+                                dateIncurredSerial = sheetPayable.dateIncurredSerial,
+                                timeSerial = sheetPayable.timeSerial,
+                                paidBy = sheetPayable.paidBy,
+                                whatFor = sheetPayable.whatFor,
+                                amountIOwe = sheetPayable.amountIOwe,
+                                dateRepaidSerial = sheetPayable.dateRepaidSerial,
+                                repaymentStatus = sheetPayable.repaymentStatus,
+                                tabName = month.tabName,
+                                sheetRowIndex = sheetPayable.rowNumber,
+                                updatedAt = System.currentTimeMillis()
+                            )
                         )
-                        tDao.insert(imported)
-                        reconciledCount++
                     }
                 }
 
-                for (sheetPayable in month.payables) {
-                    val pUuid = sheetPayable.uuid ?: continue
-                    remotePayables.add(
-                        PayableEntity(
-                            uuid = pUuid,
-                            dateIncurredSerial = sheetPayable.dateIncurredSerial,
-                            timeSerial = sheetPayable.timeSerial,
-                            paidBy = sheetPayable.paidBy,
-                            whatFor = sheetPayable.whatFor,
-                            amountIOwe = sheetPayable.amountIOwe,
-                            dateRepaidSerial = sheetPayable.dateRepaidSerial,
-                            repaymentStatus = sheetPayable.repaymentStatus,
-                            tabName = month.tabName,
-                            sheetRowIndex = sheetPayable.rowNumber,
-                            updatedAt = System.currentTimeMillis()
-                        )
-                    )
-                }
-            }
-
-            if (pDao != null) {
-                val remoteUuids = remotePayables.map { it.uuid }.toSet()
-                val localPayables = pDao.getAll()
-                for (local in localPayables) {
-                    if (!remoteUuids.contains(local.uuid)) {
-                        pDao.deleteByUuid(local.uuid)
+                if (pDao != null) {
+                    val remoteUuids = remotePayables.map { it.uuid }.toSet()
+                    val localPayables = pDao.getAll()
+                    for (local in localPayables) {
+                        if (!remoteUuids.contains(local.uuid)) {
+                            pDao.deleteByUuid(local.uuid)
+                        }
                     }
-                }
-                if (remotePayables.isNotEmpty()) {
-                    pDao.upsertAll(remotePayables)
+                    if (remotePayables.isNotEmpty()) {
+                        pDao.upsertAll(remotePayables)
+                    }
                 }
             }
 
@@ -1108,47 +1129,49 @@ class TransactionRepositoryImpl(
             val editsByRow = plan.edits.groupBy { it.row }
             val allTargetRows = (editsByRow.keys + plan.settled.map { it.row }).distinct()
 
-            for (rowNum in allTargetRows) {
-                val settledRef = plan.settled.firstOrNull { it.row == rowNum }
-                val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
-                    ?: tDao.getBySheetRowIndex(rowNum)
+            runInDbTransaction {
+                for (rowNum in allTargetRows) {
+                    val settledRef = plan.settled.firstOrNull { it.row == rowNum }
+                    val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
+                        ?: tDao.getBySheetRowIndex(rowNum)
 
-                if (existingTxn != null) {
-                    var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn
-                    val rowEdits = editsByRow[rowNum].orEmpty()
-                    for (edit in rowEdits) {
-                        val col = edit.column.uppercase()
-                        updated = when (col) {
-                            "D" -> updated.copy(merchant = edit.value?.toString() ?: updated.merchant)
-                            "G" -> {
-                                val amt = (edit.value as? Number)?.toDouble()
-                                    ?: edit.value?.toString()?.toDoubleOrNull()
-                                    ?: updated.totalAmount
-                                updated.copy(totalAmount = amt)
+                    if (existingTxn != null) {
+                        var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn
+                        val rowEdits = editsByRow[rowNum].orEmpty()
+                        for (edit in rowEdits) {
+                            val col = edit.column.uppercase()
+                            updated = when (col) {
+                                "D" -> updated.copy(merchant = edit.value?.toString() ?: updated.merchant)
+                                "G" -> {
+                                    val amt = (edit.value as? Number)?.toDouble()
+                                        ?: edit.value?.toString()?.toDoubleOrNull()
+                                        ?: updated.totalAmount
+                                    updated.copy(totalAmount = amt)
+                                }
+                                "H" -> updated.copy(companions = edit.value?.toString() ?: updated.companions)
+                                "I" -> {
+                                    val share = (edit.value as? Number)?.toDouble()
+                                        ?: edit.value?.toString()?.toDoubleOrNull()
+                                        ?: updated.myShare
+                                    updated.copy(myShare = share)
+                                }
+                                "J" -> {
+                                    val owed = (edit.value as? Number)?.toDouble()
+                                        ?: edit.value?.toString()?.toDoubleOrNull()
+                                        ?: updated.owedToMe
+                                    updated.copy(owedToMe = owed)
+                                }
+                                "K" -> updated.copy(status = edit.value?.toString() ?: updated.status)
+                                else -> updated
                             }
-                            "H" -> updated.copy(companions = edit.value?.toString() ?: updated.companions)
-                            "I" -> {
-                                val share = (edit.value as? Number)?.toDouble()
-                                    ?: edit.value?.toString()?.toDoubleOrNull()
-                                    ?: updated.myShare
-                                updated.copy(myShare = share)
-                            }
-                            "J" -> {
-                                val owed = (edit.value as? Number)?.toDouble()
-                                    ?: edit.value?.toString()?.toDoubleOrNull()
-                                    ?: updated.owedToMe
-                                updated.copy(owedToMe = owed)
-                            }
-                            "K" -> updated.copy(status = edit.value?.toString() ?: updated.status)
-                            else -> updated
                         }
+                        if (settledRef != null) {
+                            val owed = settledRef.remaining
+                            val st = if (owed <= 0.0) "Settled" else "Pending"
+                            updated = updated.copy(owedToMe = owed, status = st)
+                        }
+                        tDao.update(updated)
                     }
-                    if (settledRef != null) {
-                        val owed = settledRef.remaining
-                        val st = if (owed <= 0.0) "Settled" else "Pending"
-                        updated = updated.copy(owedToMe = owed, status = st)
-                    }
-                    tDao.update(updated)
                 }
             }
         } catch (e: Exception) {

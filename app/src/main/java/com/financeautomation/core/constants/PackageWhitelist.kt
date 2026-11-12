@@ -73,6 +73,16 @@ object PackageWhitelist {
                 BLACKLISTED_PRIVACY_PACKAGES.any { trimmed.startsWith(it) }
     }
 
+    val SMS_PACKAGES: Set<String> = setOf(
+        PACKAGE_DEFAULT_SMS,
+        PACKAGE_GOOGLE_MESSAGES,
+        PACKAGE_SAMSUNG_MESSAGES
+    )
+
+    fun isSmsPackage(packageName: String): Boolean {
+        return SMS_PACKAGES.contains(packageName.trim())
+    }
+
     fun isOtpMessage(text: String): Boolean {
         return OTP_SUPPRESSION_REGEX.containsMatchIn(text)
     }

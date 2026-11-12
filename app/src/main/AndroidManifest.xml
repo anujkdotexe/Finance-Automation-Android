@@ -74,7 +74,7 @@
 
         <activity
             android:name=".presentation.ui.ModalBottomSheetActivity"
-            android:exported="true"
+            android:exported="false"
             android:taskAffinity=""
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -84,7 +84,7 @@
         <activity-alias
             android:name=".ModalBottomSheetActivity"
             android:targetActivity=".presentation.ui.ModalBottomSheetActivity"
-            android:exported="true" />
+            android:exported="false" />
 
         <service
             android:name=".service.NotificationListenerServiceImpl"
