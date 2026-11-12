@@ -418,5 +418,44 @@ class TransactionsViewModelTest {
         assertEquals(TransactionStatus.SETTLED, shown.status)
         assertEquals(RowStatus.SYNCED, vm.uiState.value.rowStatuses["t_settled"])
     }
-}
 
+    @Test
+    fun testSearchScope_thisMonthOnlyVersusAllMonths() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val thisMonth = Calendar.getInstance(kolkataTz).apply { set(Calendar.DAY_OF_MONTH, 2); set(Calendar.HOUR_OF_DAY, 12) }
+        val lastMonth = Calendar.getInstance(kolkataTz).apply { add(Calendar.MONTH, -1); set(Calendar.DAY_OF_MONTH, 20); set(Calendar.HOUR_OF_DAY, 12) }
+        val twoMonthsAgo = Calendar.getInstance(kolkataTz).apply { add(Calendar.MONTH, -2); set(Calendar.DAY_OF_MONTH, 9); set(Calendar.HOUR_OF_DAY, 12) }
+
+        tRepo.insertTransaction(baseTxn("now").copy(merchant = "Cafe Now", timestamp = thisMonth.timeInMillis, totalAmount = 100.0, myShare = 100.0))
+        tRepo.insertTransaction(baseTxn("last").copy(merchant = "Cafe Last", timestamp = lastMonth.timeInMillis, totalAmount = 200.0, myShare = 150.0))
+        tRepo.insertTransaction(baseTxn("old").copy(merchant = "Cafe Old", timestamp = twoMonthsAgo.timeInMillis, totalAmount = 300.0, myShare = 300.0))
+        tRepo.insertTransaction(baseTxn("other").copy(merchant = "Bookshop", timestamp = lastMonth.timeInMillis, totalAmount = 999.0, myShare = 999.0))
+
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // Default scope: this month only
+        vm.setSearchQuery("cafe")
+        advanceUntilIdle()
+        assertEquals(SearchScope.THIS_MONTH, vm.uiState.value.searchScope)
+        assertEquals(listOf("now"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+        assertEquals(100.0, vm.uiState.value.totalOut, 0.001)
+
+        // All months: month filter ignored, newest first across months, totals are the results
+        vm.setSearchScope(SearchScope.ALL_MONTHS)
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertEquals(SearchScope.ALL_MONTHS, state.searchScope)
+        assertEquals(listOf("now", "last", "old"), state.groupedTransactions.flatMap { it.transactions }.map { it.id })
+        assertEquals(3, state.groupedTransactions.size)
+        assertEquals(600.0, state.totalOut, 0.001)
+        assertEquals(550.0, state.myShare, 0.001)
+
+        // A blank query in all-months scope falls back to the selected month
+        vm.setSearchQuery("")
+        advanceUntilIdle()
+        assertEquals(listOf("now"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+        assertEquals(100.0, vm.uiState.value.totalOut, 0.001)
+    }
+}
