@@ -354,17 +354,13 @@ class AccountingSyncExecutor(
             }
 
             val appendRes = when (append.table) {
-                TableType.DEBIT -> googleSheetsClient.appendDebit(spreadsheetId, append.tab, append.cells)
-                TableType.INFLOW -> googleSheetsClient.appendInflow(spreadsheetId, append.tab, append.cells)
-                TableType.PAYABLE -> googleSheetsClient.appendPayable(spreadsheetId, append.tab, append.cells)
+                TableType.DEBIT -> googleSheetsClient.appendDebit(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
+                TableType.INFLOW -> googleSheetsClient.appendInflow(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
+                TableType.PAYABLE -> googleSheetsClient.appendPayable(spreadsheetId, append.tab, append.cells, uuid = append.uuid)
             }
 
-            if (appendRes is Result.Success) {
-                val rowIdx = appendRes.data
-                val uuidRes = googleSheetsClient.updateCell(spreadsheetId, append.tab, "$colUuid$rowIdx", append.uuid)
-                if (uuidRes is Result.Error) return Result.Error(uuidRes.exception)
-            } else {
-                return Result.Error((appendRes as Result.Error).exception)
+            if (appendRes is Result.Error) {
+                return Result.Error(appendRes.exception)
             }
         }
 

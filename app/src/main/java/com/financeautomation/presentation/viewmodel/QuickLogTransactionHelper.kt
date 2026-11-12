@@ -95,6 +95,9 @@ object QuickLogTransactionHelper {
         val determinedMode = determineSplitMode(
             txn.companions, txn.owedToMe, txn.totalAmount, txn.myShare, companionsList
         )
+        val isSettledOrCarried = txn.status.value.equals("Settled", ignoreCase = true) ||
+            txn.status.value.equals("Carried Fwd", ignoreCase = true) ||
+            (txn.owedToMe > 0.0 && txn.owedToMe < (txn.totalAmount - txn.myShare - 0.01))
 
         return currentState.copy(
             transactionId = txn.id,
@@ -109,6 +112,7 @@ object QuickLogTransactionHelper {
             customShareText = if (determinedMode == SplitMode.CUSTOM) formatAmountInput(txn.myShare) else "",
             myShare = txn.myShare,
             owedToMe = txn.owedToMe,
+            isFinancialLocked = isSettledOrCarried,
             isPossibleDuplicate = txn.isPossibleDuplicate,
             isSaved = false,
             isVoided = false,
@@ -124,22 +128,38 @@ object QuickLogTransactionHelper {
         val existing = transactionRepository.getTransactionById(txnId)
             ?: return Result.Error("Transaction not found")
 
-        val selectedCompanions = state.availableCompanions
-            .filter { state.selectedCompanionIds.contains(it.id) }
-            .map { it.name }
-        val companionsText = if (state.splitMode == SplitMode.JUST_ME) "Personal" else selectedCompanions.joinToString(", ")
-        val updated = existing.copy(
-            merchant = state.payee.ifBlank { "Expense" },
-            category = state.selectedCategory,
-            totalAmount = state.amount,
-            myShare = state.myShare,
-            owedToMe = state.owedToMe,
-            companions = companionsText,
-            account = state.selectedAccount,
-            tripTag = state.activeTripTag?.name ?: existing.tripTag,
-            reviewState = ReviewState.CONFIRMED,
-            isPossibleDuplicate = false
-        )
+        val isSettledOrCarried = existing.status.value.equals("Settled", ignoreCase = true) ||
+            existing.status.value.equals("Carried Fwd", ignoreCase = true) ||
+            (existing.owedToMe > 0.0 && existing.owedToMe < (existing.totalAmount - existing.myShare - 0.01))
+
+        val updated = if (isSettledOrCarried) {
+            // Item 2.2: For Settled/Carried Fwd rows or modified owed, allow only description, category, and account edits
+            existing.copy(
+                merchant = state.payee.ifBlank { existing.merchant },
+                category = state.selectedCategory,
+                account = state.selectedAccount,
+                tripTag = state.activeTripTag?.name ?: existing.tripTag,
+                reviewState = ReviewState.CONFIRMED,
+                isPossibleDuplicate = false
+            )
+        } else {
+            val selectedCompanions = state.availableCompanions
+                .filter { state.selectedCompanionIds.contains(it.id) }
+                .map { it.name }
+            val companionsText = if (state.splitMode == SplitMode.JUST_ME) "Personal" else selectedCompanions.joinToString(", ")
+            existing.copy(
+                merchant = state.payee.ifBlank { "Expense" },
+                category = state.selectedCategory,
+                totalAmount = state.amount,
+                myShare = state.myShare,
+                owedToMe = state.owedToMe,
+                companions = companionsText,
+                account = state.selectedAccount,
+                tripTag = state.activeTripTag?.name ?: existing.tripTag,
+                reviewState = ReviewState.CONFIRMED,
+                isPossibleDuplicate = false
+            )
+        }
         return when (val res = transactionRepository.updateTransaction(updated)) {
             is Result.Success -> Result.Success(Unit)
             is Result.Error -> Result.Error(res.message ?: "Failed to update")

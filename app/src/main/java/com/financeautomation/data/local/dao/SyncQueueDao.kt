@@ -21,6 +21,9 @@ interface SyncQueueDao {
     @Query("SELECT * FROM sync_queue ORDER BY createdAt DESC")
     fun getAllQueueFlow(): Flow<List<SyncQueueEntity>>
 
+    @Query("SELECT * FROM sync_queue WHERE status = 'FAILED' OR retryCount >= 8 ORDER BY createdAt DESC")
+    fun getFailedQueueFlow(): Flow<List<SyncQueueEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: SyncQueueEntity): Long
 

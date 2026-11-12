@@ -78,6 +78,7 @@ class TransactionRepositorySyncTest {
 
         override fun getPendingQueueFlow(): Flow<List<SyncQueueEntity>> = emptyFlow()
         override fun getAllQueueFlow(): Flow<List<SyncQueueEntity>> = emptyFlow()
+        override fun getFailedQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(queue.values.filter { it.status == SyncQueueEntity.STATUS_FAILED || it.retryCount >= 8 })
         override suspend fun insert(item: SyncQueueEntity): Long {
             val id = if (item.id == 0L) idGen.getAndIncrement().toLong() else item.id
             val stored = item.copy(id = id)
@@ -243,7 +244,27 @@ class TransactionRepositorySyncTest {
                         writtenUuids[cellRef] = uuidVal
                         """{"updatedCells":1}"""
                     }
-                    // batchUpdate (sheets or values)
+                    // values:batchUpdate (atomic table append + uuid or multi-cell edits)
+                    method == "POST" && url.contains("values:batchUpdate") -> {
+                        val bodyText = request.body?.let { b ->
+                            val buf = okio.Buffer()
+                            b.writeTo(buf)
+                            buf.readUtf8()
+                        }.orEmpty()
+                        if (bodyText.contains(":K") || bodyText.contains(":k") || bodyText.contains("%3AK")) {
+                            appendDebitCount.incrementAndGet()
+                        }
+                        val acMatch = Regex("""'Nov26'!(AC\d+)""").find(bodyText)
+                        val acRef = acMatch?.groupValues?.get(1)
+                        if (acRef != null) {
+                            val uuidMatch = Regex("""'Nov26'!AC\d+.*?"values":\s*\[\s*\[\s*"([^"]+)"""").find(bodyText)
+                                ?: Regex(""""values":\s*\[\s*\[\s*"([^"]+)""").findAll(bodyText).lastOrNull()
+                            val uuidVal = uuidMatch?.groupValues?.get(1).orEmpty()
+                            writtenUuids[acRef] = uuidVal
+                        }
+                        """{"totalUpdatedCells":12,"responses":[]}"""
+                    }
+                    // batchUpdate (sheets metadata or layout)
                     method == "POST" && url.contains("batchUpdate") -> {
                         """{"totalUpdatedCells":0,"replies":[{"addSheet":{"properties":{"sheetId":101,"title":"Dec26"}}}]}"""
                     }

@@ -181,6 +181,7 @@ fun QuickLogSheet(
                 value = state.amountText,
                 onValueChange = onAmountChanged,
                 label = { Text(stringResource(R.string.prompt_enter_amount)) },
+                enabled = !state.isFinancialLocked,
                 singleLine = true,
                 shape = FinanceTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(
@@ -309,7 +310,7 @@ fun QuickLogSheet(
                         shadowElevation = if (isSelected) 2.dp else 0.dp,
                         modifier = Modifier
                             .weight(1f)
-                            .clickable {
+                            .clickable(enabled = !state.isFinancialLocked) {
                                 focusManager.clearFocus()
                                 onSplitModeChanged(mode)
                             }
