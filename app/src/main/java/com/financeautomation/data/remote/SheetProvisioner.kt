@@ -5,10 +5,10 @@ import com.financeautomation.core.constants.SheetSchemaConstants
 
 /**
  * Generates Google Sheets API v4 batchUpdate requests to provision the complete
- * Master Ledger workbook and monthly tabs strictly matching Finance2026_Template_v2.xlsx:
+ * Master Ledger workbook and monthly tabs strictly matching the iOS master ledger layout:
  * 1. Dashboard: Title banner, last updated formula, 6 KPI cards with living burn formulas,
  *    Monthly summary trend table, Category spend breakdown table, and Active Settlements query table.
- * 2. Month tabs (Template & Nov26): 31-column schema, frozen headers, spacer columns,
+ * 2. Month tabs (for example Nov26): 31-column schema, frozen headers, spacer columns,
  *    currency number formats ("₹"#,##0.00), date formats (dd/mm/yyyy), time formats (hh:mm am/pm),
  *    dropdown data validations (Status, Repayment Status, Accounts, Categories),
  *    and conditional formatting (strikethrough on Void, italic on Carried).
@@ -52,7 +52,7 @@ object SheetProvisioner {
 
     /**
      * Builds complete batchUpdate requests to format and populate the Dashboard sheet
-     * matching Finance2026_Template_v2.xlsx.
+     * matching the iOS master ledger layout.
      */
     fun buildDashboardRequests(
         dashboardSheetId: Int,
@@ -786,7 +786,7 @@ object SheetProvisioner {
 
     /**
      * Builds the complete list of Google Sheets v4 batchUpdate requests to provision a 31-column month tab
-     * or Template tab matching Finance2026_Template_v2.xlsx.
+     * matching the iOS master ledger layout.
      */
     fun buildProvisionRequests(
         sheetId: Int,

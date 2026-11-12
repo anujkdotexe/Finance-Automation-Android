@@ -111,7 +111,7 @@ class WorkbookResolverTest {
                 when {
                     url.contains("fields=sheets") && method == "GET" -> {
                         sheetTabsCallCount++
-                        // First call: returns only Sheet1 (missing Dashboard & Template)
+                        // First call: returns only Sheet1 (missing Dashboard)
                         val body = """
                             {
                               "sheets": [
@@ -313,7 +313,7 @@ class WorkbookResolverTest {
         var batchUpdateCalled = false
         var batchBody = ""
         val foundWorkbookId = "existing_partial_month_wb_789"
-        val currentMonthTab = "Nov26"
+        val currentMonthTab = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).format(java.time.format.DateTimeFormatter.ofPattern("MMMyy", java.util.Locale.US))
 
         val driveClient = GoogleDriveClient(
             OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
@@ -443,7 +443,141 @@ class WorkbookResolverTest {
         assertEquals(foundWorkbookId, (result as Result.Success).data)
         assertTrue("Expected batchUpdate to run to repair month tab", batchUpdateCalled)
         // Verify that batchUpdate targets the month tab, not re-provisioning the full master workbook
-        assertFalse("Should not attempt to add Template sheet when repairing month tab", batchBody.contains("\"title\":\"Template\""))
+        assertTrue("Repair batch should target the month tab", batchBody.contains(currentMonthTab) || batchBody.contains("102"))
+        assertFalse("Should not re-create the Dashboard sheet when repairing only the month tab", batchBody.contains("\"title\":\"Dashboard\""))
+    }
+
+    @Test
+    fun testResolverCreatesOnlyMonthTabWhenMonthTabIsMissing() = runBlocking<Unit> {
+        var batchUpdateCalled = false
+        var batchBody = ""
+        val foundWorkbookId = "existing_no_month_wb_790"
+        val currentMonthTab = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).format(java.time.format.DateTimeFormatter.ofPattern("MMMyy", java.util.Locale.US))
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                if (url.contains("/files") && request.method == "GET") {
+                    val body = """
+                        {
+                          "files": [
+                            {
+                              "id": "$foundWorkbookId",
+                              "name": "Finance2026"
+                            }
+                          ]
+                        }
+                    """.trimIndent()
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                } else {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                val method = request.method
+
+                when {
+                    url.contains("fields=sheets") && method == "GET" -> {
+                        // Tabs exist: Dashboard only; the month tab is missing
+                        val body = """
+                            {
+                              "sheets": [
+                                {
+                                  "properties": {
+                                    "sheetId": 0,
+                                    "title": "Dashboard"
+                                  }
+                                }
+                              ]
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/$currentMonthTab") && method == "GET" -> {
+                        // Month tab is empty (no headers)
+                        val body = """
+                            {
+                              "range": "$currentMonthTab!A3:AE3",
+                              "majorDimension": "ROWS",
+                              "values": []
+                            }
+                        """.trimIndent()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains(":batchUpdate") && method == "POST" -> {
+                        batchUpdateCalled = true
+                        val buffer = okio.Buffer()
+                        request.body?.writeTo(buffer)
+                        batchBody += buffer.readUtf8()
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": [{"addSheet": {"properties": {"sheetId": 102, "title": "$currentMonthTab"}}}]}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository()
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val result = resolver.resolveForYear(2026)
+
+        assertTrue("Expected resolveForYear to succeed", result is Result.Success)
+        assertEquals(foundWorkbookId, (result as Result.Success).data)
+        assertTrue("Expected batchUpdate to create the missing month tab", batchUpdateCalled)
+        // Verify that batchUpdate targets the month tab, not re-provisioning the full master workbook
+        assertTrue("Batch should create the month tab", batchBody.contains(currentMonthTab))
+        assertFalse("Should not re-create the Dashboard sheet when only the month tab is missing", batchBody.contains("\"title\":\"Dashboard\""))
     }
 
     @Test

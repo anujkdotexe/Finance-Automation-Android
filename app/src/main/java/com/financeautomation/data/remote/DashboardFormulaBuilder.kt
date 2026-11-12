@@ -5,7 +5,7 @@ import com.financeautomation.domain.model.Category
 
 /**
  * Builds Google Sheets batchUpdate request payloads for dynamic formula generation
- * and cell validation dropdowns matching the iOS master template (Finance2026_Template.xlsx):
+ * and cell validation dropdowns matching the iOS master ledger layout:
  * - KPI cards (A5, D5, G5, J5, M5, P5)
  * - Monthly summary table (V6:V17 Personal Burn, W6:W17 Total Outflow)
  * - Category spend breakdown table (Y5:Z15 for 10 categories including Savings and Other)
