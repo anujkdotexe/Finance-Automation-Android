@@ -64,6 +64,7 @@ class NotificationProcessorTest {
         override fun getTransactionsFlow(): Flow<List<TransactionEntity>> = flowOf(txns.values.toList())
         override fun getNeedsReviewFlow(): Flow<List<TransactionEntity>> = emptyFlow()
         override fun getConfirmedUnsyncedFlow(): Flow<List<TransactionEntity>> = emptyFlow()
+        override fun getAccountTransactionCounts(from: Long, to: Long): kotlinx.coroutines.flow.Flow<List<com.financeautomation.data.local.dao.AccountTransactionCount>> = kotlinx.coroutines.flow.emptyFlow()
         override suspend fun getById(id: String): TransactionEntity? = txns[id]
         override suspend fun getBySheetRowIndex(rowIndex: Int): TransactionEntity? = txns.values.firstOrNull { it.sheetRowIndex == rowIndex }
         override suspend fun getAllBySheetRowIndex(rowIndex: Int): List<TransactionEntity> = txns.values.filter { it.sheetRowIndex == rowIndex }

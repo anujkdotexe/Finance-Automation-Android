@@ -39,6 +39,7 @@ data class SettingsUiState(
     val settleDelaySeconds: Int = 120,
     val googleAccountEmail: String? = null,
     val accounts: List<Account> = emptyList(),
+    val accountTransactionCounts: Map<String, Int> = emptyMap(),
     val categories: List<Category> = emptyList(),
     val companions: List<Companion> = emptyList(),
     val tripTags: List<TripTag> = emptyList(),
@@ -106,6 +107,23 @@ class SettingsViewModel(
     init {
         observePreferences()
         customizationCoordinator.observeEntities()
+        observeAccountTransactionCounts()
+    }
+
+    /**
+     * Number of non-void transactions per account in the current month (Asia/Kolkata), for the Accounts screen.
+     */
+    private fun observeAccountTransactionCounts() {
+        val repo = accountRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            val zone = java.time.ZoneId.of("Asia/Kolkata")
+            val monthStart = java.time.LocalDate.now(zone).withDayOfMonth(1)
+            val from = monthStart.atStartOfDay(zone).toInstant().toEpochMilli()
+            val to = monthStart.plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            repo.getAccountTransactionCounts(from, to).collect { counts ->
+                _uiState.update { it.copy(accountTransactionCounts = counts) }
+            }
+        }
     }
 
     private fun observePreferences() {

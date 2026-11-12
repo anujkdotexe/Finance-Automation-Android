@@ -174,6 +174,7 @@ class ReviewInboxViewModelTest {
         override suspend fun unarchiveAccount(id: String) {}
         override suspend fun deleteAccount(id: String) {}
         override suspend fun reorderAccounts(accountIds: List<String>) {}
+        override fun getAccountTransactionCounts(from: Long, to: Long): Flow<Map<String, Int>> = flowOf(emptyMap())
     }
 
     @Test

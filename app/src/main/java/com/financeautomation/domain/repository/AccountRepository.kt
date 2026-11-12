@@ -68,4 +68,9 @@ interface AccountRepository {
      * Reorders accounts according to the provided list of IDs.
      */
     suspend fun reorderAccounts(accountIds: List<String>)
+
+    /**
+     * Observes the number of non-void transactions per account name in [from] (inclusive) to [to] (exclusive), epoch millis.
+     */
+    fun getAccountTransactionCounts(from: Long, to: Long): Flow<Map<String, Int>>
 }

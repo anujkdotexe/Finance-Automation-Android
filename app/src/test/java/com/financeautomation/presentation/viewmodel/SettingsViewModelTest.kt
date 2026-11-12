@@ -390,4 +390,28 @@ class SettingsViewModelTest {
         assertFalse(vm.uiState.value.developerMode)
         assertFalse(prefs.getDeveloperModeSync())
     }
+
+    @Test
+    fun testAccountTransactionCountsAreExposedInState() = runBlocking {
+        val accountRepo = java.lang.reflect.Proxy.newProxyInstance(
+            com.financeautomation.domain.repository.AccountRepository::class.java.classLoader,
+            arrayOf(com.financeautomation.domain.repository.AccountRepository::class.java)
+        ) { _, method, _ ->
+            when (method.name) {
+                "getAccounts" -> flowOf(emptyList<com.financeautomation.domain.model.Account>())
+                "getAccountTransactionCounts" -> flowOf(mapOf("HDFC" to 4, "Cash" to 1))
+                else -> throw UnsupportedOperationException(method.name)
+            }
+        } as com.financeautomation.domain.repository.AccountRepository
+
+        val vm = SettingsViewModel(
+            preferencesRepository = FakePreferencesRepository(),
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            accountRepository = accountRepo,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        assertEquals(mapOf("HDFC" to 4, "Cash" to 1), vm.uiState.value.accountTransactionCounts)
+    }
 }

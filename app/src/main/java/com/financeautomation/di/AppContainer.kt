@@ -190,6 +190,7 @@ class DefaultAppContainer(
         AccountRepositoryImpl(
             accountDaoProvider = { awaitDatabase().accountDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
+            transactionDaoProvider = { awaitDatabase().transactionDao() },
             ioDispatcher = ioDispatcher
         )
     }

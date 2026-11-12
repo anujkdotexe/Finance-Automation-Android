@@ -2,6 +2,7 @@ package com.financeautomation.data.repository
 
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.data.local.dao.AccountDao
+import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.AccountEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
 import com.financeautomation.domain.model.Account
@@ -23,6 +24,7 @@ class AccountRepositoryImpl(
     private val accountDao: AccountDao? = null,
     private val accountDaoProvider: (suspend () -> AccountDao)? = null,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
+    private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AccountRepository {
 
@@ -43,6 +45,15 @@ class AccountRepositoryImpl(
     private suspend fun resolveDao(): AccountDao =
         accountDao ?: accountDaoProvider?.invoke()
             ?: throw IllegalStateException("AccountDao or provider must be supplied")
+
+    override fun getAccountTransactionCounts(from: Long, to: Long): Flow<Map<String, Int>> = flow {
+        val dao = transactionDaoProvider?.invoke()
+        if (dao == null) {
+            emit(emptyMap())
+        } else {
+            emitAll(dao.getAccountTransactionCounts(from, to).map { rows -> rows.associate { it.account to it.count } })
+        }
+    }.flowOn(ioDispatcher)
 
     override fun getAccounts(includeArchived: Boolean): Flow<List<Account>> = flow {
         val dao = resolveDao()

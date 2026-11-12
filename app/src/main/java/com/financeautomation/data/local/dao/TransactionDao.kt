@@ -10,6 +10,14 @@ import com.financeautomation.data.local.entity.TransactionEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
+ * Per-account count of non-void transactions in a time window.
+ */
+data class AccountTransactionCount(
+    val account: String,
+    val count: Int
+)
+
+/**
  * Room Data Access Object for transactions table.
  */
 @Dao
@@ -23,6 +31,10 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions WHERE reviewState = 'CONFIRMED' AND syncState = 'PENDING' ORDER BY timestamp ASC")
     fun getConfirmedUnsyncedFlow(): Flow<List<TransactionEntity>>
+
+    // The status column stores "Void" (TransactionStatus.VOID.value), so compare case-insensitively
+    @Query("SELECT account, COUNT(*) AS count FROM transactions WHERE timestamp >= :from AND timestamp < :to AND UPPER(status) != 'VOID' GROUP BY account")
+    fun getAccountTransactionCounts(from: Long, to: Long): Flow<List<AccountTransactionCount>>
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): TransactionEntity?
