@@ -55,6 +55,18 @@ class MonthTabStyleTest {
         assertEquals("37474F", hex(cells[0]["backgroundColor"]))
     }
 
+    @Suppress("UNCHECKED_CAST")
+    @Test
+    fun testRow3SpacerHeaderCellsAreBlank() {
+        val update = requests.mapNotNull { it["updateCells"] as? Map<String, Any?> }
+            .first { ((it["start"] as Map<*, *>)["rowIndex"]) == 2 }
+        val values = ((update["rows"] as List<Map<String, Any?>>).first()["values"] as List<Map<String, Any?>>)
+            .map { (it["userEnteredValue"] as Map<*, *>)["stringValue"] }
+        assertEquals("", values[11])
+        assertEquals("", values[20])
+        assertEquals("Date", values[0])
+    }
+
     @Test
     fun testRow2TitlesAreSize10AndTheOwePeopleFillIsF57F17() {
         @Suppress("UNCHECKED_CAST")

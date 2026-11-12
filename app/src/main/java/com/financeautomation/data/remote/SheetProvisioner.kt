@@ -1200,7 +1200,8 @@ object SheetProvisioner {
                 format["borders"] = thinBorders()
             }
             mapOf(
-                "userEnteredValue" to mapOf("stringValue" to header),
+                // The spacer header cells are blank in the iOS reference
+                "userEnteredValue" to mapOf("stringValue" to (if (isSpacer) "" else header)),
                 "userEnteredFormat" to format
             )
         }
