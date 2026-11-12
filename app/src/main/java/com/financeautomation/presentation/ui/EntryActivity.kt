@@ -18,12 +18,15 @@ class EntryActivity : Activity() {
 
         val app = application as FinanceApplication
         val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
+        val flow = intent.getStringExtra(EXTRA_FLOW)
+            ?: intent.getStringExtra(EXTRA_ACTION)
+            ?: intent.getStringExtra("flow")
 
         if (Settings.canDrawOverlays(this)) {
-            val request = if (!captureId.isNullOrBlank()) {
-                OverlayRequest.Capture(captureId)
-            } else {
-                OverlayRequest.ChooseAction
+            val request = when {
+                !captureId.isNullOrBlank() -> OverlayRequest.Capture(captureId)
+                !flow.isNullOrBlank() -> OverlayRequest.SpecificFlow(flow)
+                else -> OverlayRequest.ChooseAction
             }
             app.appContainer.overlayController.show(request)
             finish()
@@ -57,6 +60,7 @@ class EntryActivity : Activity() {
     companion object {
         const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
         const val EXTRA_ACTION: String = "com.financeautomation.extra.ACTION"
+        const val EXTRA_FLOW: String = "com.financeautomation.extra.FLOW"
     }
 }
 

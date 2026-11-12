@@ -18,20 +18,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.lifecycleScope
 import com.financeautomation.FinanceApplication
-import com.financeautomation.R
-import com.financeautomation.presentation.components.QuickLogSheet
-import com.financeautomation.presentation.components.SheetScaffold
+import com.financeautomation.domain.model.Account
+import com.financeautomation.domain.model.Companion as FriendCompanion
+import com.financeautomation.domain.model.TripTag
+import com.financeautomation.presentation.flows.OpenDebtItem
+import com.financeautomation.presentation.overlay.OverlayContentHost
+import com.financeautomation.presentation.overlay.OverlayFlowScreen
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Transparent Activity hosting the interactive Floating Modal Bottom Sheet for expense splitting and categorization.
@@ -72,11 +81,40 @@ class ModalBottomSheetActivity : ComponentActivity() {
         setContent {
             FinanceAutomationTheme(transparentSystemBars = true) {
                 val state by quickLogViewModel.uiState.collectAsState()
+                val app = application as FinanceApplication
 
                 LaunchedEffect(state.isSaved, state.isVoided) {
                     if (state.isSaved || state.isVoided) {
                         dismissSafely()
                     }
+                }
+
+                val accounts by produceState<List<Account>>(initialValue = emptyList()) {
+                    value = withContext(Dispatchers.IO) { app.appContainer.accountRepository.getAllAccounts() }
+                }
+                val companions by produceState<List<FriendCompanion>>(initialValue = emptyList()) {
+                    value = withContext(Dispatchers.IO) { app.appContainer.peopleRepository.getAllCompanions() }
+                }
+                val activeTripTag by produceState<TripTag?>(initialValue = null) {
+                    value = withContext(Dispatchers.IO) { app.appContainer.tripTagRepository.getActiveTagSync() }
+                }
+                var openDebts by remember { mutableStateOf<List<OpenDebtItem>>(emptyList()) }
+
+                val flowExtra = intent.getStringExtra(EXTRA_FLOW)
+                    ?: intent.getStringExtra("flow")
+                    ?: intent.getStringExtra(EXTRA_ACTION)
+                    ?: intent.getStringExtra("action")
+
+                val isInternalOrDebug = callingPackage == null || callingPackage == packageName || com.financeautomation.BuildConfig.DEBUG
+                val authorizedFlow = if (isInternalOrDebug) flowExtra else null
+
+                val initialScreen = when (authorizedFlow?.uppercase()) {
+                    "MENU", "CHOOSE_ACTION" -> OverlayFlowScreen.MENU
+                    "INCOME", "INCOME_RETURN", "RETURN" -> OverlayFlowScreen.INCOME_RETURN
+                    "FRIEND_PAID", "PAYABLE" -> OverlayFlowScreen.FRIEND_PAID
+                    "REPAID", "REPAID_FRIEND" -> OverlayFlowScreen.REPAID_FRIEND
+                    "TRIP", "TRIP_MODE" -> OverlayFlowScreen.TRIP_MODE
+                    else -> OverlayFlowScreen.EXPENSE
                 }
 
                 // Transparent clickable backdrop for 1-tap outside dismiss
@@ -90,34 +128,76 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         ) { dismissSafely() },
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    // Floating Bottom Sheet using unified SheetScaffold
-                    SheetScaffold(
-                        title = when {
-                            state.transactionId != null -> stringResource(R.string.prompt_enter_amount)
-                            state.captureId != null -> stringResource(R.string.badge_payment_intercepted)
-                            else -> stringResource(R.string.prompt_enter_amount)
+                    OverlayContentHost(
+                        initialScreen = initialScreen,
+                        quickLogViewModel = quickLogViewModel,
+                        accounts = accounts,
+                        companions = companions,
+                        activeTripTag = activeTripTag,
+                        openDebts = openDebts,
+                        onPersonChanged = { person ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val useCase = app.appContainer.getOpenDebtsForPersonUseCase
+                                openDebts = useCase.invoke(person)
+                            }
+                        },
+                        onConfirmExpense = {
+                            quickLogViewModel.onConfirmAndSave { dismissSafely() }
+                        },
+                        onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                app.appContainer.transactionRepository.logCredit(
+                                    settler = settler,
+                                    amount = amount,
+                                    explicitRefs = explicitRefs,
+                                    account = account,
+                                    inflowType = inflowType,
+                                    reason = reason
+                                )
+                                withContext(Dispatchers.Main) { dismissSafely() }
+                            }
+                        },
+                        onConfirmFriendPaid = { amount, creditor, whatFor ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                app.appContainer.transactionRepository.logPayable(
+                                    creditor = creditor,
+                                    amount = amount,
+                                    whatFor = whatFor
+                                )
+                                withContext(Dispatchers.Main) { dismissSafely() }
+                            }
+                        },
+                        onConfirmRepaid = { amount, person, timestamp ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                app.appContainer.transactionRepository.logRepayment(
+                                    creditor = person,
+                                    amount = amount,
+                                    explicitRef = null,
+                                    timestamp = timestamp
+                                )
+                                withContext(Dispatchers.Main) { dismissSafely() }
+                            }
+                        },
+                        onStartTrip = { tagName ->
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val tag = app.appContainer.tripTagRepository.getTagByName(tagName)
+                                    ?: app.appContainer.tripTagRepository.insertTripTag(tagName)
+                                app.appContainer.tripTagRepository.setActiveTag(tag.id)
+                                withContext(Dispatchers.Main) { dismissSafely() }
+                            }
+                        },
+                        onEndTrip = {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                app.appContainer.tripTagRepository.setActiveTag(null)
+                                withContext(Dispatchers.Main) { dismissSafely() }
+                            }
                         },
                         onDismiss = { dismissSafely() },
+                        onKeyboardFocusChanged = {},
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m)
-                    ) {
-                        QuickLogSheet(
-                            state = state,
-                            onAmountChanged = quickLogViewModel::onAmountChanged,
-                            onPayeeChanged = quickLogViewModel::onPayeeChanged,
-                            onAccountSelected = quickLogViewModel::onAccountSelected,
-                            onCategorySelected = quickLogViewModel::onCategorySelected,
-                            onSplitModeChanged = quickLogViewModel::onSplitModeChanged,
-                            onCompanionToggled = quickLogViewModel::onCompanionToggled,
-                            onAddCompanion = quickLogViewModel::onAddNewCompanion,
-                            onCustomShareChanged = quickLogViewModel::onCustomShareChanged,
-                            onEndTrip = quickLogViewModel::onEndTrip,
-                            onConfirmAndSave = { quickLogViewModel.onConfirmAndSave { dismissSafely() } },
-                            onDismiss = { dismissSafely() },
-                            onVoid = { quickLogViewModel.onVoid { dismissSafely() } }
-                        )
-                    }
+                    )
                 }
             }
         }
@@ -162,5 +242,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
     companion object {
         const val EXTRA_TRANSACTION_ID: String = "com.financeautomation.extra.TRANSACTION_ID"
         const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
+        const val EXTRA_FLOW: String = "com.financeautomation.extra.FLOW"
+        const val EXTRA_ACTION: String = "com.financeautomation.extra.ACTION"
     }
 }
