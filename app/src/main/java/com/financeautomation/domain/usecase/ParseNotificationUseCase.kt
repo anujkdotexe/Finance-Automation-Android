@@ -169,7 +169,27 @@ class ParseNotificationUseCase(
             )
         }
 
-        // 5. Wording classification
+        val isSms = PackageWhitelist.isSmsPackage(sourcePackage)
+
+        // 5. SMS privacy and financial content guard
+        if (isSms) {
+            // Drop SMS from personal numbers or contacts
+            if (RegexPatterns.isPersonalSender(title)) {
+                return NotificationParseResult.Dropped(
+                    reason = DropReason.NOT_WHITELISTED,
+                    sourcePackage = sourcePackage
+                )
+            }
+            // Drop SMS that lack financial transaction indicators
+            if (!RegexPatterns.hasFinancialKeywords(fullContent)) {
+                return NotificationParseResult.Dropped(
+                    reason = DropReason.NOT_WHITELISTED,
+                    sourcePackage = sourcePackage
+                )
+            }
+        }
+
+        // 6. Wording classification
         val wording = classifyWording(fullContent)
         if (wording == WordingClass.FAILURE) {
             return NotificationParseResult.FailureAlert(
@@ -178,17 +198,24 @@ class ParseNotificationUseCase(
             )
         }
 
-        // 6. Direction discrimination
+        // 7. Direction discrimination
         val isCredit = RegexPatterns.isCredit(fullContent)
         val isDebit = RegexPatterns.isDebit(fullContent) || !isCredit
         val kind = if (isCredit) "CREDIT" else "DEBIT"
 
-        // 7. Funding account inference
+        // 8. Funding account inference
         val account = inferAccount(fullContent, configuredAccounts, defaultAccount)
 
-        // 8. Amount extraction
+        // 9. Amount extraction
         val amount = RegexPatterns.extractAmount(fullContent)
         if (amount == null || amount <= 0.0) {
+            if (isSms) {
+                // SMS without an explicit currency amount is non-transactional (e.g. promo, advisory)
+                return NotificationParseResult.Dropped(
+                    reason = DropReason.NOT_WHITELISTED,
+                    sourcePackage = sourcePackage
+                )
+            }
             return NotificationParseResult.FallbackPrompt(
                 message = "Payment detected, tap to enter amount",
                 sourcePackage = sourcePackage,
@@ -200,7 +227,7 @@ class ParseNotificationUseCase(
             )
         }
 
-        // 9. Merchant / Payee extraction
+        // 10. Merchant / Payee extraction
         val merchant = (if (title.isNotBlank()) RegexPatterns.extractMerchant(title) else null)
             ?: RegexPatterns.extractMerchant(text)
             ?: RegexPatterns.extractMerchant(fullContent)

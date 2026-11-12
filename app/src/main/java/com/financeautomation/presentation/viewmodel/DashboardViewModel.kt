@@ -169,14 +169,16 @@ class DashboardViewModel(
             val syncQueueDao = resolveSyncQueueDao()
             val payableDao = resolvePayableDao()
             val payablesFlow = payableDao?.observePending() ?: flowOf(emptyList())
+            val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
 
             combine(
                 transactionRepository.getTransactions(),
                 syncQueueDao.getAllQueueFlow(),
                 payablesFlow,
+                categoriesFlow,
                 monthOffsetFlow
-            ) { transactions, queueItems, pendingPayables, monthOffset ->
-                calculateDashboardMetrics(transactions, queueItems, pendingPayables, monthOffset)
+            ) { transactions, queueItems, pendingPayables, categories, monthOffset ->
+                calculateDashboardMetrics(transactions, queueItems, pendingPayables, categories, monthOffset)
             }.collect { calculatedState ->
                 _uiState.update { current ->
                     calculatedState.copy(
@@ -205,8 +207,21 @@ class DashboardViewModel(
         transactions: List<Transaction>,
         queueItems: List<SyncQueueEntity>,
         pendingPayables: List<PayableEntity>,
+        categories: List<com.financeautomation.domain.model.Category> = emptyList(),
         monthOffset: Int
     ): DashboardUiState {
+        val excludedCategoryNames: Set<String> = categories
+            .filter { it.isExcludedFromLivingBurn }
+            .map { it.name.trim().lowercase() }
+            .toSet()
+
+        fun isExcluded(category: String): Boolean {
+            val trimmed = category.trim().lowercase()
+            return excludedCategoryNames.contains(trimmed) ||
+                trimmed == CategoryConstants.CATEGORY_SAVINGS.lowercase() ||
+                trimmed == "transfer"
+        }
+
         val nowCal = Calendar.getInstance()
         val cal = Calendar.getInstance().apply {
             add(Calendar.MONTH, monthOffset)
@@ -273,9 +288,7 @@ class DashboardViewModel(
 
             // Prior month burn
             if (txn.timestamp in startOfPriorMonth until endOfPriorMonth && txn.status != TransactionStatus.VOID) {
-                val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
-                val isXfer = txn.category.equals("Transfer", ignoreCase = true)
-                if (!isSav && !isXfer) {
+                if (!isExcluded(txn.category)) {
                     lastMonthBurn += txn.myShare
                 }
             }
@@ -286,11 +299,10 @@ class DashboardViewModel(
                 monthTransactions.add(txn)
 
                 val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
-                val isXfer = txn.category.equals("Transfer", ignoreCase = true)
 
                 if (isSav) {
                     savings += txn.myShare
-                } else if (!isXfer) {
+                } else if (!isExcluded(txn.category)) {
                     currentBurn += txn.myShare
                     categorySums[txn.category] = (categorySums[txn.category] ?: 0.0) + txn.myShare
                 }
