@@ -1,5 +1,6 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.entity.AccountEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
@@ -119,7 +120,8 @@ class AccountRepositoryImpl(
     override suspend fun deleteAccount(id: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val account = dao.getById(id)
-        if (account != null && (account.name.equals("Cash", ignoreCase = true) || account.name.equals("Other", ignoreCase = true))) {
+        if (account != null && (account.name.equals(CategoryConstants.ACCOUNT_CASH, ignoreCase = true) ||
+                account.name.equals(CategoryConstants.ACCOUNT_OTHER, ignoreCase = true))) {
             return@withContext
         }
         dao.deleteById(id)
