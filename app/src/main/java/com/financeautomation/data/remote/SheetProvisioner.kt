@@ -725,7 +725,26 @@ object SheetProvisioner {
             )
         )
 
-        // 12. Dashboard Row Heights
+        // 12. Dashboard Column Widths (matching iOS master reference)
+        val dashboardColWidths = listOf(
+            0 to 72, 1 to 108, 2 to 108, 3 to 108, 4 to 98, 5 to 72, 6 to 10,
+            7 to 110, 8 to 62, 9 to 75, 10 to 89, 11 to 72, 12 to 108, 13 to 108,
+            14 to 108, 15 to 108, 16 to 108, 17 to 108, 18 to 90, 19 to 22,
+            20 to 90, 21 to 104, 22 to 152, 23 to 101, 24 to 110, 25 to 90
+        )
+        dashboardColWidths.forEach { (colIdx, px) ->
+            requests.add(
+                createUpdateDimensionPropertiesRequest(
+                    sheetId = dashboardSheetId,
+                    dimension = "COLUMNS",
+                    startIndex = colIdx,
+                    endIndex = colIdx + 1,
+                    pixelSize = px
+                )
+            )
+        }
+
+        // 13. Dashboard Row Heights (matching iOS master reference)
         val dashboardRowHeights = listOf(
             0 to 24, 1 to 14, 2 to 14, 3 to 11, 4 to 21, 5 to 17,
             23 to 18, 24 to 17, 25 to 21
@@ -741,6 +760,26 @@ object SheetProvisioner {
                 )
             )
         }
+        // Rows 6 to 22 (7 to 23 in 1-based) = 14px
+        requests.add(
+            createUpdateDimensionPropertiesRequest(
+                sheetId = dashboardSheetId,
+                dimension = "ROWS",
+                startIndex = 6,
+                endIndex = 23,
+                pixelSize = 14
+            )
+        )
+        // Rows 26 to 36 (27 to 37 in 1-based) = 15px
+        requests.add(
+            createUpdateDimensionPropertiesRequest(
+                sheetId = dashboardSheetId,
+                dimension = "ROWS",
+                startIndex = 26,
+                endIndex = 37,
+                pixelSize = 15
+            )
+        )
 
         return requests
     }
@@ -988,7 +1027,7 @@ object SheetProvisioner {
         val colWidths = listOf(
             0 to 95, 1 to 80, 2 to 85, 3 to 146, 4 to 106, 5 to 116,
             6 to 106, 7 to 125, 8 to 95, 9 to 109, 10 to 85, 11 to 10,
-            12 to 95, 13 to 80, 14 to 95, 15 to 106, 16 to 125, 17 to 130,
+            12 to 95, 13 to 118, 14 to 95, 15 to 118, 16 to 125, 17 to 130,
             18 to 120, 19 to 109, 20 to 10, 21 to 101, 22 to 80, 23 to 101,
             24 to 125, 25 to 116, 26 to 101, 27 to 120, 28 to 100, 29 to 100, 30 to 100
         )
@@ -1109,54 +1148,7 @@ object SheetProvisioner {
             )
         }
 
-        // 8. Data Validation Dropdowns (Rows 4 to targetRowCount)
-        // Col K (10): Status (Personal, Pending, Settled, Carried Fwd, Void)
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 10,
-                endCol = 11,
-                values = listOf("Personal", "Pending", "Settled", "Carried Fwd", "Void"),
-                endRow = targetRowCount
-            )
-        )
-
-        // Col AB (27): Repayment Status (Pending, Partial, Repaid, Carried Fwd, Void)
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 27,
-                endCol = 28,
-                values = listOf("Pending", "Partial", "Repaid", "Carried Fwd", "Void"),
-                endRow = targetRowCount
-            )
-        )
-
-        // Col C (2): Accounts
-        val effectiveAccounts = if (accounts.isNotEmpty()) accounts else CategoryConstants.DEFAULT_ACCOUNTS
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 2,
-                endCol = 3,
-                values = effectiveAccounts,
-                endRow = targetRowCount
-            )
-        )
-
-        // Col F (5): Categories
-        val effectiveCategories = if (categories.isNotEmpty()) categories else CategoryConstants.DEFAULT_CATEGORIES
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startCol = 5,
-                endCol = 6,
-                values = effectiveCategories,
-                endRow = targetRowCount
-            )
-        )
-
-        // 9. Conditional Formatting Rules (Rows 4 to targetRowCount, Cols A-K)
+        // 8. Conditional Formatting Rules (Rows 4 to targetRowCount, Cols A-K)
         // Rule 1: Void -> Strikethrough, gray text #9E9E9E
         val voidFormula = "=\$K4=\"Void\""
         if (!existingRuleFormulas.contains(voidFormula)) {
@@ -1321,34 +1313,6 @@ object SheetProvisioner {
                     )
                 ),
                 "fields" to "userEnteredFormat(horizontalAlignment,numberFormat)"
-            )
-        )
-    }
-
-    private fun createDataValidationRequest(
-        sheetId: Int,
-        startCol: Int,
-        endCol: Int,
-        values: List<String>,
-        endRow: Int = 1000
-    ): Map<String, Any?> {
-        return mapOf(
-            "setDataValidation" to mapOf(
-                "range" to mapOf(
-                    "sheetId" to sheetId,
-                    "startRowIndex" to 3,
-                    "endRowIndex" to endRow,
-                    "startColumnIndex" to startCol,
-                    "endColumnIndex" to endCol
-                ),
-                "rule" to mapOf(
-                    "condition" to mapOf(
-                        "type" to "ONE_OF_LIST",
-                        "values" to values.map { mapOf("userEnteredValue" to it) }
-                    ),
-                    "strict" to true,
-                    "showCustomUi" to true
-                )
             )
         )
     }
