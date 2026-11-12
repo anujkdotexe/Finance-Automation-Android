@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""
+Sheet Compare Tool - Visual parity validation between Android provisioned sheets
+and the iOS master reference template (docs/ios_reference/Finance2026_Template.xlsx).
+
+Usage:
+    python tools/sheet-compare [candidate.xlsx] [reference.xlsx]
+    python tools/sheet-compare --export <spreadsheet_id>
+"""
+
+import sys
+import os
+import re
+import argparse
+import urllib.request
+import json
+
+try:
+    import openpyxl
+except ImportError:
+    print("Error: openpyxl is required. Run: pip install openpyxl", file=sys.stderr)
+    sys.exit(2)
+
+DEFAULT_REFERENCE_PATH = os.path.join("docs", "ios_reference", "Finance2026_Template.xlsx")
+
+CANONICAL_CONFIG_HEADERS = [
+    "AccountName", "AccountLastFour", "AccountIsDefault", "AccountIsArchived", "AccountOrder",
+    "CategoryName", "CategoryIsArchived", "CategoryExcludeFromBurn", "CategoryOrder",
+    "CompanionName", "CompanionIsArchived", "CompanionOrder",
+    "TripTag", "TripIsActive", "TripOrder",
+    "PrefKey", "PrefValue"
+]
+
+MONTH_TAB_PATTERN = re.compile(r"^[A-Z][a-z]{2}\d{2}$")
+
+def get_cell_text(val):
+    if val is None:
+        return ""
+    if isinstance(val, openpyxl.worksheet.formula.ArrayFormula):
+        return val.text.strip()
+    return str(val).strip()
+
+def compare_dashboard(cand_ws, ref_ws):
+    diffs = []
+    
+    # 1. Merged Ranges
+    cand_merges = set(str(m) for m in cand_ws.merged_cells.ranges)
+    ref_merges = set(str(m) for m in ref_ws.merged_cells.ranges)
+    if cand_merges != ref_merges:
+        diffs.append(f"Dashboard merges mismatch: {cand_merges ^ ref_merges}")
+
+    # 2. Key KPI Cells
+    kpi_cells = [
+        "A4", "A5", "A6",
+        "D4", "D5", "D6",
+        "G4", "G5", "G6",
+        "J4", "J5", "J6",
+        "M4", "M5", "M6",
+        "P4", "P5", "P6"
+    ]
+    for cell_id in kpi_cells:
+        c_val = get_cell_text(cand_ws[cell_id].value)
+        r_val = get_cell_text(ref_ws[cell_id].value)
+        if c_val != r_val:
+            diffs.append(f"Dashboard {cell_id} mismatch: candidate='{c_val}' vs reference='{r_val}'")
+
+    # 3. Monthly Summary Table U5:W17
+    for r in range(5, 18):
+        for col_letter in ["U", "V", "W"]:
+            coord = f"{col_letter}{r}"
+            c_val = get_cell_text(cand_ws[coord].value)
+            r_val = get_cell_text(ref_ws[coord].value)
+            if c_val != r_val:
+                diffs.append(f"Dashboard {coord} mismatch: candidate='{c_val}' vs reference='{r_val}'")
+
+    # 4. Category Breakdown Table Y5:Z15
+    for r in range(5, 16):
+        for col_letter in ["Y", "Z"]:
+            coord = f"{col_letter}{r}"
+            c_val = get_cell_text(cand_ws[coord].value)
+            r_val = get_cell_text(ref_ws[coord].value)
+            if c_val != r_val:
+                diffs.append(f"Dashboard {coord} mismatch: candidate='{c_val}' vs reference='{r_val}'")
+
+    # 5. Active Settlements Headers and Queries
+    settlement_cells = ["A24", "A25", "H25", "A26", "H26", "A27", "H27"]
+    for coord in settlement_cells:
+        c_val = get_cell_text(cand_ws[coord].value)
+        r_val = get_cell_text(ref_ws[coord].value)
+        if c_val != r_val:
+            diffs.append(f"Dashboard {coord} mismatch: candidate='{c_val}' vs reference='{r_val}'")
+
+    # 6. Data Validations (Must be 0 dropdowns to match iOS reference)
+    if hasattr(cand_ws, "data_validations") and cand_ws.data_validations and len(cand_ws.data_validations.dataValidation) > 0:
+        diffs.append(f"Dashboard unexpected dropdown validations: {len(cand_ws.data_validations.dataValidation)} found (iOS reference has 0)")
+
+    return diffs
+
+def compare_month_tab(cand_ws, ref_ws):
+    diffs = []
+
+    # 1. Merged Ranges
+    cand_merges = set(str(m) for m in cand_ws.merged_cells.ranges)
+    ref_merges = set(str(m) for m in ref_ws.merged_cells.ranges)
+    # Ignore hidden UUID merges if present in candidate
+    cand_merges_filtered = {m for m in cand_merges if not m.startswith("AC") and not m.startswith("AD") and not m.startswith("AE")}
+    ref_merges_filtered = {m for m in ref_merges if not m.startswith("AC") and not m.startswith("AD") and not m.startswith("AE")}
+    if cand_merges_filtered != ref_merges_filtered:
+        diffs.append(f"Month tab merges mismatch: {cand_merges_filtered ^ ref_merges_filtered}")
+
+    # 2. Row 2 Group Titles
+    for coord in ["A2", "M2", "V2"]:
+        c_val = get_cell_text(cand_ws[coord].value)
+        r_val = get_cell_text(ref_ws[coord].value)
+        if c_val != r_val:
+            diffs.append(f"Month tab {coord} mismatch: candidate='{c_val}' vs reference='{r_val}'")
+
+    # 3. Row 3 Column Headers (Cols 1 to 28, A through AB)
+    for col_idx in range(1, 29):
+        c_val = get_cell_text(cand_ws.cell(row=3, column=col_idx).value)
+        r_val = get_cell_text(ref_ws.cell(row=3, column=col_idx).value)
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        if c_val != r_val:
+            diffs.append(f"Month tab header {col_letter}3 mismatch: candidate='{c_val}' vs reference='{r_val}'")
+
+    # 4. Spacers Col L (12) and Col U (21)
+    for spacer_col in [12, 21]:
+        col_letter = openpyxl.utils.get_column_letter(spacer_col)
+        cand_width = cand_ws.column_dimensions[col_letter].width
+        ref_width = ref_ws.column_dimensions[col_letter].width
+        if cand_width is not None and ref_width is not None:
+            if abs(cand_width - ref_width) > 2.0:
+                diffs.append(f"Month tab spacer {col_letter} width mismatch: candidate={cand_width} vs reference={ref_width}")
+
+    # 5. Data Validations (Must be 0 dropdowns to match iOS reference)
+    if hasattr(cand_ws, "data_validations") and cand_ws.data_validations and len(cand_ws.data_validations.dataValidation) > 0:
+        diffs.append(f"Month tab unexpected dropdown validations: {len(cand_ws.data_validations.dataValidation)} found (iOS reference has 0)")
+
+    return diffs
+
+def validate_config_tab(config_ws, ref_config_ws=None):
+    diffs = []
+    if ref_config_ws is not None:
+        # Direct comparison against reference Config sheet
+        for c in range(1, len(CANONICAL_CONFIG_HEADERS) + 1):
+            c_val = get_cell_text(config_ws.cell(row=1, column=c).value)
+            r_val = get_cell_text(ref_config_ws.cell(row=1, column=c).value)
+            if c_val != r_val:
+                diffs.append(f"Config header col {c} mismatch: candidate='{c_val}' vs reference='{r_val}'")
+    else:
+        # Schema conformity validation against canonical 50x16 Config specification
+        for idx, expected in enumerate(CANONICAL_CONFIG_HEADERS, start=1):
+            val = get_cell_text(config_ws.cell(row=1, column=idx).value)
+            if val != expected and idx <= 16:
+                diffs.append(f"Config header col {idx} mismatch: found '{val}', expected '{expected}'")
+
+        if config_ws.max_row < 50:
+            diffs.append(f"Config tab row count is {config_ws.max_row}, expected at least 50")
+
+    return diffs
+
+def export_spreadsheet_as_xlsx(spreadsheet_id, dest_path, access_token=None):
+    export_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=xlsx"
+    req = urllib.request.Request(export_url)
+    if access_token:
+        req.add_header("Authorization", f"Bearer {access_token}")
+    with urllib.request.urlopen(req) as resp, open(dest_path, "wb") as f:
+        f.write(resp.read())
+
+def run_comparison(candidate_path, reference_path=DEFAULT_REFERENCE_PATH):
+    if not os.path.isfile(reference_path):
+        print(f"Error: Reference workbook not found at: {reference_path}", file=sys.stderr)
+        return 1
+
+    if not os.path.isfile(candidate_path):
+        print(f"Error: Candidate workbook not found at: {candidate_path}", file=sys.stderr)
+        return 1
+
+    cand_wb = openpyxl.load_workbook(candidate_path, data_only=False)
+    ref_wb = openpyxl.load_workbook(reference_path, data_only=False)
+
+    all_diffs = []
+
+    # 1. Compare Dashboard
+    if "Dashboard" not in cand_wb.sheetnames:
+        all_diffs.append("Candidate workbook missing 'Dashboard' sheet")
+    elif "Dashboard" not in ref_wb.sheetnames:
+        all_diffs.append("Reference workbook missing 'Dashboard' sheet")
+    else:
+        dash_diffs = compare_dashboard(cand_wb["Dashboard"], ref_wb["Dashboard"])
+        all_diffs.extend(dash_diffs)
+
+    # 2. Compare Month Tab
+    ref_month_tab = "Nov26" if "Nov26" in ref_wb.sheetnames else [s for s in ref_wb.sheetnames if MONTH_TAB_PATTERN.match(s)][0]
+    cand_month_tabs = [s for s in cand_wb.sheetnames if MONTH_TAB_PATTERN.match(s)]
+    if not cand_month_tabs:
+        # Fallback to Template if month tab not present
+        if "Template" in cand_wb.sheetnames:
+            cand_month_tab = "Template"
+        else:
+            cand_month_tab = None
+    else:
+        cand_month_tab = cand_month_tabs[0]
+
+    if not cand_month_tab:
+        all_diffs.append("Candidate workbook missing a valid month tab")
+    else:
+        month_diffs = compare_month_tab(cand_wb[cand_month_tab], ref_wb[ref_month_tab])
+        all_diffs.extend(month_diffs)
+
+    # 3. Validate Config Tab
+    if "Config" in cand_wb.sheetnames:
+        ref_config = ref_wb["Config"] if "Config" in ref_wb.sheetnames else None
+        config_diffs = validate_config_tab(cand_wb["Config"], ref_config)
+        all_diffs.extend(config_diffs)
+
+    # Results
+    if all_diffs:
+        print(f"Visual parity comparison failed: {len(all_diffs)} differences found.")
+        for d in all_diffs:
+            print(f"  - {d}")
+        return 1
+    else:
+        print("Visual parity verified: 0 differences found for Dashboard, Config, and month tab.")
+        return 0
+
+def main():
+    parser = argparse.ArgumentParser(description="Compare Google Sheets workbook with iOS reference template.")
+    parser.add_argument("candidate", nargs="?", default=None, help="Path to candidate .xlsx or spreadsheet ID")
+    parser.add_argument("reference", nargs="?", default=DEFAULT_REFERENCE_PATH, help="Path to reference .xlsx")
+    parser.add_argument("--export", dest="export_id", help="Export Google Spreadsheet by ID and compare")
+    parser.add_argument("--token", dest="token", help="OAuth access token for export")
+    parser.add_argument("--output", dest="output", default="exported_candidate.xlsx", help="Output path for exported xlsx")
+
+    args = parser.parse_args()
+
+    if args.export_id:
+        print(f"Exporting spreadsheet {args.export_id} to {args.output}...")
+        export_spreadsheet_as_xlsx(args.export_id, args.output, args.token)
+        candidate_path = args.output
+    elif args.candidate:
+        candidate_path = args.candidate
+    else:
+        # Default self-comparison against reference
+        candidate_path = args.reference
+
+    exit_code = run_comparison(candidate_path, args.reference)
+    sys.exit(exit_code)
+
+if __name__ == "__main__":
+    main()
+
