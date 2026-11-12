@@ -270,6 +270,13 @@ class QuickLogViewModel(
             _uiState.update { it.copy(errorMessage = "Amount must be greater than zero") }
             return
         }
+        val captureTs = state.captureTimestamp
+        if (captureTs != null && com.financeautomation.core.utils.isFuture(captureTs)) {
+            _uiState.update {
+                it.copy(errorMessage = com.financeautomation.core.utils.TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            }
+            return
+        }
 
         val txnId = state.transactionId
         if (txnId != null) {

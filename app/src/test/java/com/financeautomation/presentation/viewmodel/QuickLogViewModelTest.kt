@@ -241,4 +241,38 @@ class QuickLogViewModelTest {
         // Timestamp must propagate from capture
         assertEquals(1730000000000L, insertedTxn.timestamp)
     }
+
+    @Test
+    fun testOnConfirmAndSave_rejectsFutureCaptureTimestamp() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val pDao = FakePendingCaptureDao()
+        val future = System.currentTimeMillis() + 3 * 24 * 3_600_000L
+        pDao.insert(
+            PendingCaptureEntity(
+                id = "cap_future", sourcePackage = "com.google.android.apps.nbu.paisa.user",
+                amount = 50.0, payee = "Tea Stall", inferredAccount = "Cash", timestamp = future,
+                kind = "DEBIT", flags = "", state = "WAITING", notificationKey = "k_f",
+                contentHash = "h_f", updatedAt = future
+            )
+        )
+        val vm = QuickLogViewModel(
+            transactionRepository = tRepo,
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { pDao },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        vm.loadCapture("cap_future")
+        advanceUntilIdle()
+        var saved = false
+        vm.onConfirmAndSave { saved = true }
+        advanceUntilIdle()
+        assertTrue(!saved)
+        assertEquals(0, tRepo.inserted.size)
+        assertEquals("That date is in the future.", vm.uiState.value.errorMessage)
+    }
 }
