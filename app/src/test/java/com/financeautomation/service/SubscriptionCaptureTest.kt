@@ -28,6 +28,8 @@ class SubscriptionCaptureTest {
 
     private val today = LocalDate.now(SubscriptionScheduleUseCase.IST).toEpochDay()
     private val gpay = PackageWhitelist.PACKAGE_GPAY
+    // Anchor far ahead so the matcher creates no cycles of its own; these tests add their cycles by hand
+    private val farFuture = today + 400
 
     private class Fixture {
         val repo = FakeSubscriptionRepository()
@@ -43,7 +45,7 @@ class SubscriptionCaptureTest {
     @Test
     fun matchingDebitGetsSubscriptionFlagCategoryAccountAndLeavesCycleOpen() = runBlocking {
         val f = Fixture()
-        f.repo.addSubscription(testSubscription(account = "HDFC"))
+        f.repo.addSubscription(testSubscription(account = "HDFC", anchorEpochDay = farFuture))
         val cycle = f.repo.addCycle("sub_netflix", today)
 
         val outcome = f.processor.process(gpay, "Payment to Netflix", "Paid Rs 649.00 to Netflix using Bank A/c ending 1234. UPI Ref: 123456789012")
@@ -59,7 +61,7 @@ class SubscriptionCaptureTest {
     @Test
     fun nonMatchingAmountOrMerchantGetsNoSubscriptionFlag() = runBlocking {
         val f = Fixture()
-        f.repo.addSubscription(testSubscription())
+        f.repo.addSubscription(testSubscription(anchorEpochDay = farFuture))
         f.repo.addCycle("sub_netflix", today)
 
         f.processor.process(gpay, "Payment to Swiggy", "Paid Rs 649.00 to Swiggy using Bank A/c ending 1234. UPI Ref: 123456789012")
@@ -70,7 +72,7 @@ class SubscriptionCaptureTest {
     @Test
     fun captureForAlreadyAnsweredCycleIsFlaggedDuplicateOfItsTransaction() = runBlocking {
         val f = Fixture()
-        f.repo.addSubscription(testSubscription())
+        f.repo.addSubscription(testSubscription(anchorEpochDay = farFuture))
         f.repo.addCycle("sub_netflix", today, SubscriptionCycleState.PAID, transactionId = "txn_answered")
 
         f.processor.process(gpay, "Payment to Netflix", "Paid Rs 649.00 to Netflix using Bank A/c ending 1234. UPI Ref: 123456789012")
@@ -94,7 +96,7 @@ class SubscriptionCaptureTest {
     @Test
     fun savingSubscriptionCaptureMarksCyclePaidWithTransactionId() = runBlocking {
         val f = Fixture()
-        f.repo.addSubscription(testSubscription())
+        f.repo.addSubscription(testSubscription(anchorEpochDay = farFuture))
         val cycle = f.repo.addCycle("sub_netflix", today)
         f.captures.insert(PendingCaptureEntity("cap_1", gpay, 649.0, "Netflix", "HDFC", System.currentTimeMillis(), "DEBIT", "SUBSCRIPTION:sub_netflix", "WAITING", null, null, 0L))
         val recorder = RecordingTransactionRepository()
@@ -119,7 +121,7 @@ class SubscriptionCaptureTest {
     @Test
     fun savingCaptureWithoutSubscriptionFlagLeavesCyclesAlone() = runBlocking {
         val f = Fixture()
-        f.repo.addSubscription(testSubscription())
+        f.repo.addSubscription(testSubscription(anchorEpochDay = farFuture))
         val cycle = f.repo.addCycle("sub_netflix", today)
         f.captures.insert(PendingCaptureEntity("cap_1", gpay, 649.0, "Netflix", "HDFC", System.currentTimeMillis(), "DEBIT", "", "WAITING", null, null, 0L))
         val recorder = RecordingTransactionRepository()
@@ -140,7 +142,7 @@ class SubscriptionCaptureTest {
     @Test
     fun dismissedCaptureKeepsCycleOpen() = runBlocking {
         val f = Fixture()
-        f.repo.addSubscription(testSubscription())
+        f.repo.addSubscription(testSubscription(anchorEpochDay = farFuture))
         val cycle = f.repo.addCycle("sub_netflix", today)
         f.processor.process(gpay, "Payment to Netflix", "Paid Rs 649.00 to Netflix using Bank A/c ending 1234. UPI Ref: 123456789012")
         val cap = capture(f)
