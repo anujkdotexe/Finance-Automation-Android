@@ -1042,7 +1042,8 @@ class TransactionRepositoryImpl(
                                 )
                                 tDao.insert(aligned)
                                 qDao.updateTransactionId(oldId, uuid)
-                                qDao.updatePayload(oldId, uuid)
+                                qDao.updatePayloadJsonId(oldId, uuid)
+                                qDao.updatePlanJsonId(oldId, uuid)
 
                                 val lDao = resolveLineageDao()
                                 lDao?.let {

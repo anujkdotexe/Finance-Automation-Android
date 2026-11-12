@@ -43,6 +43,7 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -134,9 +135,14 @@ class TransactionRepositorySyncTest {
                 queue[it.id] = it.copy(transactionId = newTransactionId)
             }
         }
-        override suspend fun updatePayload(oldPayload: String, newPayload: String) {
-            queue.values.filter { it.payloadJson == oldPayload }.forEach {
-                queue[it.id] = it.copy(payloadJson = newPayload)
+        override suspend fun updatePayloadJsonId(oldId: String, newId: String) {
+            queue.values.filter { it.payloadJson.contains(oldId) }.forEach {
+                queue[it.id] = it.copy(payloadJson = it.payloadJson.replace(oldId, newId))
+            }
+        }
+        override suspend fun updatePlanJsonId(oldId: String, newId: String) {
+            queue.values.filter { it.planJson != null && it.planJson!!.contains(oldId) }.forEach {
+                queue[it.id] = it.copy(planJson = it.planJson!!.replace(oldId, newId))
             }
         }
     }
@@ -1754,11 +1760,14 @@ class TransactionRepositorySyncTest {
         )
         tDao.insert(localTxn)
 
-        // Pending sync_queue item pointing to the local row
+        // Pending sync_queue item pointing to the local row with JSON payload and planJson
+        val jsonPayload = """{"requestId":"req_123","transactionId":"$oldLocalId","amount":200.0}"""
+        val planPayload = """{"appends":[{"tab":"Nov26","uuid":"$oldLocalId","cells":[200.0]}]}"""
         val queueItem = SyncQueueEntity(
             transactionId = oldLocalId,
             operationType = SyncQueueEntity.OP_UPDATE,
-            payloadJson = oldLocalId
+            payloadJson = jsonPayload,
+            planJson = planPayload
         )
         val queueItemId = qDao.insert(queueItem)
 
@@ -1804,7 +1813,11 @@ class TransactionRepositorySyncTest {
         val updatedItem = updatedQueue.first()
         assertEquals(queueItemId, updatedItem.id)
         assertEquals(canonicalSheetUuid, updatedItem.transactionId)
-        assertEquals(canonicalSheetUuid, updatedItem.payloadJson)
+        assertTrue(updatedItem.payloadJson.contains(canonicalSheetUuid))
+        assertFalse(updatedItem.payloadJson.contains(oldLocalId))
+        assertNotNull(updatedItem.planJson)
+        assertTrue(updatedItem.planJson!!.contains(canonicalSheetUuid))
+        assertFalse(updatedItem.planJson!!.contains(oldLocalId))
 
         // Queue item still points at an existing transaction
         val txnForQueueItem = tDao.getById(updatedItem.transactionId)
