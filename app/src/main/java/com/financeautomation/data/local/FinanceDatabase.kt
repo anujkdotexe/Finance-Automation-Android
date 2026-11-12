@@ -72,7 +72,7 @@ import java.io.File
         PipelineEventEntity::class,
         PayableEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -112,6 +112,7 @@ abstract class FinanceDatabase : RoomDatabase() {
         val MIGRATION_7_8 = DatabaseMigrations.MIGRATION_7_8
         val MIGRATION_8_9 = DatabaseMigrations.MIGRATION_8_9
         val MIGRATION_9_10 = DatabaseMigrations.MIGRATION_9_10
+        val MIGRATION_10_11 = DatabaseMigrations.MIGRATION_10_11
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {

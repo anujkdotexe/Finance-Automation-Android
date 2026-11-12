@@ -4,6 +4,7 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
@@ -422,15 +423,17 @@ class TransactionRepositoryImpl(
         else -> false
     }
 
-    private suspend fun markTransportFailure(item: SyncQueueEntity, txn: Transaction) {
+    private suspend fun markTransportFailure(item: SyncQueueEntity, txn: Transaction, throwable: Throwable? = null) {
         val tDao = resolveTransactionDao()
         val qDao = resolveSyncQueueDao()
         val newRetry = item.retryCount + 1
+        val kind = SyncErrorKind.fromThrowable(throwable).name
+        val detail = throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure"
         if (newRetry >= MAX_SYNC_RETRIES) {
-            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetry)
+            qDao.setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, newRetry, kind, detail)
             tDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
         } else {
-            qDao.updateStatus(item.id, SyncQueueEntity.STATUS_FAILED, 1)
+            qDao.updateStatusError(item.id, SyncQueueEntity.STATUS_FAILED, 1, kind, detail)
         }
     }
 
@@ -1232,13 +1235,15 @@ class TransactionRepositoryImpl(
         return Result.Success(debitRow ?: lastAppendedRow)
     }
 
-    private suspend fun handleItemTransportFailure(item: SyncQueueEntity) {
+    private suspend fun handleItemTransportFailure(item: SyncQueueEntity, throwable: Throwable? = null) {
         val qDao = resolveSyncQueueDao()
         val newRetries = item.retryCount + 1
+        val kind = SyncErrorKind.fromThrowable(throwable).name
+        val detail = throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure"
         if (newRetries >= MAX_SYNC_RETRIES) {
-            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetries)
+            qDao.setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, newRetries, kind, detail)
         } else {
-            qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_PENDING, newRetries)
+            qDao.setStatusError(item.id, SyncQueueEntity.STATUS_PENDING, newRetries, kind, detail)
         }
     }
 
