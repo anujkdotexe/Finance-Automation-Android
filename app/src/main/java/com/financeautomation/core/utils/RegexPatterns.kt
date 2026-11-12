@@ -126,7 +126,7 @@ object RegexPatterns {
     }
 
     /**
-     * Extracts funding account information (e.g. "SBI XX1234").
+     * Extracts funding account information (e.g. "Bank XX1234").
      */
     fun extractAccount(text: String): String? {
         val match = ACCOUNT_REGEX.find(text)

@@ -1,7 +1,7 @@
 package com.financeautomation.domain.model
 
 /**
- * Domain entity representing a funding/payment account (e.g. SBI, Canara, HDFC, Credit Card, Cash).
+ * Domain entity representing a funding/payment account (e.g. Bank Account, Credit Card, Cash).
  * Pure Kotlin model with zero Android framework dependencies.
  */
 data class Account(
