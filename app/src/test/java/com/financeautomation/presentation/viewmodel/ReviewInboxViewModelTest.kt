@@ -16,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -98,7 +99,8 @@ class ReviewInboxViewModelTest {
 
         override fun getPendingQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(emptyList())
         override fun getAllQueueFlow(): Flow<List<SyncQueueEntity>> = queueFlow
-        override fun getFailedQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(emptyList())
+        override fun getFailedQueueFlow(): Flow<List<SyncQueueEntity>> =
+            queueFlow.map { list -> list.filter { it.status == SyncQueueEntity.STATUS_FAILED || it.retryCount >= 8 } }
         override suspend fun insert(item: SyncQueueEntity): Long {
             val id = if (item.id == 0L) idGen.getAndIncrement() else item.id
             queue[id] = item.copy(id = id)
@@ -204,7 +206,7 @@ class ReviewInboxViewModelTest {
 
         val unknownAccountTxn = eligibleTxn.copy(
             id = "txn_unknown_acc",
-            account = "Unknown"
+            account = ""
         )
 
         val blankCategoryTxn = eligibleTxn.copy(
@@ -247,6 +249,39 @@ class ReviewInboxViewModelTest {
         assertEquals(ReviewState.NEEDS_REVIEW, tRepo.getTransactionById("txn_unknown_acc")?.reviewState)
         assertEquals(ReviewState.NEEDS_REVIEW, tRepo.getTransactionById("txn_blank_cat")?.reviewState)
         assertEquals(ReviewState.NEEDS_REVIEW, tRepo.getTransactionById("txn_zero_amount")?.reviewState)
+    }
+
+    @Test
+    fun testConfirmAllEligible_skipsTransactionWithFailedQueueItem() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val base = Transaction(
+            id = "txn_ok", timestamp = System.currentTimeMillis(), dateSerial = 46330, timeSerial = 0.5,
+            account = "HDFC", merchant = "Cafe", category = "Food & Drink", totalAmount = 250.0,
+            companions = "Personal", myShare = 250.0, owedToMe = 0.0,
+            status = TransactionStatus.PENDING, reviewState = ReviewState.NEEDS_REVIEW
+        )
+        tRepo.insertTransaction(base)
+        tRepo.insertTransaction(base.copy(id = "txn_failed"))
+        qDao.insert(
+            SyncQueueEntity(
+                id = 30L, transactionId = "txn_failed", operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "{}", status = SyncQueueEntity.STATUS_FAILED, retryCount = 8
+            )
+        )
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo, directSyncQueueDao = qDao,
+            directPendingCaptureDao = FakePendingCaptureDao(), accountRepository = FakeAccountRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val confirmed = vm.confirmAllEligible()
+        advanceUntilIdle()
+
+        assertEquals(1, confirmed)
+        assertEquals(ReviewState.CONFIRMED, tRepo.getTransactionById("txn_ok")?.reviewState)
+        assertEquals(ReviewState.NEEDS_REVIEW, tRepo.getTransactionById("txn_failed")?.reviewState)
     }
 
     @Test
@@ -302,6 +337,91 @@ class ReviewInboxViewModelTest {
         assertFalse(updatedCapture!!.flags.contains(PendingCaptureEntity.FLAG_NEW_ACCOUNT))
         assertEquals("OTHER_FLAG", updatedCapture.flags)
         assertNull(updatedCapture.detectedAccountHint)
+        assertEquals("Axis Bank", updatedCapture.inferredAccount)
+    }
+
+    private fun newAccountCapture(now: Long) = PendingCaptureEntity(
+        id = "cap_v2",
+        sourcePackage = "com.google.android.apps.nbu.paisa.user",
+        amount = 10.0,
+        payee = "Store",
+        inferredAccount = "HDFC",
+        timestamp = now,
+        kind = PendingCaptureEntity.KIND_DEBIT,
+        flags = PendingCaptureEntity.FLAG_NEW_ACCOUNT,
+        state = PendingCaptureEntity.STATE_NEEDS_REVIEW,
+        notificationKey = null,
+        contentHash = null,
+        updatedAt = now,
+        detectedAccountHint = "Axis 1234"
+    )
+
+    private suspend fun runAddAccount(
+        existing: List<Account>,
+        name: String,
+        lastFour: String,
+        scope: kotlinx.coroutines.test.TestScope
+    ): Triple<FakeAccountRepo, FakePendingCaptureDao, ReviewInboxViewModel> {
+        val aRepo = FakeAccountRepo()
+        aRepo.accounts.value = existing
+        val cDao = FakePendingCaptureDao()
+        cDao.insert(newAccountCapture(System.currentTimeMillis()))
+        val vm = ReviewInboxViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPendingCaptureDao = cDao,
+            accountRepository = aRepo,
+            ioDispatcher = testDispatcher
+        )
+        scope.advanceUntilIdle()
+        vm.addAccountFromCapture("cap_v2", name, lastFour)
+        scope.advanceUntilIdle()
+        return Triple(aRepo, cDao, vm)
+    }
+
+    @Test
+    fun testAddAccountFromCapture_duplicateNameRejected() = runTest {
+        val (aRepo, cDao, vm) = runAddAccount(
+            listOf(Account(id = "a1", name = "Axis Bank", isDefault = true, isArchived = true)),
+            "  axis bank ", "", this
+        )
+        assertEquals(1, aRepo.accounts.value.size)
+        assertTrue(vm.uiState.value.errorMessage != null)
+        assertTrue(cDao.getById("cap_v2")!!.flags.contains(PendingCaptureEntity.FLAG_NEW_ACCOUNT))
+        assertEquals("HDFC", cDao.getById("cap_v2")!!.inferredAccount)
+    }
+
+    @Test
+    fun testAddAccountFromCapture_cashAndOtherRejected() = runTest {
+        val (aRepo, _, vm) = runAddAccount(emptyList(), "Cash", "", this)
+        assertTrue(aRepo.accounts.value.isEmpty())
+        assertTrue(vm.uiState.value.errorMessage != null)
+        vm.clearMessages()
+        vm.addAccountFromCapture("cap_v2", "other", "")
+        advanceUntilIdle()
+        assertTrue(aRepo.accounts.value.isEmpty())
+        assertTrue(vm.uiState.value.errorMessage != null)
+    }
+
+    @Test
+    fun testAddAccountFromCapture_badLastFourRejected() = runTest {
+        val (aRepo, _, vm) = runAddAccount(emptyList(), "Axis", "12a4", this)
+        assertTrue(aRepo.accounts.value.isEmpty())
+        assertTrue(vm.uiState.value.errorMessage != null)
+        vm.clearMessages()
+        vm.addAccountFromCapture("cap_v2", "Axis", "123")
+        advanceUntilIdle()
+        assertTrue(aRepo.accounts.value.isEmpty())
+        assertTrue(vm.uiState.value.errorMessage != null)
+    }
+
+    @Test
+    fun testAddAccountFromCapture_blankLastFourStoredAsNull() = runTest {
+        val (aRepo, cDao, _) = runAddAccount(emptyList(), "Kotak", "  ", this)
+        assertEquals(1, aRepo.accounts.value.size)
+        assertNull(aRepo.accounts.value.first().lastFourDigits)
+        assertTrue(aRepo.accounts.value.first().isDefault)
+        assertEquals("Kotak", cDao.getById("cap_v2")!!.inferredAccount)
     }
 
     @Test

@@ -169,13 +169,30 @@ class ReviewInboxViewModel(
             val accountRepo = accountRepository ?: return@launch
             val captureDao = resolvePendingCaptureDao() ?: return@launch
 
+            val trimmedName = name.trim()
+            val trimmedLastFour = lastFour.trim()
             val existingAccounts = accountRepo.getAllAccounts(includeArchived = true)
-            val isFirst = existingAccounts.isEmpty()
 
+            val validationError = when {
+                trimmedName.isBlank() -> "Account name cannot be blank."
+                existingAccounts.any { it.name.equals(trimmedName, ignoreCase = true) } ||
+                    trimmedName.equals(CategoryConstants.ACCOUNT_CASH, ignoreCase = true) ||
+                    trimmedName.equals(CategoryConstants.ACCOUNT_OTHER, ignoreCase = true) ->
+                    "An account named \"$trimmedName\" already exists."
+                trimmedLastFour.isNotEmpty() && !(trimmedLastFour.length == 4 && trimmedLastFour.all { it in '0'..'9' }) ->
+                    "Last four digits must be exactly 4 digits."
+                else -> null
+            }
+            if (validationError != null) {
+                _uiState.update { it.copy(errorMessage = validationError) }
+                return@launch
+            }
+
+            val isFirst = existingAccounts.isEmpty()
             val newAccount = Account(
                 id = UUID.randomUUID().toString(),
-                name = name.trim(),
-                lastFourDigits = lastFour.trim(),
+                name = trimmedName,
+                lastFourDigits = trimmedLastFour.ifBlank { null },
                 isDefault = isFirst
             )
             accountRepo.insertAccount(newAccount)
@@ -191,6 +208,7 @@ class ReviewInboxViewModel(
                     .filter { it.isNotBlank() && !it.equals(PendingCaptureEntity.FLAG_NEW_ACCOUNT, ignoreCase = true) }
                     .joinToString(",")
                 val updated = capture.copy(
+                    inferredAccount = newAccount.name,
                     flags = updatedFlags,
                     detectedAccountHint = null,
                     updatedAt = System.currentTimeMillis()
@@ -204,6 +222,10 @@ class ReviewInboxViewModel(
     suspend fun confirmAllEligible(): Int {
         val currentItems = transactionRepository.getNeedsReview().firstOrNull() ?: _uiState.value.items
         var confirmedCount = 0
+        val failedTransactionIds: Set<String> = resolveSyncQueueDao()
+            ?.getFailedQueueFlow()?.firstOrNull()
+            ?.map { it.transactionId }?.toSet()
+            ?: _uiState.value.failedQueueItems.map { it.transactionId }.toSet()
 
         for (txn in currentItems) {
             val isEligible = txn.reviewState == ReviewState.NEEDS_REVIEW &&
@@ -212,7 +234,7 @@ class ReviewInboxViewModel(
                 !txn.isPossibleDuplicate &&
                 txn.status != TransactionStatus.VOID &&
                 txn.account.isNotBlank() &&
-                !txn.account.equals("unknown", ignoreCase = true)
+                txn.id !in failedTransactionIds
 
             if (isEligible) {
                 val updated = txn.copy(
