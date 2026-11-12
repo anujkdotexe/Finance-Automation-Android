@@ -44,6 +44,35 @@ object SheetProvisioner {
         Triple(0, 1, 27.0), Triple(1, 2, 18.0), Triple(2, 3, 21.0), Triple(3, 1000, 12.5)
     )
 
+    private const val ROW3_LAST_BORDERED_COL = 24 // column Y
+
+    /** Debit table columns C, D, E, F, H, K (0-based) that are plain text in the iOS reference. */
+    val DEBIT_TEXT_COLUMNS: List<Int> = listOf(2, 3, 4, 5, 7, 10)
+
+    private fun thinBorder(): Map<String, Any?> =
+        mapOf("style" to "SOLID", "width" to 1, "color" to mapOf("red" to 0f, "green" to 0f, "blue" to 0f))
+
+    private fun thinBorders(): Map<String, Any?> =
+        mapOf("top" to thinBorder(), "bottom" to thinBorder(), "left" to thinBorder(), "right" to thinBorder())
+
+    /** Thin outer border around a rectangular block of cells. */
+    private fun outerBordersRequest(sheetId: Int, startRow: Int, endRow: Int, startCol: Int, endCol: Int): Map<String, Any?> =
+        mapOf(
+            "updateBorders" to mapOf(
+                "range" to mapOf(
+                    "sheetId" to sheetId,
+                    "startRowIndex" to startRow,
+                    "endRowIndex" to endRow,
+                    "startColumnIndex" to startCol,
+                    "endColumnIndex" to endCol
+                ),
+                "top" to thinBorder(),
+                "bottom" to thinBorder(),
+                "left" to thinBorder(),
+                "right" to thinBorder()
+            )
+        )
+
     /** A range to clear: 0-based start row, exclusive end row, 0-based column. */
     data class ColumnRowRange(val startRow: Int, val endRow: Int, val column: Int)
 
@@ -96,6 +125,7 @@ object SheetProvisioner {
     private val settlementsBannerBg = hexToColorMap("37464E")
     private val settlementsHeaderBg = hexToColorMap("455964")
     private val amberBg = hexToColorMap("F47F17")
+    private val owePeopleHeaderBg = hexToColorMap("F57F17")
     private val debitsHeaderBg = hexToColorMap("C62828")
     private val inflowsHeaderBg = hexToColorMap("2E7D32")
     private val spacerGrayBg = hexToColorMap("ECEFF1")
@@ -983,7 +1013,7 @@ object SheetProvisioner {
             Triple(11, 12, Pair("", spacerGrayBg)),
             Triple(12, 20, Pair("INFLOWS (MONEY IN)", inflowsHeaderBg)),
             Triple(20, 21, Pair("", spacerGrayBg)),
-            Triple(21, 28, Pair("I OWE PEOPLE", amberBg))
+            Triple(21, 28, Pair("I OWE PEOPLE", owePeopleHeaderBg))
         )
 
         sectionDefs.forEach { (startCol, endCol, content) ->
@@ -1007,13 +1037,20 @@ object SheetProvisioner {
                                 "textFormat" to mapOf(
                                     "foregroundColor" to whiteColor,
                                     "bold" to true,
-                                    "fontSize" to 11
+                                    "fontSize" to 10
                                 )
                             )
                         ),
                         "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                     )
                 )
+            )
+        }
+
+        // Thin borders around each row 2 block (A2:K2, L2, M2:T2, U2, V2:AB2), as in the iOS reference
+        sectionDefs.forEach { (startCol, endCol, _) ->
+            requests.add(
+                outerBordersRequest(sheetId, startRow = 1, endRow = 2, startCol = startCol, endCol = endCol)
             )
         }
 
@@ -1095,19 +1132,26 @@ object SheetProvisioner {
             SheetSchemaConstants.SHEET_COLUMN_HEADERS[letter].orEmpty()
         }
 
-        val row3Values = columnHeaders.map { header ->
+        val row3Values = columnHeaders.mapIndexed { colIdx, header ->
+            val isSpacer = colIdx == SheetSchemaConstants.SPACER_1_COL_INDEX || colIdx == SheetSchemaConstants.SPACER_2_COL_INDEX
+            val format = mutableMapOf<String, Any?>(
+                "backgroundColor" to (if (isSpacer) spacerGrayBg else headerSlateBg),
+                "horizontalAlignment" to "CENTER",
+                "wrapStrategy" to "WRAP",
+                "textFormat" to mapOf(
+                    "foregroundColor" to whiteColor,
+                    "bold" to true,
+                    "fontSize" to 9
+                )
+            )
+            // The iOS reference has a vertical alignment and thin borders on A3:Y3 only; Z3:AB3 are plain
+            if (colIdx <= ROW3_LAST_BORDERED_COL) {
+                format["verticalAlignment"] = "MIDDLE"
+                format["borders"] = thinBorders()
+            }
             mapOf(
                 "userEnteredValue" to mapOf("stringValue" to header),
-                "userEnteredFormat" to mapOf(
-                    "backgroundColor" to headerSlateBg,
-                    "horizontalAlignment" to "CENTER",
-                    "verticalAlignment" to "MIDDLE",
-                    "textFormat" to mapOf(
-                        "foregroundColor" to whiteColor,
-                        "bold" to true,
-                        "fontSize" to 9
-                    )
-                )
+                "userEnteredFormat" to format
             )
         }
 
@@ -1122,7 +1166,7 @@ object SheetProvisioner {
                     "rows" to listOf(
                         mapOf("values" to row3Values)
                     ),
-                    "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+                    "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy,borders)"
                 )
             )
         )
@@ -1139,6 +1183,29 @@ object SheetProvisioner {
                     pattern = "\"₹\"#,##0",
                     align = "RIGHT",
                     endRow = targetRowCount
+                )
+            )
+        }
+
+        // Plain text format (@) on the debit table columns C, D, E, F, H and K, as in the iOS reference
+        DEBIT_TEXT_COLUMNS.forEach { colIdx ->
+            requests.add(
+                mapOf(
+                    "repeatCell" to mapOf(
+                        "range" to mapOf(
+                            "sheetId" to sheetId,
+                            "startRowIndex" to 3,
+                            "endRowIndex" to 999,
+                            "startColumnIndex" to colIdx,
+                            "endColumnIndex" to colIdx + 1
+                        ),
+                        "cell" to mapOf(
+                            "userEnteredFormat" to mapOf(
+                                "numberFormat" to mapOf("type" to "TEXT", "pattern" to "@")
+                            )
+                        ),
+                        "fields" to "userEnteredFormat.numberFormat"
+                    )
                 )
             )
         }
@@ -1173,76 +1240,8 @@ object SheetProvisioner {
             )
         }
 
-        // 8. Conditional Formatting Rules (Rows 4 to targetRowCount, Cols A-K)
-        // Rule 1: Void -> Strikethrough, gray text #9E9E9E
-        val voidFormula = "=\$K4=\"Void\""
-        if (!existingRuleFormulas.contains(voidFormula)) {
-            requests.add(
-                mapOf(
-                    "addConditionalFormatRule" to mapOf(
-                        "rule" to mapOf(
-                            "ranges" to listOf(
-                                mapOf(
-                                    "sheetId" to sheetId,
-                                    "startRowIndex" to 3,
-                                    "endRowIndex" to targetRowCount,
-                                    "startColumnIndex" to 0,
-                                    "endColumnIndex" to 11
-                                )
-                            ),
-                            "booleanRule" to mapOf(
-                                "condition" to mapOf(
-                                    "type" to "CUSTOM_FORMULA",
-                                    "values" to listOf(mapOf("userEnteredValue" to voidFormula))
-                                ),
-                                "format" to mapOf(
-                                    "textFormat" to mapOf(
-                                        "strikethrough" to true,
-                                        "foregroundColor" to voidGrayColor
-                                    )
-                                )
-                            )
-                        ),
-                        "index" to 0
-                    )
-                )
-            )
-        }
-
-        // Rule 2: Carried Fwd -> Italic, gray text #9E9E9E
-        val carriedFormula = "=OR(\$K4=\"Carried Fwd\", \$K4=\"Carried\")"
-        if (!existingRuleFormulas.contains(carriedFormula)) {
-            requests.add(
-                mapOf(
-                    "addConditionalFormatRule" to mapOf(
-                        "rule" to mapOf(
-                            "ranges" to listOf(
-                                mapOf(
-                                    "sheetId" to sheetId,
-                                    "startRowIndex" to 3,
-                                    "endRowIndex" to targetRowCount,
-                                    "startColumnIndex" to 0,
-                                    "endColumnIndex" to 11
-                                )
-                            ),
-                            "booleanRule" to mapOf(
-                                "condition" to mapOf(
-                                    "type" to "CUSTOM_FORMULA",
-                                    "values" to listOf(mapOf("userEnteredValue" to carriedFormula))
-                                ),
-                                "format" to mapOf(
-                                    "textFormat" to mapOf(
-                                        "italic" to true,
-                                        "foregroundColor" to voidGrayColor
-                                    )
-                                )
-                            )
-                        ),
-                        "index" to 1
-                    )
-                )
-            )
-        }
+        // The iOS reference has no conditional formatting on the month tab, so none is added.
+        // (existingRuleFormulas is kept in the signature for callers that read existing rules.)
 
         return requests
     }
