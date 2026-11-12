@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.financeautomation.BuildConfig
 import com.financeautomation.R
@@ -31,6 +32,7 @@ import com.financeautomation.presentation.screens.AdvancedDiagnosticsCard
 import com.financeautomation.presentation.screens.settings.CaptureHealthCard
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
+import com.financeautomation.service.worker.SubscriptionReminderWorker
 
 @Composable
 fun DiagnosticsScreen(
@@ -82,6 +84,15 @@ fun DiagnosticsScreen(
             AdvancedDiagnosticsCard(modifier = Modifier.fillMaxWidth())
 
             CaptureHealthCard(modifier = Modifier.fillMaxWidth())
+
+            val appContext = LocalContext.current.applicationContext
+            OutlinedButton(
+                onClick = { SubscriptionReminderWorker.runNow(appContext) },
+                shape = FinanceTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Run subscription check now")
+            }
 
             if (BuildConfig.DEBUG || BuildConfig.BUILD_TYPE == "beta") {
                 OutlinedButton(

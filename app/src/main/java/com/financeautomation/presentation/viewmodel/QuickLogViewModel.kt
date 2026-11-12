@@ -51,7 +51,8 @@ class QuickLogViewModel(
     private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(QuickLogUiState())
@@ -99,7 +100,9 @@ class QuickLogViewModel(
                 } else emptyList()
                 val dupTxn = recentSimilar.firstOrNull()
                 val isPossibleDup = capture.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE) || dupTxn != null
-                val duplicateOfId = dupTxn?.id
+                val duplicateOfId = PendingCaptureEntity.flagValue(capture.flags, PendingCaptureEntity.FLAG_DUPLICATE_OF_PREFIX)
+                    ?: dupTxn?.id
+                val subscriptionId = PendingCaptureEntity.flagValue(capture.flags, PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX)
 
                 _uiState.update { current ->
                     val resolvedAccount = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: current.selectedAccount
@@ -113,7 +116,11 @@ class QuickLogViewModel(
                         selectedAccount = resolvedAccount,
                         isNeedsAmount = isNeedsAmount,
                         isPossibleDuplicate = isPossibleDup,
-                        duplicateOfId = duplicateOfId
+                        duplicateOfId = duplicateOfId,
+                        subscriptionId = subscriptionId,
+                        selectedCategory = if (subscriptionId != null) {
+                            com.financeautomation.core.constants.CategoryConstants.CATEGORY_SUBSCRIPTIONS
+                        } else current.selectedCategory
                     )
                 }
                 recalculateSplit()
@@ -270,6 +277,13 @@ class QuickLogViewModel(
             _uiState.update { it.copy(errorMessage = "Amount must be greater than zero") }
             return
         }
+        val captureTs = state.captureTimestamp
+        if (captureTs != null && com.financeautomation.core.utils.isFuture(captureTs)) {
+            _uiState.update {
+                it.copy(errorMessage = com.financeautomation.core.utils.TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            }
+            return
+        }
 
         val txnId = state.transactionId
         if (txnId != null) {
@@ -303,7 +317,8 @@ class QuickLogViewModel(
                     logExpenseUseCase = logExpenseUseCase,
                     pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     categoryStatDaoProvider = categoryStatDaoProvider,
-                    predictCategoryUseCase = predictCategoryUseCase
+                    predictCategoryUseCase = predictCategoryUseCase,
+                    subscriptionRepository = subscriptionRepository
                 )) {
                     is Result.Success -> {
                         val loggedTxn = result.data

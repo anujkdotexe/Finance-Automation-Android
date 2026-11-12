@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.provider.Settings
 import com.financeautomation.FinanceApplication
 import com.financeautomation.presentation.overlay.OverlayRequest
+import kotlinx.coroutines.launch
 
 /**
  * Transparent trampoline entry point for Widget, Quick Settings Tile, Pinned Shortcut, and Notifications (Spec 5.2.1).
@@ -16,8 +17,40 @@ class EntryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val subscriptionCycleId = intent.getStringExtra(EXTRA_SUBSCRIPTION_CYCLE_ID)
+        if (!subscriptionCycleId.isNullOrBlank()) {
+            routeSubscriptionYes(subscriptionCycleId)
+            return
+        }
+        route(intent.getStringExtra(EXTRA_CAPTURE_ID))
+    }
+
+    /**
+     * Yes on a reminder for a subscription whose amount varies: prepares a capture with the name,
+     * category, account and due date filled in and an empty amount, then opens the normal expense sheet.
+     */
+    private fun routeSubscriptionYes(cycleId: String) {
         val app = application as FinanceApplication
-        val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
+        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+        if (notificationId != -1) {
+            (getSystemService(NOTIFICATION_SERVICE) as? android.app.NotificationManager)?.cancel(notificationId)
+        }
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val outcome = try {
+                app.appContainer.subscriptionActionUseCase.yes(cycleId)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                null
+            }
+            runOnUiThread {
+                val captureId = (outcome as? com.financeautomation.domain.usecase.SubscriptionYesOutcome.NeedsAmount)?.captureId
+                if (captureId != null) route(captureId) else finish()
+            }
+        }
+    }
+
+    private fun route(captureId: String?) {
+        val app = application as FinanceApplication
         val flow = intent.getStringExtra(EXTRA_FLOW)
             ?: intent.getStringExtra(EXTRA_ACTION)
             ?: intent.getStringExtra("flow")
@@ -43,6 +76,7 @@ class EntryActivity : Activity() {
                 putExtras(intent)
                 putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
             }
+            fallbackIntent.putExtra(EXTRA_CAPTURE_ID, captureId)
             startActivity(fallbackIntent)
             finish()
         }
@@ -68,6 +102,8 @@ class EntryActivity : Activity() {
         const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
         const val EXTRA_ACTION: String = "com.financeautomation.extra.ACTION"
         const val EXTRA_FLOW: String = "com.financeautomation.extra.FLOW"
+        const val EXTRA_SUBSCRIPTION_CYCLE_ID: String = "com.financeautomation.extra.SUBSCRIPTION_CYCLE_ID"
+        const val EXTRA_NOTIFICATION_ID: String = "com.financeautomation.extra.NOTIFICATION_ID"
     }
 }
 

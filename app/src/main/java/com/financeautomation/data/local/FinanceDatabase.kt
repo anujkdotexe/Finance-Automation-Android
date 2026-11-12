@@ -19,6 +19,8 @@ import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PipelineEventDao
 import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.dao.SubscriptionCycleDao
+import com.financeautomation.data.local.dao.SubscriptionDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.dao.TripTagDao
@@ -32,6 +34,8 @@ import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.PipelineEventEntity
 import com.financeautomation.data.local.entity.PreferenceEntity
+import com.financeautomation.data.local.entity.SubscriptionCycleEntity
+import com.financeautomation.data.local.entity.SubscriptionEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.local.entity.TripTagEntity
@@ -70,9 +74,11 @@ import java.io.File
         HandledNotificationEntity::class,
         CategoryStatEntity::class,
         PipelineEventEntity::class,
-        PayableEntity::class
+        PayableEntity::class,
+        SubscriptionEntity::class,
+        SubscriptionCycleEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -92,6 +98,8 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun categoryStatDao(): CategoryStatDao
     abstract fun pipelineEventDao(): PipelineEventDao
     abstract fun payableDao(): PayableDao
+    abstract fun subscriptionDao(): SubscriptionDao
+    abstract fun subscriptionCycleDao(): SubscriptionCycleDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -113,6 +121,7 @@ abstract class FinanceDatabase : RoomDatabase() {
         val MIGRATION_8_9 = DatabaseMigrations.MIGRATION_8_9
         val MIGRATION_9_10 = DatabaseMigrations.MIGRATION_9_10
         val MIGRATION_10_11 = DatabaseMigrations.MIGRATION_10_11
+        val MIGRATION_11_12 = DatabaseMigrations.MIGRATION_11_12
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {

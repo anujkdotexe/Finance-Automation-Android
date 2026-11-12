@@ -14,6 +14,7 @@ import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PeopleRepository
+import com.financeautomation.domain.repository.SubscriptionRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.LogExpenseUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
@@ -171,12 +172,30 @@ object QuickLogTransactionHelper {
         }
     }
 
+    /**
+     * A capture that carries the SUBSCRIPTION flag marks its subscription cycle PAID inside the same
+     * database transaction as the expense insert. A dismissed capture never reaches this point,
+     * so its cycle stays open.
+     */
+    private fun subscriptionPaidHook(
+        state: QuickLogUiState,
+        repository: SubscriptionRepository?
+    ): (suspend (Transaction) -> Unit)? {
+        val subscriptionId = state.subscriptionId ?: return null
+        if (repository == null) return null
+        val captureTs = state.captureTimestamp ?: System.currentTimeMillis()
+        val epochDay = java.time.Instant.ofEpochMilli(captureTs)
+            .atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay()
+        return { txn -> repository.markCyclePaidForSubscription(subscriptionId, epochDay, txn.id) }
+    }
+
     suspend fun logNewExpense(
         state: QuickLogUiState,
         logExpenseUseCase: LogExpenseUseCase,
         pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
         categoryStatDaoProvider: (suspend () -> CategoryStatDao)?,
-        predictCategoryUseCase: PredictCategoryUseCase
+        predictCategoryUseCase: PredictCategoryUseCase,
+        subscriptionRepository: SubscriptionRepository? = null
     ): Result<Transaction> {
         val selectedCompanions = state.availableCompanions
             .filter { state.selectedCompanionIds.contains(it.id) }
@@ -195,7 +214,8 @@ object QuickLogTransactionHelper {
             timestamp = state.captureTimestamp ?: System.currentTimeMillis(),
             reviewState = ReviewState.CONFIRMED,
             isPossibleDuplicate = state.isPossibleDuplicate,
-            duplicateOfId = state.duplicateOfId
+            duplicateOfId = state.duplicateOfId,
+            afterInsert = subscriptionPaidHook(state, subscriptionRepository)
         )
 
         if (result is Result.Success) {

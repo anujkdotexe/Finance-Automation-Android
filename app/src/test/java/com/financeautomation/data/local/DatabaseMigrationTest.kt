@@ -139,4 +139,61 @@ class DatabaseMigrationTest {
         assertTrue(createSql.contains("`lastErrorKind` TEXT"))
         assertTrue(createSql.contains("`lastErrorDetail` TEXT"))
     }
+
+    private fun loadSchema(version: Int): kotlinx.serialization.json.JsonObject {
+        val rel = "schemas/com.financeautomation.data.local.FinanceDatabase/$version.json"
+        val file = File(rel).takeIf { it.exists() } ?: File("app/$rel")
+        assertTrue("Schema $version.json must exist", file.exists())
+        return Json { ignoreUnknownKeys = true }.parseToJsonElement(file.readText()).jsonObject
+    }
+
+    private fun normalizeSql(sql: String) = sql.replace(Regex("\\s+"), " ").replace("( ", "(").replace(" )", ")").trim()
+
+    @Test
+    fun testMigration11to12_matchesSchema12Json() {
+        assertEquals(11, DatabaseMigrations.MIGRATION_11_12.startVersion)
+        assertEquals(12, DatabaseMigrations.MIGRATION_11_12.endVersion)
+        assertTrue(DatabaseMigrations.ALL_MIGRATIONS.contains(DatabaseMigrations.MIGRATION_11_12))
+
+        val root = loadSchema(12)
+        val database = root["database"]!!.jsonObject
+        assertEquals("12", database["version"]!!.jsonPrimitive.content)
+        val entities = database["entities"]!!.jsonArray
+
+        // Run the migration against a recording database and compare each statement with schema 12.json
+        val executed = mutableListOf<String>()
+        val db = java.lang.reflect.Proxy.newProxyInstance(
+            javaClass.classLoader, arrayOf(androidx.sqlite.db.SupportSQLiteDatabase::class.java)
+        ) { _, method, args ->
+            if (method.name == "execSQL") executed.add(args!![0] as String)
+            null
+        } as androidx.sqlite.db.SupportSQLiteDatabase
+        DatabaseMigrations.MIGRATION_11_12.migrate(db)
+
+        val expected = mutableListOf<String>()
+        for (table in listOf("subscriptions", "subscription_cycles")) {
+            val entity = entities.find { it.jsonObject["tableName"]?.jsonPrimitive?.content == table }?.jsonObject
+            assertNotNull("$table must exist in schema 12.json", entity)
+            expected.add(entity!!["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table))
+            entity["indices"]?.jsonArray?.forEach { idx ->
+                expected.add(idx.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table))
+            }
+        }
+        assertEquals(expected.map(::normalizeSql).sorted(), executed.map(::normalizeSql).sorted())
+
+        // The cycle table has the unique (subscriptionId, dueEpochDay) index and the subscriptionId index
+        val cycleSql = expected.filter { it.contains("subscription_cycles") }
+        assertTrue(cycleSql.any { it.startsWith("CREATE UNIQUE INDEX") && it.contains("`subscriptionId`, `dueEpochDay`") })
+        assertTrue(cycleSql.any { it.startsWith("CREATE INDEX") && it.contains("(`subscriptionId`)") })
+    }
+
+    @Test
+    fun testSchema12KeepsEverySchema11Table() {
+        fun tables(root: kotlinx.serialization.json.JsonObject) =
+            root["database"]!!.jsonObject["entities"]!!.jsonArray.map { it.jsonObject["tableName"]!!.jsonPrimitive.content }.toSet()
+        val v11 = tables(loadSchema(11))
+        val v12 = tables(loadSchema(12))
+        assertTrue(v12.containsAll(v11))
+        assertEquals(setOf("subscriptions", "subscription_cycles"), v12 - v11)
+    }
 }

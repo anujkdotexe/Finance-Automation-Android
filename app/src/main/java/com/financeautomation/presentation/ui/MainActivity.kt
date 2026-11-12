@@ -45,7 +45,9 @@ class MainActivity : ComponentActivity() {
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
             pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             accountRepository = app.appContainer.accountRepository,
-            ioDispatcher = app.appContainer.ioDispatcher
+            ioDispatcher = app.appContainer.ioDispatcher,
+            subscriptionRepository = app.appContainer.subscriptionRepository,
+            subscriptionActions = app.appContainer.subscriptionActionUseCase
         )
     }
 

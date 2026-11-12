@@ -5,12 +5,15 @@ import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.dao.SubscriptionDao
 import com.financeautomation.data.local.dao.TripTagDao
 import com.financeautomation.data.local.entity.AccountEntity
 import com.financeautomation.data.local.entity.CategoryEntity
 import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.PreferenceEntity
+import com.financeautomation.data.local.entity.SubscriptionEntity
 import com.financeautomation.data.local.entity.TripTagEntity
+import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.DirtyConfigSnapshot
 import com.financeautomation.domain.repository.SyncedPreference
@@ -29,6 +32,7 @@ class ConfigSyncLocalGatewayImpl(
     companionDao: CompanionDao? = null,
     tripTagDao: TripTagDao? = null,
     preferenceDao: PreferenceDao? = null,
+    subscriptionDao: SubscriptionDao? = null,
     private val dbProvider: (suspend () -> FinanceDatabase)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ConfigSyncLocalGateway {
@@ -38,6 +42,7 @@ class ConfigSyncLocalGatewayImpl(
     private val directCompanionDao = companionDao
     private val directTripTagDao = tripTagDao
     private val directPreferenceDao = preferenceDao
+    private val directSubscriptionDao = subscriptionDao
 
     constructor(
         accountDao: AccountDao,
@@ -68,6 +73,9 @@ class ConfigSyncLocalGatewayImpl(
     private suspend fun resolveTripTagDao(): TripTagDao =
         directTripTagDao ?: dbProvider?.invoke()?.tripTagDao() ?: throw IllegalStateException("TripTagDao or dbProvider required")
 
+    private suspend fun resolveSubscriptionDao(): SubscriptionDao? =
+        directSubscriptionDao ?: dbProvider?.invoke()?.subscriptionDao()
+
     private suspend fun resolvePreferenceDao(): PreferenceDao =
         directPreferenceDao ?: dbProvider?.invoke()?.preferenceDao() ?: throw IllegalStateException("PreferenceDao or dbProvider required")
 
@@ -86,12 +94,15 @@ class ConfigSyncLocalGatewayImpl(
             .filterNot { ConfigConstants.isLocalOnlyPref(it.key) }
             .map { SyncedPreference(it.key, it.value, it.updatedAt, it.dirty == 1) }
 
+        val dirtySubscriptions = resolveSubscriptionDao()?.getDirtySubscriptions()?.map { it.toDomain() }.orEmpty()
+
         DirtyConfigSnapshot(
             accounts = dirtyAccounts,
             categories = dirtyCategories,
             companions = dirtyCompanions,
             tripTags = dirtyTripTags,
-            preferences = dirtyPrefs
+            preferences = dirtyPrefs,
+            subscriptions = dirtySubscriptions
         )
     }
 
@@ -113,6 +124,27 @@ class ConfigSyncLocalGatewayImpl(
 
     override suspend fun markPreferencesClean(keys: List<String>): Unit = withContext(ioDispatcher) {
         if (keys.isNotEmpty()) resolvePreferenceDao().markClean(keys)
+    }
+
+    override suspend fun markSubscriptionsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
+        if (ids.isNotEmpty()) resolveSubscriptionDao()?.markClean(ids)
+    }
+
+    override suspend fun applyRemoteSubscription(
+        subscription: Subscription,
+        updatedAt: Long,
+        deleted: Boolean
+    ): Unit = withContext(ioDispatcher) {
+        val dao = resolveSubscriptionDao() ?: return@withContext
+        val existing = dao.getById(subscription.id)
+        if (existing == null) {
+            if (!deleted) {
+                dao.insert(SubscriptionEntity.fromDomain(subscription, updatedAt = updatedAt, dirty = 0))
+            }
+        } else if (updatedAt > existing.updatedAt) {
+            val incoming = if (deleted) existing.toDomain().copy(active = false) else subscription
+            dao.insert(SubscriptionEntity.fromDomain(incoming, updatedAt = updatedAt, dirty = 0))
+        }
     }
 
     override suspend fun applyRemoteAccount(
@@ -375,5 +407,8 @@ class ConfigSyncLocalGatewayImpl(
             .forEach {
                 preferenceDao.setPreference(it.copy(updatedAt = now, dirty = 1))
             }
+        resolveSubscriptionDao()?.let { subDao ->
+            subDao.getAll().forEach { subDao.update(it.copy(updatedAt = now, dirty = 1)) }
+        }
     }
 }

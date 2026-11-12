@@ -1,6 +1,8 @@
 package com.financeautomation.data.repository
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.isFuture
+import com.financeautomation.core.utils.TimeGuardConstants
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
@@ -188,13 +190,21 @@ class TransactionRepositoryImpl(
         resolveTransactionDao().getById(id)?.toDomain()
     }
 
-    override suspend fun insertTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun insertTransaction(transaction: Transaction): Result<Unit> =
+        insertTransactionWith(transaction) {}
+
+    override suspend fun insertTransactionWith(
+        transaction: Transaction,
+        inSameTransaction: suspend () -> Unit
+    ): Result<Unit> = withContext(ioDispatcher) {
         try {
+            if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
             runInDbTransaction {
                 tDao.insert(entity)
+                inSameTransaction()
 
                 if (transaction.syncState == SyncState.PENDING) {
                     val queueItem = SyncQueueEntity(
@@ -213,6 +223,7 @@ class TransactionRepositoryImpl(
 
     override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
         try {
+            if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
@@ -242,6 +253,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "cred_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogCreditRequest(
                 requestId = reqId,
@@ -273,6 +285,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "pay_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogPayableRequest(
                 requestId = reqId,
@@ -301,6 +314,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "rep_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogRepaymentRequest(
                 requestId = reqId,

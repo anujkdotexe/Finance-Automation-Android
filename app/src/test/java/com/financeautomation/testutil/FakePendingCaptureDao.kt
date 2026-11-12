@@ -1,0 +1,36 @@
+package com.financeautomation.testutil
+
+import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.data.local.entity.PendingCaptureEntity
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+
+/** In-memory [PendingCaptureDao] for unit tests. */
+class FakePendingCaptureDao : PendingCaptureDao {
+    val captures = mutableMapOf<String, PendingCaptureEntity>()
+    override suspend fun insert(capture: PendingCaptureEntity) { captures[capture.id] = capture }
+    override suspend fun update(capture: PendingCaptureEntity) { captures[capture.id] = capture }
+    override suspend fun getById(id: String): PendingCaptureEntity? = captures[id]
+    override suspend fun getByNotificationKey(key: String): PendingCaptureEntity? =
+        captures.values.lastOrNull { it.notificationKey == key }
+    override suspend fun getByState(state: String): List<PendingCaptureEntity> = captures.values.filter { it.state == state }
+    override fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>> =
+        flowOf(captures.values.filter { it.state == "WAITING" })
+    override fun getNeedsReviewCapturesFlow(): Flow<List<PendingCaptureEntity>> =
+        flowOf(captures.values.filter { it.state == "NEEDS_REVIEW" })
+    override fun getNewAccountCapturesFlow(): Flow<List<PendingCaptureEntity>> =
+        flowOf(captures.values.filter { it.flags.contains("NEW_ACCOUNT") && it.state !in listOf("DONE", "DISMISSED") })
+    override suspend fun getWaitingCaptures(): List<PendingCaptureEntity> = captures.values.filter { it.state == "WAITING" }
+    override suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity> =
+        captures.values.filter { it.state == "WAITING" && it.timestamp < cutoffTime }
+    override suspend fun getAwaitingSuccessCaptures(): List<PendingCaptureEntity> =
+        captures.values.filter { it.state == "AWAITING_SUCCESS" }
+    override suspend fun findSimilarByAmountAndTime(amount: Double, minTime: Long, maxTime: Long): List<PendingCaptureEntity> =
+        captures.values.filter { it.amount == amount && it.timestamp in minTime..maxTime }
+    override suspend fun updateState(id: String, state: String, updatedAt: Long) {
+        captures[id]?.let { captures[id] = it.copy(state = state, updatedAt = updatedAt) }
+    }
+    override suspend fun resetShownToWaiting(updatedAt: Long): Int = 0
+    override suspend fun deleteById(id: String) { captures.remove(id) }
+    override suspend fun pruneOldCompletedCaptures(cutoffTime: Long) {}
+}

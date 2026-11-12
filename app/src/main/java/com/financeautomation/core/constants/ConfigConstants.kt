@@ -15,6 +15,7 @@ object ConfigConstants {
     const val TYPE_PERSON = "person"
     const val TYPE_TRIP = "trip"
     const val TYPE_PREF = "pref"
+    const val TYPE_SUBSCRIPTION = "subscription"
 
     // Meta Keys
     const val KEY_SCHEMA_VERSION = "schemaVersion"

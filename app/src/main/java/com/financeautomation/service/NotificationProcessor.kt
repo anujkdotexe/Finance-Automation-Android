@@ -20,6 +20,7 @@ import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
+import com.financeautomation.domain.usecase.SubscriptionMatcher
 import com.financeautomation.domain.usecase.WordingClass
 import kotlinx.coroutines.CancellationException
 import java.security.MessageDigest
@@ -61,6 +62,7 @@ class NotificationProcessor(
     private val accountDao: AccountDao? = null,
     private val preferenceDao: PreferenceDao? = null,
     private val transactionDao: TransactionDao? = null,
+    private val subscriptionMatcher: SubscriptionMatcher? = null,
     private val parseUseCase: ParseNotificationUseCase = ParseNotificationUseCase(),
     private val runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null,
     private val ownPackageName: String = "com.financeautomation"
@@ -195,14 +197,28 @@ class NotificationProcessor(
                 } else {
                     PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_OK_DEBIT)
                 }
+                var flags = parseResult.flags
+                var inferredAccount = parseResult.inferredAccount
+                if (!parseResult.isCredit) {
+                    val match = matchSubscription(parseResult.transaction.totalAmount, fullContent, postTime)
+                    if (match != null) {
+                        if (match.isDuplicate) {
+                            flags = appendFlag(flags, PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+                            flags = appendFlag(flags, PendingCaptureEntity.FLAG_DUPLICATE_OF_PREFIX + match.duplicateOfTransactionId)
+                        } else {
+                            flags = appendFlag(flags, PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX + match.subscription.id)
+                            inferredAccount = match.subscription.account.ifBlank { inferredAccount }
+                        }
+                    }
+                }
                 val outcome = handleCaptureDecision(
                     sourcePackage = sourcePackage,
                     amount = parseResult.transaction.totalAmount,
                     payee = parseResult.transaction.merchant,
-                    inferredAccount = parseResult.inferredAccount,
+                    inferredAccount = inferredAccount,
                     kind = kind,
                     wording = parseResult.wording,
-                    flags = parseResult.flags,
+                    flags = flags,
                     postTime = postTime,
                     sbnKey = sbnKey,
                     contentHash = contentHash,
@@ -213,6 +229,23 @@ class NotificationProcessor(
             }
         }
     }
+
+    private suspend fun matchSubscription(
+        amount: Double,
+        alertText: String,
+        postTime: Long
+    ) = try {
+        val epochDay = java.time.Instant.ofEpochMilli(postTime)
+            .atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay()
+        subscriptionMatcher?.match(amount, alertText, epochDay)
+    } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: subscription match")
+        null
+    }
+
+    private fun appendFlag(flags: String, flag: String): String =
+        if (flags.isBlank()) flag else "$flags,$flag"
 
     suspend fun expireStaleWaitingCaptures(now: Long = System.currentTimeMillis()) {
         val pDao = pendingCaptureDao ?: return
