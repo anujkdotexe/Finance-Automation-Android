@@ -256,7 +256,7 @@ class OverlayController(
                                                         onUndo = if (txnId != null) {
                                                             { id ->
                                                                 mainScope.launch(ioDispatcher) {
-                                                                    transactionRepository.voidTransaction(id)
+                                                                    transactionRepository.undoRecentSave(id)
                                                                 }
                                                             }
                                                         } else null
