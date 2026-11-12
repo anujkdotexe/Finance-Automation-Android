@@ -171,7 +171,7 @@ private fun SettingsScreenPreviewLight() {
             state = SettingsUiState(
                 googleAccountEmail = "user@example.com",
                 spreadsheetId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-                defaultAccount = "SBI"
+                defaultAccount = "Primary Account"
             ),
             onSpreadsheetIdChanged = {},
             onDefaultAccountChanged = {},
