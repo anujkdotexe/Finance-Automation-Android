@@ -49,12 +49,46 @@ HEIGHT_ROWS = range(1, 8)
 PIXEL_TOLERANCE = 2.0
 
 
+class Diff(str):
+    """A difference message that also carries its category for the summary."""
+
+    def __new__(cls, category, message):
+        obj = super().__new__(cls, message)
+        obj.category = category
+        return obj
+
+
+STYLE_KEY_CATEGORY = {
+    "font": "fonts", "size": "fonts", "bold": "fonts", "italic": "fonts", "color": "fonts",
+    "fill": "fills",
+    "horizontal": "alignment", "vertical": "alignment", "wrap": "alignment",
+    "numberFormat": "number formats",
+    "borderBottom": "borders", "borderTop": "borders", "borderLeft": "borders", "borderRight": "borders",
+}
+
+SUMMARY_ORDER = ["widths", "heights", "fonts", "fills", "alignment", "borders", "number formats",
+                 "formulas", "values", "merges", "validations", "config", "structure"]
+
+_DUMMY_WRAPPER = re.compile(r'^=IFERROR\(__xludf\.DUMMYFUNCTION\("(.*)"\),""\)$', re.S)
+
+
+def normalize_formula(text):
+    """Google's xlsx export wraps some formulas as =IFERROR(__xludf.DUMMYFUNCTION("..."),"").
+    Inside, quotes are doubled and long text is split with "&". Undo both so it compares equal."""
+    text = text.strip()
+    m = _DUMMY_WRAPPER.match(text)
+    if not m:
+        return text
+    inner = m.group(1).replace('"&"', '')
+    return "=" + inner.replace('""', '"')
+
+
 def get_cell_text(val):
     if val is None:
         return ""
     if isinstance(val, openpyxl.worksheet.formula.ArrayFormula):
-        return val.text.strip()
-    return str(val).strip()
+        return normalize_formula(val.text)
+    return normalize_formula(str(val))
 
 
 def _color(color):
@@ -108,7 +142,9 @@ def compare_styles(label, cand_ws, ref_ws, rows, columns):
             cs, rs = cell_style(cc), cell_style(rc)
             for key in rs:
                 if cs[key] != rs[key]:
-                    diffs.append(f"{label} {coord} style {key}: candidate={cs[key]!r} vs reference={rs[key]!r}")
+                    diffs.append(Diff(
+                        STYLE_KEY_CATEGORY[key],
+                        f"{label} {coord} style {key}: candidate={cs[key]!r} vs reference={rs[key]!r}"))
     return diffs
 
 
@@ -116,18 +152,27 @@ def _width_px(width):
     return None if width is None else width * 7.0 + 5.0
 
 
+def column_widths(ws):
+    """Width per 1-based column index. openpyxl groups equal neighbouring columns into one
+    dimension (min to max), so expand every group."""
+    widths = {}
+    for dim in ws.column_dimensions.values():
+        if dim.width:
+            for c in range(dim.min, dim.max + 1):
+                widths[c] = dim.width
+    return widths
+
+
 def compare_widths(label, cand_ws, ref_ws, columns):
     diffs = []
+    cand_widths, ref_widths = column_widths(cand_ws), column_widths(ref_ws)
     for c in columns:
-        letter = get_column_letter(c)
-        cd, rd = cand_ws.column_dimensions.get(letter), ref_ws.column_dimensions.get(letter)
-        cw = cd.width if cd is not None and cd.width else None
-        rw = rd.width if rd is not None and rd.width else None
+        cw, rw = cand_widths.get(c), ref_widths.get(c)
         if cw is None and rw is None:
             continue
         cp, rp = _width_px(cw), _width_px(rw)
         if cp is None or rp is None or abs(cp - rp) > PIXEL_TOLERANCE:
-            diffs.append(f"{label} column {letter} width: candidate={cw} vs reference={rw}")
+            diffs.append(Diff("widths", f"{label} column {get_column_letter(c)} width: candidate={cw} vs reference={rw}"))
     return diffs
 
 
@@ -140,7 +185,7 @@ def compare_heights(label, cand_ws, ref_ws, rows):
             continue
         # points to pixels is 4/3; tolerance is in pixels
         if ch is None or rh is None or abs(ch - rh) * 4.0 / 3.0 > PIXEL_TOLERANCE:
-            diffs.append(f"{label} row {r} height: candidate={ch} vs reference={rh}")
+            diffs.append(Diff("heights", f"{label} row {r} height: candidate={ch} vs reference={rh}"))
     return diffs
 
 
@@ -150,7 +195,8 @@ def compare_values(label, cand_ws, ref_ws, coords):
         c_val = get_cell_text(cand_ws[coord].value)
         r_val = get_cell_text(ref_ws[coord].value)
         if c_val != r_val:
-            diffs.append(f"{label} {coord} value: candidate='{c_val}' vs reference='{r_val}'")
+            category = "formulas" if (c_val.startswith("=") or r_val.startswith("=")) else "values"
+            diffs.append(Diff(category, f"{label} {coord} {category[:-1]}: candidate='{c_val}' vs reference='{r_val}'"))
     return diffs
 
 
@@ -171,7 +217,7 @@ def compare_dashboard(cand_ws, ref_ws):
     diffs = []
     cm, rm = _filter_merges(cand_ws, False), _filter_merges(ref_ws, False)
     if cm != rm:
-        diffs.append(f"{label} merges differ: {sorted(cm ^ rm)}")
+        diffs.append(Diff("merges", f"{label} merges differ: {sorted(cm ^ rm)}"))
 
     coords = [f"{col}{row}" for col in "ADGJMP" for row in (4, 5, 6)]
     coords += [f"{col}{row}" for row in range(5, 18) for col in "UVW"]
@@ -180,7 +226,7 @@ def compare_dashboard(cand_ws, ref_ws):
     diffs += compare_values(label, cand_ws, ref_ws, coords)
 
     if _validation_count(cand_ws) > 0:
-        diffs.append(f"{label} has {_validation_count(cand_ws)} dropdown validations (reference has 0)")
+        diffs.append(Diff("validations", f"{label} has {_validation_count(cand_ws)} dropdown validations (reference has 0)"))
 
     diffs += compare_styles(label, cand_ws, ref_ws, DASHBOARD_STYLE_ROWS, DASHBOARD_STYLE_COLUMNS)
     diffs += compare_widths(label, cand_ws, ref_ws, DASHBOARD_STYLE_COLUMNS)
@@ -193,14 +239,14 @@ def compare_month_tab(cand_ws, ref_ws):
     diffs = []
     cm, rm = _filter_merges(cand_ws, True), _filter_merges(ref_ws, True)
     if cm != rm:
-        diffs.append(f"{label} merges differ: {sorted(cm ^ rm)}")
+        diffs.append(Diff("merges", f"{label} merges differ: {sorted(cm ^ rm)}"))
 
     columns = range(1, LAST_COMPARED_MONTH_COLUMN + 1)
     coords = ["A2", "M2", "V2"] + [f"{get_column_letter(c)}3" for c in columns]
     diffs += compare_values(label, cand_ws, ref_ws, coords)
 
     if _validation_count(cand_ws) > 0:
-        diffs.append(f"{label} has {_validation_count(cand_ws)} dropdown validations (reference has 0)")
+        diffs.append(Diff("validations", f"{label} has {_validation_count(cand_ws)} dropdown validations (reference has 0)"))
 
     diffs += compare_styles(label, cand_ws, ref_ws, MONTH_STYLE_ROWS, columns)
     # Data row number formats (rows 4 and 5)
@@ -216,7 +262,7 @@ def validate_config_tab(config_ws):
     for idx, expected in enumerate(CONFIG_HEADERS, start=1):
         found = get_cell_text(config_ws.cell(row=1, column=idx).value)
         if found != expected:
-            diffs.append(f"Config header col {idx}: found '{found}', expected '{expected}'")
+            diffs.append(Diff("config", f"Config header col {idx}: found '{found}', expected '{expected}'"))
     return diffs
 
 
@@ -232,18 +278,18 @@ def compare_workbooks(candidate_path, reference_path=DEFAULT_REFERENCE_PATH):
     diffs = []
 
     if "Dashboard" not in cand_wb.sheetnames:
-        diffs.append("Candidate workbook missing 'Dashboard' sheet")
+        diffs.append(Diff("structure", "Candidate workbook missing 'Dashboard' sheet"))
     elif "Dashboard" not in ref_wb.sheetnames:
-        diffs.append("Reference workbook missing 'Dashboard' sheet")
+        diffs.append(Diff("structure", "Reference workbook missing 'Dashboard' sheet"))
     else:
         diffs += compare_dashboard(cand_wb["Dashboard"], ref_wb["Dashboard"])
 
     ref_month = first_month_tab(ref_wb)
     cand_month = first_month_tab(cand_wb)
     if ref_month is None:
-        diffs.append("Reference workbook has no month tab")
+        diffs.append(Diff("structure", "Reference workbook has no month tab"))
     elif cand_month is None:
-        diffs.append("Candidate workbook missing a month tab")
+        diffs.append(Diff("structure", "Candidate workbook missing a month tab"))
     else:
         diffs += compare_month_tab(cand_wb[cand_month], ref_wb[ref_month])
 
@@ -262,16 +308,27 @@ def export_spreadsheet_as_xlsx(spreadsheet_id, dest_path, access_token=None):
 
 
 def print_result(diffs):
+    counts = {}
+    for d in diffs:
+        counts[d.category] = counts.get(d.category, 0) + 1
+    print("Summary by category (differences found):")
+    for category in SUMMARY_ORDER:
+        print(f"  {category:<15} {counts.get(category, 0)}")
     if diffs:
         print(f"Parity comparison failed: {len(diffs)} differences found.")
         for d in diffs:
-            print(f"  - {d}")
+            print(f"  - [{d.category}] {d}")
         return 1
     print("Parity verified: 0 differences for the Dashboard and the first month tab.")
     return 0
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
     parser = argparse.ArgumentParser(
         description="Compare an Android workbook with the iOS reference. A candidate is required.",
         usage="sheet-compare <candidate.xlsx> [reference.xlsx] | --export <spreadsheet_id> | --self-test",

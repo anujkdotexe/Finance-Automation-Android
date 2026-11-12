@@ -87,6 +87,42 @@ class SheetCompareTest(unittest.TestCase):
         diffs = self.tool.compare_workbooks(path, REFERENCE)
         self.assertTrue(any(d.startswith("Config header col 1") for d in diffs), diffs)
 
+    def test_dummyfunction_wrapper_is_normalized(self):
+        wrapped = (
+            '''=IFERROR(__xludf.DUMMYFUNCTION("IFERROR(QUERY(INDIRECT(""'"" & TEXT(TODAY(), ""mmm"") & ''' +
+            '''RIGHT(YEAR(TODAY()), 2) & ""'!A4:K""), ""SELECT Col"&"1"", 0), """")"),"")'''
+        )
+        plain = (
+            '''=IFERROR(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:K"), ''' +
+            '''"SELECT Col1", 0), "")'''
+        )
+        self.assertEqual(plain, self.tool.normalize_formula(wrapped))
+        self.assertEqual(plain, self.tool.normalize_formula(plain))
+
+    def test_grouped_column_widths_are_expanded(self):
+        wb = openpyxl.load_workbook(REFERENCE)
+        widths = self.tool.column_widths(wb["Dashboard"])
+        # In the reference columns A to D share one dimension, so B must have the A width
+        self.assertEqual(widths[1], widths[2])
+        self.assertIn(13, widths)
+
+    def test_differences_carry_a_category_for_the_summary(self):
+        def mutate(wb):
+            month = self.tool.first_month_tab(wb)
+            wb[month].column_dimensions["B"].width = 40
+
+        path = self.altered_copy("category.xlsx", mutate)
+        diffs = self.tool.compare_workbooks(path, REFERENCE)
+        self.assertTrue(diffs)
+        self.assertIn("widths", {d.category for d in diffs})
+
+    def test_summary_lists_every_category(self):
+        path = self.altered_copy("summary.xlsx", lambda wb: None)
+        result = subprocess.run([sys.executable, SCRIPT, path], capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        for category in ("widths", "heights", "fonts", "borders", "number formats", "formulas", "validations"):
+            self.assertIn(category, result.stdout)
+
     def test_no_argument_prints_usage_and_exits_2(self):
         result = subprocess.run([sys.executable, SCRIPT], capture_output=True, text=True)
         self.assertEqual(2, result.returncode)
