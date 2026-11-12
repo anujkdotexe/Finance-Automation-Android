@@ -232,7 +232,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .openHelperFactory(openHelperFactory)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
                 .addCallback(DatabasePrepopulateCallback())
                 .build()
 
@@ -253,7 +253,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 context.applicationContext,
                 FinanceDatabase::class.java
             )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
                 .allowMainThreadQueries()
                 .build()
         }
