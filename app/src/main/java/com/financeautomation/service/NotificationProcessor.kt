@@ -387,6 +387,17 @@ class NotificationProcessor(
                 }
 
                 if (transactionDao != null) {
+                    val capAmount = cap.amount ?: 0.0
+                    val similar = transactionDao.getRecentSimilar(
+                        minTimestamp = cap.timestamp - 120_000L,
+                        maxTimestamp = cap.timestamp + 5_000L,
+                        minAmount = capAmount - 0.01,
+                        maxAmount = capAmount + 0.01
+                    ).firstOrNull { it.id != cap.id }
+
+                    val isDup = similar != null || cap.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+                    val duplicateOfId = similar?.id
+
                     val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
                     val txn = TransactionEntity(
                         id = txnId,
@@ -403,7 +414,9 @@ class NotificationProcessor(
                         companions = "Personal",
                         reviewState = ReviewState.NEEDS_REVIEW.name,
                         syncState = SyncState.PENDING.name,
-                        sourcePackage = cap.sourcePackage
+                        sourcePackage = cap.sourcePackage,
+                        isPossibleDuplicate = isDup,
+                        duplicateOfId = duplicateOfId
                     )
                     val op: suspend () -> Unit = {
                         transactionDao.insert(txn)

@@ -232,6 +232,56 @@ class ReviewInboxViewModel(
         return confirmedCount
     }
 
+    fun keepBoth(id: String) {
+        viewModelScope.launch(ioDispatcher) {
+            val target = transactionRepository.getTransactionById(id) ?: return@launch
+            val otherId = target.duplicateOfId ?: transactionRepository.getTransactions().firstOrNull()?.find { it.duplicateOfId == id }?.id
+            val other = otherId?.let { transactionRepository.getTransactionById(it) }
+
+            val updatedTarget = target.copy(
+                isPossibleDuplicate = false,
+                duplicateOfId = null,
+                reviewState = ReviewState.CONFIRMED,
+                syncState = SyncState.PENDING
+            )
+            transactionRepository.updateTransaction(updatedTarget)
+
+            if (other != null) {
+                val updatedOther = other.copy(
+                    isPossibleDuplicate = false,
+                    duplicateOfId = null,
+                    reviewState = ReviewState.CONFIRMED,
+                    syncState = SyncState.PENDING
+                )
+                transactionRepository.updateTransaction(updatedOther)
+            }
+            _uiState.update { it.copy(userMessage = "Kept both transactions") }
+        }
+    }
+
+    fun keepOne(id: String) {
+        viewModelScope.launch(ioDispatcher) {
+            val target = transactionRepository.getTransactionById(id) ?: return@launch
+            val otherId = target.duplicateOfId ?: transactionRepository.getTransactions().firstOrNull()?.find { it.duplicateOfId == id }?.id
+            val other = otherId?.let { transactionRepository.getTransactionById(it) }
+
+            if (other == null) {
+                transactionRepository.voidTransaction(target.id)
+            } else {
+                val (newer, older) = if (target.timestamp >= other.timestamp) Pair(target, other) else Pair(other, target)
+                transactionRepository.voidTransaction(newer.id)
+                val updatedOlder = older.copy(
+                    isPossibleDuplicate = false,
+                    duplicateOfId = null,
+                    reviewState = ReviewState.CONFIRMED,
+                    syncState = SyncState.PENDING
+                )
+                transactionRepository.updateTransaction(updatedOlder)
+            }
+            _uiState.update { it.copy(userMessage = "Kept one transaction") }
+        }
+    }
+
     fun retryQueueItem(id: Long) {
         viewModelScope.launch(ioDispatcher) {
             val qDao = resolveSyncQueueDao() ?: return@launch

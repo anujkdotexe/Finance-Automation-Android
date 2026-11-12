@@ -33,6 +33,7 @@ data class QuickLogUiState(
     val isNeedsAmount: Boolean = false,
     val isFinancialLocked: Boolean = false,
     val isPossibleDuplicate: Boolean = false,
+    val duplicateOfId: String? = null,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val isVoided: Boolean = false,

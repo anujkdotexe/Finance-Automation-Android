@@ -313,5 +313,141 @@ class ReviewInboxViewModelTest {
         val updatedCapture = cDao.getById("cap_dismiss")
         assertEquals(PendingCaptureEntity.STATE_DISMISSED, updatedCapture?.state)
     }
+
+    @Test
+    fun testKeepBoth_confirmsBothAndClearsFlags() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cDao = FakePendingCaptureDao()
+        val aRepo = FakeAccountRepo()
+
+        val t1 = Transaction(
+            id = "txn_1",
+            timestamp = 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Cafe",
+            category = "Food & Drink",
+            totalAmount = 250.0,
+            companions = "Personal",
+            myShare = 250.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW,
+            isPossibleDuplicate = true,
+            duplicateOfId = null
+        )
+        val t2 = Transaction(
+            id = "txn_2",
+            timestamp = 2000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Cafe",
+            category = "Food & Drink",
+            totalAmount = 250.0,
+            companions = "Personal",
+            myShare = 250.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW,
+            isPossibleDuplicate = true,
+            duplicateOfId = "txn_1"
+        )
+        tRepo.insertTransaction(t1)
+        tRepo.insertTransaction(t2)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = cDao,
+            accountRepository = aRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.keepBoth("txn_2")
+        advanceUntilIdle()
+
+        val r1 = tRepo.getTransactionById("txn_1")!!
+        val r2 = tRepo.getTransactionById("txn_2")!!
+
+        assertEquals(ReviewState.CONFIRMED, r1.reviewState)
+        assertFalse(r1.isPossibleDuplicate)
+        assertNull(r1.duplicateOfId)
+
+        assertEquals(ReviewState.CONFIRMED, r2.reviewState)
+        assertFalse(r2.isPossibleDuplicate)
+        assertNull(r2.duplicateOfId)
+    }
+
+    @Test
+    fun testKeepOne_voidsNewerEntryOnly() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cDao = FakePendingCaptureDao()
+        val aRepo = FakeAccountRepo()
+
+        val olderTxn = Transaction(
+            id = "txn_older",
+            timestamp = 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Store",
+            category = "Shopping",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW,
+            isPossibleDuplicate = true,
+            duplicateOfId = null
+        )
+        val newerTxn = Transaction(
+            id = "txn_newer",
+            timestamp = 2000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Store",
+            category = "Shopping",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW,
+            isPossibleDuplicate = true,
+            duplicateOfId = "txn_older"
+        )
+        tRepo.insertTransaction(olderTxn)
+        tRepo.insertTransaction(newerTxn)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = cDao,
+            accountRepository = aRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.keepOne("txn_newer")
+        advanceUntilIdle()
+
+        val rOlder = tRepo.getTransactionById("txn_older")!!
+        val rNewer = tRepo.getTransactionById("txn_newer")!!
+
+        assertEquals(ReviewState.CONFIRMED, rOlder.reviewState)
+        assertFalse(rOlder.isPossibleDuplicate)
+        assertNull(rOlder.duplicateOfId)
+        assertEquals(TransactionStatus.PENDING, rOlder.status)
+
+        // Newer one must be voided
+        assertEquals(TransactionStatus.VOID, rNewer.status)
+    }
 }
 

@@ -77,4 +77,32 @@ class DatabaseMigrationTest {
         val createSql = pendingCapturesEntity["createSql"]!!.jsonPrimitive.content
         assertTrue(createSql.contains("`detectedAccountHint` TEXT"))
     }
+
+    @Test
+    fun testMigration9to10_matchesSchema10Json() {
+        assertEquals(9, DatabaseMigrations.MIGRATION_9_10.startVersion)
+        assertEquals(10, DatabaseMigrations.MIGRATION_9_10.endVersion)
+        assertTrue(DatabaseMigrations.ALL_MIGRATIONS.contains(DatabaseMigrations.MIGRATION_9_10))
+
+        val schemaFile = File("schemas/com.financeautomation.data.local.FinanceDatabase/10.json")
+        val altFile = File("app/schemas/com.financeautomation.data.local.FinanceDatabase/10.json")
+        val targetFile = if (schemaFile.exists()) schemaFile else altFile
+        assertTrue("Schema 10.json must exist", targetFile.exists())
+
+        val json = Json { ignoreUnknownKeys = true }
+        val root = json.parseToJsonElement(targetFile.readText()).jsonObject
+        val entities = root["database"]!!.jsonObject["entities"]!!.jsonArray
+
+        val transactionsEntity = entities.find { it.jsonObject["tableName"]?.jsonPrimitive?.content == "transactions" }?.jsonObject
+        assertNotNull("transactions table must exist in schema 10.json", transactionsEntity)
+
+        val fields = transactionsEntity!!["fields"]!!.jsonArray
+        val dupField = fields.find { it.jsonObject["columnName"]?.jsonPrimitive?.content == "duplicateOfId" }?.jsonObject
+        assertNotNull("duplicateOfId column must exist in schema 10.json transactions table", dupField)
+        assertEquals("TEXT", dupField!!["affinity"]?.jsonPrimitive?.content)
+        assertEquals("false", dupField["notNull"]?.jsonPrimitive?.content)
+
+        val createSql = transactionsEntity["createSql"]!!.jsonPrimitive.content
+        assertTrue(createSql.contains("`duplicateOfId` TEXT"))
+    }
 }

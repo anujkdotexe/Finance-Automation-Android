@@ -31,7 +31,9 @@ class LogExpenseUseCase(
         tripTag: String = "",
         sourcePackage: String = "manual",
         timestamp: Long = System.currentTimeMillis(),
-        reviewState: ReviewState = ReviewState.CONFIRMED
+        reviewState: ReviewState = ReviewState.CONFIRMED,
+        isPossibleDuplicate: Boolean = false,
+        duplicateOfId: String? = null
     ): Result<Transaction> {
         try {
             require(amount > 0.0) { "Transaction amount must be strictly greater than zero" }
@@ -71,7 +73,8 @@ class LogExpenseUseCase(
                 reviewState = reviewState,
                 syncState = SyncState.PENDING,
                 sheetRowIndex = null,
-                isPossibleDuplicate = false
+                isPossibleDuplicate = isPossibleDuplicate,
+                duplicateOfId = duplicateOfId
             )
 
             return when (val insertResult = transactionRepository.insertTransaction(transaction)) {
