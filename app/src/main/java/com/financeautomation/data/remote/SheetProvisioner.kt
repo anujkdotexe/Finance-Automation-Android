@@ -73,6 +73,44 @@ object SheetProvisioner {
             )
         )
 
+    private const val GOOGLE_SANS = "Google Sans"
+
+    /** Text style (Google Sans, bold or italic as given, centered) for the blank cells of a title band row. */
+    private fun bandStyleRequest(
+        sheetId: Int,
+        row: Int,
+        startCol: Int,
+        endCol: Int,
+        fontSize: Int,
+        color: Map<String, Float>,
+        italic: Boolean
+    ): Map<String, Any?> =
+        mapOf(
+            "repeatCell" to mapOf(
+                "range" to mapOf(
+                    "sheetId" to sheetId,
+                    "startRowIndex" to row,
+                    "endRowIndex" to row + 1,
+                    "startColumnIndex" to startCol,
+                    "endColumnIndex" to endCol
+                ),
+                "cell" to mapOf(
+                    "userEnteredFormat" to mapOf(
+                        "horizontalAlignment" to "CENTER",
+                        "verticalAlignment" to "MIDDLE",
+                        "textFormat" to mapOf(
+                            "fontFamily" to GOOGLE_SANS,
+                            "fontSize" to fontSize,
+                            "bold" to !italic,
+                            "italic" to italic,
+                            "foregroundColor" to color
+                        )
+                    )
+                ),
+                "fields" to "userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat(fontFamily,fontSize,bold,italic,foregroundColor))"
+            )
+        )
+
     /** A range to clear: 0-based start row, exclusive end row, 0-based column. */
     data class ColumnRowRange(val startRow: Int, val endRow: Int, val column: Int)
 
@@ -290,6 +328,7 @@ object SheetProvisioner {
                     "textFormat" to mapOf(
                         "foregroundColor" to grayTextColor,
                         "bold" to false,
+                        "italic" to true,
                         "fontSize" to 9
                     )
                 )
@@ -328,6 +367,7 @@ object SheetProvisioner {
                     "horizontalAlignment" to "CENTER",
                     "verticalAlignment" to "MIDDLE",
                     "textFormat" to mapOf(
+                        "fontFamily" to GOOGLE_SANS,
                         "foregroundColor" to blueSectionColor,
                         "bold" to true,
                         "fontSize" to 11
@@ -335,6 +375,16 @@ object SheetProvisioner {
                 )
             )
         )
+
+        // Styled (empty) cells to the right of the merged title rows, as in the iOS reference
+        requests.add(bandStyleRequest(dashboardSheetId, row = 0, startCol = 20, endCol = 29, fontSize = 18, color = whiteColor, italic = false))
+        requests.add(bandStyleRequest(dashboardSheetId, row = 1, startCol = 20, endCol = 29, fontSize = 10, color = hexToColorMap("536D79"), italic = true))
+        requests.add(bandStyleRequest(dashboardSheetId, row = 2, startCol = 18, endCol = 29, fontSize = 11, color = whiteColor, italic = false))
+
+        // Thin box around each KPI card (rows 4 to 6)
+        listOf(0, 3, 6, 9, 12, 15).forEach { startCol ->
+            requests.add(outerBordersRequest(dashboardSheetId, startRow = 3, endRow = 6, startCol = startCol, endCol = startCol + 3))
+        }
 
         // 5. KPI Header Titles (Row 4)
         val kpiHeaders = listOf(
