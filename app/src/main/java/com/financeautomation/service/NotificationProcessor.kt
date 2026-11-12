@@ -134,11 +134,11 @@ class NotificationProcessor(
             emptyList()
         }
         val defaultAccount: String = try {
-            preferenceDao?.getPreference("default_account") ?: "Other"
+            preferenceDao?.getPreference("default_account") ?: CategoryConstants.ACCOUNT_OTHER
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: defaultAccount preference fallback")
-            "Other"
+            CategoryConstants.ACCOUNT_OTHER
         }
 
         // 7. Parse financial alert candidate via domain ParseNotificationUseCase
