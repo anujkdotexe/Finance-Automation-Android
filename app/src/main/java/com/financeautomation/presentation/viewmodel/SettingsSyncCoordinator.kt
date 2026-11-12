@@ -197,10 +197,33 @@ class SettingsSyncCoordinator(
         }
     }
 
+    /**
+     * Saves a typed spreadsheet id only if the app can open it. The app has only the drive.file scope,
+     * so a workbook created outside the app answers 403 or 404; such ids are rejected and not stored.
+     * On success the id is stored for the current year (which also sets the legacy key), because the
+     * resolver and the main screen read the per-year key first.
+     */
     fun onSpreadsheetIdChanged(newId: String) {
         scope.launch(ioDispatcher) {
-            preferencesRepository.setSpreadsheetId(newId.trim())
-            uiState.update { it.copy(userMessage = "Spreadsheet ID saved") }
+            val trimmed = newId.trim()
+            val sheetsClient = googleSheetsClient
+            if (trimmed.isBlank() || sheetsClient == null) {
+                uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_MESSAGE) }
+                return@launch
+            }
+            when (sheetsClient.getSheetTabsDetailed(trimmed)) {
+                is Result.Success -> {
+                    val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+                    preferencesRepository.setSpreadsheetIdForYear(currentYear, trimmed)
+                    uiState.update {
+                        it.copy(spreadsheetId = trimmed, errorMessage = null, userMessage = "Spreadsheet ID saved")
+                    }
+                }
+                is Result.Error -> {
+                    uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_MESSAGE) }
+                }
+                is Result.Loading -> {}
+            }
         }
     }
 
@@ -320,5 +343,9 @@ class SettingsSyncCoordinator(
             }
         }
     }
-}
 
+    companion object {
+        const val SPREADSHEET_ID_REJECTED_MESSAGE: String =
+            "The app can only open workbooks it created. Use Create a fresh workbook, or ask Google Drive to open the file with this app."
+    }
+}
