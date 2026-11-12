@@ -122,6 +122,16 @@ class SyncConfigUseCase(
                             deleted = row.deleted
                         )
                     }
+                    ConfigConstants.TYPE_SUBSCRIPTION -> {
+                        val subscription = SubscriptionConfigCodec.decode(row.key, row.value1)
+                        if (subscription != null) {
+                            localGateway.applyRemoteSubscription(
+                                subscription = subscription,
+                                updatedAt = epochMilli,
+                                deleted = row.deleted
+                            )
+                        }
+                    }
                     ConfigConstants.TYPE_PREF -> {
                         if (!ConfigConstants.isLocalOnlyPref(row.key)) {
                             localGateway.applyRemotePreference(
@@ -214,6 +224,19 @@ class SyncConfigUseCase(
                 )
             }
 
+            dirty.subscriptions.forEach {
+                dirtyRows.add(
+                    ConfigRow(
+                        type = ConfigConstants.TYPE_SUBSCRIPTION,
+                        key = it.id,
+                        values = listOf(SubscriptionConfigCodec.encode(it)),
+                        updatedAt = now,
+                        updatedBy = deviceId,
+                        deleted = false
+                    )
+                )
+            }
+
             dirty.preferences.forEach {
                 dirtyRows.add(
                     ConfigRow(
@@ -263,6 +286,7 @@ class SyncConfigUseCase(
             localGateway.markCompanionsClean(dirty.companions.map { it.id })
             localGateway.markTripTagsClean(dirty.tripTags.map { it.id })
             localGateway.markPreferencesClean(dirty.preferences.map { it.key })
+            localGateway.markSubscriptionsClean(dirty.subscriptions.map { it.id })
         }
     }
 

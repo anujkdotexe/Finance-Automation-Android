@@ -25,6 +25,12 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +65,19 @@ import java.time.format.DateTimeParseException
  * Flow sheet for recording debt repayments to friends (Phase 5.6 point 4).
  * Reconciles open payables in Table 3 via RepaymentWaterfallUseCase.
  */
+private val SHEET_ZONE: java.time.ZoneId = java.time.ZoneId.of("Asia/Kolkata")
+
+/** Date picker rule: nothing after today (Asia/Kolkata). Picker dates are UTC midnights. */
+@OptIn(ExperimentalMaterial3Api::class)
+internal object NoFutureSelectableDates : SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+        val today = LocalDate.now(SHEET_ZONE).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        return utcTimeMillis <= today
+    }
+    override fun isSelectableYear(year: Int): Boolean = year <= LocalDate.now(SHEET_ZONE).year
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RepaidFriendFlowSheet(
     companions: List<Companion>,
@@ -71,8 +90,13 @@ fun RepaidFriendFlowSheet(
 ) {
     var amountText by remember { mutableStateOf("") }
     var personName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
-    val todayFormatted = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
+    val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
     var dateText by remember { mutableStateOf(todayFormatted) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val dateInteraction = remember { MutableInteractionSource() }
+    LaunchedEffect(dateInteraction) {
+        dateInteraction.interactions.collect { if (it is androidx.compose.foundation.interaction.PressInteraction.Release) showDatePicker = true }
+    }
 
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
@@ -224,23 +248,39 @@ fun RepaidFriendFlowSheet(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
-        // Date Field (Defaults to today)
+        // Date field (defaults to today); opens a picker that rejects future dates
         OutlinedTextField(
             value = dateText,
-            onValueChange = { dateText = it },
+            onValueChange = {},
+            readOnly = true,
             label = { Text(stringResource(R.string.prompt_date_repaid)) },
-            keyboardOptions = KeyboardOptions(
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = { focusManager.clearFocus() }
-            ),
             singleLine = true,
+            interactionSource = dateInteraction,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
             shape = FinanceTheme.shapes.large
         )
+        if (showDatePicker) {
+            val pickerState = rememberDatePickerState(
+                initialSelectedDateMillis = LocalDate.parse(dateText).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                selectableDates = NoFutureSelectableDates
+            )
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pickerState.selectedDateMillis?.let { ms ->
+                            dateText = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+                        }
+                        showDatePicker = false
+                    }) { Text(stringResource(android.R.string.ok)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) { Text(stringResource(android.R.string.cancel)) }
+                }
+            ) { DatePicker(state = pickerState) }
+        }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
 
@@ -251,7 +291,7 @@ fun RepaidFriendFlowSheet(
         Button(
             onClick = {
                 val timestamp = try {
-                    LocalDate.parse(dateText).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    LocalDate.parse(dateText).atStartOfDay(SHEET_ZONE).toInstant().toEpochMilli()
                 } catch (e: DateTimeParseException) {
                     Diagnostics.record("RepaidFriendFlowSheet", "parseDate: ${e.javaClass.simpleName}")
                     System.currentTimeMillis()

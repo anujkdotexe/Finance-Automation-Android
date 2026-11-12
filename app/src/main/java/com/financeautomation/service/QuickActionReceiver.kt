@@ -82,6 +82,12 @@ class QuickActionReceiver : BroadcastReceiver() {
                         val account = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: CategoryConstants.ACCOUNT_OTHER
 
                         if (amount > 0.0) {
+                            val subscriptionId = com.financeautomation.data.local.entity.PendingCaptureEntity.flagValue(
+                                capture.flags,
+                                com.financeautomation.data.local.entity.PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX
+                            )
+                            val captureEpochDay = java.time.Instant.ofEpochMilli(capture.timestamp)
+                                .atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay()
                             val logResult = container.logExpenseUseCase(
                                 amount = amount,
                                 merchant = capture.payee.ifBlank { "Expense" },
@@ -89,7 +95,13 @@ class QuickActionReceiver : BroadcastReceiver() {
                                 account = account,
                                 sourcePackage = capture.sourcePackage,
                                 timestamp = capture.timestamp,
-                                reviewState = ReviewState.CONFIRMED
+                                reviewState = ReviewState.CONFIRMED,
+                                afterInsert = if (subscriptionId != null) {
+                                    { txn ->
+                                        container.subscriptionRepository
+                                            .markCyclePaidForSubscription(subscriptionId, captureEpochDay, txn.id)
+                                    }
+                                } else null
                             )
                             if (logResult is com.financeautomation.core.model.Result.Success<*>) {
                                 captureDao.updateState(capture.id, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)

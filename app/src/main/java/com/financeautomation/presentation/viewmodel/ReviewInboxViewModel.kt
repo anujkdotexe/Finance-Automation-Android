@@ -15,7 +15,11 @@ import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.model.SubscriptionCycleWithSubscription
 import com.financeautomation.domain.repository.AccountRepository
+import com.financeautomation.domain.repository.SubscriptionRepository
+import com.financeautomation.domain.usecase.SubscriptionActionUseCase
+import com.financeautomation.domain.usecase.SubscriptionYesOutcome
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +59,9 @@ class ReviewInboxViewModel(
     private val directPendingCaptureDao: PendingCaptureDao? = null,
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
     private val accountRepository: AccountRepository? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val subscriptionRepository: SubscriptionRepository? = null,
+    private val subscriptionActions: SubscriptionActionUseCase? = null
 ) : ViewModel() {
 
     constructor(
@@ -105,10 +111,60 @@ class ReviewInboxViewModel(
     private val _uiState = MutableStateFlow(ReviewInboxUiState(isLoading = true))
     val uiState: StateFlow<ReviewInboxUiState> = _uiState.asStateFlow()
 
+    private val _subscriptionsDue = MutableStateFlow<List<SubscriptionCycleWithSubscription>>(emptyList())
+
+    /** Subscription cycles that were not answered after three reminders (NEEDS_REVIEW), with their subscription. */
+    val subscriptionsDue: StateFlow<List<SubscriptionCycleWithSubscription>> = _subscriptionsDue.asStateFlow()
+
     init {
         observeNeedsReview()
         observeFailedQueue()
         observeCaptures()
+        observeSubscriptionsDue()
+    }
+
+    private fun observeSubscriptionsDue() {
+        val repo = subscriptionRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            repo.observeNeedsReviewCycles()
+                .catch { /* ignore */ }
+                .collect { _subscriptionsDue.value = it }
+        }
+    }
+
+    /**
+     * Yes: logs the expense and marks the cycle paid. When the amount varies, the prefilled expense
+     * sheet is opened through the same path as a capture confirmation.
+     */
+    fun subscriptionYes(cycleId: String) {
+        val actions = subscriptionActions ?: return
+        viewModelScope.launch(ioDispatcher) {
+            when (val outcome = actions.yes(cycleId)) {
+                is SubscriptionYesOutcome.Logged ->
+                    _uiState.update { it.copy(userMessage = "Subscription expense saved") }
+                is SubscriptionYesOutcome.NeedsAmount ->
+                    _uiState.update { it.copy(openQuickLogCaptureId = outcome.captureId) }
+                is SubscriptionYesOutcome.Failed ->
+                    _uiState.update { it.copy(errorMessage = outcome.message) }
+                SubscriptionYesOutcome.PastMonth ->
+                    _uiState.update {
+                        it.copy(errorMessage = "That payment is from a previous month and cannot be added. Skip it instead.")
+                    }
+                SubscriptionYesOutcome.NotFound, SubscriptionYesOutcome.AlreadyResolved -> Unit
+            }
+        }
+    }
+
+    /** Not yet: the cycle goes back to DUE with its reminder count reset to 2. */
+    fun subscriptionNotYet(cycleId: String) {
+        val actions = subscriptionActions ?: return
+        viewModelScope.launch(ioDispatcher) { actions.notYet(cycleId) }
+    }
+
+    /** Skip this time: the cycle is marked SKIPPED and no expense is logged. */
+    fun subscriptionSkip(cycleId: String) {
+        val actions = subscriptionActions ?: return
+        viewModelScope.launch(ioDispatcher) { actions.skip(cycleId) }
     }
 
     private suspend fun resolveSyncQueueDao(): SyncQueueDao? =
@@ -450,7 +506,9 @@ class ReviewInboxViewModel(
             syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
             pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
             accountRepository: AccountRepository? = null,
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            subscriptionRepository: SubscriptionRepository? = null,
+            subscriptionActions: SubscriptionActionUseCase? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -459,7 +517,9 @@ class ReviewInboxViewModel(
                     syncQueueDaoProvider = syncQueueDaoProvider,
                     pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     accountRepository = accountRepository,
-                    ioDispatcher = ioDispatcher
+                    ioDispatcher = ioDispatcher,
+                    subscriptionRepository = subscriptionRepository,
+                    subscriptionActions = subscriptionActions
                 ) as T
             }
         }

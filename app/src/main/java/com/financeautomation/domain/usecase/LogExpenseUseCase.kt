@@ -6,6 +6,8 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.core.utils.TimeGuardConstants
+import com.financeautomation.core.utils.isFuture
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
 import java.util.UUID
@@ -33,9 +35,11 @@ class LogExpenseUseCase(
         timestamp: Long = System.currentTimeMillis(),
         reviewState: ReviewState = ReviewState.CONFIRMED,
         isPossibleDuplicate: Boolean = false,
-        duplicateOfId: String? = null
+        duplicateOfId: String? = null,
+        afterInsert: (suspend (Transaction) -> Unit)? = null
     ): Result<Transaction> {
         try {
+            if (isFuture(timestamp)) return Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             require(amount > 0.0) { "Transaction amount must be strictly greater than zero" }
             require(merchant.isNotBlank()) { "Merchant / Item description cannot be blank" }
 
@@ -77,7 +81,12 @@ class LogExpenseUseCase(
                 duplicateOfId = duplicateOfId
             )
 
-            return when (val insertResult = transactionRepository.insertTransaction(transaction)) {
+            val insertResult = if (afterInsert != null) {
+                transactionRepository.insertTransactionWith(transaction) { afterInsert(transaction) }
+            } else {
+                transactionRepository.insertTransaction(transaction)
+            }
+            return when (insertResult) {
                 is Result.Success -> Result.Success(transaction)
                 is Result.Error -> Result.Error(insertResult.throwable, insertResult.message)
                 is Result.Loading -> Result.Loading

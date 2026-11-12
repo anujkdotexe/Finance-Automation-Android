@@ -31,6 +31,20 @@ interface TransactionRepository {
     suspend fun insertTransaction(transaction: Transaction): Result<Unit>
 
     /**
+     * Persists a new transaction and runs [inSameTransaction] inside the same database
+     * transaction as the insert, so both succeed or both roll back. The default is a
+     * sequential fallback for implementations without transactional storage.
+     */
+    suspend fun insertTransactionWith(
+        transaction: Transaction,
+        inSameTransaction: suspend () -> Unit
+    ): Result<Unit> {
+        val result = insertTransaction(transaction)
+        if (result is Result.Success) inSameTransaction()
+        return result
+    }
+
+    /**
      * Updates an existing transaction in local storage.
      */
     suspend fun updateTransaction(transaction: Transaction): Result<Unit>
