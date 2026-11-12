@@ -144,7 +144,7 @@ class WorkbookResolverTest {
                             .protocol(Protocol.HTTP_1_1)
                             .code(200)
                             .message("OK")
-                            .body("""{"replies": [{"addSheet": {"properties": {"sheetId": 101, "title": "Template"}}}]}""".toResponseBody(jsonMediaType))
+                            .body("""{"replies": [{"addSheet": {"properties": {"sheetId": 102, "title": "Nov26"}}}]}""".toResponseBody(jsonMediaType))
                             .build()
                     }
                     else -> {
@@ -225,7 +225,7 @@ class WorkbookResolverTest {
 
                 when {
                     url.contains("fields=sheets") && method == "GET" -> {
-                        // Tabs exist: Dashboard and Template already exist
+                        // Tabs exist: Dashboard and Nov26 already exist
                         val body = """
                             {
                               "sheets": [
@@ -237,8 +237,8 @@ class WorkbookResolverTest {
                                 },
                                 {
                                   "properties": {
-                                    "sheetId": 101,
-                                    "title": "Template"
+                                    "sheetId": 102,
+                                    "title": "Nov26"
                                   }
                                 }
                               ]
@@ -252,11 +252,11 @@ class WorkbookResolverTest {
                             .body(body.toResponseBody(jsonMediaType))
                             .build()
                     }
-                    url.contains("/values/Template") && method == "GET" -> {
+                    url.contains("/values/Nov") && method == "GET" -> {
                         // Layout read: returns empty values (no headers populated)
                         val body = """
                             {
-                              "range": "Template!A3:AE3",
+                              "range": "Nov26!A3:AE3",
                               "majorDimension": "ROWS",
                               "values": []
                             }
@@ -309,7 +309,7 @@ class WorkbookResolverTest {
     }
 
     @Test
-    fun testResolverRepairsOnlyMonthTabWhenTemplateIsValidButMonthTabLayoutIsMissing() = runBlocking<Unit> {
+    fun testResolverRepairsOnlyMonthTabWhenMonthTabLayoutIsMissing() = runBlocking<Unit> {
         var batchUpdateCalled = false
         var batchBody = ""
         val foundWorkbookId = "existing_partial_month_wb_789"
@@ -358,7 +358,7 @@ class WorkbookResolverTest {
 
                 when {
                     url.contains("fields=sheets") && method == "GET" -> {
-                        // Tabs exist: Dashboard, Template, and Nov26
+                        // Tabs exist: Dashboard and Nov26
                         val body = """
                             {
                               "sheets": [
@@ -370,39 +370,10 @@ class WorkbookResolverTest {
                                 },
                                 {
                                   "properties": {
-                                    "sheetId": 101,
-                                    "title": "Template"
-                                  }
-                                },
-                                {
-                                  "properties": {
                                     "sheetId": 102,
                                     "title": "$currentMonthTab"
                                   }
                                 }
-                              ]
-                            }
-                        """.trimIndent()
-                        Response.Builder()
-                            .request(request)
-                            .protocol(Protocol.HTTP_1_1)
-                            .code(200)
-                            .message("OK")
-                            .body(body.toResponseBody(jsonMediaType))
-                            .build()
-                    }
-                    url.contains("/values/Template") && method == "GET" -> {
-                        // Template tab has valid 31 headers
-                        val headers = (0 until com.financeautomation.core.constants.SheetSchemaConstants.TOTAL_COLUMN_COUNT).joinToString(", ") { idx ->
-                            val colLetter = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMNS[idx]
-                            "\"" + com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS[colLetter] + "\""
-                        }
-                        val body = """
-                            {
-                              "range": "Template!A3:AE3",
-                              "majorDimension": "ROWS",
-                              "values": [
-                                [ $headers ]
                               ]
                             }
                         """.trimIndent()
@@ -527,7 +498,7 @@ class WorkbookResolverTest {
                             {
                               "sheets": [
                                 { "properties": { "sheetId": 0, "title": "Dashboard" } },
-                                { "properties": { "sheetId": 101, "title": "Template" } }
+                                { "properties": { "sheetId": 102, "title": "Nov26" } }
                               ]
                             }
                         """.trimIndent()
@@ -539,14 +510,14 @@ class WorkbookResolverTest {
                             .body(body.toResponseBody(jsonMediaType))
                             .build()
                     }
-                    url.contains("/values/Template") && method == "GET" -> {
+                    url.contains("/values/Nov") && method == "GET" -> {
                         // Headers with wrong first and last column names
                         val headers = (0 until com.financeautomation.core.constants.SheetSchemaConstants.TOTAL_COLUMN_COUNT).joinToString(", ") { idx ->
                             "\"LegacyHeader$idx\""
                         }
                         val body = """
                             {
-                              "range": "Template!A3:AE3",
+                              "range": "Nov26!A3:AE3",
                               "majorDimension": "ROWS",
                               "values": [ [ $headers ] ]
                             }
@@ -681,7 +652,7 @@ class WorkbookResolverTest {
                         val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
                         val body = """
                             {
-                              "range": "Template!A3:AE3",
+                              "range": "Nov26!A3:AE3",
                               "values": [ [ $validHeaders ] ]
                             }
                         """.trimIndent()
@@ -795,7 +766,7 @@ class WorkbookResolverTest {
                         val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
                         val body = """
                             {
-                              "range": "Template!A3:AE3",
+                              "range": "Nov26!A3:AE3",
                               "values": [ [ $validHeaders ] ]
                             }
                         """.trimIndent()

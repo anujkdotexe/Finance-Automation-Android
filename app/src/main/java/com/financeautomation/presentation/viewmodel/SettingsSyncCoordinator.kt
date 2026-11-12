@@ -301,7 +301,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isRegeneratingDashboard = false,
-                            userMessage = "Master Workbook (Dashboard, Template, $currentMonthTab) formatted & updated to v2 template"
+                            userMessage = "Master Workbook (Dashboard, $currentMonthTab) formatted"
                         )
                     }
                 }

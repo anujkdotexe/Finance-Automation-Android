@@ -641,14 +641,6 @@ class GoogleSheetsClientTest {
                                 {
                                   "addSheet": {
                                     "properties": {
-                                      "sheetId": 101,
-                                      "title": "Template"
-                                    }
-                                  }
-                                },
-                                {
-                                  "addSheet": {
-                                    "properties": {
                                       "sheetId": 102,
                                       "title": "Nov26"
                                     }
