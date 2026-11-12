@@ -192,7 +192,7 @@ class GoogleAuthTokenProvider(
             )
 
             val notification = NotificationCompat.Builder(context, CHANNEL_AUTH_ALERTS)
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .setSmallIcon(R.drawable.ic_launcher_monochrome)
                 .setContentTitle(context.getString(R.string.notif_auth_reconnect_title))
                 .setContentText(context.getString(R.string.notif_auth_reconnect_text))
                 .setPriority(NotificationCompat.PRIORITY_LOW)

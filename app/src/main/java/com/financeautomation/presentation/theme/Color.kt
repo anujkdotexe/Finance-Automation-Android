@@ -13,64 +13,83 @@ val SheetPayableAmber: Color = Color(0xFFD97706)
 val SheetSlateHeader: Color = Color(0xFF334155)
 val SheetSpacerGray: Color = Color(0xFFF1F5F9)
 
-// High-End Fintech Light Color Palette (Clean, Modern, Accessible)
-val LightPrimary: Color = Color(0xFF2563EB) // Vibrant Royal Blue
+// Calm Financial Automation - Light Mode Palette Tokens
+val LightPrimary: Color = Color(0xFF006874)
 val LightOnPrimary: Color = Color(0xFFFFFFFF)
-val LightPrimaryContainer: Color = Color(0xFFEFF6FF) // Soft Blue 50
-val LightOnPrimaryContainer: Color = Color(0xFF1D4ED8)
+val LightPrimaryContainer: Color = Color(0xFF9EEFFD)
+val LightOnPrimaryContainer: Color = Color(0xFF001F24)
 
-val LightSecondary: Color = Color(0xFF0F172A) // Deep Slate
+val LightSecondary: Color = Color(0xFF4A6267)
 val LightOnSecondary: Color = Color(0xFFFFFFFF)
-val LightSecondaryContainer: Color = Color(0xFFF1F5F9) // Slate 100
-val LightOnSecondaryContainer: Color = Color(0xFF334155)
+val LightSecondaryContainer: Color = Color(0xFFCDE7ED)
+val LightOnSecondaryContainer: Color = Color(0xFF051F23)
 
-val LightTertiary: Color = Color(0xFF059669) // Emerald for Savings & Settled
+val LightTertiary: Color = Color(0xFF3A4664)
 val LightOnTertiary: Color = Color(0xFFFFFFFF)
-val LightTertiaryContainer: Color = Color(0xFFECFDF5)
-val LightOnTertiaryContainer: Color = Color(0xFF047857)
+val LightTertiaryContainer: Color = Color(0xFF525E7D)
+val LightOnTertiaryContainer: Color = Color(0xFFCCD8FD)
 
-val LightError: Color = Color(0xFFDC2626) // Crimson Red
+val LightError: Color = Color(0xFFBA1A1A)
 val LightOnError: Color = Color(0xFFFFFFFF)
-val LightErrorContainer: Color = Color(0xFFFEF2F2)
-val LightOnErrorContainer: Color = Color(0xFFB91C1C)
+val LightErrorContainer: Color = Color(0xFFFFDAD6)
+val LightOnErrorContainer: Color = Color(0xFF93000A)
 
-val LightBackground: Color = Color(0xFFF8FAFC) // Ultra-soft Slate 50
-val LightOnBackground: Color = Color(0xFF0F172A)
-val LightSurface: Color = Color(0xFFFFFFFF) // Pure Crisp White Cards
-val LightOnSurface: Color = Color(0xFF0F172A)
-val LightSurfaceVariant: Color = Color(0xFFF1F5F9) // Subtle Container Fill
-val LightOnSurfaceVariant: Color = Color(0xFF64748B) // Refined Slate Caption
-val LightOutline: Color = Color(0xFFE2E8F0) // Subtle 1dp Stroke
-val LightOutlineVariant: Color = Color(0xFFCBD5E1)
+val LightBackground: Color = Color(0xFFF8FAFA)
+val LightOnBackground: Color = Color(0xFF191C1D)
+val LightSurface: Color = Color(0xFFF8FAFA)
+val LightOnSurface: Color = Color(0xFF191C1D)
+val LightSurfaceVariant: Color = Color(0xFFDBE4E6)
+val LightOnSurfaceVariant: Color = Color(0xFF3F484A)
+val LightOutline: Color = Color(0xFF6F797A)
+val LightOutlineVariant: Color = Color(0xFFBFC8CA)
 
-// Dark Theme Color Palette (Fallback)
-val DarkPrimary: Color = Color(0xFF93C5FD)
-val DarkOnPrimary: Color = Color(0xFF1E3A8A)
-val DarkPrimaryContainer: Color = Color(0xFF1D4ED8)
-val DarkOnPrimaryContainer: Color = Color(0xFFDBEAFE)
+// Extended Surface Container Tones (Light)
+val LightSurfaceDim: Color = Color(0xFFD8DADB)
+val LightSurfaceBright: Color = Color(0xFFF8FAFA)
+val LightSurfaceContainerLowest: Color = Color(0xFFFFFFFF)
+val LightSurfaceContainerLow: Color = Color(0xFFECF5F7)
+val LightSurfaceContainer: Color = Color(0xFFEDF0F1)
+val LightSurfaceContainerHigh: Color = Color(0xFFE7EBEC)
+val LightSurfaceContainerHighest: Color = Color(0xFFDBE4E6)
 
-val DarkSecondary: Color = Color(0xFFCBD5E1)
-val DarkOnSecondary: Color = Color(0xFF1E293B)
-val DarkSecondaryContainer: Color = Color(0xFF334155)
-val DarkOnSecondaryContainer: Color = Color(0xFFF1F5F9)
+// Calm Financial Automation - Dark Mode Palette Tokens
+val DarkPrimary: Color = Color(0xFF4DD8E6)
+val DarkOnPrimary: Color = Color(0xFF00363D)
+val DarkPrimaryContainer: Color = Color(0xFF004F58)
+val DarkOnPrimaryContainer: Color = Color(0xFF97E4F2)
 
-val DarkTertiary: Color = Color(0xFF6EE7B7)
-val DarkOnTertiary: Color = Color(0xFF064E3B)
-val DarkTertiaryContainer: Color = Color(0xFF047857)
-val DarkOnTertiaryContainer: Color = Color(0xFFA7F3D0)
+val DarkSecondary: Color = Color(0xFFB1CBD1)
+val DarkOnSecondary: Color = Color(0xFF1C3438)
+val DarkSecondaryContainer: Color = Color(0xFF334B4F)
+val DarkOnSecondaryContainer: Color = Color(0xFFCDE7ED)
 
-val DarkError: Color = Color(0xFFFCA5A5)
-val DarkOnError: Color = Color(0xFF7F1D1D)
-val DarkErrorContainer: Color = Color(0xFF991B1B)
-val DarkOnErrorContainer: Color = Color(0xFFFEE2E2)
+val DarkTertiary: Color = Color(0xFFB9C6EA)
+val DarkOnTertiary: Color = Color(0xFF23304D)
+val DarkTertiaryContainer: Color = Color(0xFF3A4664)
+val DarkOnTertiaryContainer: Color = Color(0xFFD9E2FF)
 
-val DarkBackground: Color = Color(0xFF0F172A)
-val DarkOnBackground: Color = Color(0xFFF8FAFC)
-val DarkSurface: Color = Color(0xFF1E293B)
-val DarkOnSurface: Color = Color(0xFFF8FAFC)
-val DarkSurfaceVariant: Color = Color(0xFF334155)
-val DarkOnSurfaceVariant: Color = Color(0xFF94A3B8)
-val DarkOutline: Color = Color(0xFF475569)
+val DarkError: Color = Color(0xFFFFB4AB)
+val DarkOnError: Color = Color(0xFF690005)
+val DarkErrorContainer: Color = Color(0xFF93000A)
+val DarkOnErrorContainer: Color = Color(0xFFFFDAD6)
+
+val DarkBackground: Color = Color(0xFF0F1416)
+val DarkOnBackground: Color = Color(0xFFDEE3E5)
+val DarkSurface: Color = Color(0xFF0F1416)
+val DarkOnSurface: Color = Color(0xFFDEE3E5)
+val DarkSurfaceVariant: Color = Color(0xFF262B2D)
+val DarkOnSurfaceVariant: Color = Color(0xFFBEC8CA)
+val DarkOutline: Color = Color(0xFF899294)
+val DarkOutlineVariant: Color = Color(0xFF3F484A)
+
+// Extended Surface Container Tones (Dark)
+val DarkSurfaceDim: Color = Color(0xFF0F1416)
+val DarkSurfaceBright: Color = Color(0xFF0F1416)
+val DarkSurfaceContainerLowest: Color = Color(0xFF0A0F10)
+val DarkSurfaceContainerLow: Color = Color(0xFF171C1E)
+val DarkSurfaceContainer: Color = Color(0xFF1B2022)
+val DarkSurfaceContainerHigh: Color = Color(0xFF262B2D)
+val DarkSurfaceContainerHighest: Color = Color(0xFF303638)
 
 val LightColorScheme = lightColorScheme(
     primary = LightPrimary,
@@ -122,15 +141,16 @@ val DarkColorScheme = darkColorScheme(
     onSurface = DarkOnSurface,
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = DarkOnSurfaceVariant,
-    outline = DarkOutline
+    outline = DarkOutline,
+    outlineVariant = DarkOutlineVariant
 )
 
-const val OVERLAY_SCRIM_ARGB: Long = 0x73000000L
+const val OVERLAY_SCRIM_ARGB: Long = 0x52000000L
 val DefaultOverlayScrim: Color = Color(OVERLAY_SCRIM_ARGB)
 
 /**
- * Cohesive visual tokens for Finance Automation (Design Guide 3.1).
- * Carries financial and structural meaning across both light and dark themes.
+ * Cohesive visual tokens for Calm Financial Automation.
+ * Carries semantic money colors and full surface container scales across both themes.
  */
 data class FinanceColors(
     val moneyOut: Color,
@@ -140,41 +160,59 @@ data class FinanceColors(
     val info: Color,
     val surface: Color,
     val surfaceVariant: Color,
+    val surfaceContainerLowest: Color,
+    val surfaceContainerLow: Color,
+    val surfaceContainer: Color,
+    val surfaceContainerHigh: Color,
+    val surfaceContainerHighest: Color,
     val outline: Color,
+    val outlineVariant: Color,
     val onSurface: Color,
     val onSurfaceVariant: Color,
     val overlayScrim: Color = DefaultOverlayScrim,
     val primary: Color = brand,
-    val primaryContainer: Color = surfaceVariant,
+    val primaryContainer: Color = surfaceContainer,
     val error: Color = moneyOut
 )
 
 val LightFinanceColors = FinanceColors(
-    moneyOut = Color(0xFFC62828),
-    moneyIn = Color(0xFF2E7D32),
-    moneyOwed = Color(0xFFE65100),
-    brand = Color(0xFF19227E),
-    info = Color(0xFF1465BF),
-    surface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFFF1F5F9),
-    outline = Color(0xFFE2E8F0),
-    onSurface = Color(0xFF0F172A),
-    onSurfaceVariant = Color(0xFF64748B),
-    overlayScrim = Color(0x73000000)
+    moneyOut = Color(0xFFBA1A1A),
+    moneyIn = Color(0xFF146C2E),
+    moneyOwed = Color(0xFF8F4C00),
+    brand = LightPrimary,
+    info = LightPrimary,
+    surface = LightSurface,
+    surfaceVariant = LightSurfaceVariant,
+    surfaceContainerLowest = LightSurfaceContainerLowest,
+    surfaceContainerLow = LightSurfaceContainerLow,
+    surfaceContainer = LightSurfaceContainer,
+    surfaceContainerHigh = LightSurfaceContainerHigh,
+    surfaceContainerHighest = LightSurfaceContainerHighest,
+    outline = LightOutline,
+    outlineVariant = LightOutlineVariant,
+    onSurface = LightOnSurface,
+    onSurfaceVariant = LightOnSurfaceVariant,
+    overlayScrim = Color(0x52000000)
 )
 
 val DarkFinanceColors = FinanceColors(
-    moneyOut = Color(0xFFEF9A9A),
-    moneyIn = Color(0xFFA5D6A7),
-    moneyOwed = Color(0xFFFFCC80),
-    brand = Color(0xFFC5CAE9),
-    info = Color(0xFF90CAF8),
-    surface = Color(0xFF121418),
-    surfaceVariant = Color(0xFF1C1F26),
-    outline = Color(0xFF2A2E37),
-    onSurface = Color(0xFFF8FAFC),
-    onSurfaceVariant = Color(0xFF94A3B8),
-    overlayScrim = Color(0x99000000)
+    moneyOut = Color(0xFFFFB4AB),
+    moneyIn = Color(0xFF72D6E4),
+    moneyOwed = Color(0xFFFFB951),
+    brand = DarkPrimary,
+    info = DarkPrimary,
+    surface = DarkSurface,
+    surfaceVariant = DarkSurfaceVariant,
+    surfaceContainerLowest = DarkSurfaceContainerLowest,
+    surfaceContainerLow = DarkSurfaceContainerLow,
+    surfaceContainer = DarkSurfaceContainer,
+    surfaceContainerHigh = DarkSurfaceContainerHigh,
+    surfaceContainerHighest = DarkSurfaceContainerHighest,
+    outline = DarkOutline,
+    outlineVariant = DarkOutlineVariant,
+    onSurface = DarkOnSurface,
+    onSurfaceVariant = DarkOnSurfaceVariant,
+    overlayScrim = Color(0x73000000)
 )
 
 val LocalFinanceColors = staticCompositionLocalOf { LightFinanceColors }

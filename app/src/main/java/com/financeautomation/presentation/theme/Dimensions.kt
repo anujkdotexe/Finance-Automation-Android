@@ -7,7 +7,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Spacing, shape, and motion design tokens (Design Guide 3.3).
+ * Spacing, shape, and size design tokens for Calm Financial Automation.
+ * Conforms to Material 3 and Samsung One UI guidelines.
  */
 object Spacing {
     val none: Dp = 0.dp
@@ -23,19 +24,19 @@ object Spacing {
 
 object FinanceShapes {
     val small = RoundedCornerShape(8.dp)
-    val card = RoundedCornerShape(10.dp)
+    val card = RoundedCornerShape(12.dp)
     val medium = RoundedCornerShape(12.dp)
     val large = RoundedCornerShape(16.dp)
     val dialog = RoundedCornerShape(20.dp)
-    val sheet = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    val pill = RoundedCornerShape(32.dp)
+    val sheet = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    val pill = CircleShape
     val chip = CircleShape
 }
 
 object FinanceSizes {
     val strokeThin: Dp = 1.dp
     val strokeThick: Dp = 2.dp
-    val grabberWidth: Dp = 36.dp
+    val grabberWidth: Dp = 32.dp
     val grabberHeight: Dp = 4.dp
     val badgeOffset: Dp = 6.dp
     val iconXs: Dp = 14.dp
@@ -51,8 +52,8 @@ object FinanceSizes {
     val buttonHeightMedium: Dp = 40.dp
     val avatarMedium: Dp = 42.dp
     val minTouchTarget: Dp = 48.dp
-    val buttonHeightLarge: Dp = 52.dp
-    val bottomBarHeight: Dp = 56.dp
+    val buttonHeightLarge: Dp = 48.dp
+    val bottomBarHeight: Dp = 64.dp
     val avatarLarge: Dp = 72.dp
     val emptyStateIllustration: Dp = 96.dp
     val chartHeight: Dp = 120.dp

@@ -13,26 +13,38 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Standard transaction entry row (Design Guide 4).
- * Displays description, date, account badge, amount, and settlement status chip.
+ * Standard transaction entry row.
+ * Line 1: merchant and amount.
+ * Line 2: category, account and time with status chip.
+ * Optional Line 3: "My share X, Owed Y" for split rows.
  */
 @Composable
 fun TransactionRow(
-    description: String,
-    dateText: String,
-    account: String,
+    merchant: String,
     amount: Double,
-    status: String,
     modifier: Modifier = Modifier,
+    category: String = "",
+    account: String = "",
+    time: String = "",
+    status: String = "",
+    splitText: String? = null,
     isExpense: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
+    val subtitleParts = listOfNotNull(
+        category.takeIf { it.isNotBlank() },
+        account.takeIf { it.isNotBlank() },
+        time.takeIf { it.isNotBlank() }
+    )
+    val subtitle = subtitleParts.joinToString(" • ")
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -47,19 +59,37 @@ fun TransactionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).padding(end = FinanceTheme.spacing.s),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            // Line 1: Merchant
             Text(
-                text = description,
+                text = merchant,
                 style = FinanceTheme.typography.bodyMedium,
-                color = FinanceTheme.colors.onSurface
+                color = FinanceTheme.colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = "$dateText • $account",
-                style = FinanceTheme.typography.labelMedium,
-                color = FinanceTheme.colors.onSurfaceVariant
-            )
+            // Line 2: Category, account, time
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = FinanceTheme.typography.bodySmall,
+                    color = FinanceTheme.colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // Optional Line 3: Split details
+            if (!splitText.isNullOrBlank()) {
+                Text(
+                    text = splitText,
+                    style = FinanceTheme.typography.numeric,
+                    color = FinanceTheme.colors.moneyOwed,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         Column(
@@ -68,13 +98,42 @@ fun TransactionRow(
         ) {
             AmountText(
                 amount = amount,
-                tone = if (isExpense) AmountTone.MONEY_OUT else AmountTone.MONEY_IN,
-                style = FinanceTheme.typography.bodyMedium,
-                prefix = if (isExpense) "-" else "+"
+                tone = if (isExpense) AmountTone.DEFAULT else AmountTone.MONEY_IN,
+                style = FinanceTheme.typography.kpiMedium,
+                prefix = if (isExpense) "" else "+"
             )
-            StatusChip(status = status)
+            if (status.isNotBlank()) {
+                StatusChip(status = status)
+            }
         }
     }
+}
+
+/**
+ * Backward compatibility overload.
+ */
+@Composable
+fun TransactionRow(
+    description: String,
+    dateText: String,
+    account: String,
+    amount: Double,
+    status: String,
+    modifier: Modifier = Modifier,
+    isExpense: Boolean = true,
+    onClick: (() -> Unit)? = null
+) {
+    TransactionRow(
+        merchant = description,
+        amount = amount,
+        modifier = modifier,
+        category = "",
+        account = account,
+        time = dateText,
+        status = status,
+        isExpense = isExpense,
+        onClick = onClick
+    )
 }
 
 @Preview(name = "Light", showBackground = true)
@@ -82,11 +141,12 @@ fun TransactionRow(
 private fun TransactionRowPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
         TransactionRow(
-            description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
-            dateText = "10 Nov",
-            account = "Primary Account",
-            amount = 240.0,
-            status = "Personal"
+            merchant = "Blue Tokai Coffee",
+            amount = 340.0,
+            category = "Food & Drink",
+            account = "HDFC ••4921",
+            time = "Today, 2:15 PM",
+            status = "Needs review"
         )
     }
 }
@@ -96,26 +156,28 @@ private fun TransactionRowPreviewLight() {
 private fun TransactionRowPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
         TransactionRow(
-            description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
-            dateText = "09 Nov",
-            account = "Secondary Account",
-            amount = 1850.0,
-            status = "Pending"
+            merchant = "Dinner with team",
+            amount = 2400.0,
+            category = "Food & Drink",
+            account = "ICICI ••1028",
+            time = "Yesterday",
+            status = "Pending",
+            splitText = "My share 600, Owed 1,800"
         )
     }
 }
 
-@Preview(name = "Large Font 200%", fontScale = 2.0f, showBackground = true)
+@Preview(name = "Font Scale 1.3x", fontScale = 1.3f, showBackground = true)
 @Composable
-private fun TransactionRowPreviewLargeFont() {
+private fun TransactionRowPreviewScale() {
     FinanceAutomationTheme(darkTheme = false) {
         TransactionRow(
-            description = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.preview_sample_merchant),
-            dateText = "08 Nov",
-            account = "Primary Account",
-            amount = 640.0,
-            status = "Settled"
+            merchant = "Shell Petrol",
+            amount = 1200.0,
+            category = "Transit",
+            account = "ICICI ••1028",
+            time = "24 Nov",
+            status = "Synced"
         )
     }
 }
-

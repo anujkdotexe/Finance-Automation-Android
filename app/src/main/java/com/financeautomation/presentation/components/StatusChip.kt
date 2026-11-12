@@ -2,22 +2,37 @@ package com.financeautomation.presentation.components
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.HourglassEmpty
+import androidx.compose.material.icons.rounded.Rule
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Renders verified transaction status tags with explicit text and tint (Design Guide 4 & 8).
- * Never relies on color alone for state.
+ * Verified status chip with one-line icon + text and calm tonal colors (red only for Failed).
+ * Supported: Pending, Needs review, Synced, Failed, Waiting to sync, plus legacy ledger tags.
  */
 @Composable
 fun StatusChip(
@@ -32,25 +47,68 @@ fun StatusChip(
     status: String,
     modifier: Modifier = Modifier
 ) {
-    val (bgColor, textColor) = when (status.uppercase()) {
-        "SETTLED", "REPAID" -> FinanceTheme.colors.moneyIn.copy(alpha = 0.15f) to FinanceTheme.colors.moneyIn
-        "PENDING", "PARTIAL" -> FinanceTheme.colors.moneyOwed.copy(alpha = 0.15f) to FinanceTheme.colors.moneyOwed
-        "CARRIED FWD", "CARRIED_FWD" -> FinanceTheme.colors.info.copy(alpha = 0.15f) to FinanceTheme.colors.info
-        "VOID" -> FinanceTheme.colors.moneyOut.copy(alpha = 0.15f) to FinanceTheme.colors.moneyOut
-        "PERSONAL" -> FinanceTheme.colors.surfaceVariant to FinanceTheme.colors.onSurfaceVariant
-        else -> FinanceTheme.colors.surfaceVariant to FinanceTheme.colors.onSurfaceVariant
+    val normalized = status.trim()
+    val upper = normalized.uppercase()
+
+    val (bgColor, textColor, icon) = when {
+        upper == "FAILED" -> Triple(
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+            Icons.Rounded.Warning
+        )
+        upper == "NEEDS REVIEW" || upper == "NEEDS_REVIEW" -> Triple(
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+            Icons.Rounded.Rule
+        )
+        upper == "WAITING TO SYNC" || upper == "WAITING_TO_SYNC" -> Triple(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            Icons.Rounded.Sync
+        )
+        upper == "SYNCED" || upper == "SETTLED" || upper == "REPAID" -> Triple(
+            FinanceTheme.colors.moneyIn.copy(alpha = 0.15f),
+            FinanceTheme.colors.moneyIn,
+            Icons.Rounded.CheckCircle
+        )
+        upper == "PENDING" || upper == "PARTIAL" -> Triple(
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+            Icons.Rounded.Schedule
+        )
+        upper == "CARRIED FWD" || upper == "CARRIED_FWD" -> Triple(
+            FinanceTheme.colors.info.copy(alpha = 0.15f),
+            FinanceTheme.colors.info,
+            Icons.Rounded.HourglassEmpty
+        )
+        else -> Triple(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            null
+        )
     }
 
-    Box(
+    Row(
         modifier = modifier
-            .background(bgColor, FinanceTheme.shapes.chip)
-            .padding(horizontal = FinanceTheme.spacing.s, vertical = 2.dp),
-        contentAlignment = Alignment.Center
+            .background(bgColor, FinanceShapes.chip)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(12.dp)
+            )
+        }
         Text(
-            text = status,
-            style = FinanceTheme.typography.labelMedium,
-            color = textColor
+            text = normalized,
+            style = FinanceTheme.typography.numeric.copy(fontSize = 11.sp),
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -59,7 +117,13 @@ fun StatusChip(
 @Composable
 private fun StatusChipPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        StatusChip(status = "Settled")
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            StatusChip(status = "Synced")
+            StatusChip(status = "Pending")
+            StatusChip(status = "Needs review")
+            StatusChip(status = "Waiting to sync")
+            StatusChip(status = "Failed")
+        }
     }
 }
 
@@ -67,15 +131,17 @@ private fun StatusChipPreviewLight() {
 @Composable
 private fun StatusChipPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        StatusChip(status = "Pending")
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            StatusChip(status = "Pending")
+            StatusChip(status = "Failed")
+        }
     }
 }
 
-@Preview(name = "Large Font 200%", fontScale = 2.0f, showBackground = true)
+@Preview(name = "Font Scale 1.3x", fontScale = 1.3f, showBackground = true)
 @Composable
-private fun StatusChipPreviewLargeFont() {
+private fun StatusChipPreviewScale() {
     FinanceAutomationTheme(darkTheme = false) {
-        StatusChip(status = "Personal")
+        StatusChip(status = "Waiting to sync")
     }
 }
-

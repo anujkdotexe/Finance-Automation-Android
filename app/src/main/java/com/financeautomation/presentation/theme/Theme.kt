@@ -17,8 +17,8 @@ import androidx.core.view.WindowCompat
 import com.financeautomation.domain.model.ThemeMode
 
 /**
- * Standard Material 3 theme wrapper for Finance Automation.
- * Defaults to high-end Fintech Light Theme for pristine clarity and readability.
+ * Standard Material 3 theme wrapper for Calm Financial Automation.
+ * Respects user preferences (System, Light, Dark).
  */
 @Composable
 fun FinanceAutomationTheme(
@@ -50,7 +50,7 @@ fun FinanceAutomationTheme(
                     window.statusBarColor = android.graphics.Color.TRANSPARENT
                     window.navigationBarColor = android.graphics.Color.TRANSPARENT
                 } else {
-                    window.statusBarColor = colorScheme.background.toArgb()
+                    window.statusBarColor = colorScheme.surface.toArgb()
                     window.navigationBarColor = colorScheme.surface.toArgb()
                     val insetsController = WindowCompat.getInsetsController(window, view)
                     insetsController.isAppearanceLightStatusBars = !darkTheme
@@ -78,7 +78,7 @@ fun FinanceAutomationTheme(
 }
 
 /**
- * Direct accessor for token values in the active theme (Design Guide 3).
+ * Direct accessor for token values in the active theme.
  */
 object FinanceTheme {
     val colors: FinanceColors

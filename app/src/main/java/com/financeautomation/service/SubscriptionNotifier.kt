@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionCycle
@@ -51,7 +52,7 @@ class SubscriptionNotifier(private val context: Context) : SubscriptionReminderN
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle("Did you pay ${subscription.name}?")
             .setContentText("$amountText due today")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

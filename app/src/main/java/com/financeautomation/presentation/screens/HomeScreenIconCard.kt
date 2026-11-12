@@ -80,7 +80,7 @@ fun HomeScreenIconCard(
                             action = Intent.ACTION_VIEW
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                         }
-                        val icon = IconCompat.createWithResource(context, R.drawable.ic_quick_log_symbol)
+                        val icon = IconCompat.createWithResource(context, R.drawable.ic_widget_glyph)
                         val info = ShortcutInfoCompat.Builder(context, "quick_log")
                             .setShortLabel(context.getString(R.string.quick_log_shortcut_short_label))
                             .setLongLabel(context.getString(R.string.quick_log_shortcut_long_label))

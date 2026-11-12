@@ -148,7 +148,7 @@ class QuickLogWidgetProvider : AppWidgetProvider() {
             val rect = RectF(0f, 0f, side.toFloat(), side.toFloat())
             canvas.drawRoundRect(rect, radius, radius, bgPaint)
 
-            val symbolDrawable = ContextCompat.getDrawable(context, R.drawable.ic_quick_log_symbol)?.mutate()
+            val symbolDrawable = ContextCompat.getDrawable(context, R.drawable.ic_widget_glyph)?.mutate()
             if (symbolDrawable != null) {
                 DrawableCompat.setTint(symbolDrawable, ContextCompat.getColor(context, R.color.widget_symbol))
                 val symbolSize = (side * SYMBOL_SCALE_RATIO).toInt()

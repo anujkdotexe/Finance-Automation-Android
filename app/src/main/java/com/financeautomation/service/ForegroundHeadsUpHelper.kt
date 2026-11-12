@@ -112,7 +112,7 @@ object ForegroundHeadsUpHelper {
         val titleText = if (capture.payee.isNotBlank()) capture.payee else context.getString(R.string.notif_payment_detected_title)
 
         val builder = NotificationCompat.Builder(context, NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS)
-            .setSmallIcon(android.R.drawable.stat_notify_more)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(titleText)
             .setContentText(amountStr)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

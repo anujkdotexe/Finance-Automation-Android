@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesAuto
@@ -21,15 +22,15 @@ enum class AmountTone {
 }
 
 /**
- * Renders monetary figures strictly with tabular figures and theme color tokens (Design Guide 4).
- * Defaults to formatRupeesAuto (shows paise only when not 00).
+ * Monetary figure rendered with monospaced tabular numerals.
+ * Never wraps, reserves width, defaults to formatRupeesAuto.
  */
 @Composable
 fun AmountText(
     amount: Double,
     modifier: Modifier = Modifier,
     tone: AmountTone = AmountTone.DEFAULT,
-    style: TextStyle = FinanceTheme.typography.amountLarge,
+    style: TextStyle = FinanceTheme.typography.kpiMedium,
     includeDecimals: Boolean? = null,
     prefix: String = ""
 ) {
@@ -52,6 +53,9 @@ fun AmountText(
         text = displayText,
         style = style,
         color = color,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier
     )
 }
@@ -60,7 +64,7 @@ fun AmountText(
 @Composable
 private fun AmountTextPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        AmountText(amount = 2450.50, tone = AmountTone.MONEY_OUT, includeDecimals = true)
+        AmountText(amount = 6549.0, tone = AmountTone.DEFAULT)
     }
 }
 
@@ -68,14 +72,14 @@ private fun AmountTextPreviewLight() {
 @Composable
 private fun AmountTextPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        AmountText(amount = 2450.50, tone = AmountTone.MONEY_IN, includeDecimals = false)
+        AmountText(amount = 2050.50, tone = AmountTone.MONEY_IN)
     }
 }
 
-@Preview(name = "Large Font", showBackground = true, fontScale = 1.5f)
+@Preview(name = "Font Scale 1.3x", showBackground = true, fontScale = 1.3f)
 @Composable
-private fun AmountTextPreviewLargeFont() {
+private fun AmountTextPreviewScale() {
     FinanceAutomationTheme(darkTheme = false) {
-        AmountText(amount = 125000.0, tone = AmountTone.MONEY_OWED, includeDecimals = false)
+        AmountText(amount = 125000.0, tone = AmountTone.MONEY_OWED)
     }
 }
