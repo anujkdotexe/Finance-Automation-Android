@@ -160,4 +160,43 @@ class AccountingPlanJsonAdapterTest {
         assertEquals(original.settled[0].uuid, deserialized.settled[0].uuid)
         assertNull(deserialized.settled[1].uuid)
     }
+
+    @Test
+    fun testRoundTripStringCellsPreserveTypes() {
+        val originalPlan = AccountingPlan(
+            appends = listOf(
+                NewRow(
+                    table = TableType.DEBIT,
+                    tab = "Nov26",
+                    uuid = "txn_numeric_strings",
+                    cells = listOf("42", "007", "1e3", "true", "Infinity", 42, 3.14, true, false, null)
+                )
+            ),
+            edits = listOf(
+                CellEdit("Nov26", 5, "D", "42"),
+                CellEdit("Nov26", 6, "D", "true"),
+                CellEdit("Nov26", 7, "D", "Infinity")
+            ),
+            message = "Preserve string types"
+        )
+
+        val json = AccountingPlanJsonAdapter.toJson(originalPlan)
+        val deserialized = AccountingPlanJsonAdapter.fromJson(json)
+
+        val cells = deserialized.appends[0].cells
+        assertEquals("42", cells[0])
+        assertEquals("007", cells[1])
+        assertEquals("1e3", cells[2])
+        assertEquals("true", cells[3])
+        assertEquals("Infinity", cells[4])
+        assertEquals(42, cells[5])
+        assertEquals(3.14, cells[6])
+        assertEquals(true, cells[7])
+        assertEquals(false, cells[8])
+        assertNull(cells[9])
+
+        assertEquals("42", deserialized.edits[0].value)
+        assertEquals("true", deserialized.edits[1].value)
+        assertEquals("Infinity", deserialized.edits[2].value)
+    }
 }
