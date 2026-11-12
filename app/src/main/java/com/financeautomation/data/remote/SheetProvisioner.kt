@@ -28,6 +28,22 @@ object SheetProvisioner {
         )
     }
 
+    /** Sheets API pixelSize is in pixels; the iOS reference gives row heights in points (1 pixel = 0.75 point). */
+    fun pointsToPixels(points: Double): Int = Math.round(points / 0.75).toInt()
+
+    /** Dashboard row heights from the iOS reference: start row, end row (exclusive), 0-based, and points. */
+    val DASHBOARD_ROW_HEIGHT_POINTS: List<Triple<Int, Int, Double>> = listOf(
+        Triple(0, 1, 24.0), Triple(1, 2, 13.5), Triple(2, 3, 14.0), Triple(3, 4, 10.5),
+        Triple(4, 5, 21.0), Triple(5, 6, 16.5), Triple(6, 7, 12.75), Triple(7, 23, 13.5),
+        Triple(23, 24, 18.0), Triple(24, 25, 16.5), Triple(25, 26, 21.0), Triple(26, 36, 15.0),
+        Triple(36, 37, 12.5)
+    )
+
+    /** Month tab row heights from the iOS reference (rows 4 to 1000 are 12.5 points). */
+    val MONTH_TAB_ROW_HEIGHT_POINTS: List<Triple<Int, Int, Double>> = listOf(
+        Triple(0, 1, 27.0), Triple(1, 2, 18.0), Triple(2, 3, 21.0), Triple(3, 1000, 12.5)
+    )
+
     /** A range to clear: 0-based start row, exclusive end row, 0-based column. */
     data class ColumnRowRange(val startRow: Int, val endRow: Int, val column: Int)
 
@@ -767,10 +783,10 @@ object SheetProvisioner {
 
         // 12. Dashboard Column Widths (matching iOS master reference)
         val dashboardColWidths = listOf(
-            0 to 72, 1 to 108, 2 to 108, 3 to 108, 4 to 98, 5 to 72, 6 to 10,
-            7 to 110, 8 to 62, 9 to 75, 10 to 89, 11 to 72, 12 to 108, 13 to 108,
-            14 to 108, 15 to 108, 16 to 108, 17 to 108, 18 to 90, 19 to 22,
-            20 to 90, 21 to 104, 22 to 152, 23 to 101, 24 to 110, 25 to 90
+            0 to 68, 1 to 68, 2 to 68, 3 to 68, 4 to 93, 5 to 68, 6 to 10, 7 to 104, 8 to 59,
+            9 to 71, 10 to 84, 11 to 68, 12 to 68, 13 to 68, 14 to 68, 15 to 68, 16 to 68, 17 to 68,
+            18 to 85, 19 to 20, 20 to 85, 21 to 98, 22 to 144, 23 to 96, 24 to 104, 25 to 85,
+            26 to 85, 27 to 85, 28 to 85
         )
         dashboardColWidths.forEach { (colIdx, px) ->
             requests.add(
@@ -784,42 +800,18 @@ object SheetProvisioner {
             )
         }
 
-        // 13. Dashboard Row Heights (matching iOS master reference)
-        val dashboardRowHeights = listOf(
-            0 to 24, 1 to 14, 2 to 14, 3 to 11, 4 to 21, 5 to 17,
-            23 to 18, 24 to 17, 25 to 21
-        )
-        dashboardRowHeights.forEach { (rIdx, px) ->
+        // 13. Dashboard Row Heights (iOS reference values in points, converted to the pixels the API expects)
+        DASHBOARD_ROW_HEIGHT_POINTS.forEach { (startRow, endRowExclusive, points) ->
             requests.add(
                 createUpdateDimensionPropertiesRequest(
                     sheetId = dashboardSheetId,
                     dimension = "ROWS",
-                    startIndex = rIdx,
-                    endIndex = rIdx + 1,
-                    pixelSize = px
+                    startIndex = startRow,
+                    endIndex = endRowExclusive,
+                    pixelSize = pointsToPixels(points)
                 )
             )
         }
-        // Rows 6 to 22 (7 to 23 in 1-based) = 14px
-        requests.add(
-            createUpdateDimensionPropertiesRequest(
-                sheetId = dashboardSheetId,
-                dimension = "ROWS",
-                startIndex = 6,
-                endIndex = 23,
-                pixelSize = 14
-            )
-        )
-        // Rows 26 to 36 (27 to 37 in 1-based) = 15px
-        requests.add(
-            createUpdateDimensionPropertiesRequest(
-                sheetId = dashboardSheetId,
-                dimension = "ROWS",
-                startIndex = 26,
-                endIndex = 37,
-                pixelSize = 15
-            )
-        )
 
         return requests
     }
@@ -1068,11 +1060,10 @@ object SheetProvisioner {
 
         // Exact Column Widths matching iOS master template
         val colWidths = listOf(
-            0 to 95, 1 to 80, 2 to 85, 3 to 146, 4 to 106, 5 to 116,
-            6 to 106, 7 to 125, 8 to 95, 9 to 109, 10 to 85, 11 to 10,
-            12 to 95, 13 to 118, 14 to 95, 15 to 118, 16 to 125, 17 to 130,
-            18 to 120, 19 to 109, 20 to 10, 21 to 101, 22 to 80, 23 to 101,
-            24 to 125, 25 to 116, 26 to 101, 27 to 120, 28 to 100, 29 to 100, 30 to 100
+            0 to 90, 1 to 75, 2 to 80, 3 to 140, 4 to 100, 5 to 110, 6 to 100, 7 to 120, 8 to 90,
+            9 to 90, 10 to 80, 11 to 10, 12 to 90, 13 to 112, 14 to 90, 15 to 112, 16 to 120,
+            17 to 125, 18 to 115, 19 to 115, 20 to 10, 21 to 95, 22 to 75, 23 to 95, 24 to 120,
+            25 to 110, 26 to 95, 27 to 115
         )
         colWidths.forEach { (colIdx, px) ->
             requests.add(
@@ -1086,27 +1077,18 @@ object SheetProvisioner {
             )
         }
 
-        // Row Heights: Row 1 = 27, Row 2 = 18, Row 3 = 21, Row 4..1000 = 15
-        listOf(0 to 27, 1 to 18, 2 to 21).forEach { (rIdx, px) ->
+        // Row heights (iOS reference values in points, converted to the pixels the API expects)
+        MONTH_TAB_ROW_HEIGHT_POINTS.forEach { (startRow, endRowExclusive, points) ->
             requests.add(
                 createUpdateDimensionPropertiesRequest(
                     sheetId = sheetId,
                     dimension = "ROWS",
-                    startIndex = rIdx,
-                    endIndex = rIdx + 1,
-                    pixelSize = px
+                    startIndex = startRow,
+                    endIndex = endRowExclusive,
+                    pixelSize = pointsToPixels(points)
                 )
             )
         }
-        requests.add(
-            createUpdateDimensionPropertiesRequest(
-                sheetId = sheetId,
-                dimension = "ROWS",
-                startIndex = 3,
-                endIndex = 1000,
-                pixelSize = 15
-            )
-        )
 
         // 6. Populate Row 3 Column Headers
         val columnHeaders = SheetSchemaConstants.SHEET_COLUMNS.map { letter ->
