@@ -40,6 +40,12 @@ interface TransactionRepository {
      */
     suspend fun voidTransaction(id: String): Result<Unit>
 
+    /**
+     * Resolves a failed sync locally without writing to the sync queue.
+     * When [voidIt] is true the transaction is marked Void (amounts kept) because it never reached the sheet;
+     * otherwise it is marked synced and confirmed.
+     */
+    suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit>
 
     /**
      * Searches for transactions within [windowMillis] of the present with matching [amount].

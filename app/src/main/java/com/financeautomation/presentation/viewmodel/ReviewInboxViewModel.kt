@@ -296,25 +296,11 @@ class ReviewInboxViewModel(
             val qDao = resolveSyncQueueDao() ?: return@launch
             val queueItem = qDao.getById(id)
             if (queueItem != null) {
-                val txn = transactionRepository.getTransactionById(queueItem.transactionId)
-                if (txn != null) {
-                    if (queueItem.operationType == SyncQueueEntity.OP_INSERT) {
-                        val voided = txn.copy(
-                            totalAmount = 0.0,
-                            myShare = 0.0,
-                            owedToMe = 0.0,
-                            status = TransactionStatus.VOID,
-                            reviewState = ReviewState.CONFIRMED,
-                            syncState = SyncState.VOID
-                        )
-                        transactionRepository.updateTransaction(voided)
-                    } else {
-                        val synced = txn.copy(
-                            syncState = SyncState.SYNCED,
-                            reviewState = ReviewState.CONFIRMED
-                        )
-                        transactionRepository.updateTransaction(synced)
-                    }
+                if (transactionRepository.getTransactionById(queueItem.transactionId) != null) {
+                    transactionRepository.discardLocalOnly(
+                        queueItem.transactionId,
+                        voidIt = queueItem.operationType == SyncQueueEntity.OP_INSERT
+                    )
                 }
             }
             qDao.deleteById(id)

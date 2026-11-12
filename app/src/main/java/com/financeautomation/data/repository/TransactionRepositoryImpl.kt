@@ -3,6 +3,7 @@ package com.financeautomation.data.repository
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.data.local.dao.LineageDao
@@ -388,6 +389,36 @@ class TransactionRepositoryImpl(
                 )
                 qDao.insert(queueItem)
             }
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val tDao = resolveTransactionDao()
+            val existing = tDao.getById(id)
+                ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            val updated = if (voidIt) {
+                val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
+                    existing.merchant
+                } else {
+                    "[Void] ${existing.merchant}"
+                }
+                existing.copy(
+                    status = TransactionStatus.VOID.value,
+                    merchant = voidTitle,
+                    reviewState = ReviewState.CONFIRMED.name,
+                    syncState = SyncState.VOID.name
+                )
+            } else {
+                existing.copy(
+                    reviewState = ReviewState.CONFIRMED.name,
+                    syncState = SyncState.SYNCED.name
+                )
+            }
+            tDao.update(updated)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
