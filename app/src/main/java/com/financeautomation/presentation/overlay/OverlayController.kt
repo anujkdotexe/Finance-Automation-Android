@@ -247,10 +247,20 @@ class OverlayController(
                                                 dismiss()
                                                 resultPill.show(appContext.getString(R.string.self_test_completed_pill))
                                             } else {
-                                                viewModel.onConfirmAndSave { message ->
+                                                viewModel.onConfirmAndSave { message, txnId ->
                                                     PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
                                                     dismiss()
-                                                    resultPill.show(message)
+                                                    resultPill.show(
+                                                        message = message,
+                                                        transactionId = txnId,
+                                                        onUndo = if (txnId != null) {
+                                                            { id ->
+                                                                mainScope.launch(ioDispatcher) {
+                                                                    transactionRepository.voidTransaction(id)
+                                                                }
+                                                            }
+                                                        } else null
+                                                    )
                                                 }
                                             }
                                         },

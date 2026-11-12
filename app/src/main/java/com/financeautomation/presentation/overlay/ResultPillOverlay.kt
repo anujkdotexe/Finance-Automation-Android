@@ -2,22 +2,22 @@ package com.financeautomation.presentation.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -35,8 +35,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Secondary floating pill overlay displayed at the top centre of the screen (Phase 5.3.5).
- * Auto-hides after 3 seconds or dismisses upon tap.
+ * Secondary floating pill overlay displayed at the top centre of the screen (Phase 5.3.5 / R10).
+ * Displays a confirmation message and an optional Undo action active for 8 seconds.
  */
 class ResultPillOverlay(
     private val context: Context
@@ -49,15 +49,44 @@ class ResultPillOverlay(
     private var treeOwners: ComposeOverlayTreeOwners? = null
     private var autoHideJob: Job? = null
 
+    var activeSession: PillUndoSession? = null
+        private set
+
     /**
-     * Displays a result pill capsule with the provided message.
+     * Triggers the undo action if still within the 8-second window.
      */
-    fun show(message: String) {
+    fun triggerUndo(): Boolean {
+        val session = activeSession
+        activeSession = null
+        val triggered = session?.triggerUndo() ?: false
+        dismiss()
+        return triggered
+    }
+
+    /**
+     * Displays a result pill capsule with the provided message and optional Undo callback.
+     */
+    fun show(
+        message: String,
+        transactionId: String? = null,
+        onUndo: ((String) -> Unit)? = null
+    ) {
         if (!Settings.canDrawOverlays(appContext)) return
 
         scope.launch {
             try {
                 dismiss()
+
+                val session = if (transactionId != null && onUndo != null) {
+                    PillUndoSession(transactionId = transactionId, windowMillis = 8000L, onUndo = onUndo).also {
+                        it.startTimer(scope) {
+                            dismiss()
+                        }
+                    }
+                } else null
+                activeSession = session
+
+                val durationMs = if (session != null) 8000L else 3000L
 
                 val density = appContext.resources.displayMetrics.density
                 val topMarginPx = (48 * density).toInt()
@@ -109,6 +138,18 @@ class ResultPillOverlay(
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                                         modifier = Modifier.padding(start = FinanceTheme.spacing.s)
                                     )
+                                    if (session != null) {
+                                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.m))
+                                        Text(
+                                            text = "Undo",
+                                            style = FinanceTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier
+                                                .clickable { triggerUndo() }
+                                                .padding(horizontal = FinanceTheme.spacing.xs, vertical = FinanceTheme.spacing.xxs)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -120,7 +161,7 @@ class ResultPillOverlay(
                 pillView = composeView
 
                 autoHideJob = scope.launch {
-                    delay(3000L)
+                    delay(durationMs)
                     dismiss()
                 }
             } catch (e: Exception) {
@@ -136,6 +177,8 @@ class ResultPillOverlay(
     fun dismiss() {
         autoHideJob?.cancel()
         autoHideJob = null
+        activeSession?.expire()
+        activeSession = null
 
         pillView?.let { view ->
             try {
@@ -150,4 +193,3 @@ class ResultPillOverlay(
         }
     }
 }
-

@@ -12,6 +12,7 @@ import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.LogExpenseUseCase
@@ -176,7 +177,7 @@ object QuickLogTransactionHelper {
         pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
         categoryStatDaoProvider: (suspend () -> CategoryStatDao)?,
         predictCategoryUseCase: PredictCategoryUseCase
-    ): Result<Unit> {
+    ): Result<Transaction> {
         val selectedCompanions = state.availableCompanions
             .filter { state.selectedCompanionIds.contains(it.id) }
             .map { it.name }
@@ -198,6 +199,7 @@ object QuickLogTransactionHelper {
         )
 
         if (result is Result.Success) {
+            val loggedTxn = result.data
             PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.DONE)
             state.captureId?.let { cid ->
                 try {
@@ -217,7 +219,7 @@ object QuickLogTransactionHelper {
                 if (statEx is CancellationException) throw statEx
                 Diagnostics.record("QuickLogTransactionHelper", "${statEx.javaClass.simpleName}: incrementStat")
             }
-            return Result.Success(Unit)
+            return Result.Success(loggedTxn)
         }
         return if (result is Result.Error) Result.Error(result.message ?: "Failed to log expense") else Result.Loading
     }
