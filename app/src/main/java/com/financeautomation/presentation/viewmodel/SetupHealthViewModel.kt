@@ -64,23 +64,57 @@ data class SetupHealthUiState(
 )
 
 /**
+ * Source of the two facts behind the "Capture is on" line: whether the user granted notification
+ * access to this app, and whether the notification listener service is currently connected.
+ */
+interface CaptureStatusSource {
+    fun isNotificationAccessGranted(): Boolean
+    fun isListenerConnected(): Boolean
+}
+
+/** Production [CaptureStatusSource] backed by the system listener settings and the live service flag. */
+class AndroidCaptureStatusSource(private val context: Context) : CaptureStatusSource {
+    override fun isNotificationAccessGranted(): Boolean =
+        NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+
+    override fun isListenerConnected(): Boolean = NotificationListenerServiceImpl.isConnected
+}
+
+/**
  * ViewModel managing the 7-point setup health checklist and resolution intents (Phase 7.1 & 7.2).
  */
 class SetupHealthViewModel(
     private val context: Context,
     private val preferencesRepository: PreferencesRepository,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val captureStatusSource: CaptureStatusSource = AndroidCaptureStatusSource(context)
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SetupHealthUiState())
     val uiState: StateFlow<SetupHealthUiState> = _uiState.asStateFlow()
 
+    private val _captureOn = MutableStateFlow(false)
+
+    /** True when notification access is granted and the listener is connected ("Capture is on"). */
+    val captureOn: StateFlow<Boolean> = _captureOn.asStateFlow()
+
     init {
         refreshChecks()
     }
 
+    private fun updateCaptureStatus() {
+        _captureOn.value = try {
+            captureStatusSource.isNotificationAccessGranted() && captureStatusSource.isListenerConnected()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Diagnostics.record(TAG, "${e.javaClass.simpleName}: updateCaptureStatus")
+            false
+        }
+    }
+
     fun refreshChecks() {
         viewModelScope.launch(ioDispatcher) {
+            updateCaptureStatus()
             _uiState.update { it.copy(isLoading = true) }
             try {
                 val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
