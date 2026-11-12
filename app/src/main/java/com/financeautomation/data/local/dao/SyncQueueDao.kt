@@ -63,6 +63,9 @@ interface SyncQueueDao {
     @Query("UPDATE sync_queue SET transactionId = :newTransactionId WHERE transactionId = :oldTransactionId")
     suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String)
 
-    @Query("UPDATE sync_queue SET payloadJson = :newPayload WHERE payloadJson = :oldPayload")
-    suspend fun updatePayload(oldPayload: String, newPayload: String)
+    @Query("UPDATE sync_queue SET payloadJson = REPLACE(payloadJson, :oldId, :newId) WHERE payloadJson LIKE '%' || :oldId || '%'")
+    suspend fun updatePayloadJsonId(oldId: String, newId: String)
+
+    @Query("UPDATE sync_queue SET planJson = REPLACE(planJson, :oldId, :newId) WHERE planJson IS NOT NULL AND planJson LIKE '%' || :oldId || '%'")
+    suspend fun updatePlanJsonId(oldId: String, newId: String)
 }

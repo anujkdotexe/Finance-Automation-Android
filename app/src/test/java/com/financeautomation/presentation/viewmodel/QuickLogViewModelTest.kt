@@ -173,7 +173,8 @@ class QuickLogViewModelTest {
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) {}
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
-        override suspend fun updatePayload(oldPayload: String, newPayload: String) {}
+        override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
+        override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
     }
 
     @Test
