@@ -580,6 +580,92 @@ class WorkbookResolverTest {
         assertFalse("Should not re-create the Dashboard sheet when only the month tab is missing", batchBody.contains("\"title\":\"Dashboard\""))
     }
 
+    private class FreshDriveClient(tokenProvider: TokenProvider) : GoogleDriveClient(OkHttpClient.Builder().build(), tokenProvider) {
+        val createdNames = mutableListOf<String>()
+        val createdFolderIds = mutableListOf<String>()
+        var createResult: Result<String> = Result.Success("fresh_sheet_id")
+
+        override suspend fun findOrCreateFolder(folderName: String): Result<String> {
+            assertEquals("Personal Finance", folderName)
+            return Result.Success("folder_1")
+        }
+
+        override suspend fun createSpreadsheet(folderId: String, spreadsheetName: String, year: Int?): Result<String> {
+            createdFolderIds.add(folderId)
+            createdNames.add(spreadsheetName)
+            return createResult
+        }
+    }
+
+    private class FreshSheetsClient(tokenProvider: TokenProvider) : GoogleSheetsClient(OkHttpClient.Builder().build(), tokenProvider) {
+        val provisioned = mutableListOf<String>()
+        var provisionResult: Result<Unit> = Result.Success(Unit)
+
+        override suspend fun provisionMasterWorkbook(spreadsheetId: String, accounts: List<String>, categories: List<String>): Result<Unit> {
+            provisioned.add(spreadsheetId)
+            return provisionResult
+        }
+    }
+
+    private fun prefsWithOldId() = FakePreferencesRepository().apply {
+        yearMap[2026] = "old_sheet_id"
+        activeSpreadsheetId = "old_sheet_id"
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_createsNewWorkbookAndSavesBothKeys() = runBlocking<Unit> {
+        val drive = FreshDriveClient(fakeTokenProvider)
+        val sheets = FreshSheetsClient(fakeTokenProvider)
+        val prefs = prefsWithOldId()
+        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined)
+
+        val result = resolver.createFreshWorkbook(2026)
+
+        assertTrue(result is Result.Success)
+        assertEquals("fresh_sheet_id", (result as Result.Success).data)
+        assertEquals("fresh_sheet_id", prefs.yearMap[2026])
+        assertEquals("fresh_sheet_id", prefs.activeSpreadsheetId)
+        // One new spreadsheet, named with a time stamp so the name is unique, and it was provisioned
+        assertEquals(listOf("folder_1"), drive.createdFolderIds)
+        assertEquals(1, drive.createdNames.size)
+        val namePattern = Regex("""Finance2026 \(new \d{4}-\d{2}-\d{2} \d{2}:\d{2}\)""")
+        assertTrue(drive.createdNames.first(), namePattern.matches(drive.createdNames.first()))
+        assertEquals(listOf("fresh_sheet_id"), sheets.provisioned)
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_createFailureKeepsStoredIds() = runBlocking<Unit> {
+        val drive = FreshDriveClient(fakeTokenProvider).apply {
+            createResult = Result.Error(java.io.IOException("Drive quota"))
+        }
+        val sheets = FreshSheetsClient(fakeTokenProvider)
+        val prefs = prefsWithOldId()
+        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined)
+
+        val result = resolver.createFreshWorkbook(2026)
+
+        assertTrue(result is Result.Error)
+        assertEquals("old_sheet_id", prefs.yearMap[2026])
+        assertEquals("old_sheet_id", prefs.activeSpreadsheetId)
+        assertTrue(sheets.provisioned.isEmpty())
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_provisionFailureKeepsStoredIds() = runBlocking<Unit> {
+        val drive = FreshDriveClient(fakeTokenProvider)
+        val sheets = FreshSheetsClient(fakeTokenProvider).apply {
+            provisionResult = Result.Error(GoogleSheetsApiException(500, "boom"))
+        }
+        val prefs = prefsWithOldId()
+        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined)
+
+        val result = resolver.createFreshWorkbook(2026)
+
+        assertTrue(result is Result.Error)
+        assertEquals("old_sheet_id", prefs.yearMap[2026])
+        assertEquals("old_sheet_id", prefs.activeSpreadsheetId)
+    }
+
     @Test
     fun testResolverReProvisionsWhenHeaderNamesDoNotMatchSchemaConstants() = runBlocking<Unit> {
         var provisionBatchCalled = false

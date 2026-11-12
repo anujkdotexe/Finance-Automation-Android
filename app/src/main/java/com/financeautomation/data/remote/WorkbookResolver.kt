@@ -223,6 +223,45 @@ open class WorkbookResolver(
         }
     }
 
+    /**
+     * Creates a brand new workbook for [year] and switches the app to it. Never searches for an existing
+     * workbook and leaves every old workbook untouched. The stored id changes only after the new workbook
+     * is created and provisioned; on any failure the previous id stays as it was.
+     */
+    open suspend fun createFreshWorkbook(year: Int): Result<String> = withContext(ioDispatcher) {
+        mutex.withLock {
+            val folderRes = googleDriveClient.findOrCreateFolder("Personal Finance")
+            if (folderRes is Result.Error) {
+                return@withContext Result.Error(folderRes.exception)
+            }
+            val folderId = (folderRes as Result.Success).data
+
+            val stamp = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.US))
+            val workbookName = "Finance$year (new $stamp)"
+            val createRes = googleDriveClient.createSpreadsheet(folderId, workbookName, year)
+            if (createRes is Result.Error) {
+                return@withContext Result.Error(createRes.exception)
+            }
+            val newId = (createRes as Result.Success).data
+
+            val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+            val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+            val provRes = googleSheetsClient.provisionMasterWorkbook(newId, accounts, categories)
+            if (provRes is Result.Error) {
+                return@withContext Result.Error(provRes.exception)
+            }
+
+            preferencesRepository.setSpreadsheetIdForYear(year, newId)
+            preferencesRepository.setSpreadsheetId(newId)
+
+            syncConfigUseCase?.mirrorToCloud(newId)
+            regenerateDashboardUseCase?.invoke()
+
+            Result.Success(newId)
+        }
+    }
+
     private suspend fun checkTabHasValidLayout(spreadsheetId: String, tabTitle: String): Boolean {
         val range = "$tabTitle!A3:AE3"
         val res = googleSheetsClient.getRangeValues(spreadsheetId, range)

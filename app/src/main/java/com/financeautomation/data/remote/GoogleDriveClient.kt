@@ -44,7 +44,7 @@ open class GoogleDriveClient(
      * Searches for a folder with [folderName] or creates it under Drive root if not found.
      * Returns the Drive folder ID on success.
      */
-    suspend fun findOrCreateFolder(folderName: String): Result<String> = withContext(Dispatchers.IO) {
+    open suspend fun findOrCreateFolder(folderName: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val escapedFolderName = folderName.replace("'", "\\'")
             val query = "(appProperties has { key='app' and value='FinanceAutomation' } or name = '$escapedFolderName') and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
@@ -180,6 +180,23 @@ open class GoogleDriveClient(
             }
 
             // Spreadsheet does not exist, create it with parent folder ID and appProperties
+            return@withContext createSpreadsheet(folderId, spreadsheetName, resolvedYear)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Always creates a new spreadsheet in [folderId] without searching for an existing one.
+     * The name must be unique; the caller is responsible for that.
+     */
+    open suspend fun createSpreadsheet(
+        folderId: String,
+        spreadsheetName: String,
+        year: Int? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val resolvedYear = year ?: Regex("""\d{4}""").find(spreadsheetName)?.value?.toIntOrNull()
             val createUrl = "$baseUrl/files"
             val fiscalYearValue = resolvedYear?.toString() ?: ""
             val requestBodyJson = """

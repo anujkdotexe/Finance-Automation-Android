@@ -36,7 +36,8 @@ fun SyncBackupScreen(
             onMirrorConfigToCloud = viewModel::onMirrorConfigToCloud,
             onRestoreConfigFromCloud = viewModel::onRestoreConfigFromCloud,
             onRegenerateDashboard = viewModel::onRegenerateDashboard,
-            onRepairWorkbook = viewModel::autoProvisionMasterSheet
+            onRepairWorkbook = viewModel::autoProvisionMasterSheet,
+            onCreateFreshWorkbook = viewModel::onCreateFreshWorkbook
         )
     }
 }

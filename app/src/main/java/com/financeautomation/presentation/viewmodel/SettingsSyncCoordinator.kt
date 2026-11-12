@@ -227,6 +227,39 @@ class SettingsSyncCoordinator(
         }
     }
 
+    /**
+     * Creates a new empty workbook and switches the app to it. The old workbook stays in Google Drive.
+     * The stored id is changed only on success.
+     */
+    fun onCreateFreshWorkbook() {
+        val resolver = workbookResolver ?: return
+        if (uiState.value.isProvisioning) return
+        scope.launch(ioDispatcher) {
+            uiState.update { it.copy(isProvisioning = true, errorMessage = null) }
+            val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+            when (val res = resolver.createFreshWorkbook(currentYear)) {
+                is Result.Success -> {
+                    uiState.update {
+                        it.copy(
+                            spreadsheetId = res.data,
+                            isProvisioning = false,
+                            userMessage = "Created a fresh Finance$currentYear workbook and switched to it"
+                        )
+                    }
+                }
+                is Result.Error -> {
+                    uiState.update {
+                        it.copy(
+                            isProvisioning = false,
+                            errorMessage = res.message ?: "Failed to create a fresh workbook: ${res.throwable.message}"
+                        )
+                    }
+                }
+                is Result.Loading -> {}
+            }
+        }
+    }
+
     fun onSyncNow() {
         val repo = transactionRepository ?: return
         scope.launch(ioDispatcher) {

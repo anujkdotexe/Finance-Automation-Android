@@ -449,6 +449,75 @@ class SettingsViewModelTest {
         ioDispatcher = Dispatchers.Unconfined
     )
 
+    private class FreshResolver(
+        driveClient: GoogleDriveClient,
+        sheetsClient: GoogleSheetsClient,
+        private val prefs: FakePreferencesRepository,
+        private val fail: Boolean
+    ) : WorkbookResolver(driveClient, sheetsClient, prefs) {
+        override suspend fun createFreshWorkbook(year: Int): Result<String> {
+            if (fail) return Result.Error(java.io.IOException("Drive quota"))
+            prefs.setSpreadsheetIdForYear(year, "fresh_id")
+            prefs.setSpreadsheetId("fresh_id")
+            return Result.Success("fresh_id")
+        }
+    }
+
+    private fun freshCoordinator(
+        scope: kotlinx.coroutines.CoroutineScope,
+        prefs: FakePreferencesRepository,
+        fail: Boolean,
+        state: MutableStateFlow<SettingsUiState>
+    ): SettingsSyncCoordinator {
+        val http = OkHttpClient.Builder().build()
+        val drive = GoogleDriveClient(http, fakeTokenProvider)
+        val sheets = GoogleSheetsClient(http, fakeTokenProvider)
+        return SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            googleAuthTokenProvider = null,
+            workbookResolver = FreshResolver(drive, sheets, prefs, fail),
+            accountRepository = null,
+            categoryRepository = null,
+            scope = scope,
+            uiState = state,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_successSwitchesIdAndShowsMessage() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState(spreadsheetId = "sheet_123"))
+        val year = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year
+
+        freshCoordinator(this, prefs, fail = false, state = state).onCreateFreshWorkbook()
+
+        assertEquals("fresh_id", prefs.yearMap[year])
+        assertEquals("fresh_id", prefs.activeSpreadsheetId)
+        assertEquals("fresh_id", state.value.spreadsheetId)
+        assertFalse(state.value.isProvisioning)
+        assertEquals(null, state.value.errorMessage)
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_failureIsShownAndStoredIdUnchanged() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState(spreadsheetId = "sheet_123"))
+
+        freshCoordinator(this, prefs, fail = true, state = state).onCreateFreshWorkbook()
+
+        assertTrue(prefs.yearMap.isEmpty())
+        assertEquals("sheet_123", prefs.activeSpreadsheetId)
+        assertEquals("sheet_123", state.value.spreadsheetId)
+        assertFalse(state.value.isProvisioning)
+        assertTrue(state.value.errorMessage?.contains("Drive quota") == true)
+    }
+
     @Test
     fun testSaveId_accessibleIdIsSavedForCurrentYear() = runBlocking<Unit> {
         val prefs = FakePreferencesRepository()

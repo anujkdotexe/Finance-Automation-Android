@@ -88,6 +88,7 @@ fun SettingsScreen(
             onRestoreConfigFromCloud = viewModel::onRestoreConfigFromCloud,
             onRegenerateDashboard = viewModel::onRegenerateDashboard,
             onRepairWorkbook = viewModel::autoProvisionMasterSheet,
+            onCreateFreshWorkbook = viewModel::onCreateFreshWorkbook,
             onVersionTapped = viewModel::onVersionTapped,
             modifier = Modifier.padding(innerPadding)
         )
@@ -120,6 +121,7 @@ fun SettingsContent(
     onRestoreConfigFromCloud: () -> Unit,
     onRegenerateDashboard: () -> Unit,
     onRepairWorkbook: () -> Unit = {},
+    onCreateFreshWorkbook: () -> Unit = {},
     onVersionTapped: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -164,7 +166,8 @@ fun SettingsContent(
             onMirrorConfigToCloud = onMirrorConfigToCloud,
             onRestoreConfigFromCloud = onRestoreConfigFromCloud,
             onRegenerateDashboard = onRegenerateDashboard,
-            onRepairWorkbook = onRepairWorkbook
+            onRepairWorkbook = onRepairWorkbook,
+            onCreateFreshWorkbook = onCreateFreshWorkbook
         )
 
         // 5. Overlay Permission, Categories, and Trip Tags
