@@ -48,7 +48,7 @@ class PreferencesRepositoryImpl(
 
     // In-memory fallbacks when running headless without Room database
     private val memSpreadsheetId = MutableStateFlow<String?>(null)
-    private val memDefaultAccount = MutableStateFlow("Other")
+    private val memDefaultAccount = MutableStateFlow(CategoryConstants.ACCOUNT_OTHER)
     private val memActiveTrip = MutableStateFlow<String?>(null)
     private val memGoogleEmail = MutableStateFlow<String?>(null)
     private val memSettleDelay = MutableStateFlow(DEFAULT_SETTLE_DELAY_SECONDS)
@@ -123,13 +123,13 @@ class PreferencesRepositoryImpl(
         if (dao == null) {
             emitAll(memDefaultAccount.asStateFlow())
         } else {
-            emitAll(dao.getPreferenceFlow(KEY_DEFAULT_ACCOUNT).map { it ?: "Other" })
+            emitAll(dao.getPreferenceFlow(KEY_DEFAULT_ACCOUNT).map { it ?: CategoryConstants.ACCOUNT_OTHER })
         }
     }.flowOn(ioDispatcher)
 
     override suspend fun getDefaultAccountSync(): String = withContext(ioDispatcher) {
         val dao = resolveDao() ?: return@withContext memDefaultAccount.value
-        dao.getPreference(KEY_DEFAULT_ACCOUNT) ?: "Other"
+        dao.getPreference(KEY_DEFAULT_ACCOUNT) ?: CategoryConstants.ACCOUNT_OTHER
     }
 
     override suspend fun setDefaultAccount(account: String): Unit = withContext(ioDispatcher) {

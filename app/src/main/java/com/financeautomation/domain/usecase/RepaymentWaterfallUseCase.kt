@@ -1,5 +1,6 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.CellEdit
 import com.financeautomation.domain.model.LedgerPayable
@@ -120,7 +121,7 @@ class RepaymentWaterfallUseCase(
                 "Cash",
                 "[Carried Over] Excess repayment balance",
                 "",
-                "Other",
+                CategoryConstants.CATEGORY_OTHER,
                 AccountingUtils.round2(remaining),
                 creditor,
                 0.0,

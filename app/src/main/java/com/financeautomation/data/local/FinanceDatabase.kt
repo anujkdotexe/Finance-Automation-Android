@@ -299,7 +299,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                     ),
                     AccountEntity(
                         id = "acc_other",
-                        name = "Other",
+                        name = CategoryConstants.ACCOUNT_OTHER,
                         lastFourDigits = null,
                         isDefault = false,
                         isArchived = false,
@@ -314,7 +314,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 preferenceDao.setPreference(
                     PreferenceEntity(
                         key = "key_default_account",
-                        value = "Other"
+                        value = CategoryConstants.ACCOUNT_OTHER
                     )
                 )
             }

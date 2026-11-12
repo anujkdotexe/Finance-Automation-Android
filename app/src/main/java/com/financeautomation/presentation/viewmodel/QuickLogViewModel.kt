@@ -69,7 +69,7 @@ class QuickLogViewModel(
             launch {
                 accountRepository.getAccounts().collect { accs ->
                     _uiState.update { curr ->
-                        val acc = if (accs.any { it.name.equals(curr.selectedAccount, ignoreCase = true) }) curr.selectedAccount else accs.firstOrNull { it.isDefault }?.name ?: accs.firstOrNull()?.name ?: "Other"
+                        val acc = if (accs.any { it.name.equals(curr.selectedAccount, ignoreCase = true) }) curr.selectedAccount else accs.firstOrNull { it.isDefault }?.name ?: accs.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_OTHER
                         curr.copy(availableAccounts = accs, selectedAccount = acc)
                     }
                 }
