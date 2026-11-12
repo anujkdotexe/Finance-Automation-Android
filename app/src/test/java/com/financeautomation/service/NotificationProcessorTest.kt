@@ -35,6 +35,8 @@ class NotificationProcessorTest {
         override suspend fun getByNotificationKey(key: String): PendingCaptureEntity? = captures.values.lastOrNull { it.notificationKey == key }
         override suspend fun getByState(state: String): List<PendingCaptureEntity> = captures.values.filter { it.state == state }
         override fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(captures.values.filter { it.state == "WAITING" })
+        override fun getNeedsReviewCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(captures.values.filter { it.state == "NEEDS_REVIEW" })
+        override fun getNewAccountCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(captures.values.filter { it.flags.contains("NEW_ACCOUNT") && it.state !in listOf("DONE", "DISMISSED") })
         override suspend fun getWaitingCaptures(): List<PendingCaptureEntity> = captures.values.filter { it.state == "WAITING" }
         override suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity> =
             captures.values.filter { it.state == "WAITING" && it.timestamp < cutoffTime }

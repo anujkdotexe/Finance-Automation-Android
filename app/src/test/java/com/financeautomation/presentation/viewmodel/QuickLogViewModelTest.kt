@@ -140,6 +140,8 @@ class QuickLogViewModelTest {
         override suspend fun getByNotificationKey(key: String): PendingCaptureEntity? = captures.values.lastOrNull { it.notificationKey == key }
         override suspend fun getByState(state: String): List<PendingCaptureEntity> = captures.values.filter { it.state == state }
         override fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(emptyList())
+        override fun getNeedsReviewCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(emptyList())
+        override fun getNewAccountCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(emptyList())
         override suspend fun getWaitingCaptures(): List<PendingCaptureEntity> = emptyList()
         override suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity> = emptyList()
         override suspend fun getAwaitingSuccessCaptures(): List<PendingCaptureEntity> = emptyList()

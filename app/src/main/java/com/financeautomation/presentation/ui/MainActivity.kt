@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
             transactionRepository = app.appContainer.transactionRepository,
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
             payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
+            pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             categoryRepository = app.appContainer.categoryRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
