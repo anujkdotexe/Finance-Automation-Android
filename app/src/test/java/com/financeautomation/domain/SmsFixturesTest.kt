@@ -101,3 +101,4 @@ class SmsFixturesTest {
         assertTrue("Expected to test all 44 fixtures", tested >= 40)
     }
 }
+
