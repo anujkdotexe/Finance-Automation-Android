@@ -214,38 +214,12 @@ class NotificationProcessor(
 
     suspend fun expireStaleWaitingCaptures(now: Long = System.currentTimeMillis()) {
         val pDao = pendingCaptureDao ?: return
-        val tDao = transactionDao ?: return
-        val cutoff = now - 24L * 60L * 60L * 1000L
-        val expired = pDao.getExpiredWaitingCaptures(cutoff)
-        for (cap in expired) {
-            val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
-            val txn = TransactionEntity(
-                id = txnId,
-                timestamp = cap.timestamp,
-                dateSerial = DateSerialUtils.toDateSerial(cap.timestamp),
-                timeSerial = DateSerialUtils.toTimeSerial(cap.timestamp),
-                merchant = cap.payee.ifBlank { "Expense" },
-                category = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
-                account = cap.inferredAccount?.takeIf { it.isNotBlank() } ?: "Other",
-                totalAmount = cap.amount ?: 0.0,
-                myShare = cap.amount ?: 0.0,
-                owedToMe = 0.0,
-                status = "Personal",
-                companions = "Personal",
-                reviewState = ReviewState.NEEDS_REVIEW.name,
-                syncState = SyncState.PENDING.name,
-                sourcePackage = cap.sourcePackage
-            )
-            val op: suspend () -> Unit = {
-                tDao.insert(txn)
-                pDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
-            }
-            if (runInTransaction != null) {
-                runInTransaction.invoke(op)
-            } else {
-                op()
-            }
-        }
+        expireStaleCaptures(
+            pendingCaptureDao = pDao,
+            transactionDao = transactionDao,
+            now = now,
+            runInTransaction = runInTransaction
+        )
     }
 
     private suspend fun handleCaptureDecision(
@@ -376,6 +350,68 @@ class NotificationProcessor(
                 hex.append(Integer.toHexString(b))
             }
             return hex.toString()
+        }
+
+        /**
+         * Single canonical implementation for expiring stale WAITING captures (> 24 hours).
+         * - Captures with missing or zero amount (NEEDS_AMOUNT) are marked NEEDS_REVIEW without creating a 0-rupee transaction.
+         * - CREDIT captures are marked NEEDS_REVIEW without creating a debit expense.
+         * - DEBIT captures with valid amount (> 0.0) are converted into NEEDS_REVIEW transactions with CATEGORY_OTHER.
+         */
+        suspend fun expireStaleCaptures(
+            pendingCaptureDao: PendingCaptureDao,
+            transactionDao: TransactionDao?,
+            now: Long = System.currentTimeMillis(),
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
+            runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null
+        ) {
+            val cutoff = now - 24L * 60L * 60L * 1000L
+            val expired = pendingCaptureDao.getExpiredWaitingCaptures(cutoff)
+            for (cap in expired) {
+                val hasNoAmount = cap.amount == null || cap.amount <= 0.0 ||
+                    cap.flags.split(",").map { it.trim() }.contains(PendingCaptureEntity.FLAG_NEEDS_AMOUNT)
+                if (hasNoAmount) {
+                    pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_NEEDS_REVIEW)
+                    continue
+                }
+
+                if (cap.kind.equals(PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
+                    pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_NEEDS_REVIEW)
+                    continue
+                }
+
+                if (transactionDao != null) {
+                    val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+                    val txn = TransactionEntity(
+                        id = txnId,
+                        timestamp = cap.timestamp,
+                        dateSerial = DateSerialUtils.toDateSerial(cap.timestamp),
+                        timeSerial = DateSerialUtils.toTimeSerial(cap.timestamp),
+                        merchant = cap.payee.ifBlank { "Expense" },
+                        category = CategoryConstants.CATEGORY_OTHER,
+                        account = cap.inferredAccount?.takeIf { it.isNotBlank() } ?: defaultAccount,
+                        totalAmount = cap.amount,
+                        myShare = cap.amount,
+                        owedToMe = 0.0,
+                        status = "Personal",
+                        companions = "Personal",
+                        reviewState = ReviewState.NEEDS_REVIEW.name,
+                        syncState = SyncState.PENDING.name,
+                        sourcePackage = cap.sourcePackage
+                    )
+                    val op: suspend () -> Unit = {
+                        transactionDao.insert(txn)
+                        pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
+                    }
+                    if (runInTransaction != null) {
+                        runInTransaction.invoke(op)
+                    } else {
+                        op()
+                    }
+                } else {
+                    pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_NEEDS_REVIEW)
+                }
+            }
         }
     }
 }

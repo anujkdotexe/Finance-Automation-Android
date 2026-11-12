@@ -340,33 +340,11 @@ class ForegroundWatcher(
     }
 
     private suspend fun expireStaleCaptures(pDao: PendingCaptureDao) {
-        val cutoff = System.currentTimeMillis() - 24L * 60L * 60L * 1000L
-        val expired = pDao.getExpiredWaitingCaptures(cutoff)
-        if (expired.isEmpty()) return
         val tDao = directTransactionDao ?: transactionDaoProvider?.invoke()
-        for (cap in expired) {
-            if (tDao != null) {
-                val txn = TransactionEntity(
-                    id = "txn_${java.util.UUID.randomUUID().toString().replace("-", "").take(12)}",
-                    timestamp = cap.timestamp,
-                    dateSerial = DateSerialUtils.toDateSerial(cap.timestamp),
-                    timeSerial = DateSerialUtils.toTimeSerial(cap.timestamp),
-                    merchant = cap.payee.ifBlank { "Expense" },
-                    category = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
-                    account = cap.inferredAccount?.takeIf { it.isNotBlank() } ?: "Other",
-                    totalAmount = cap.amount ?: 0.0,
-                    myShare = cap.amount ?: 0.0,
-                    owedToMe = 0.0,
-                    status = "Personal",
-                    companions = "Personal",
-                    reviewState = ReviewState.NEEDS_REVIEW.name,
-                    syncState = SyncState.PENDING.name,
-                    sourcePackage = cap.sourcePackage
-                )
-                tDao.insert(txn)
-            }
-            pDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
-        }
+        NotificationProcessor.expireStaleCaptures(
+            pendingCaptureDao = pDao,
+            transactionDao = tDao
+        )
     }
 
     private suspend fun postHeadsUpFallback(capture: PendingCaptureEntity) {
