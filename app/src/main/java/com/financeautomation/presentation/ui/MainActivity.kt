@@ -5,69 +5,38 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.rememberNavController
 import com.financeautomation.FinanceApplication
-import com.financeautomation.R
-import com.financeautomation.presentation.overlay.OverlayController
-import com.financeautomation.presentation.screens.DashboardScreen
+import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.presentation.screens.OnboardingScreen
-import com.financeautomation.presentation.screens.ReviewInboxScreen
-import com.financeautomation.presentation.screens.SettingsScreen
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
-import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModelFactory
+import com.financeautomation.presentation.viewmodel.TransactionsViewModel
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
-enum class MainNavDestination(val label: String) {
-    INBOX("Needs Review"),
-    DASHBOARD("Dashboard"),
-    SETTINGS("Settings & Sync")
-}
-
 /**
  * Main launcher Activity for Finance Automation.
- * Hosts navigation between ReviewInboxScreen, DashboardScreen, and SettingsScreen.
+ * Hosts modular navigation drawer, bottom bar, and deep links via AppNavHost.
  */
 class MainActivity : ComponentActivity() {
+
+    private var pendingRoute by mutableStateOf<String?>(null)
 
     private val reviewInboxViewModel: ReviewInboxViewModel by viewModels {
         val app = application as FinanceApplication
@@ -88,6 +57,14 @@ class MainActivity : ComponentActivity() {
             payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
             pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             categoryRepository = app.appContainer.categoryRepository,
+            ioDispatcher = app.appContainer.ioDispatcher
+        )
+    }
+
+    private val transactionsViewModel: TransactionsViewModel by viewModels {
+        val app = application as FinanceApplication
+        TransactionsViewModel.provideFactory(
+            transactionRepository = app.appContainer.transactionRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -137,16 +114,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        extractRouteFromIntent(intent)
+
         setContent {
             val app = application as FinanceApplication
             val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
             val googleEmail by app.appContainer.preferencesRepository.getGoogleAccountEmail().collectAsState(initial = null)
             val spreadsheetId by app.appContainer.preferencesRepository.getSpreadsheetIdForYear(currentYear).collectAsState(initial = null)
+            val themeMode by app.appContainer.preferencesRepository.getThemeMode().collectAsState(initial = ThemeMode.SYSTEM)
             var forceOnboarding by remember { mutableStateOf(false) }
 
             val needsOnboarding = forceOnboarding || googleEmail.isNullOrBlank() || spreadsheetId.isNullOrBlank()
 
-            FinanceAutomationTheme {
+            FinanceAutomationTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -157,11 +137,25 @@ class MainActivity : ComponentActivity() {
                             onOnboardingFinished = { forceOnboarding = false }
                         )
                     } else {
-                        MainScreen(
-                            reviewInboxViewModel = reviewInboxViewModel,
+                        val navController = rememberNavController()
+
+                        LaunchedEffect(pendingRoute) {
+                            pendingRoute?.let { route ->
+                                navController.navigate(route) {
+                                    launchSingleTop = true
+                                }
+                                pendingRoute = null
+                            }
+                        }
+
+                        AppNavHost(
+                            navController = navController,
                             dashboardViewModel = dashboardViewModel,
+                            reviewInboxViewModel = reviewInboxViewModel,
+                            transactionsViewModel = transactionsViewModel,
                             settingsViewModel = settingsViewModel,
                             setupHealthViewModel = setupHealthViewModel,
+                            onboardingViewModel = onboardingViewModel,
                             overlayControllerProvider = { app.appContainer.overlayController },
                             onReRunSetup = { forceOnboarding = true }
                         )
@@ -170,182 +164,26 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MainScreen(
-    reviewInboxViewModel: ReviewInboxViewModel,
-    dashboardViewModel: DashboardViewModel,
-    settingsViewModel: SettingsViewModel,
-    setupHealthViewModel: SetupHealthViewModel,
-    overlayControllerProvider: () -> OverlayController,
-    onReRunSetup: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    var currentDestination by remember { mutableStateOf(MainNavDestination.INBOX) }
-    val healthState by setupHealthViewModel.uiState.collectAsState()
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractRouteFromIntent(intent)
+    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = when (currentDestination) {
-                                MainNavDestination.INBOX -> stringResource(R.string.nav_inbox_title)
-                                MainNavDestination.DASHBOARD -> stringResource(R.string.nav_dashboard_title)
-                                MainNavDestination.SETTINGS -> stringResource(R.string.nav_settings_title)
-                            },
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = when (currentDestination) {
-                                MainNavDestination.INBOX -> stringResource(R.string.nav_inbox_subtitle)
-                                MainNavDestination.DASHBOARD -> stringResource(R.string.nav_dashboard_subtitle)
-                                MainNavDestination.SETTINGS -> stringResource(R.string.nav_settings_subtitle)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground
-                )
-            )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = FinanceTheme.spacing.xs
-            ) {
-                MainNavDestination.values().forEach { destination ->
-                    val isSelected = currentDestination == destination
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { currentDestination = destination },
-                        label = {
-                            Text(
-                                text = destination.label,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        },
-                        icon = {
-                            if (destination == MainNavDestination.SETTINGS && healthState.hasMissing) {
-                                BadgedBox(badge = { Badge() }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Tune,
-                                        contentDescription = destination.label,
-                                        modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
-                                    )
-                                }
-                            } else {
-                                Icon(
-                                    imageVector = when (destination) {
-                                        MainNavDestination.INBOX -> Icons.AutoMirrored.Rounded.ReceiptLong
-                                        MainNavDestination.DASHBOARD -> Icons.Rounded.Dashboard
-                                        MainNavDestination.SETTINGS -> Icons.Rounded.Tune
-                                    },
-                                    contentDescription = destination.label,
-                                    modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
-                                )
-                            }
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
-        },
-        floatingActionButton = {
-            if (currentDestination == MainNavDestination.INBOX) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        val authIntent = android.app.PendingIntent.getActivity(
-                            context,
-                            0,
-                            Intent(),
-                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-                        )
-                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java).apply {
-                            putExtra(ModalBottomSheetActivity.EXTRA_FLOW, "MENU")
-                            putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
-                        })
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = stringResource(R.string.quick_add_tile_label)
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = stringResource(R.string.quick_add_tile_label),
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                )
-            }
-        },
-        modifier = modifier
-    ) { innerPadding ->
-        when (currentDestination) {
-            MainNavDestination.INBOX -> {
-                ReviewInboxScreen(
-                    reviewInboxViewModel = reviewInboxViewModel,
-                    onEditTransaction = { txn ->
-                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java).apply {
-                            putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, txn.id)
-                        })
-                    },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            MainNavDestination.DASHBOARD -> {
-                DashboardScreen(
-                    viewModel = dashboardViewModel,
-                    onNavigateToReview = { currentDestination = MainNavDestination.INBOX },
-                    onNavigateToSettlements = { personName, owedToMe ->
-                        val extras = com.financeautomation.presentation.overlay.FlowAuthGate.mapSettlementToExtras(personName, owedToMe)
-                        val authIntent = android.app.PendingIntent.getActivity(
-                            context,
-                            0,
-                            Intent(),
-                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-                        )
-                        val intent = Intent(context, ModalBottomSheetActivity::class.java).apply {
-                            putExtra(ModalBottomSheetActivity.EXTRA_FLOW, extras.flow)
-                            putExtra(ModalBottomSheetActivity.EXTRA_PRESELECT_FRIEND, extras.preselectedFriend)
-                            putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
-                        }
-                        context.startActivity(intent)
-                    },
-                    onAddExpense = {
-                        context.startActivity(Intent(context, ModalBottomSheetActivity::class.java))
-                    },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            MainNavDestination.SETTINGS -> {
-                SettingsScreen(
-                    viewModel = settingsViewModel,
-                    setupHealthViewModel = setupHealthViewModel,
-                    overlayControllerProvider = overlayControllerProvider,
-                    onReRunSetup = onReRunSetup,
-                    modifier = Modifier.padding(innerPadding)
-                )
+    private fun extractRouteFromIntent(intent: Intent?) {
+        val extraRoute = intent?.getStringExtra("extra_route")
+        if (!extraRoute.isNullOrBlank()) {
+            pendingRoute = extraRoute
+            return
+        }
+        val dataUri = intent?.data
+        if (dataUri != null && dataUri.scheme == "financeautomation") {
+            val host = dataUri.host
+            val path = dataUri.path?.removePrefix("/")
+            val route = if (!path.isNullOrBlank()) path else host
+            if (!route.isNullOrBlank()) {
+                pendingRoute = route
             }
         }
     }
