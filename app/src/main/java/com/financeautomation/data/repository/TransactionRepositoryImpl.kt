@@ -4,6 +4,7 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
@@ -70,6 +71,8 @@ class TransactionRepositoryImpl(
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val payableDao: PayableDao? = null,
     private val payableDaoProvider: (suspend () -> PayableDao)? = null,
+    private val lineageDao: LineageDao? = null,
+    private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
     private val databaseProvider: (suspend () -> FinanceDatabase)? = null,
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val preferencesRepository: PreferencesRepository? = null,
@@ -89,6 +92,7 @@ class TransactionRepositoryImpl(
         transactionDao: TransactionDao,
         syncQueueDao: SyncQueueDao,
         payableDao: PayableDao? = null,
+        lineageDao: LineageDao? = null,
         googleSheetsClient: GoogleSheetsClient? = null,
         preferencesRepository: PreferencesRepository? = null,
         workbookResolver: WorkbookResolver? = null,
@@ -108,6 +112,8 @@ class TransactionRepositoryImpl(
         syncQueueDaoProvider = null,
         payableDao = payableDao,
         payableDaoProvider = null,
+        lineageDao = lineageDao,
+        lineageDaoProvider = null,
         databaseProvider = null,
         googleSheetsClient = googleSheetsClient,
         preferencesRepository = preferencesRepository,
@@ -144,6 +150,9 @@ class TransactionRepositoryImpl(
 
     private suspend fun resolvePayableDao(): PayableDao? =
         payableDao ?: payableDaoProvider?.invoke()
+
+    private suspend fun resolveLineageDao(): LineageDao? =
+        lineageDao ?: lineageDaoProvider?.invoke() ?: databaseProvider?.invoke()?.lineageDao()
 
     private fun resolveExecutor(): AccountingSyncExecutor {
         accountingSyncExecutor?.let { return it }
@@ -1017,7 +1026,8 @@ class TransactionRepositoryImpl(
 
                             // Align local ID with non-blank sheet UUID if matched by tab/row to avoid orphan divergence
                             if (!uuid.isNullOrBlank() && localTxn.id != uuid) {
-                                tDao.deleteById(localTxn.id)
+                                val oldId = localTxn.id
+                                val qDao = resolveSyncQueueDao()
                                 val aligned = localTxn.copy(
                                     id = uuid,
                                     totalAmount = newTotal,
@@ -1031,6 +1041,17 @@ class TransactionRepositoryImpl(
                                     syncState = SyncState.SYNCED.name
                                 )
                                 tDao.insert(aligned)
+                                qDao.updateTransactionId(oldId, uuid)
+                                qDao.updatePayload(oldId, uuid)
+
+                                val lDao = resolveLineageDao()
+                                lDao?.let {
+                                    it.updateUuid(oldId, uuid)
+                                    it.updateCarriedFromUuid(oldId, uuid)
+                                    it.updateRootUuid(oldId, uuid)
+                                }
+
+                                tDao.deleteById(oldId)
                                 reconciledCount++
                             } else if (localTxn.totalAmount != newTotal ||
                                 localTxn.merchant != newMerchant ||

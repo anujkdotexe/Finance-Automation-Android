@@ -14,6 +14,7 @@ import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.entity.LineageEntity
+import com.financeautomation.data.remote.AccountingPlanJsonAdapter
 import com.financeautomation.data.remote.AccountingRequestJsonAdapter
 import com.financeautomation.data.remote.AccountingSyncExecutor
 import com.financeautomation.data.remote.GoogleDriveClient
@@ -22,7 +23,9 @@ import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.data.repository.TransactionRepositoryImpl
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.CellEdit
+import com.financeautomation.domain.model.NewRow
 import com.financeautomation.domain.model.SettledRef
+import com.financeautomation.domain.model.TableType
 import com.financeautomation.domain.model.LogCreditRequest
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PreferencesRepository
@@ -41,6 +44,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.ConcurrentHashMap
@@ -125,6 +129,16 @@ class TransactionRepositorySyncTest {
         override suspend fun updatePlanJson(id: Long, planJson: String?) {
             queue[id]?.let { queue[id] = it.copy(planJson = planJson) }
         }
+        override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {
+            queue.values.filter { it.transactionId == oldTransactionId }.forEach {
+                queue[it.id] = it.copy(transactionId = newTransactionId)
+            }
+        }
+        override suspend fun updatePayload(oldPayload: String, newPayload: String) {
+            queue.values.filter { it.payloadJson == oldPayload }.forEach {
+                queue[it.id] = it.copy(payloadJson = newPayload)
+            }
+        }
     }
 
     private class FakePayableDao : PayableDao {
@@ -154,6 +168,22 @@ class TransactionRepositorySyncTest {
         override suspend fun getByCarriedFrom(carriedFromUuid: String): LineageEntity? =
             records.values.firstOrNull { it.carriedFromUuid == carriedFromUuid }
         override suspend fun getAll(): List<LineageEntity> = records.values.toList()
+        override suspend fun updateUuid(oldUuid: String, newUuid: String) {
+            val existing = records.remove(oldUuid)
+            if (existing != null) {
+                records[newUuid] = existing.copy(uuid = newUuid)
+            }
+        }
+        override suspend fun updateCarriedFromUuid(oldUuid: String, newUuid: String) {
+            records.values.filter { it.carriedFromUuid == oldUuid }.forEach {
+                records[it.uuid] = it.copy(carriedFromUuid = newUuid)
+            }
+        }
+        override suspend fun updateRootUuid(oldUuid: String, newUuid: String) {
+            records.values.filter { it.rootUuid == oldUuid }.forEach {
+                records[it.uuid] = it.copy(rootUuid = newUuid)
+            }
+        }
     }
 
     private class FakePreferencesRepository(private val spreadsheetId: String = "test_sheet_id") : PreferencesRepository {
@@ -186,6 +216,7 @@ class TransactionRepositorySyncTest {
         val writtenUuids = ConcurrentHashMap<String, String>() // cell -> uuid
         var customBatchGetResponse: String? = null
         var failBatchGetOnce: Boolean = false
+        var customGetHandler: ((url: String) -> String?)? = null
 
         val fakeTokenProvider = object : TokenProvider {
             override fun getAccessToken(): String = "test_token"
@@ -209,7 +240,10 @@ class TransactionRepositorySyncTest {
                         .build()
                 }
 
-                val responseBody: String = when {
+                val customResp = if (method == "GET") customGetHandler?.invoke(url) else null
+                val responseBody: String = if (customResp != null) {
+                    customResp
+                } else when {
                     // values:batchGet (readLedgerSnapshot)
                     method == "GET" && url.contains("values:batchGet") -> {
                         customBatchGetResponse ?: """{"valueRanges":[
@@ -969,13 +1003,7 @@ class TransactionRepositorySyncTest {
             googleSheetsClient = sheets,
             googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
             syncQueueDao = qDao,
-            lineageDao = object : LineageDao {
-                override suspend fun insert(entity: LineageEntity) {}
-                override suspend fun insertAll(entities: List<LineageEntity>) {}
-                override suspend fun getByUuid(uuid: String): LineageEntity? = null
-                override suspend fun getByCarriedFrom(carriedFromUuid: String): LineageEntity? = null
-                override suspend fun getAll(): List<LineageEntity> = emptyList()
-            },
+            lineageDao = FakeLineageDao(),
             transactionDao = tDao
         )
 
@@ -1546,5 +1574,241 @@ class TransactionRepositorySyncTest {
         assertEquals("Nov Dinner", untouchedNov!!.merchant)
         assertEquals(150.0, untouchedNov.owedToMe, 0.001)
         assertEquals(300.0, untouchedNov.totalAmount, 0.001)
+    }
+
+    @Test
+    fun testApplyPlan_splitExpenseStoresDebitRowNotPayableRow() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val lineageDao = FakeLineageDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+
+        // Table 1 (A4:A) has 2 occupied rows (rows 4, 5) -> next free row is 6 (debit append row)
+        // Table 3 (V4:V) has 4 occupied rows (rows 4, 5, 6, 7) -> next free row is 8 (payable append row)
+        mock.customGetHandler = { url ->
+            val decoded = java.net.URLDecoder.decode(url, "UTF-8")
+            when {
+                decoded.contains("Nov26") && (decoded.contains("!A4:A") || decoded.contains("A4:A")) ->
+                    """{"range":"'Nov26'!A4:A","majorDimension":"ROWS","values":[["46338"],["46338"]]}"""
+                decoded.contains("Nov26") && (decoded.contains("!V4:V") || decoded.contains("V4:V")) ->
+                    """{"range":"'Nov26'!V4:V","majorDimension":"ROWS","values":[["46338"],["46338"],["46338"],["46338"]]}"""
+                decoded.contains("Nov26") && (decoded.contains("AC") || decoded.contains("AE")) ->
+                    """{"range":"'Nov26'!AC3:AC","majorDimension":"ROWS","values":[]}"""
+                else -> null
+            }
+        }
+
+        val sheets = mock.createClient()
+        val drive = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider)
+        val executor = AccountingSyncExecutor(
+            googleSheetsClient = sheets,
+            googleDriveClient = drive,
+            syncQueueDao = qDao,
+            lineageDao = lineageDao,
+            transactionDao = tDao
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            lineageDao = lineageDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = executor
+        )
+
+        val txnId = "txn_split_debit_vs_payable_test"
+        val localTxn = TransactionEntity(
+            id = txnId,
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Groceries Split",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "AliceBobk",
+            myShare = 120.0,
+            owedToMe = 380.0,
+            status = "Pending",
+            sheetRowIndex = null,
+            syncState = SyncState.PENDING.name,
+            reviewState = ReviewState.CONFIRMED.name
+        )
+        tDao.insert(localTxn)
+
+        // OP_INSERT plan with one DEBIT append (row 6) and one PAYABLE append (row 8)
+        val splitPlan = AccountingPlan(
+            appends = listOf(
+                NewRow(
+                    table = TableType.DEBIT,
+                    tab = "Nov26",
+                    uuid = txnId,
+                    cells = listOf(46338, 0.5, "Cash", "Groceries Split", "", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending")
+                ),
+                NewRow(
+                    table = TableType.PAYABLE,
+                    tab = "Nov26",
+                    uuid = "payable_split_row8",
+                    cells = listOf(46338, 0.5, "AliceBobk", "Groceries Split", 380.0, "", "Pending")
+                )
+            )
+        )
+        val queueItem = SyncQueueEntity(
+            transactionId = txnId,
+            operationType = SyncQueueEntity.OP_INSERT,
+            payloadJson = txnId,
+            planJson = AccountingPlanJsonAdapter.toJson(splitPlan)
+        )
+        qDao.insert(queueItem)
+
+        // Sync pending transactions
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue(syncRes is Result.Success)
+
+        // Assert local transaction has sheetRowIndex == 6 (debit row, NOT payable row 8)
+        val syncedTxn = tDao.getById(txnId)
+        assertNotNull(syncedTxn)
+        assertEquals(6, syncedTxn!!.sheetRowIndex)
+        assertEquals(SyncState.SYNCED.name, syncedTxn.syncState)
+
+        // Reconcile against sheet with the same UUID at row 6
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension":"ROWS",
+                    "values": [
+                        [""], [""],
+                        [46338, 0.5, "Cash", "Groceries Split", "", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension":"ROWS",
+                    "values": [
+                        [""], [""],
+                        ["$txnId"]
+                    ]
+                },
+                {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+            ]
+        }"""
+
+        val reconcileRes = repo.reconcileWithSheet("test_sheet_id")
+        assertTrue(reconcileRes is Result.Success)
+
+        // Assert exactly one local row afterwards
+        assertEquals(1, tDao.transactions.values.size)
+        val reconciledTxn = tDao.getById(txnId)
+        assertNotNull(reconciledTxn)
+        assertEquals(6, reconciledTxn!!.sheetRowIndex)
+        assertEquals("Groceries Split", reconciledTxn.merchant)
+    }
+
+    @Test
+    fun testReconcile_realignsLocalIdAndUpdatesPendingSyncQueueItem() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val lineageDao = FakeLineageDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            lineageDao = lineageDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs
+        )
+
+        val oldLocalId = "txn_offline_temp_123"
+        val canonicalSheetUuid = "txn_canonical_sheet_456"
+
+        // Local row has old ID, tab Nov26, row index 6, but offline ID differs from canonical sheet UUID
+        val localTxn = TransactionEntity(
+            id = oldLocalId,
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Dinner",
+            category = "Food & Drink",
+            totalAmount = 200.0,
+            companions = "Personal",
+            myShare = 200.0,
+            owedToMe = 0.0,
+            status = "Personal",
+            sheetRowIndex = 6,
+            syncState = SyncState.PENDING.name,
+            reviewState = ReviewState.CONFIRMED.name
+        )
+        tDao.insert(localTxn)
+
+        // Pending sync_queue item pointing to the local row
+        val queueItem = SyncQueueEntity(
+            transactionId = oldLocalId,
+            operationType = SyncQueueEntity.OP_UPDATE,
+            payloadJson = oldLocalId
+        )
+        val queueItemId = qDao.insert(queueItem)
+
+        // Remote sheet has row 6 carrying the canonical UUID in column AC
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension":"ROWS",
+                    "values": [
+                        [""], [""],
+                        [46338, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Personal", 200.0, 0.0, "Personal"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension":"ROWS",
+                    "values": [
+                        [""], [""],
+                        ["$canonicalSheetUuid"]
+                    ]
+                },
+                {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+            ]
+        }"""
+
+        val reconcileRes = repo.reconcileWithSheet("test_sheet_id")
+        assertTrue(reconcileRes is Result.Success)
+
+        // Assert old ID is gone and new aligned ID exists
+        assertNull(tDao.getById(oldLocalId))
+        val alignedTxn = tDao.getById(canonicalSheetUuid)
+        assertNotNull(alignedTxn)
+        assertEquals(canonicalSheetUuid, alignedTxn!!.id)
+        assertEquals(6, alignedTxn.sheetRowIndex)
+
+        // Assert the pending sync_queue item was realigned to point to the canonical UUID
+        val updatedQueue = qDao.queue.values.toList()
+        assertEquals(1, updatedQueue.size)
+        val updatedItem = updatedQueue.first()
+        assertEquals(queueItemId, updatedItem.id)
+        assertEquals(canonicalSheetUuid, updatedItem.transactionId)
+        assertEquals(canonicalSheetUuid, updatedItem.payloadJson)
+
+        // Queue item still points at an existing transaction
+        val txnForQueueItem = tDao.getById(updatedItem.transactionId)
+        assertNotNull(txnForQueueItem)
+        assertEquals(canonicalSheetUuid, txnForQueueItem!!.id)
     }
 }

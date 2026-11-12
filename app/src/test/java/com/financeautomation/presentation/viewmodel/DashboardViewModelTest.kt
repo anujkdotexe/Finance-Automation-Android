@@ -89,6 +89,8 @@ class DashboardViewModelTest {
         override suspend fun setStatusAndRetryCount(id: Long, status: String, retryCount: Int) {}
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) {}
+        override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
+        override suspend fun updatePayload(oldPayload: String, newPayload: String) {}
     }
 
     private class FakePayableDao : PayableDao {

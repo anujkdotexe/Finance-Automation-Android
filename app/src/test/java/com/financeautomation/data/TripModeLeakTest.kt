@@ -158,6 +158,8 @@ class TripModeLeakTest {
         }
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) { items[id]?.let { items[id] = it.copy(planJson = planJson) } }
+        override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
+        override suspend fun updatePayload(oldPayload: String, newPayload: String) {}
     }
 
     @Test

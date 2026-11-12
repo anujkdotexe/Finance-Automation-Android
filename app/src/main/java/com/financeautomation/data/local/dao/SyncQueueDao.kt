@@ -59,4 +59,10 @@ interface SyncQueueDao {
 
     @Query("UPDATE sync_queue SET planJson = :planJson WHERE id = :id")
     suspend fun updatePlanJson(id: Long, planJson: String?)
+
+    @Query("UPDATE sync_queue SET transactionId = :newTransactionId WHERE transactionId = :oldTransactionId")
+    suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String)
+
+    @Query("UPDATE sync_queue SET payloadJson = :newPayload WHERE payloadJson = :oldPayload")
+    suspend fun updatePayload(oldPayload: String, newPayload: String)
 }
