@@ -227,6 +227,31 @@ class SyncConfigUseCase(
                 )
             }
 
+            // Tombstone any leaked entity tokens (txn_, pay_, inf_, row_) present in remote Config tab
+            val remoteResult = configRepository.readAll(spreadsheetId)
+            if (remoteResult is Result.Success) {
+                for (remoteRow in remoteResult.data) {
+                    if (remoteRow.type == ConfigConstants.TYPE_PERSON &&
+                        !remoteRow.deleted &&
+                        (remoteRow.key.startsWith("txn_", ignoreCase = true) ||
+                         remoteRow.key.startsWith("pay_", ignoreCase = true) ||
+                         remoteRow.key.startsWith("inf_", ignoreCase = true) ||
+                         remoteRow.key.startsWith("row_", ignoreCase = true))
+                    ) {
+                        dirtyRows.add(
+                            ConfigRow(
+                                type = ConfigConstants.TYPE_PERSON,
+                                key = remoteRow.key,
+                                values = listOf("", ""),
+                                updatedAt = now,
+                                updatedBy = deviceId,
+                                deleted = true
+                            )
+                        )
+                    }
+                }
+            }
+
             val upsertResult = configRepository.upsert(spreadsheetId, dirtyRows)
             if (upsertResult is Result.Error) {
                 throw upsertResult.exception
