@@ -79,6 +79,13 @@ object PackageWhitelist {
         PACKAGE_SAMSUNG_MESSAGES
     )
 
+    /** Privacy line shown next to the read-only list of watched apps. */
+    const val PRIVACY_STATEMENT: String = "We never read WhatsApp, Telegram or OTP messages."
+
+    /** Names of the apps this app reads, for the read-only "Apps we read" list. */
+    fun watchedAppsForDisplay(): List<String> =
+        listOf("Google Pay", "BHIM", "Supermoney", "PhonePe", "Paytm", "Bank SMS")
+
     fun isSmsPackage(packageName: String): Boolean {
         return SMS_PACKAGES.contains(packageName.trim())
     }
