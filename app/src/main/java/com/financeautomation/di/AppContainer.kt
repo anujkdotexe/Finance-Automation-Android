@@ -392,6 +392,7 @@ class DefaultAppContainer(
         ForegroundWatcher(
             context = applicationContext,
             pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
+            transactionDaoProvider = { awaitDatabase().transactionDao() },
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
             predictCategoryUseCase = predictCategoryUseCase,
             overlayControllerProvider = { overlayController }

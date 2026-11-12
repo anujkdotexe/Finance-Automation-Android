@@ -14,6 +14,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.room.withTransaction
 import com.financeautomation.FinanceApplication
 import com.financeautomation.R
 import com.financeautomation.core.constants.PackageWhitelist
@@ -63,9 +64,9 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
         val extras = sbn.notification.extras ?: Bundle.EMPTY
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
-            ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
-            ?: ""
+        val extraText = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        val extraBigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
+        val text = if (extraBigText.length > extraText.length) extraBigText else extraText
         val postTime = if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()
         val key = sbn.key ?: ""
 
@@ -137,7 +138,9 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                         handledNotificationDao = db.handledNotificationDao(),
                         accountDao = db.accountDao(),
                         preferenceDao = db.preferenceDao(),
+                        transactionDao = db.transactionDao(),
                         parseUseCase = it.parseNotificationUseCase,
+                        runInTransaction = { block -> db.withTransaction { block() } },
                         ownPackageName = packageName
                     )
                 } ?: return@launch
@@ -154,9 +157,6 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                             watcher?.notifyCaptureWaiting(serviceScope)
                         }
                     }
-                    is NotificationProcessingOutcome.FallbackPrompt -> {
-                        showFallbackNotification(outcome.message, outcome.sourcePackage)
-                    }
                     is NotificationProcessingOutcome.Merged -> {
                         // Merged dual alert without posting duplicate notification
                     }
@@ -172,32 +172,6 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                 Diagnostics.record(TAG, "${e.javaClass.simpleName}: handleNotification execution")
             }
         }
-    }
-
-    private fun showFallbackNotification(message: String, sourcePackage: String) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-        createNotificationChannel(notificationManager)
-
-        val intent = Intent(this, EntryActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("source_package", sourcePackage)
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            sourcePackage.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_FINANCIAL_ALERTS)
-            .setSmallIcon(android.R.drawable.stat_notify_more)
-            .setContentTitle(getString(R.string.notif_payment_detected_title))
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-
-        notificationManager.notify(sourcePackage.hashCode(), builder.build())
     }
 
     private fun createNotificationChannel(notificationManager: NotificationManager) {

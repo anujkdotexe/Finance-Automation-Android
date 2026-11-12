@@ -45,6 +45,17 @@ interface TripTagDao {
     @Query("UPDATE trip_tags SET isActive = 1, updatedAt = :updatedAt, dirty = 1 WHERE id = :id")
     suspend fun setActiveFlag(id: String, updatedAt: Long = System.currentTimeMillis())
 
+    @androidx.room.Transaction
+    suspend fun setActiveTagAtomic(id: String?, updatedAt: Long = System.currentTimeMillis()): String? {
+        clearActiveFlags(updatedAt)
+        return if (id != null) {
+            setActiveFlag(id, updatedAt)
+            getById(id)?.name
+        } else {
+            null
+        }
+    }
+
     @Query("SELECT COUNT(*) FROM trip_tags")
     suspend fun count(): Int
 

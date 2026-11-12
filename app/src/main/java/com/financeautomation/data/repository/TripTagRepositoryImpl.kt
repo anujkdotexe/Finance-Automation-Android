@@ -119,13 +119,7 @@ class TripTagRepositoryImpl(
 
     override suspend fun setActiveTag(id: String?): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
-        dao.clearActiveFlags()
-        val tagName = if (id != null) {
-            dao.setActiveFlag(id)
-            dao.getById(id)?.name
-        } else {
-            null
-        }
+        val tagName = dao.setActiveTagAtomic(id)
         preferencesRepositoryProvider?.invoke()?.setActiveTrip(tagName)
         configSyncCoordinator?.schedulePush()
     }

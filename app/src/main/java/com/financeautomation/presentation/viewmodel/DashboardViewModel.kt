@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Summary item for friend debts shown on the dashboard cards (Design Guide 5.1).
@@ -222,8 +223,9 @@ class DashboardViewModel(
                 trimmed == "transfer"
         }
 
-        val nowCal = Calendar.getInstance()
-        val cal = Calendar.getInstance().apply {
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz)
+        val cal = Calendar.getInstance(kolkataTz).apply {
             add(Calendar.MONTH, monthOffset)
             set(Calendar.DAY_OF_MONTH, 1)
             set(Calendar.HOUR_OF_DAY, 0)
@@ -233,7 +235,9 @@ class DashboardViewModel(
         }
         val startOfMonth = cal.timeInMillis
 
-        val monthLabelFormat = SimpleDateFormat("MMMM yyyy", Locale.US)
+        val monthLabelFormat = SimpleDateFormat("MMMM yyyy", Locale.US).apply {
+            timeZone = kolkataTz
+        }
         val selectedMonthLabel = monthLabelFormat.format(cal.time)
 
         val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
@@ -249,7 +253,7 @@ class DashboardViewModel(
         val endOfMonth = cal.timeInMillis
 
         // Prior month window for "Last month" comparison
-        val priorCal = Calendar.getInstance().apply {
+        val priorCal = Calendar.getInstance(kolkataTz).apply {
             timeInMillis = startOfMonth
             add(Calendar.MONTH, -1)
         }

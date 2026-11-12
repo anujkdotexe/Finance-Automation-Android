@@ -10,8 +10,13 @@ import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.data.local.entity.TransactionEntity
+import com.financeautomation.core.model.ReviewState
+import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
@@ -37,11 +42,6 @@ sealed interface NotificationProcessingOutcome {
         val enriched: Boolean = false
     ) : NotificationProcessingOutcome
 
-    data class FallbackPrompt(
-        val message: String,
-        val sourcePackage: String
-    ) : NotificationProcessingOutcome
-
     data class Dismissed(
         val captureId: String
     ) : NotificationProcessingOutcome
@@ -60,7 +60,9 @@ class NotificationProcessor(
     private val handledNotificationDao: HandledNotificationDao? = null,
     private val accountDao: AccountDao? = null,
     private val preferenceDao: PreferenceDao? = null,
+    private val transactionDao: TransactionDao? = null,
     private val parseUseCase: ParseNotificationUseCase = ParseNotificationUseCase(),
+    private val runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null,
     private val ownPackageName: String = "com.financeautomation"
 ) {
 
@@ -111,17 +113,17 @@ class NotificationProcessor(
             // Prune rows older than 24 hours
             val cutoff = postTime - 24L * 60L * 60L * 1000L
             handledNotificationDao.pruneOlderThan(cutoff)
-
-            // Record this alert in handled_notifications
-            handledNotificationDao.insert(
-                HandledNotificationEntity(
-                    key = key,
-                    postTime = postTime,
-                    contentHash = contentHash,
-                    handledAt = System.currentTimeMillis()
-                )
-            )
         }
+
+        // 5b. Expire WAITING captures older than 24 hours quietly to Needs Review
+        expireStaleWaitingCaptures(postTime)
+
+        val handledEntity = HandledNotificationEntity(
+            key = key,
+            postTime = postTime,
+            contentHash = contentHash,
+            handledAt = System.currentTimeMillis()
+        )
 
         // 6. Inferred account resolution from configured accounts
         val configuredAccounts: List<String> = try {
@@ -171,7 +173,7 @@ class NotificationProcessor(
             is NotificationParseResult.FallbackPrompt -> {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_UNREADABLE)
                 // Unreadable alert: amount = null, payee = "Unknown Payee", flags = NEEDS_AMOUNT
-                handleCaptureDecision(
+                val outcome = handleCaptureDecision(
                     sourcePackage = sourcePackage,
                     amount = null,
                     payee = "Unknown Payee",
@@ -181,8 +183,10 @@ class NotificationProcessor(
                     flags = PendingCaptureEntity.FLAG_NEEDS_AMOUNT,
                     postTime = postTime,
                     sbnKey = sbnKey,
-                    contentHash = contentHash
+                    contentHash = contentHash,
+                    handledEntity = handledEntity
                 )
+                outcome
             }
             is NotificationParseResult.Success -> {
                 val kind = if (parseResult.isCredit) PendingCaptureEntity.KIND_CREDIT else PendingCaptureEntity.KIND_DEBIT
@@ -191,7 +195,7 @@ class NotificationProcessor(
                 } else {
                     PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_OK_DEBIT)
                 }
-                handleCaptureDecision(
+                val outcome = handleCaptureDecision(
                     sourcePackage = sourcePackage,
                     amount = parseResult.transaction.totalAmount,
                     payee = parseResult.transaction.merchant,
@@ -201,8 +205,46 @@ class NotificationProcessor(
                     flags = "",
                     postTime = postTime,
                     sbnKey = sbnKey,
-                    contentHash = contentHash
+                    contentHash = contentHash,
+                    handledEntity = handledEntity
                 )
+                outcome
+            }
+        }
+    }
+
+    suspend fun expireStaleWaitingCaptures(now: Long = System.currentTimeMillis()) {
+        val pDao = pendingCaptureDao ?: return
+        val tDao = transactionDao ?: return
+        val cutoff = now - 24L * 60L * 60L * 1000L
+        val expired = pDao.getExpiredWaitingCaptures(cutoff)
+        for (cap in expired) {
+            val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+            val txn = TransactionEntity(
+                id = txnId,
+                timestamp = cap.timestamp,
+                dateSerial = DateSerialUtils.toDateSerial(cap.timestamp),
+                timeSerial = DateSerialUtils.toTimeSerial(cap.timestamp),
+                merchant = cap.payee.ifBlank { "Expense" },
+                category = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
+                account = cap.inferredAccount?.takeIf { it.isNotBlank() } ?: "Other",
+                totalAmount = cap.amount ?: 0.0,
+                myShare = cap.amount ?: 0.0,
+                owedToMe = 0.0,
+                status = "Personal",
+                companions = "Personal",
+                reviewState = ReviewState.NEEDS_REVIEW.name,
+                syncState = SyncState.PENDING.name,
+                sourcePackage = cap.sourcePackage
+            )
+            val op: suspend () -> Unit = {
+                tDao.insert(txn)
+                pDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
+            }
+            if (runInTransaction != null) {
+                runInTransaction.invoke(op)
+            } else {
+                op()
             }
         }
     }
@@ -217,7 +259,8 @@ class NotificationProcessor(
         flags: String,
         postTime: Long,
         sbnKey: String,
-        contentHash: String
+        contentHash: String,
+        handledEntity: HandledNotificationEntity
     ): NotificationProcessingOutcome {
         val targetState = if (wording == WordingClass.PROCESSING) {
             PendingCaptureEntity.STATE_AWAITING_SUCCESS
@@ -237,7 +280,11 @@ class NotificationProcessor(
                     contentHash = contentHash,
                     updatedAt = System.currentTimeMillis()
                 )
-                pendingCaptureDao.update(updated)
+                val updateOp: suspend () -> Unit = {
+                    handledNotificationDao?.insert(handledEntity)
+                    pendingCaptureDao.update(updated)
+                }
+                if (runInTransaction != null) runInTransaction.invoke(updateOp) else updateOp()
                 return NotificationProcessingOutcome.Updated(updated)
             }
         }
@@ -261,7 +308,11 @@ class NotificationProcessor(
                         inferredAccount = if (mergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else mergeTarget.inferredAccount,
                         updatedAt = System.currentTimeMillis()
                     )
-                    pendingCaptureDao.update(merged)
+                    val mergeOp: suspend () -> Unit = {
+                        handledNotificationDao?.insert(handledEntity)
+                        pendingCaptureDao.update(merged)
+                    }
+                    if (runInTransaction != null) runInTransaction.invoke(mergeOp) else mergeOp()
                     PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED)
                     return NotificationProcessingOutcome.Merged(merged.id, enriched = true)
                 }
@@ -297,7 +348,12 @@ class NotificationProcessor(
             updatedAt = System.currentTimeMillis()
         )
 
-        pendingCaptureDao?.insert(capture)
+        val insertOp: suspend () -> Unit = {
+            handledNotificationDao?.insert(handledEntity)
+            pendingCaptureDao?.insert(capture)
+        }
+        if (runInTransaction != null) runInTransaction.invoke(insertOp) else insertOp()
+
         if (targetState == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
             PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.AWAITING_SUCCESS)
         } else {

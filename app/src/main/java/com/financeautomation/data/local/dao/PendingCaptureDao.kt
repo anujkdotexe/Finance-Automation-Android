@@ -35,6 +35,9 @@ interface PendingCaptureDao {
     @Query("SELECT * FROM pending_captures WHERE state = 'WAITING' ORDER BY timestamp ASC")
     suspend fun getWaitingCaptures(): List<PendingCaptureEntity>
 
+    @Query("SELECT * FROM pending_captures WHERE state = 'WAITING' AND timestamp < :cutoffTime ORDER BY timestamp ASC")
+    suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity>
+
     @Query("SELECT * FROM pending_captures WHERE state = 'AWAITING_SUCCESS' ORDER BY timestamp ASC")
     suspend fun getAwaitingSuccessCaptures(): List<PendingCaptureEntity>
 

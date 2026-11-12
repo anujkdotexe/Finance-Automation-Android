@@ -12,6 +12,7 @@ import com.financeautomation.domain.model.TripTag
  */
 data class QuickLogUiState(
     val captureId: String? = null,
+    val captureTimestamp: Long? = null,
     val transactionId: String? = null,
     val sourcePackage: String = "manual",
     val amountText: String = "",
