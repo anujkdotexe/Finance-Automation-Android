@@ -414,4 +414,67 @@ class SettingsViewModelTest {
 
         assertEquals(mapOf("HDFC" to 4, "Cash" to 1), vm.uiState.value.accountTransactionCounts)
     }
+
+    private class AccessSheetsClient(
+        okHttpClient: OkHttpClient,
+        tokenProvider: TokenProvider,
+        private val accessibleIds: Set<String>
+    ) : GoogleSheetsClient(okHttpClient, tokenProvider) {
+        override suspend fun getSheetTabsDetailed(spreadsheetId: String): Result<Map<String, GoogleSheetsClient.SheetTabInfo>> =
+            if (spreadsheetId in accessibleIds) {
+                Result.Success(emptyMap())
+            } else {
+                Result.Error(GoogleSheetsApiException(404, "Requested entity was not found"))
+            }
+    }
+
+    private fun idCoordinator(
+        scope: kotlinx.coroutines.CoroutineScope,
+        prefs: FakePreferencesRepository,
+        sheets: GoogleSheetsClient,
+        state: MutableStateFlow<SettingsUiState>
+    ) = SettingsSyncCoordinator(
+        preferencesRepository = prefs,
+        transactionRepository = null,
+        syncConfigUseCase = null,
+        regenerateDashboardUseCase = null,
+        googleDriveClient = null,
+        googleSheetsClient = sheets,
+        googleAuthTokenProvider = null,
+        workbookResolver = null,
+        accountRepository = null,
+        categoryRepository = null,
+        scope = scope,
+        uiState = state,
+        ioDispatcher = Dispatchers.Unconfined
+    )
+
+    @Test
+    fun testSaveId_accessibleIdIsSavedForCurrentYear() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val sheets = AccessSheetsClient(OkHttpClient.Builder().build(), fakeTokenProvider, setOf("new_sheet_id"))
+        val state = MutableStateFlow(SettingsUiState(spreadsheetId = "sheet_123"))
+        val year = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year
+
+        idCoordinator(this, prefs, sheets, state).onSpreadsheetIdChanged("  new_sheet_id ")
+
+        assertEquals("new_sheet_id", prefs.yearMap[year])
+        assertEquals("new_sheet_id", state.value.spreadsheetId)
+        assertEquals("Spreadsheet ID saved", state.value.userMessage)
+        assertEquals(null, state.value.errorMessage)
+    }
+
+    @Test
+    fun testSaveId_inaccessibleIdIsRejectedAndNotSaved() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val sheets = AccessSheetsClient(OkHttpClient.Builder().build(), fakeTokenProvider, emptySet())
+        val state = MutableStateFlow(SettingsUiState(spreadsheetId = "sheet_123"))
+
+        idCoordinator(this, prefs, sheets, state).onSpreadsheetIdChanged("outside_sheet_id")
+
+        assertTrue(prefs.yearMap.isEmpty())
+        assertEquals("sheet_123", prefs.activeSpreadsheetId)
+        assertEquals("sheet_123", state.value.spreadsheetId)
+        assertEquals(SettingsSyncCoordinator.SPREADSHEET_ID_REJECTED_MESSAGE, state.value.errorMessage)
+    }
 }

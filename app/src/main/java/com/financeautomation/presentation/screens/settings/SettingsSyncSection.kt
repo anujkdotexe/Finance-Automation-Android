@@ -59,7 +59,8 @@ fun SettingsSyncSection(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var spreadsheetInput by remember(state.spreadsheetId) { mutableStateOf(state.spreadsheetId) }
+    // Reset to the stored id when it changes or when a save is rejected
+    var spreadsheetInput by remember(state.spreadsheetId, state.errorMessage) { mutableStateOf(state.spreadsheetId) }
     var sliderValue by remember(state.settleDelaySeconds) { mutableFloatStateOf(state.settleDelaySeconds.toFloat()) }
     var isCrashlyticsOptedIn by remember { mutableStateOf(CrashlyticsManager.isOptedIn(context)) }
 
