@@ -15,6 +15,7 @@ import com.financeautomation.domain.model.SubscriptionCycle
 import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.SubscriptionRepository
+import com.financeautomation.domain.usecase.SubscriptionCycleSync
 import com.financeautomation.domain.usecase.SubscriptionScheduleUseCase
 import com.financeautomation.service.SubscriptionNotifier
 import kotlinx.coroutines.CancellationException
@@ -32,7 +33,8 @@ fun interface SubscriptionReminderNotifier {
 
 /**
  * Daily worker (24 hours, 15 minute flex, started at the user's reminder time, default 21:00 Asia/Kolkata).
- * 1. Creates missing cycles for each active subscription up to today (at most 3 months back).
+ * 1. Creates missing cycles for each active subscription up to today, never before the current month
+ * (Asia/Kolkata) and never before the day the subscription was created.
  * 2. Posts one notification per DUE cycle with reminders on and counts the reminder.
  * 3. After the third reminder the cycle moves to NEEDS_REVIEW and reminding stops.
  */
@@ -64,7 +66,6 @@ class SubscriptionReminderWorker(
         const val WORK_NAME: String = "subscription_reminder_periodic"
         const val WORK_NAME_ONCE: String = "subscription_reminder_once"
         const val MAX_REMINDERS: Int = 3
-        const val BACKFILL_MONTHS: Long = 3
         const val FLEX_MINUTES: Long = 15
 
         /**
@@ -77,11 +78,7 @@ class SubscriptionReminderWorker(
             notifier: SubscriptionReminderNotifier,
             todayEpochDay: Long
         ): Int {
-            val earliest = java.time.LocalDate.ofEpochDay(todayEpochDay).minusMonths(BACKFILL_MONTHS).toEpochDay()
-            for (sub in repository.getActiveSubscriptions()) {
-                val dates = scheduleUseCase.dueDates(sub, earliest, todayEpochDay, todayEpochDay)
-                for (day in dates) repository.createCycleIfMissing(sub.id, day)
-            }
+            SubscriptionCycleSync.ensure(repository, scheduleUseCase, todayEpochDay)
 
             var posted = 0
             for (item in repository.getDueCyclesUpTo(todayEpochDay)) {

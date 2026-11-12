@@ -62,7 +62,7 @@ class SubscriptionReviewHooksTest {
     @Test
     fun subscriptionsDueExposesOnlyNeedsReviewCyclesWithTheirSubscription() = runTest(dispatcher) {
         val f = Fixture(649.0)
-        f.repo.addCycle("sub_netflix", today - 5, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+        f.repo.addCycle("sub_netflix", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
         f.repo.addCycle("sub_netflix", today - 35, SubscriptionCycleState.DUE)
         f.repo.addCycle("sub_netflix", today - 65, SubscriptionCycleState.PAID, "txn_1")
         val vm = viewModel(f)
@@ -71,13 +71,13 @@ class SubscriptionReviewHooksTest {
         val due = vm.subscriptionsDue.value
         assertEquals(1, due.size)
         assertEquals("Netflix", due.single().subscription.name)
-        assertEquals(today - 5, due.single().cycle.dueEpochDay)
+        assertEquals(today, due.single().cycle.dueEpochDay)
     }
 
     @Test
     fun yesLogsExpenseAndRemovesItemFromList() = runTest(dispatcher) {
         val f = Fixture(649.0)
-        val cycle = f.repo.addCycle("sub_netflix", today - 5, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+        val cycle = f.repo.addCycle("sub_netflix", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
         val vm = viewModel(f)
         advanceUntilIdle()
 
@@ -93,7 +93,7 @@ class SubscriptionReviewHooksTest {
     @Test
     fun yesWithVariesAmountOpensPrefilledCapture() = runTest(dispatcher) {
         val f = Fixture(null)
-        val cycle = f.repo.addCycle("sub_netflix", today - 5, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+        val cycle = f.repo.addCycle("sub_netflix", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
         val vm = viewModel(f)
         advanceUntilIdle()
 
@@ -107,7 +107,7 @@ class SubscriptionReviewHooksTest {
     @Test
     fun notYetGoesBackToDueWithReminderCountTwo() = runTest(dispatcher) {
         val f = Fixture(649.0)
-        val cycle = f.repo.addCycle("sub_netflix", today - 5, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+        val cycle = f.repo.addCycle("sub_netflix", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
         val vm = viewModel(f)
         advanceUntilIdle()
 
@@ -122,7 +122,7 @@ class SubscriptionReviewHooksTest {
     @Test
     fun skipMarksSkippedAndLogsNothing() = runTest(dispatcher) {
         val f = Fixture(649.0)
-        val cycle = f.repo.addCycle("sub_netflix", today - 5, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+        val cycle = f.repo.addCycle("sub_netflix", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
         val vm = viewModel(f)
         advanceUntilIdle()
 

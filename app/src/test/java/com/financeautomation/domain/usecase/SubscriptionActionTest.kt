@@ -29,15 +29,18 @@ class SubscriptionActionTest {
         }
     }
 
+    private val fixedNow = LocalDate.of(2026, 4, 20).atTime(18, 0).atZone(ist).toInstant().toEpochMilli()
+    private val aprilDue = LocalDate.of(2026, 4, 15).toEpochDay()
+
     private fun dueNoon(day: Long) = LocalDate.ofEpochDay(day).atTime(12, 0).atZone(ist).toInstant().toEpochMilli()
 
     @Test
     fun yesWithFixedAmountLogsExpenseAtDueDateNoonAndMarksPaid() = runBlocking {
         val f = Fixture(649.0)
-        val due = LocalDate.now(ist).minusDays(2).toEpochDay()
+        val due = aprilDue
         val cycle = f.repo.addCycle("sub_netflix", due)
 
-        val outcome = f.actions.yes(cycle.id, System.currentTimeMillis())
+        val outcome = f.actions.yes(cycle.id, fixedNow)
 
         assertTrue(outcome is SubscriptionYesOutcome.Logged)
         assertEquals(1, f.recorder.inserted.size)
@@ -69,15 +72,45 @@ class SubscriptionActionTest {
     @Test
     fun yesWithVariesAmountPreparesCaptureAndLogsNothing() = runBlocking {
         val f = Fixture(null)
-        val due = LocalDate.now(ist).minusDays(1).toEpochDay()
+        val due = aprilDue
         val cycle = f.repo.addCycle("sub_netflix", due)
 
-        val outcome = f.actions.yes(cycle.id, System.currentTimeMillis())
+        val outcome = f.actions.yes(cycle.id, fixedNow)
 
         assertEquals(SubscriptionYesOutcome.NeedsAmount("cap_1"), outcome)
         assertEquals(listOf("sub_netflix" to dueNoon(due)), f.captures)
         assertTrue(f.recorder.inserted.isEmpty())
         assertEquals(SubscriptionCycleState.DUE, f.repo.cycle(cycle.id).state)
+    }
+
+    @Test
+    fun yesOnCycleFromPreviousMonthInsertsNothingAndMovesItToNeedsReview() = runBlocking {
+        val f = Fixture(649.0)
+        val cycle = f.repo.addCycle("sub_netflix", LocalDate.of(2026, 3, 31).toEpochDay())
+
+        val outcome = f.actions.yes(cycle.id, fixedNow)
+
+        assertEquals(SubscriptionYesOutcome.PastMonth, outcome)
+        assertTrue(f.recorder.inserted.isEmpty())
+        assertEquals(SubscriptionCycleState.NEEDS_REVIEW, f.repo.cycle(cycle.id).state)
+    }
+
+    @Test
+    fun yesOnPreviousMonthCycleWithVariesAmountPreparesNoCapture() = runBlocking {
+        val f = Fixture(null)
+        val cycle = f.repo.addCycle("sub_netflix", LocalDate.of(2026, 3, 31).toEpochDay())
+
+        assertEquals(SubscriptionYesOutcome.PastMonth, f.actions.yes(cycle.id, fixedNow))
+        assertTrue(f.captures.isEmpty())
+    }
+
+    @Test
+    fun yesOnFirstDayOfCurrentMonthIsStillAllowed() = runBlocking {
+        val f = Fixture(649.0)
+        val cycle = f.repo.addCycle("sub_netflix", LocalDate.of(2026, 4, 1).toEpochDay())
+
+        assertTrue(f.actions.yes(cycle.id, fixedNow) is SubscriptionYesOutcome.Logged)
+        assertEquals(1, f.recorder.inserted.size)
     }
 
     @Test
@@ -125,7 +158,7 @@ class SubscriptionActionTest {
     @Test
     fun receiverHandleMapsActionsAndReportsLoggedExpense() = runBlocking {
         val f = Fixture(649.0)
-        val due = LocalDate.now(ist).minusDays(1).toEpochDay()
+        val due = LocalDate.now(ist).toEpochDay()
         val a = f.repo.addCycle("sub_netflix", due)
         val b = f.repo.addCycle("sub_netflix", due - 30)
         val c = f.repo.addCycle("sub_netflix", due - 60)

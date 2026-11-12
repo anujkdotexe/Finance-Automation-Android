@@ -96,8 +96,9 @@ fun testSubscription(
     account: String = "HDFC",
     keywords: String = "",
     active: Boolean = true,
-    remind: Boolean = true
+    remind: Boolean = true,
+    createdAt: Long = 0L
 ) = Subscription(
     id = id, name = name, amount = amount, frequency = frequency, anchorEpochDay = anchorEpochDay,
-    account = account, category = "Subscriptions", remind = remind, keywords = keywords, active = active, createdAt = 0L
+    account = account, category = "Subscriptions", remind = remind, keywords = keywords, active = active, createdAt = createdAt
 )

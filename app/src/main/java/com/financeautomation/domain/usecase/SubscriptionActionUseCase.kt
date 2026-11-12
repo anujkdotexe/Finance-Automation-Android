@@ -17,6 +17,12 @@ sealed interface SubscriptionYesOutcome {
 
     data object NotFound : SubscriptionYesOutcome
     data object AlreadyResolved : SubscriptionYesOutcome
+
+    /**
+     * The cycle is due in a previous month. No expense is created (it would belong to an older sheet
+     * tab); the cycle is moved to NEEDS_REVIEW so the user can skip it.
+     */
+    data object PastMonth : SubscriptionYesOutcome
     data class Failed(val message: String) : SubscriptionYesOutcome
 }
 
@@ -45,6 +51,14 @@ class SubscriptionActionUseCase(
         val sub = item.subscription
         if (cycle.state == SubscriptionCycleState.PAID || cycle.state == SubscriptionCycleState.SKIPPED) {
             return SubscriptionYesOutcome.AlreadyResolved
+        }
+        val currentMonthStart = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+            .withDayOfMonth(1).toEpochDay()
+        if (cycle.dueEpochDay < currentMonthStart) {
+            if (cycle.state != SubscriptionCycleState.NEEDS_REVIEW) {
+                repository.setCycleState(cycle.id, SubscriptionCycleState.NEEDS_REVIEW)
+            }
+            return SubscriptionYesOutcome.PastMonth
         }
         val timestamp = expenseTimestamp(cycle.dueEpochDay, nowMillis)
         val amount = sub.amount

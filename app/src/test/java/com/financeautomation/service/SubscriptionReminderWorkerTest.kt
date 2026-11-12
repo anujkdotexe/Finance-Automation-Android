@@ -32,13 +32,59 @@ class SubscriptionReminderWorkerTest {
     }
 
     @Test
-    fun createsMissingCyclesUpToTodayAndNotMoreThanThreeMonthsBack() {
+    fun createsCyclesOnlyForTheCurrentMonthEvenWithAnOldAnchor() {
         val repo = FakeSubscriptionRepository()
         repo.addSubscription(testSubscription(anchorEpochDay = LocalDate.of(2025, 1, 15).toEpochDay()))
         run(repo, RecordingNotifier())
 
         val days = repo.cycles.value.values.map { LocalDate.ofEpochDay(it.dueEpochDay).toString() }.sorted()
-        assertEquals(listOf("2026-01-15", "2026-02-15", "2026-03-15", "2026-04-15"), days)
+        assertEquals(listOf("2026-04-15"), days)
+    }
+
+    private fun istMillis(y: Int, m: Int, d: Int, hour: Int) =
+        LocalDate.of(y, m, d).atTime(hour, 0).atZone(ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+    @Test
+    fun subscriptionCreatedTodayWithAnchorThreeMonthsAgoCreatesOnlyCurrentMonthCycles() {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(
+            testSubscription(
+                anchorEpochDay = LocalDate.of(2026, 1, 15).toEpochDay(),
+                createdAt = istMillis(2026, 4, 15, 10)
+            )
+        )
+        val notifier = RecordingNotifier()
+        run(repo, notifier)
+
+        val days = repo.cycles.value.values.map { LocalDate.ofEpochDay(it.dueEpochDay).toString() }
+        assertEquals(listOf("2026-04-15"), days)
+        assertEquals(1, notifier.posted.size)
+    }
+
+    @Test
+    fun cyclesNeverStartBeforeTheDayTheSubscriptionWasCreated() {
+        val repo = FakeSubscriptionRepository()
+        // Weekly on Mondays; created Wednesday 8 April, so Monday 6 April (in the current month) is skipped
+        repo.addSubscription(
+            testSubscription(
+                frequency = SubscriptionFrequency.WEEKLY,
+                anchorEpochDay = LocalDate.of(2026, 1, 5).toEpochDay(),
+                createdAt = istMillis(2026, 4, 8, 9)
+            )
+        )
+        run(repo, RecordingNotifier())
+
+        val days = repo.cycles.value.values.map { LocalDate.ofEpochDay(it.dueEpochDay).toString() }.sorted()
+        assertEquals(listOf("2026-04-13"), days)
+    }
+
+    @Test
+    fun noCycleIsCreatedInAPreviousMonth() {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(testSubscription(anchorEpochDay = LocalDate.of(2026, 1, 31).toEpochDay()))
+        // 2 April: the 31 March due date belongs to the previous month and must not be created
+        run(repo, RecordingNotifier(), LocalDate.of(2026, 4, 2).toEpochDay())
+        assertTrue(repo.cycles.value.isEmpty())
     }
 
     @Test
@@ -47,19 +93,21 @@ class SubscriptionReminderWorkerTest {
         repo.addSubscription(testSubscription(anchorEpochDay = LocalDate.of(2026, 3, 15).toEpochDay()))
         run(repo, RecordingNotifier())
         run(repo, RecordingNotifier())
-        assertEquals(2, repo.cycles.value.size)
+        assertEquals(1, repo.cycles.value.size)
     }
 
     @Test
     fun postsOneNotificationPerDueCyclePerRun() {
         val repo = FakeSubscriptionRepository()
-        repo.addSubscription(testSubscription(anchorEpochDay = LocalDate.of(2026, 3, 15).toEpochDay()))
+        repo.addSubscription(
+            testSubscription(frequency = SubscriptionFrequency.WEEKLY, anchorEpochDay = LocalDate.of(2026, 4, 8).toEpochDay())
+        )
         val notifier = RecordingNotifier()
         val posted = run(repo, notifier)
 
         assertEquals(2, posted)
         assertEquals(2, notifier.posted.size)
-        assertEquals(setOf(LocalDate.of(2026, 3, 15).toEpochDay(), today), notifier.posted.map { it.second.dueEpochDay }.toSet())
+        assertEquals(setOf(LocalDate.of(2026, 4, 8).toEpochDay(), today), notifier.posted.map { it.second.dueEpochDay }.toSet())
         assertTrue(repo.cycles.value.values.all { it.remindCount == 1 && it.state == SubscriptionCycleState.DUE })
     }
 
