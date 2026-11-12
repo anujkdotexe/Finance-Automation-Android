@@ -39,11 +39,11 @@ interface TripTagDao {
     @Query("SELECT * FROM trip_tags WHERE isActive = 1 AND isArchived = 0 LIMIT 1")
     fun getActiveTagFlow(): Flow<TripTagEntity?>
 
-    @Query("UPDATE trip_tags SET isActive = 0")
-    suspend fun clearActiveFlags()
+    @Query("UPDATE trip_tags SET isActive = 0, updatedAt = :updatedAt, dirty = 1 WHERE isActive = 1")
+    suspend fun clearActiveFlags(updatedAt: Long = System.currentTimeMillis())
 
-    @Query("UPDATE trip_tags SET isActive = 1 WHERE id = :id")
-    suspend fun setActiveFlag(id: String)
+    @Query("UPDATE trip_tags SET isActive = 1, updatedAt = :updatedAt, dirty = 1 WHERE id = :id")
+    suspend fun setActiveFlag(id: String, updatedAt: Long = System.currentTimeMillis())
 
     @Query("SELECT COUNT(*) FROM trip_tags")
     suspend fun count(): Int

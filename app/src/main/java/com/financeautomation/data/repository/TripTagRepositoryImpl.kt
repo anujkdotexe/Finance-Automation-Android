@@ -4,6 +4,7 @@ import com.financeautomation.data.local.dao.TripTagDao
 import com.financeautomation.data.local.entity.TripTagEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
 import com.financeautomation.domain.model.TripTag
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -23,17 +24,20 @@ class TripTagRepositoryImpl(
     private val tripTagDao: TripTagDao? = null,
     private val tripTagDaoProvider: (suspend () -> TripTagDao)? = null,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
+    private val preferencesRepositoryProvider: (() -> PreferencesRepository)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TripTagRepository {
 
     constructor(
         tripTagDao: TripTagDao,
         configSyncCoordinator: ConfigSyncCoordinator? = null,
+        preferencesRepository: PreferencesRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         tripTagDao = tripTagDao,
         tripTagDaoProvider = null,
         configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
+        preferencesRepositoryProvider = preferencesRepository?.let { { it } },
         ioDispatcher = ioDispatcher
     )
 
@@ -116,9 +120,13 @@ class TripTagRepositoryImpl(
     override suspend fun setActiveTag(id: String?): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         dao.clearActiveFlags()
-        if (id != null) {
+        val tagName = if (id != null) {
             dao.setActiveFlag(id)
+            dao.getById(id)?.name
+        } else {
+            null
         }
+        preferencesRepositoryProvider?.invoke()?.setActiveTrip(tagName)
         configSyncCoordinator?.schedulePush()
     }
 
