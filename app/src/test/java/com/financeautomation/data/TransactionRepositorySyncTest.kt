@@ -128,6 +128,16 @@ class TransactionRepositorySyncTest {
         override suspend fun deleteAll() { payables.clear() }
     }
 
+    private class FakeLineageDao : LineageDao {
+        val records = ConcurrentHashMap<String, LineageEntity>()
+        override suspend fun insert(entity: LineageEntity) { records[entity.uuid] = entity }
+        override suspend fun insertAll(entities: List<LineageEntity>) { entities.forEach { insert(it) } }
+        override suspend fun getByUuid(uuid: String): LineageEntity? = records[uuid]
+        override suspend fun getByCarriedFrom(carriedFromUuid: String): LineageEntity? =
+            records.values.firstOrNull { it.carriedFromUuid == carriedFromUuid }
+        override suspend fun getAll(): List<LineageEntity> = records.values.toList()
+    }
+
     private class FakePreferencesRepository(private val spreadsheetId: String = "test_sheet_id") : PreferencesRepository {
         override fun getSpreadsheetId(): Flow<String?> = flowOf(spreadsheetId)
         override suspend fun getSpreadsheetIdSync(): String? = spreadsheetId
@@ -235,7 +245,7 @@ class TransactionRepositorySyncTest {
                     }
                     // batchUpdate (sheets or values)
                     method == "POST" && url.contains("batchUpdate") -> {
-                        """{"totalUpdatedCells":0,"replies":[]}"""
+                        """{"totalUpdatedCells":0,"replies":[{"addSheet":{"properties":{"sheetId":101,"title":"Dec26"}}}]}"""
                     }
                     else -> "{}"
                 }
@@ -812,5 +822,141 @@ class TransactionRepositorySyncTest {
         assertTrue("Sync should succeed on retry", syncResult2 is Result.Success)
         // Queue item deleted after successful sync
         org.junit.Assert.assertNull(qDao.queue[1L])
+    }
+
+    @Test
+    fun testCarryForward_ensuresTargetTabExists_andCarriesUnsettledRows() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val lineageDao = FakeLineageDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val executor = AccountingSyncExecutor(
+            googleSheetsClient = sheets,
+            googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
+            syncQueueDao = qDao,
+            lineageDao = lineageDao,
+            transactionDao = tDao
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = executor,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        // Setup snapshot data with Nov26 tab containing 1 pending debit, 1 settled debit, 1 pending payable
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46338, 0.4, "SBI", "Dinner", "", "Food & Drink", 100.0, "Charlie", 50.0, 50.0, "Pending"],
+                        [46338, 0.5, "SBI", "Lunch", "", "Food & Drink", 50.0, "Bob", 50.0, 0.0, "Settled"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [["txn_dinner_123"], ["txn_lunch_456"]]
+                },
+                {
+                    "range": "'Nov26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46338, 0.6, "Bob", "Movie ticket", 200.0, "", "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": [["pay_movie_789"]]
+                }
+            ]
+        }"""
+
+        // Trigger carry forward for Dec26
+        val cfRes = repo.carryForward(targetTab = "Dec26")
+        assertTrue(cfRes is Result.Success)
+
+        // Queue item should exist
+        val pendingQueue = qDao.getAllPending(8)
+        assertEquals(1, pendingQueue.size)
+        assertEquals(SyncQueueEntity.OP_CARRY_FORWARD, pendingQueue[0].operationType)
+
+        // Execute sync
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue("Carry forward sync must succeed", syncRes is Result.Success)
+
+        // Queue item should be deleted on success
+        val remainingQueue = qDao.getAllPending(8)
+        assertTrue("Queue must be empty after successful rollover", remainingQueue.isEmpty())
+
+        // Lineage records created for the carried debit and payable
+        val lineage = lineageDao.getAll()
+        assertEquals(2, lineage.size)
+        assertTrue(lineage.any { it.carriedFromUuid == "txn_dinner_123" })
+        assertTrue(lineage.any { it.carriedFromUuid == "pay_movie_789" })
+    }
+
+    @Test
+    fun testCarryForward_retriesOnTransportFailure() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val lineageDao = FakeLineageDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val executor = AccountingSyncExecutor(
+            googleSheetsClient = sheets,
+            googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
+            syncQueueDao = qDao,
+            lineageDao = lineageDao,
+            transactionDao = tDao
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = executor,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        // Enqueue carry forward
+        repo.carryForward(targetTab = "Dec26")
+        val queueItem = qDao.getAllPending(8).first()
+
+        // Simulate transport failure on first sync attempt
+        mock.failBatchGetOnce = true
+        val syncRes1 = repo.syncPendingTransactions()
+
+        // Item must not be deleted and should have retry count incremented
+        val queueAfterFail = qDao.queue[queueItem.id]
+        org.junit.Assert.assertNotNull(queueAfterFail)
+        assertEquals(1, queueAfterFail?.retryCount)
+        assertEquals(SyncQueueEntity.STATUS_PENDING, queueAfterFail?.status)
     }
 }

@@ -22,7 +22,10 @@ import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
 import com.financeautomation.domain.usecase.YearCloseUseCase
 import com.financeautomation.domain.utils.AccountingUtils
+import java.util.Locale
 import java.util.UUID
+
+private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
 
 /**
  * Handles two-phase durable execution of complex accounting operations in the sync queue:
@@ -237,11 +240,19 @@ class AccountingSyncExecutor(
         spreadsheetId: String
     ): Result<Unit> {
         val req = AccountingRequestJsonAdapter.carryForwardRequestFromJson(item.payloadJson)
+        val targetTab = req.targetTab
+
+        // 1. Ensure target tab exists
+        val tabEnsureRes = googleSheetsClient.ensureMonthTabExists(spreadsheetId, targetTab)
+        if (tabEnsureRes is Result.Error) {
+            return Result.Error(tabEnsureRes.exception)
+        }
+
+        // 2. Read snapshot of workbook
         val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
         if (snapRes is Result.Error) return Result.Error(snapRes.exception)
         val snapshot = (snapRes as Result.Success).data
 
-        val targetTab = req.targetTab
         val sourceTab = req.sourceTab ?: findPrecedingTab(targetTab, snapshot.monthTabs.map { it.tabName })
         if (sourceTab == null) {
             return Result.Success(Unit)
@@ -476,7 +487,36 @@ class AccountingSyncExecutor(
         )
     }
 
+    fun parseMonthKey(tabName: String): Int? {
+        val match = MONTH_TAB_REGEX.find(tabName.trim()) ?: return null
+        val mmm = match.groupValues[1].lowercase(Locale.US)
+        val yy = match.groupValues[2].toIntOrNull() ?: return null
+        val monthIdx = when (mmm) {
+            "jan" -> 1
+            "feb" -> 2
+            "mar" -> 3
+            "apr" -> 4
+            "may" -> 5
+            "jun" -> 6
+            "jul" -> 7
+            "aug" -> 8
+            "sep" -> 9
+            "oct" -> 10
+            "nov" -> 11
+            "dec" -> 12
+            else -> return null
+        }
+        return (2000 + yy) * 12 + monthIdx
+    }
+
     fun findPrecedingTab(targetTab: String, availableTabs: List<String>): String? {
+        val targetKey = parseMonthKey(targetTab)
+        if (targetKey != null) {
+            val precedingTabs = availableTabs
+                .mapNotNull { tab -> parseMonthKey(tab)?.let { key -> tab to key } }
+                .filter { (_, key) -> key < targetKey }
+            return precedingTabs.maxByOrNull { (_, key) -> key }?.first
+        }
         val targetIdx = availableTabs.indexOfFirst { it.equals(targetTab, ignoreCase = true) }
         return if (targetIdx > 0) {
             availableTabs[targetIdx - 1]

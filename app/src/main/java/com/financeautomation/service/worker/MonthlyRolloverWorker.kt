@@ -30,22 +30,38 @@ class MonthlyRolloverWorker(
     override suspend fun doWork(): androidx.work.ListenableWorker.Result = withContext(Dispatchers.IO) {
         val app = applicationContext as? FinanceApplication
         val repository = app?.appContainer?.transactionRepository ?: return@withContext androidx.work.ListenableWorker.Result.retry()
-
-        val now = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
-        if (now.dayOfMonth >= 25) {
-            val nextMonth = now.plusMonths(1)
-            val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
-            val nextMonthTab = nextMonth.format(formatter)
-
-            repository.carryForward(targetTab = nextMonthTab)
+        val syncUseCase: suspend () -> com.financeautomation.core.model.Result<*> = {
             app.appContainer.syncTransactionsUseCase.invoke()
         }
 
-        androidx.work.ListenableWorker.Result.success()
+        val now = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
+        executeRollover(now, repository, syncUseCase)
     }
 
     companion object {
         const val WORK_NAME: String = "monthly_rollover_periodic"
+
+        suspend fun executeRollover(
+            now: ZonedDateTime,
+            repository: com.financeautomation.domain.repository.TransactionRepository,
+            syncUseCase: suspend () -> com.financeautomation.core.model.Result<*>
+        ): androidx.work.ListenableWorker.Result {
+            if (now.dayOfMonth >= 25) {
+                val nextMonth = now.plusMonths(1)
+                val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
+                val nextMonthTab = nextMonth.format(formatter)
+
+                val cfRes = repository.carryForward(targetTab = nextMonthTab)
+                if (cfRes is com.financeautomation.core.model.Result.Error) {
+                    return androidx.work.ListenableWorker.Result.retry()
+                }
+                val syncRes = syncUseCase()
+                if (syncRes is com.financeautomation.core.model.Result.Error) {
+                    return androidx.work.ListenableWorker.Result.retry()
+                }
+            }
+            return androidx.work.ListenableWorker.Result.success()
+        }
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
