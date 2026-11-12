@@ -108,6 +108,12 @@ object DatabaseMigrations {
         }
     }
 
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN duplicateOfId TEXT")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_2_3,
         MIGRATION_3_4,
@@ -115,7 +121,8 @@ object DatabaseMigrations {
         MIGRATION_5_6,
         MIGRATION_6_7,
         MIGRATION_7_8,
-        MIGRATION_8_9
+        MIGRATION_8_9,
+        MIGRATION_9_10
     )
 }
 

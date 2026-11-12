@@ -76,7 +76,10 @@ data class TransactionEntity(
     val sheetRowIndex: Int? = null,
 
     @ColumnInfo(name = "isPossibleDuplicate")
-    val isPossibleDuplicate: Boolean = false
+    val isPossibleDuplicate: Boolean = false,
+
+    @ColumnInfo(name = "duplicateOfId")
+    val duplicateOfId: String? = null
 ) {
     fun toDomain(): Transaction {
         val domainStatus = TransactionStatus.fromString(status)
@@ -111,7 +114,8 @@ data class TransactionEntity(
             reviewState = domainReviewState,
             syncState = domainSyncState,
             sheetRowIndex = sheetRowIndex,
-            isPossibleDuplicate = isPossibleDuplicate
+            isPossibleDuplicate = isPossibleDuplicate,
+            duplicateOfId = duplicateOfId
         )
     }
 
@@ -135,7 +139,8 @@ data class TransactionEntity(
                 reviewState = transaction.reviewState.name,
                 syncState = transaction.syncState.name,
                 sheetRowIndex = transaction.sheetRowIndex,
-                isPossibleDuplicate = transaction.isPossibleDuplicate
+                isPossibleDuplicate = transaction.isPossibleDuplicate,
+                duplicateOfId = transaction.duplicateOfId
             )
         }
     }

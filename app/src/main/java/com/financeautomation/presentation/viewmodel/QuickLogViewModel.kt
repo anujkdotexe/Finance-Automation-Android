@@ -89,7 +89,17 @@ class QuickLogViewModel(
                 val amountVal = capture.amount ?: 0.0
                 val amountStr = formatAmountInput(amountVal)
                 val isNeedsAmount = capture.flags.contains(PendingCaptureEntity.FLAG_NEEDS_AMOUNT) || amountVal <= 0.0
-                val isPossibleDup = capture.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+
+                val recentSimilar = if (amountVal > 0.0) {
+                    try {
+                        transactionRepository.findRecentSimilar(amountVal, 120_000L)
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } else emptyList()
+                val dupTxn = recentSimilar.firstOrNull()
+                val isPossibleDup = capture.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE) || dupTxn != null
+                val duplicateOfId = dupTxn?.id
 
                 _uiState.update { current ->
                     val resolvedAccount = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: current.selectedAccount
@@ -102,7 +112,8 @@ class QuickLogViewModel(
                         payee = capture.payee,
                         selectedAccount = resolvedAccount,
                         isNeedsAmount = isNeedsAmount,
-                        isPossibleDuplicate = isPossibleDup
+                        isPossibleDuplicate = isPossibleDup,
+                        duplicateOfId = duplicateOfId
                     )
                 }
                 recalculateSplit()

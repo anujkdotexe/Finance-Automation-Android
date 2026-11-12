@@ -114,6 +114,7 @@ object QuickLogTransactionHelper {
             owedToMe = txn.owedToMe,
             isFinancialLocked = isSettledOrCarried,
             isPossibleDuplicate = txn.isPossibleDuplicate,
+            duplicateOfId = txn.duplicateOfId,
             isSaved = false,
             isVoided = false,
             errorMessage = null
@@ -140,7 +141,8 @@ object QuickLogTransactionHelper {
                 account = state.selectedAccount,
                 tripTag = state.activeTripTag?.name ?: existing.tripTag,
                 reviewState = ReviewState.CONFIRMED,
-                isPossibleDuplicate = false
+                isPossibleDuplicate = false,
+                duplicateOfId = null
             )
         } else {
             val selectedCompanions = state.availableCompanions
@@ -157,7 +159,8 @@ object QuickLogTransactionHelper {
                 account = state.selectedAccount,
                 tripTag = state.activeTripTag?.name ?: existing.tripTag,
                 reviewState = ReviewState.CONFIRMED,
-                isPossibleDuplicate = false
+                isPossibleDuplicate = false,
+                duplicateOfId = null
             )
         }
         return when (val res = transactionRepository.updateTransaction(updated)) {
@@ -189,7 +192,9 @@ object QuickLogTransactionHelper {
             tripTag = state.activeTripTag?.name ?: "",
             sourcePackage = state.sourcePackage,
             timestamp = state.captureTimestamp ?: System.currentTimeMillis(),
-            reviewState = ReviewState.CONFIRMED
+            reviewState = ReviewState.CONFIRMED,
+            isPossibleDuplicate = state.isPossibleDuplicate,
+            duplicateOfId = state.duplicateOfId
         )
 
         if (result is Result.Success) {
