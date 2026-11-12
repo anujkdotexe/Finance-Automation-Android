@@ -20,6 +20,7 @@ import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,9 +76,21 @@ data class DashboardUiState(
     val income: Double = 0.0,
     val transactionCount: Int = 0,
     val syncQueueItems: List<SyncQueueEntity> = emptyList(),
+    val isOffline: Boolean = false,
+    val queuedItems: List<QueuedItem> = emptyList(),
     val isSyncing: Boolean = false,
     val syncMessage: String? = null,
     val errorMessage: String? = null
+)
+
+/**
+ * An item waiting in the sync queue, shown while offline. Carries only the merchant name,
+ * amount and creation time; no ids.
+ */
+data class QueuedItem(
+    val name: String,
+    val amount: Double,
+    val createdAt: Long
 )
 
 /**
@@ -92,6 +105,7 @@ class DashboardViewModel(
     private val categoryRepository: CategoryRepository? = null,
     private val directPendingCaptureDao: PendingCaptureDao? = null,
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
+    private val onlineState: Flow<Boolean>? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -239,7 +253,8 @@ class DashboardViewModel(
                 payablesFlow,
                 categoriesFlow,
                 needsReviewCapturesFlow,
-                monthOffsetFlow
+                monthOffsetFlow,
+                onlineState ?: flowOf(true)
             ) { flows ->
                 @Suppress("UNCHECKED_CAST")
                 val transactions = flows[0] as List<Transaction>
@@ -252,6 +267,7 @@ class DashboardViewModel(
                 @Suppress("UNCHECKED_CAST")
                 val needsReviewCaptures = flows[4] as List<PendingCaptureEntity>
                 val monthOffset = flows[5] as Int
+                val isOnline = flows[6] as Boolean
 
                 calculateDashboardMetrics(
                     transactions = transactions,
@@ -260,6 +276,9 @@ class DashboardViewModel(
                     categories = categories,
                     needsReviewCaptures = needsReviewCaptures,
                     monthOffset = monthOffset
+                ).copy(
+                    isOffline = !isOnline,
+                    queuedItems = buildQueuedItems(transactions, queueItems)
                 )
             }.collect { calculatedState ->
                 _uiState.update { current ->
@@ -283,6 +302,20 @@ class DashboardViewModel(
 
     fun currentMonth() {
         monthOffsetFlow.value = 0
+    }
+
+    private fun buildQueuedItems(
+        transactions: List<Transaction>,
+        queueItems: List<SyncQueueEntity>
+    ): List<QueuedItem> {
+        val byId = transactions.associateBy { it.id }
+        return queueItems
+            .filter { it.status == SyncQueueEntity.STATUS_PENDING }
+            .sortedBy { it.createdAt }
+            .mapNotNull { item ->
+                val txn = byId[item.transactionId] ?: return@mapNotNull null
+                QueuedItem(name = txn.merchant, amount = txn.totalAmount, createdAt = item.createdAt)
+            }
     }
 
     private fun calculateDashboardMetrics(
@@ -543,6 +576,7 @@ class DashboardViewModel(
             payableDaoProvider: (suspend () -> PayableDao)? = null,
             pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
             categoryRepository: CategoryRepository? = null,
+            onlineState: Flow<Boolean>? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -553,6 +587,7 @@ class DashboardViewModel(
                     payableDaoProvider = payableDaoProvider,
                     pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     categoryRepository = categoryRepository,
+                    onlineState = onlineState,
                     ioDispatcher = ioDispatcher
                 ) as T
             }

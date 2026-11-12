@@ -105,6 +105,7 @@ interface AppContainer {
     val peopleListRebuilder: PeopleListRebuilder
     val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
+    val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
 }
 
 /**
@@ -125,6 +126,10 @@ class DefaultAppContainer(
     override val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     override val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
     override val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
+
+    override val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver by lazy {
+        com.financeautomation.core.utils.ConnectivityObserver(applicationContext)
+    }
 
     override val rawHttpErrorStore: RawHttpErrorStore by lazy {
         RawHttpErrorStore(applicationContext.filesDir)
