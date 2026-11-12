@@ -506,6 +506,7 @@ fun AppNavHost(
                         DashboardScreen(
                             viewModel = dashboardViewModel,
                             onNavigateToReview = { navController.navigate(AppRoutes.NEEDS_REVIEW) },
+                            onNavigateToTransactions = { navController.navigate(AppRoutes.TRANSACTIONS) },
                             onNavigateToSettlements = { personName, owedToMe ->
                                 val extras = FlowAuthGate.mapSettlementToExtras(personName, owedToMe)
                                 launchFlow(extras.flow, extras.preselectedFriend)

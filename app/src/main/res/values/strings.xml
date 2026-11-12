@@ -110,6 +110,14 @@
     <string name="dashboard_income_caption">Total inflows</string>
     <string name="dashboard_empty_message">Nothing logged yet. Pay with UPI and the prompt will appear, or tap Add expense.</string>
     <string name="dashboard_empty_action">Add expense</string>
+    <string name="dashboard_excludes_savings">Excludes Savings</string>
+    <string name="dashboard_on_track">On track</string>
+    <string name="dashboard_daily_average_prefix">Daily average: </string>
+    <string name="dashboard_vs_same_day_prefix">vs same day last month </string>
+    <string name="dashboard_offline_banner_title">You are offline.</string>
+    <string name="dashboard_offline_banner_body">Your expenses are saved on this phone and will sync when you are back online.</string>
+    <string name="dashboard_waiting_to_sync">Waiting to sync</string>
+    <string name="dashboard_balances_clear">All other balances clear</string>
     <string name="sync_status_synced_now">Synced just now</string>
     <string name="sync_status_syncing">Syncing&#8230;</string>
     <string name="sync_status_offline">Offline</string>

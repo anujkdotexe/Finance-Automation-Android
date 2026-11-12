@@ -1,120 +1,185 @@
 package com.financeautomation.presentation.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.financeautomation.R
+import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
-import com.financeautomation.presentation.components.SyncStatusLine
+import com.financeautomation.presentation.components.SectionTitle
+import com.financeautomation.presentation.components.TonalCard
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.CategorySpend
 
 /**
- * Month header with navigation controls and sync status line (Design Guide 5.1).
+ * Modern Month Switcher card with calendar icon and navigation chevrons.
  */
 @Composable
-fun MonthHeader(
+fun MonthSwitcher(
     monthLabel: String,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
-    syncQueueCount: Int,
-    isSyncing: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onPreviousMonth, modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                    contentDescription = stringResource(R.string.cd_prev_month),
-                    tint = FinanceTheme.colors.onSurface
-                )
-            }
-
-            Text(
-                text = monthLabel,
-                style = FinanceTheme.typography.titleMedium,
-                color = FinanceTheme.colors.onSurface
-            )
-
-            IconButton(onClick = onNextMonth, modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = stringResource(R.string.cd_next_month),
-                    tint = FinanceTheme.colors.onSurface
-                )
-            }
-        }
-
-        SyncStatusLine(
-            pendingCount = syncQueueCount,
-            isSyncing = isSyncing,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
-    }
-}
-
-/**
- * Category breakdown row with thin proportional bar (Design Guide 5.1).
- */
-@Composable
-fun CategoryBarRow(item: CategorySpend, modifier: Modifier = Modifier) {
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = FinanceTheme.spacing.xs)
+            .height(48.dp)
+            .clip(FinanceShapes.card)
+            .background(FinanceTheme.colors.surfaceContainerLowest)
+            .padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = item.category,
-                style = FinanceTheme.typography.bodyMedium,
-                color = FinanceTheme.colors.onSurface
-            )
+            IconButton(
+                onClick = onPreviousMonth,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                    contentDescription = stringResource(R.string.cd_prev_month),
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-                AmountText(amount = item.amount, tone = AmountTone.MONEY_OUT)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CalendarToday,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
                 Text(
-                    text = "${(item.percentage * 100).toInt()}%",
-                    style = FinanceTheme.typography.labelMedium,
-                    color = FinanceTheme.colors.onSurfaceVariant
+                    text = monthLabel,
+                    style = FinanceTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            IconButton(
+                onClick = onNextMonth,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = stringResource(R.string.cd_next_month),
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+/**
+ * "Where it went" Category spending breakdown with proportional horizontal bars.
+ */
+@Composable
+fun CategoryBreakdownSection(
+    categories: List<CategorySpend>,
+    hasMore: Boolean,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (categories.isEmpty()) return
 
-        LinearProgressIndicator(
-            progress = { item.percentage },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(FinanceTheme.sizes.grabberHeight),
-            color = FinanceTheme.colors.brand,
-            trackColor = FinanceTheme.colors.surfaceVariant
+    Column(modifier = modifier.fillMaxWidth()) {
+        SectionTitle(
+            title = stringResource(R.string.dashboard_where_it_went),
+            actionText = if (hasMore) {
+                if (isExpanded) stringResource(R.string.action_show_less) else stringResource(R.string.action_see_all)
+            } else null,
+            onActionClick = onToggleExpand
         )
+
+        TonalCard {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                categories.forEach { item ->
+                    val percentageInt = (item.percentage * 100).toInt()
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = item.category,
+                                style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                AmountText(
+                                    amount = item.amount,
+                                    tone = AmountTone.DEFAULT,
+                                    style = FinanceTheme.typography.numeric.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "$percentageInt%",
+                                    style = FinanceTheme.typography.numeric,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // Proportional progress bar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(CircleShape)
+                                .background(FinanceTheme.colors.surfaceContainer)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(fraction = item.percentage.coerceIn(0f, 1f))
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

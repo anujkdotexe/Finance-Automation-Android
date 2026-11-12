@@ -2,25 +2,18 @@ package com.financeautomation.presentation.screens
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,26 +26,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.financeautomation.R
-import com.financeautomation.presentation.components.AmountTone
+import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.EmptyState
-import com.financeautomation.presentation.components.KpiCard
-import com.financeautomation.presentation.components.SectionHeader
+import com.financeautomation.presentation.components.SectionTitle
+import com.financeautomation.presentation.components.SyncStatusLine
+import com.financeautomation.presentation.components.TonalCard
 import com.financeautomation.presentation.components.TransactionRow
-import com.financeautomation.presentation.screens.settings.CompatibilityReportDialog
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.CategorySpend
 import com.financeautomation.presentation.viewmodel.DashboardUiState
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
 import com.financeautomation.presentation.viewmodel.DebtSummary
+import com.financeautomation.presentation.viewmodel.QueuedItem
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Rebuilt Calm Utility Home Screen per Design Guide 5.1.
- * Stateless composable displaying living burn, receivables/payables, category bars, and recent transactions.
+ * Rebuilt Calm Utility Dashboard screen matching November 2026 reference specifications.
+ * Renders living burn hero metrics, receivables/payables, category distribution, and offline status.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +55,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     modifier: Modifier = Modifier,
     onNavigateToReview: () -> Unit = {},
+    onNavigateToTransactions: () -> Unit = onNavigateToReview,
     onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit,
     onAddExpense: () -> Unit = {}
 ) {
@@ -80,7 +76,7 @@ fun DashboardScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = FinanceTheme.colors.surface,
+        containerColor = MaterialTheme.colorScheme.surface,
         modifier = modifier
     ) { innerPadding ->
         PullToRefreshBox(
@@ -95,6 +91,7 @@ fun DashboardScreen(
                 onPreviousMonth = viewModel::previousMonth,
                 onNextMonth = viewModel::nextMonth,
                 onNavigateToReview = onNavigateToReview,
+                onNavigateToTransactions = onNavigateToTransactions,
                 onNavigateToSettlements = onNavigateToSettlements,
                 onAddExpense = onAddExpense,
                 modifier = Modifier.fillMaxSize()
@@ -112,30 +109,46 @@ fun DashboardContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onNavigateToReview: () -> Unit,
+    onNavigateToTransactions: () -> Unit,
     onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit,
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAllCategories by remember { mutableStateOf(false) }
-    var showMissedPaymentDialog by remember { mutableStateOf(false) }
-    val showLessText = stringResource(R.string.action_show_less)
-    val seeAllText = stringResource(R.string.action_see_all)
 
     LazyColumn(
         modifier = modifier.padding(horizontal = FinanceTheme.spacing.l),
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
         item {
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-            MonthHeader(
-                monthLabel = state.selectedMonthLabel,
-                onPreviousMonth = onPreviousMonth,
-                onNextMonth = onNextMonth,
-                syncQueueCount = state.syncQueueItems.size,
-                isSyncing = state.isSyncing
+            // Single-line sync status indicator
+            SyncStatusLine(
+                waitingCount = state.waitingCount,
+                failedCount = state.failedCount,
+                isSyncing = state.isSyncing,
+                isOffline = state.isOffline,
+                modifier = Modifier.padding(vertical = 2.dp)
             )
         }
 
+        // Offline Banner & Queued Items
+        if (state.isOffline) {
+            item {
+                OfflineSection(queuedItems = state.queuedItems)
+            }
+        }
+
+        // 1. Month Switcher
+        item {
+            MonthSwitcher(
+                monthLabel = state.selectedMonthLabel,
+                onPreviousMonth = onPreviousMonth,
+                onNextMonth = onNextMonth
+            )
+        }
+
+        // Empty State vs Populated Dashboard
         if (state.transactionCount == 0 && state.currentBurn == 0.0) {
             item {
                 EmptyState(
@@ -146,139 +159,95 @@ fun DashboardContent(
                 )
             }
         } else {
-            // 1. Hero Living Burn Card
+            // 2. Hero KPI Card: Living Burn
             item {
                 HeroBurnCard(
                     currentBurn = state.currentBurn,
                     dailyAverage = state.dailyAverage,
-                    lastMonthBurn = state.lastMonthBurn
+                    lastMonthSameDayBurn = state.lastMonthSameDayBurn,
+                    paceDeltaPercent = state.paceDeltaPercent,
+                    onTrack = state.onTrack
                 )
             }
 
-            // 2. Side-by-Side Owed Cards
+            // 3. Owed to me and I owe cards
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-                ) {
-                    OwedSummaryCard(
-                        title = stringResource(R.string.dashboard_owed_to_me),
-                        amount = state.owedToMe,
-                        tone = AmountTone.MONEY_IN,
-                        topFriends = state.topOwedToMe,
-                        onPersonClick = { personName -> onNavigateToSettlements(personName, true) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    OwedSummaryCard(
-                        title = stringResource(R.string.dashboard_i_owe),
-                        amount = state.iOwePeople,
-                        tone = AmountTone.MONEY_OWED,
-                        topFriends = state.topIOwe,
-                        onPersonClick = { personName -> onNavigateToSettlements(personName, false) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                OwedSummarySection(
+                    owedToMe = state.owedToMe,
+                    topOwedToMe = state.topOwedToMe,
+                    iOwePeople = state.iOwePeople,
+                    topIOwe = state.topIOwe,
+                    onPersonClick = onNavigateToSettlements
+                )
             }
 
-            // 3. Needs Review Chip Row
-            if (state.needsReviewCount > 0) {
+            // 4. Needs Review Action Banner (calm tonal colors, not red)
+            if (state.needsReviewTotal > 0 || state.needsReviewCount > 0) {
+                val reviewCount = if (state.needsReviewTotal > 0) state.needsReviewTotal else state.needsReviewCount
                 item {
                     NeedsReviewBanner(
-                        count = state.needsReviewCount,
+                        count = reviewCount,
                         onClick = onNavigateToReview
                     )
                 }
             }
 
-            // 4. Where It Went (Category Proportional Bars)
+            // 5. Where It Went (Category Proportional Bars)
             val displayedCategories = if (showAllCategories) state.allCategories else state.topCategories
             if (displayedCategories.isNotEmpty()) {
                 item {
-                    SectionHeader(
-                        title = stringResource(R.string.dashboard_where_it_went),
-                        actionText = if (state.allCategories.size > 5) {
-                            if (showAllCategories) showLessText else seeAllText
-                        } else null,
-                        onActionClick = { showAllCategories = !showAllCategories }
+                    CategoryBreakdownSection(
+                        categories = displayedCategories,
+                        hasMore = state.allCategories.size > 5,
+                        isExpanded = showAllCategories,
+                        onToggleExpand = { showAllCategories = !showAllCategories }
                     )
-                }
-
-                items(displayedCategories) { item ->
-                    CategoryBarRow(item = item)
                 }
             }
 
-            // 5. Recent Transactions
+            // 6. Two Small Cards: Savings and Income
+            item {
+                SavingsAndIncomeSection(
+                    savings = state.savings,
+                    income = state.income
+                )
+            }
+
+            // 7. Recent Transactions (last 3 items)
             if (state.recentTransactions.isNotEmpty()) {
                 item {
-                    SectionHeader(
+                    SectionTitle(
                         title = stringResource(R.string.dashboard_recent),
                         actionText = stringResource(R.string.action_see_all),
-                        onActionClick = onNavigateToReview
+                        onActionClick = onNavigateToTransactions
                     )
-                }
-
-                items(state.recentTransactions) { txn ->
-                    TransactionRow(
-                        description = txn.merchant.ifBlank { txn.category },
-                        dateText = SimpleDateFormat("dd MMM", Locale.getDefault()).format(Date(txn.timestamp)),
-                        account = txn.account,
-                        amount = txn.totalAmount,
-                        status = txn.status.value
-                    )
-                }
-            }
-
-            // 6. Below the Fold: Savings and Income
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-                ) {
-                    KpiCard(
-                        label = stringResource(R.string.dashboard_savings),
-                        amount = state.savings,
-                        tone = AmountTone.INFO,
-                        caption = stringResource(R.string.dashboard_savings_caption),
-                        modifier = Modifier.weight(1f)
-                    )
-                    KpiCard(
-                        label = stringResource(R.string.dashboard_income),
-                        amount = state.income,
-                        tone = AmountTone.MONEY_IN,
-                        caption = stringResource(R.string.dashboard_income_caption),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            item {
-                OutlinedButton(
-                    onClick = { showMissedPaymentDialog = true },
-                    shape = FinanceTheme.shapes.card,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.BugReport,
-                        contentDescription = null,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                    Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
-                    Text(stringResource(R.string.report_missed_payment_button))
+                    TonalCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            state.recentTransactions.take(3).forEach { txn ->
+                                val dateStr = SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
+                                    .format(Date(txn.timestamp))
+                                TransactionRow(
+                                    merchant = txn.merchant.ifBlank { txn.category },
+                                    amount = txn.totalAmount,
+                                    category = txn.category,
+                                    account = txn.account,
+                                    time = dateStr,
+                                    status = txn.status.value,
+                                    splitText = if (txn.owedToMe > 0.0) {
+                                        "My share ${com.financeautomation.core.utils.formatRupeesAuto(txn.myShare)}, Owed ${com.financeautomation.core.utils.formatRupeesAuto(txn.owedToMe)}"
+                                    } else null,
+                                    isExpense = true
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
 
         item {
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
+            Spacer(modifier = Modifier.height(88.dp))
         }
-    }
-
-    if (showMissedPaymentDialog) {
-        CompatibilityReportDialog(
-            isMissedPayment = true,
-            onDismiss = { showMissedPaymentDialog = false }
-        )
     }
 }
 
@@ -289,27 +258,38 @@ private fun DashboardScreenPreviewLight() {
         DashboardContent(
             state = DashboardUiState(
                 selectedMonthLabel = "November 2026",
-                currentBurn = 42350.0,
-                dailyAverage = 1411.0,
-                lastMonthBurn = 38900.0,
-                owedToMe = 3200.0,
+                currentBurn = 6549.0,
+                dailyAverage = 273.0,
+                lastMonthBurn = 7100.0,
+                lastMonthSameDayBurn = 7100.0,
+                paceDeltaPercent = -7.8,
+                onTrack = true,
+                owedToMe = 2050.0,
                 topOwedToMe = listOf(
-                    DebtSummary("Aditya", 1800.0),
-                    DebtSummary("Rohit", 1400.0)
+                    DebtSummary("Rahul V.", 1400.0),
+                    DebtSummary("Priya S.", 650.0)
                 ),
-                needsReviewCount = 2,
+                iOwePeople = 1120.0,
+                topIOwe = listOf(
+                    DebtSummary("Karan M.", 1120.0)
+                ),
+                needsReviewTotal = 3,
                 topCategories = listOf(
-                    CategorySpend("Food & Drink", 18500.0, 0.43f),
-                    CategorySpend("Groceries", 9200.0, 0.22f),
-                    CategorySpend("Transit", 4500.0, 0.11f)
+                    CategorySpend("Shopping", 1800.0, 0.27f),
+                    CategorySpend("Transit", 1490.0, 0.23f),
+                    CategorySpend("Groceries", 1200.0, 0.18f),
+                    CategorySpend("Food & Drink", 990.0, 0.15f),
+                    CategorySpend("Subscriptions", 649.0, 0.10f),
+                    CategorySpend("Health", 420.0, 0.06f)
                 ),
                 savings = 25000.0,
-                income = 120000.0,
-                transactionCount = 15
+                income = 85000.0,
+                transactionCount = 14
             ),
             onPreviousMonth = {},
             onNextMonth = {},
             onNavigateToReview = {},
+            onNavigateToTransactions = {},
             onNavigateToSettlements = { _, _ -> },
             onAddExpense = {}
         )
@@ -323,19 +303,54 @@ private fun DashboardScreenPreviewDark() {
         DashboardContent(
             state = DashboardUiState(
                 selectedMonthLabel = "November 2026",
-                currentBurn = 42350.0,
-                dailyAverage = 1411.0,
-                lastMonthBurn = 38900.0,
-                owedToMe = 3200.0,
-                needsReviewCount = 0,
-                topCategories = listOf(
-                    CategorySpend("Food & Drink", 18500.0, 0.43f)
-                ),
-                transactionCount = 5
+                currentBurn = 34820.0,
+                dailyAverage = 1240.0,
+                lastMonthSameDayBurn = 36000.0,
+                paceDeltaPercent = -3.2,
+                onTrack = true,
+                owedToMe = 1500.0,
+                topOwedToMe = listOf(DebtSummary("Aman", 1500.0)),
+                iOwePeople = 0.0,
+                needsReviewTotal = 0,
+                savings = 10000.0,
+                income = 95000.0,
+                transactionCount = 28
             ),
             onPreviousMonth = {},
             onNextMonth = {},
             onNavigateToReview = {},
+            onNavigateToTransactions = {},
+            onNavigateToSettlements = { _, _ -> },
+            onAddExpense = {}
+        )
+    }
+}
+
+@Preview(name = "Font Scale 1.3x", fontScale = 1.3f, showBackground = true)
+@Composable
+private fun DashboardScreenPreviewScale() {
+    FinanceAutomationTheme(darkTheme = false) {
+        DashboardContent(
+            state = DashboardUiState(
+                selectedMonthLabel = "November 2026",
+                currentBurn = 12500.0,
+                dailyAverage = 416.0,
+                lastMonthSameDayBurn = 13000.0,
+                paceDeltaPercent = -3.8,
+                onTrack = true,
+                owedToMe = 450.0,
+                topOwedToMe = listOf(DebtSummary("Neha", 450.0)),
+                iOwePeople = 200.0,
+                topIOwe = listOf(DebtSummary("Vikram", 200.0)),
+                needsReviewTotal = 1,
+                savings = 5000.0,
+                income = 40000.0,
+                transactionCount = 8
+            ),
+            onPreviousMonth = {},
+            onNextMonth = {},
+            onNavigateToReview = {},
+            onNavigateToTransactions = {},
             onNavigateToSettlements = { _, _ -> },
             onAddExpense = {}
         )
