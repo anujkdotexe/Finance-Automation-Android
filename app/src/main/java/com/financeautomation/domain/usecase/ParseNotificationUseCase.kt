@@ -34,7 +34,8 @@ sealed interface NotificationParseResult {
         val isCredit: Boolean,
         val wording: WordingClass = WordingClass.SUCCESS,
         val flags: String = "",
-        val inferredAccount: String = transaction.account
+        val inferredAccount: String = transaction.account,
+        val detectedAccountHint: String? = null
     ) : NotificationParseResult
 
     /**
@@ -48,7 +49,8 @@ sealed interface NotificationParseResult {
         val inferredAccount: String = CategoryConstants.ACCOUNT_OTHER,
         val kind: String = "DEBIT",
         val flags: String = "NEEDS_AMOUNT",
-        val timestamp: Long = System.currentTimeMillis()
+        val timestamp: Long = System.currentTimeMillis(),
+        val detectedAccountHint: String? = null
     ) : NotificationParseResult
 
     /**
@@ -242,10 +244,11 @@ class ParseNotificationUseCase(
                 message = "Payment detected, tap to enter amount",
                 sourcePackage = sourcePackage,
                 wording = wording,
-                inferredAccount = detectedAccount,
+                inferredAccount = account,
                 kind = kind,
                 flags = fallbackFlags,
-                timestamp = timestamp
+                timestamp = timestamp,
+                detectedAccountHint = inferred.detectedName
             )
         }
 
@@ -287,7 +290,8 @@ class ParseNotificationUseCase(
             isCredit = isCredit,
             wording = wording,
             flags = flags,
-            inferredAccount = detectedAccount
+            inferredAccount = account,
+            detectedAccountHint = inferred.detectedName
         )
     }
 }

@@ -45,7 +45,10 @@ data class PendingCaptureEntity(
     val contentHash: String?,
 
     @ColumnInfo(name = "updatedAt")
-    val updatedAt: Long
+    val updatedAt: Long,
+
+    @ColumnInfo(name = "detectedAccountHint")
+    val detectedAccountHint: String? = null
 ) {
     companion object {
         const val KIND_DEBIT: String = "DEBIT"

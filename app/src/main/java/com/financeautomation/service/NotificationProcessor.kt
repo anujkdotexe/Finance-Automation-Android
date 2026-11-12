@@ -183,7 +183,8 @@ class NotificationProcessor(
                     postTime = postTime,
                     sbnKey = sbnKey,
                     contentHash = contentHash,
-                    handledEntity = handledEntity
+                    handledEntity = handledEntity,
+                    detectedAccountHint = parseResult.detectedAccountHint
                 )
                 outcome
             }
@@ -205,7 +206,8 @@ class NotificationProcessor(
                     postTime = postTime,
                     sbnKey = sbnKey,
                     contentHash = contentHash,
-                    handledEntity = handledEntity
+                    handledEntity = handledEntity,
+                    detectedAccountHint = parseResult.detectedAccountHint
                 )
                 outcome
             }
@@ -233,7 +235,8 @@ class NotificationProcessor(
         postTime: Long,
         sbnKey: String,
         contentHash: String,
-        handledEntity: HandledNotificationEntity
+        handledEntity: HandledNotificationEntity,
+        detectedAccountHint: String? = null
     ): NotificationProcessingOutcome {
         val targetState = if (wording == WordingClass.PROCESSING) {
             PendingCaptureEntity.STATE_AWAITING_SUCCESS
@@ -251,6 +254,7 @@ class NotificationProcessor(
                     inferredAccount = inferredAccount.ifBlank { existingByKey.inferredAccount },
                     state = if (targetState == PendingCaptureEntity.STATE_WAITING) PendingCaptureEntity.STATE_WAITING else existingByKey.state,
                     contentHash = contentHash,
+                    detectedAccountHint = detectedAccountHint ?: existingByKey.detectedAccountHint,
                     updatedAt = System.currentTimeMillis()
                 )
                 val updateOp: suspend () -> Unit = {
@@ -279,6 +283,7 @@ class NotificationProcessor(
                     val merged = mergeTarget.copy(
                         payee = if (mergeTarget.payee == "Unknown Payee" && payee != "Unknown Payee") payee else mergeTarget.payee,
                         inferredAccount = if (mergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else mergeTarget.inferredAccount,
+                        detectedAccountHint = mergeTarget.detectedAccountHint ?: detectedAccountHint,
                         updatedAt = System.currentTimeMillis()
                     )
                     val mergeOp: suspend () -> Unit = {
@@ -318,7 +323,8 @@ class NotificationProcessor(
             state = targetState,
             notificationKey = sbnKey.takeIf { it.isNotBlank() },
             contentHash = contentHash,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            detectedAccountHint = detectedAccountHint
         )
 
         val insertOp: suspend () -> Unit = {

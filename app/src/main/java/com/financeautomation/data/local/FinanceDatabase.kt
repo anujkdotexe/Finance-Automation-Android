@@ -72,7 +72,7 @@ import java.io.File
         PipelineEventEntity::class,
         PayableEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {

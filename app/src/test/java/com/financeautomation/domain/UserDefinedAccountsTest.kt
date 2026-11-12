@@ -94,7 +94,8 @@ class UserDefinedAccountsTest {
         assertTrue(result is NotificationParseResult.Success)
         val success = result as NotificationParseResult.Success
         assertEquals("NEW_ACCOUNT", success.flags)
-        assertTrue(success.inferredAccount.contains("9988"))
+        assertEquals("Other", success.inferredAccount)
+        assertEquals("A/c XX9988", success.detectedAccountHint)
         // Transaction account MUST be the safe defaultAccount ("Other"), NOT the unconfigured pattern
         assertEquals("Other", success.transaction.account)
     }
@@ -118,8 +119,9 @@ class UserDefinedAccountsTest {
         assertEquals("NEW_ACCOUNT", success.flags)
         // Transaction is saved under defaultAccount so only configured accounts reach the sheet
         assertEquals("ICICI Bank", success.transaction.account)
-        // Detected name is preserved in capture's inferredAccount
-        assertTrue(success.inferredAccount.contains("4821"))
+        // Inferred account is safe defaultAccount
+        assertEquals(defaultAccount, success.inferredAccount)
+        assertEquals("A/c XX4821", success.detectedAccountHint)
     }
 
     @Test
