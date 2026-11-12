@@ -146,6 +146,10 @@ class ReviewInboxViewModel(
                     _uiState.update { it.copy(openQuickLogCaptureId = outcome.captureId) }
                 is SubscriptionYesOutcome.Failed ->
                     _uiState.update { it.copy(errorMessage = outcome.message) }
+                SubscriptionYesOutcome.PastMonth ->
+                    _uiState.update {
+                        it.copy(errorMessage = "That payment is from a previous month and cannot be added. Skip it instead.")
+                    }
                 SubscriptionYesOutcome.NotFound, SubscriptionYesOutcome.AlreadyResolved -> Unit
             }
         }
