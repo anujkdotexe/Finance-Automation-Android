@@ -26,10 +26,19 @@ data class SubscriptionMatch(
  * or any keyword contained (case-insensitive) in the merchant or alert text.
  * Pure Kotlin.
  */
-class SubscriptionMatcher(private val repository: SubscriptionRepository) {
+class SubscriptionMatcher(
+    private val repository: SubscriptionRepository,
+    private val scheduleUseCase: SubscriptionScheduleUseCase = SubscriptionScheduleUseCase()
+) {
 
     suspend fun match(amount: Double, merchantText: String, nowEpochDay: Long): SubscriptionMatch? {
         if (amount <= 0.0 || merchantText.isBlank()) return null
+        // Cycles are normally created by the evening worker. A payment alert can arrive earlier, or
+        // up to three days before the due date, so make sure the cycles in the window exist first.
+        // This is about cycles only: the expense keeps the real alert time, and cycles after today are never reminded.
+        SubscriptionCycleSync.ensure(
+            repository, scheduleUseCase, nowEpochDay, aheadDays = WINDOW_DAYS, lookBackDays = WINDOW_DAYS
+        )
         val haystack = merchantText.lowercase()
         val candidates = repository.getCyclesInWindow(nowEpochDay - WINDOW_DAYS, nowEpochDay + WINDOW_DAYS)
             .filter { it.subscription.active }

@@ -117,4 +117,80 @@ class SubscriptionMatcherTest {
         val r = m.match(649.0, "netflix", today)
         assertFalse(r!!.isDuplicate)
     }
+
+    // ---- Cycles are ensured before matching: alerts that arrive before the evening worker runs
+
+    private val aprilToday = java.time.LocalDate.of(2026, 4, 15).toEpochDay()
+
+    private fun monthlyDue(dayOfMonth: Int) = testSubscription(
+        anchorEpochDay = java.time.LocalDate.of(2026, 1, dayOfMonth).toEpochDay()
+    )
+
+    @Test
+    fun paymentOnTheMorningOfTheDueDateMatchesAndNoReminderIsPostedThatEvening() = runBlocking {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(monthlyDue(15))
+        assertTrue("no cycle exists before the worker runs", repo.cycles.value.isEmpty())
+
+        val r = SubscriptionMatcher(repo).match(649.0, "Paid to Netflix", aprilToday)
+
+        assertNotNull(r)
+        assertEquals(aprilToday, r!!.cycle.dueEpochDay)
+        // Saving the capture marks the cycle paid; the evening worker then has nothing to ask about
+        repo.markCyclePaidForSubscription("sub_netflix", aprilToday, "txn_morning")
+        val posted = mutableListOf<String>()
+        com.financeautomation.service.worker.SubscriptionReminderWorker.runCheck(
+            repo, SubscriptionScheduleUseCase(),
+            com.financeautomation.service.worker.SubscriptionReminderNotifier { s, _ -> posted.add(s.name) },
+            aprilToday
+        )
+        assertTrue(posted.isEmpty())
+    }
+
+    @Test
+    fun paymentTwoDaysBeforeTheDueDateMatchesAFutureCycle() = runBlocking {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(monthlyDue(17))
+
+        val r = SubscriptionMatcher(repo).match(649.0, "Paid to Netflix", aprilToday)
+
+        assertNotNull(r)
+        assertEquals(aprilToday + 2, r!!.cycle.dueEpochDay)
+    }
+
+    @Test
+    fun paymentFourDaysBeforeTheDueDateDoesNotMatch() = runBlocking {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(monthlyDue(19))
+
+        assertNull(SubscriptionMatcher(repo).match(649.0, "Paid to Netflix", aprilToday))
+    }
+
+    @Test
+    fun futureCyclesCreatedForMatchingAreNeverReminded() = runBlocking {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(monthlyDue(17))
+        SubscriptionMatcher(repo).match(1.0, "nothing relevant", aprilToday)
+        SubscriptionMatcher(repo).match(649.0, "Paid to Netflix", aprilToday)
+        assertEquals(1, repo.cycles.value.size)
+
+        val posted = mutableListOf<String>()
+        com.financeautomation.service.worker.SubscriptionReminderWorker.runCheck(
+            repo, SubscriptionScheduleUseCase(),
+            com.financeautomation.service.worker.SubscriptionReminderNotifier { s, _ -> posted.add(s.name) },
+            aprilToday
+        )
+        assertTrue(posted.isEmpty())
+        assertEquals(0, repo.cycles.value.values.single().remindCount)
+    }
+
+    @Test
+    fun matcherCreatesNoCycleInAPreviousMonth() = runBlocking {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(monthlyDue(31))
+        val earlyApril = java.time.LocalDate.of(2026, 4, 2).toEpochDay()
+
+        assertNull(SubscriptionMatcher(repo).match(649.0, "Paid to Netflix", earlyApril))
+        assertTrue(repo.cycles.value.isEmpty())
+    }
 }
