@@ -1,0 +1,635 @@
+[
+ {
+  "sender": "VA-SBIUPI-S",
+  "body": "Dear UPI user A/C X#### debited by 30 on date 31Dec25 trf to PAYEE A1 Refno ########## If not u? call-########## for other services-#####-SBI",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": null
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 30,
+   "merchant": "<a name>"
+  }
+ },
+ {
+  "sender": "VK-CANBNK-S",
+  "body": "Rs.20.00 paid thru A/C XX#### on 06-12-25 18:33:32 to PAYEE B1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 20,
+   "merchant": "PAYEE B1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 20,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "VM-CANBNK-S",
+  "body": "Rs.60.00 paid thru A/C XX#### on 14-11-25 19:53:03 to PAYEE C1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 60,
+   "merchant": "PAYEE C1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 60,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "AX-CANBNK-S",
+  "body": "An amount of INR 314.96 has been DEBITED to your account XXX#### on 17/10/2025. Total Avail.bal INR 2,727.39.Dial 1930 to report cyber fraud - Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 314.96
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 314.96,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "AD-CANBNK-S",
+  "body": "Rs.15.00 paid thru A/C XX#### on 03-10-25 13:51:49 to PAYEE D1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 15,
+   "merchant": "PAYEE D1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 15,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "AD-CANBNK-S",
+  "body": "Rs.240.00 paid thru A/C XX#### on 14-9-25 20:41:18 to PAYEE E1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 240,
+   "merchant": "PAYEE E1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 240,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "VM-CANBNK-S",
+  "body": "Rs.599.00 paid thru A/C XX#### on 09-8-25 14:20:48 to PAYEE F1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 599,
+   "merchant": "PAYEE F1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 599,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "VM-CANBNK-S",
+  "body": "Rs.12.00 paid thru A/C XX#### on 16-7-25 19:21:05 to PAYEE G1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 12,
+   "merchant": "PAYEE G1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 12,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "AX-CANBNK-S",
+  "body": "Rs.60.00 paid thru A/C XX#### on 26-6-25 19:24:05 to PAYEE H1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 60,
+   "merchant": "PAYEE H1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 60,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "JD-CANBNK-S",
+  "body": "Rs.110.00 paid thru A/C XX#### on 04-6-25 08:44:43 to PAYEE I1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 110,
+   "merchant": "PAYEE I1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 110,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "BP-CANBNK",
+  "body": "An amount of INR 4,000.00 has been DEBITED to your account XXX#### on 26/03/2025. Total Avail.bal INR 19,843.02.Dial 1930 to report cyber fraud - Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 4000
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 4000,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "JX-CANBNK",
+  "body": "Rs.24.00 paid thru A/C XX#### on 04-2-25 17:20:08 to PAYEE J1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 24,
+   "merchant": "PAYEE J1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 24,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "VK-CANBNK",
+  "body": "Rs. INR 8,500.00 has been DEBITED to your A/c XXX#### on 29/12/2024. Avl Bal INR 17,313.95.To report fraud & stop further debit SMS SUSPECT to #####.Dial 1930 to report cyber fraud- Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 8500
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 8500,
+   "merchant": "<a name>"
+  }
+ },
+ {
+  "sender": "VK-CANBNK",
+  "body": "Rs.129.00 paid thru A/C XX#### on 28-11-24 11:56:09 to PAYEE K1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 129,
+   "merchant": "PAYEE K1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 129,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "AD-CANBNK",
+  "body": "Rs.135.00 paid thru A/C XX#### on 20-9-24 21:10:47 to PAYEE L1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 135,
+   "merchant": "PAYEE L1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 135,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "AX-CANBNK",
+  "body": "Rs.110.00 paid thru A/C XX#### on 09-8-24 10:52:21 to PAYEE M1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 110,
+   "merchant": "PAYEE M1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 110,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "AX-CANBNK",
+  "body": "An amount of INR 426.00 has been DEBITED to your account XXX#### on 16/06/2024. Total Avail.bal INR 3,137.44. - Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 426
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 426,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "AD-CANBNK",
+  "body": "Rs.155.71 paid thru A/C XX#### on 07-4-24 21:04:56 to PAYEE N1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 155.71,
+   "merchant": "PAYEE N1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 155.71,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "VK-CANBNK",
+  "body": "An amount of INR 16.66 has been DEBITED to your account XXX#### on 21/01/2024. Total Avail.bal INR 3,506.54. - Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 16.66
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 16.66,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "VK-CANBNK",
+  "body": "Rs.70.00 paid thru A/C XX#### on 24-10-23 23:23:02 to PAYEE O1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 70,
+   "merchant": "PAYEE O1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 70,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "AD-CANBNK",
+  "body": "Rs.180.00 paid thru A/C XX#### on 13-8-23 13:29:03 to PAYEE P1, UPI Ref ##########. If not done, SMS BLOCKUPI to ##########.-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 180,
+   "merchant": "PAYEE P1"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 180,
+   "merchant": "##########"
+  }
+ },
+ {
+  "sender": "VM-CANBNK-S",
+  "body": "Your a/c no. XX#### has been credited with Rs.500.00 on 12/31/25 7:38 PM from a/c no. XX#### (UPI Ref no ##########)-Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 500
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 500,
+   "merchant": "Unknown Payee"
+  }
+ },
+ {
+  "sender": "AD-CANBNK-S",
+  "body": "An amount of INR 123.00 has been CREDITED to your account XXX#### on 20/11/2025.Total Avail.bal INR 6,860.74.- Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 123
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 123,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "JX-CANBNK-S",
+  "body": "An amount of INR 5.00 has been CREDITED to your account XXX#### on 09/10/2025.Total Avail.bal INR 5,333.40.- Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 5
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 5,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "JX-ATMSBI-S",
+  "body": "Dear Customer, Rs.1000 withdrawn at SBI ATM S1BB##### from A/cX#### on 16Aug25 Transaction Number 2717. Available Balance Rs.7922.00. If not withdrawn by you, forward this SMS to ########## / call ########## or ########## to block your card. Call ##### if cash not received.",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 1000
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 1000,
+   "merchant": "<a name>"
+  }
+ },
+ {
+  "sender": "CANBNK-S",
+  "body": "An amount of INR 9,415.00 has been CREDITED to your account XXX#### on 16/07/2025.Total Avail.bal INR 13,964.71.- Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 9415
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 9415,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "JX-CANBNK",
+  "body": "An amount of INR 1,800.00 has been CREDITED to your account XXX#### on 13/04/2025.Total Avail.bal INR 11,346.02.- Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 1800
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 1800,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "AD-CANBNK",
+  "body": "INR 30,000.00 has been CREDITED to your A/c XXX#### on 01/07/2024 by CASH.Total bal is INR 34,298.30..Access MB app https://onelink.to/ai1r - Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 30000
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 30000,
+   "merchant": "<a name>"
+  }
+ },
+ {
+  "sender": "VK-CANBNK",
+  "body": "An amount of INR 133.00 has been CREDITED to your account XXX#### on 01/12/2023.Total Avail.bal INR 9,095.09.- Canara Bank",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 133
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 133,
+   "merchant": "your account XXX####"
+  }
+ },
+ {
+  "sender": "TX-FAMPAY",
+  "body": "You received Rs.150.0 from PAYEE Q1 with txn ID FMPIB#####. Your FamPay a/c balance is Rs.200.0",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 150
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 150,
+   "merchant": "Unknown Payee"
+  }
+ },
+ {
+  "sender": "VK-CANBNK-S",
+  "body": "Dear Customer, txn of Rs.160.00 thru A/C XX#### on 25-12-25 at 17:05:56 to PAYEE R1 failed due to INSUFFICIENT FUNDS-Canara Bank",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "FAILURE_ALERT"
+  },
+  "currentParserSays": {
+   "prompt": false,
+   "result": "FAILURE"
+  }
+ },
+ {
+  "sender": "AX-CANBNK-S",
+  "body": "Dear Customer, txn of Rs.2000.00 thru A/C XX#### on 14-11-25 at 22:25:03 to SBIMOPS failed due to INSUFFICIENT FUNDS-Canara Bank",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "FAILURE_ALERT"
+  },
+  "currentParserSays": {
+   "prompt": false,
+   "result": "FAILURE"
+  }
+ },
+ {
+  "sender": "AX-CANBNK-S",
+  "body": "Card ending ####:Your txn declined as ECOM channel is disabled. Pls enable Ecom channel and set limit through ai1/IB/ATM/Branch.-Canara Bank",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "FAILURE_ALERT"
+  },
+  "currentParserSays": {
+   "prompt": false,
+   "result": "FAILURE"
+  }
+ },
+ {
+  "sender": "VM-CANBNK-S",
+  "body": "UPI txn of Rs.12.00 thru A/C XX#### on 17-6-25 at 16:22:37 to PAYEE S1 failed due to PAYEE T1. If not you, SMS BLOCKUPI to ##########-Canara Bank",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "FAILURE_ALERT"
+  },
+  "currentParserSays": {
+   "prompt": false,
+   "result": "FAILURE"
+  }
+ },
+ {
+  "sender": "AD-CANBNK",
+  "body": "Dear Customer, txn of Rs.#####.00 thru A/C XX#### on 25-12-24 at 17:40:18 to PAYEE U1. failed due to INSUFFICIENT FUNDS-Canara Bank",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "FAILURE_ALERT"
+  },
+  "currentParserSays": {
+   "prompt": false,
+   "result": "FAILURE"
+  }
+ },
+ {
+  "sender": "AX-CANBNK",
+  "body": "UPI txn of Rs.25.00 thru A/C XX#### on 10-5-24 at 18:23:44 to PAYEE V1 failed due to PAYEE W1. If not you, SMS BLOCKUPI to ##########-Canara Bank",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "FAILURE_ALERT"
+  },
+  "currentParserSays": {
+   "prompt": false,
+   "result": "FAILURE"
+  }
+ },
+ {
+  "sender": "AG-AIRTEL-P",
+  "body": "Aapke recharge app ko upgrade kar diya gaya hai. UPI, loan, bank, FD aur bhi bahut kuch - ab Airtel app ke Finance tab mein sab kuch maujood hai. Check karein: https://i.airtel.in/Finance_new",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "AD-ARWGOV-S",
+  "body": "શું તમે પોતાને અને સાથી નાગરિકોને સાયબર ફ્રોડથી બચાવવા માંગો છો? સંચાર સાથી પોર્ટલ અને મોબાઇલ એપ તમને ફ્રોડ કોલ્સ અને એસએમએસની સરળ રીતે ફરિયાદ કરવામાં મદદ કરે છે. કૃપા કરીને ફરિયાદ કરો સંચાર સાથી પોર્ટલ www.sancharsaathi.gov.in પર. આજે જ સંચાર સાથી એપ ડાઉનલોડ કરો. એન્ડ્રોઇડ: https://bit.ly/3ZR4H3P આઈઓએસ: https://apple.co/4554aik",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "JM-BLUDRT",
+  "body": "FRAUD ALERT: Be cautious of spam from unknown numbers. Avoid sharing information or clicking links, except from confirmed Blue Dart official numbers.",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "+91##########",
+  "body": "Hey, are you free tonight?",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "+91##########",
+  "body": "Call me when you reach",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "+91##########",
+  "body": "Happy birthday!",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "+91##########",
+  "body": "Your parcel is out for delivery today",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "+91##########",
+  "body": "Can you send me the notes by evening?",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "result": "FALLBACK_NO_AMOUNT"
+  }
+ }
+]
