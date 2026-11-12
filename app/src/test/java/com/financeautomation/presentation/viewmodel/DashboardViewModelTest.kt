@@ -527,4 +527,52 @@ class DashboardViewModelTest {
         // needsReviewTotal = 1 txn + 1 capture in NEEDS_REVIEW + 1 failed queue item = 3
         assertEquals(3, state.needsReviewTotal)
     }
+
+    @Test
+    fun testNeedsReviewTotal_failedSyncOfReviewTransactionCountsOnce() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val now = System.currentTimeMillis()
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_failed_review",
+                timestamp = now,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Cafe",
+                category = "Food & Drink",
+                totalAmount = 250.0,
+                companions = "Personal",
+                myShare = 250.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.PENDING,
+                reviewState = ReviewState.NEEDS_REVIEW
+            )
+        )
+        qDao.insert(
+            SyncQueueEntity(
+                id = 1L,
+                transactionId = "txn_failed_review",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "{}",
+                status = SyncQueueEntity.STATUS_FAILED
+            )
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(1, state.failedCount)
+        assertEquals(1, state.needsReviewCount)
+        assertEquals(1, state.needsReviewTotal)
+    }
 }
