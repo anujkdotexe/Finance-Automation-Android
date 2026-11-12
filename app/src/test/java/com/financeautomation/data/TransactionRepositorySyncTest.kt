@@ -12,9 +12,15 @@ import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
+import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.entity.LineageEntity
+import com.financeautomation.data.remote.AccountingRequestJsonAdapter
+import com.financeautomation.data.remote.AccountingSyncExecutor
+import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
 import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.data.repository.TransactionRepositoryImpl
+import com.financeautomation.domain.model.LogCreditRequest
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
@@ -151,6 +157,7 @@ class TransactionRepositorySyncTest {
         val appendDebitCount = AtomicInteger(0)
         val writtenUuids = ConcurrentHashMap<String, String>() // cell -> uuid
         var customBatchGetResponse: String? = null
+        var failBatchGetOnce: Boolean = false
 
         val fakeTokenProvider = object : TokenProvider {
             override fun getAccessToken(): String = "test_token"
@@ -162,6 +169,17 @@ class TransactionRepositorySyncTest {
                 val request = chain.request()
                 val url = request.url.toString()
                 val method = request.method
+
+                if (method == "GET" && url.contains("values:batchGet") && failBatchGetOnce) {
+                    failBatchGetOnce = false
+                    return@Interceptor Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(503)
+                        .message("Service Unavailable")
+                        .body("Service Unavailable".toResponseBody(JSON_MEDIA_TYPE))
+                        .build()
+                }
 
                 val responseBody: String = when {
                     // values:batchGet (readLedgerSnapshot)
@@ -681,5 +699,118 @@ class TransactionRepositorySyncTest {
         assertEquals(2, payables.size)
         val totalIOwe = pDao.getPending().sumOf { it.amountIOwe }
         assertEquals(5121.5, totalIOwe, 0.001)
+    }
+
+    @Test
+    fun testFailedSnapshotRead_doesNotSavePlanAndRetries() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val executor = AccountingSyncExecutor(
+            googleSheetsClient = sheets,
+            googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
+            syncQueueDao = qDao,
+            lineageDao = object : LineageDao {
+                override suspend fun insert(entity: LineageEntity) {}
+                override suspend fun insertAll(entities: List<LineageEntity>) {}
+                override suspend fun getByUuid(uuid: String): LineageEntity? = null
+                override suspend fun getByCarriedFrom(carriedFromUuid: String): LineageEntity? = null
+                override suspend fun getAll(): List<LineageEntity> = emptyList()
+            },
+            transactionDao = tDao
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = executor,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        // Queue item for Charlie paying 50.0
+        val creditReq = LogCreditRequest(
+            requestId = "inf_req_1",
+            settler = "Charlie",
+            amount = 50.0,
+            account = "SBI",
+            inflowType = "Friend Settlement",
+            reason = "Lunch settlement",
+            timestamp = 1794387699000L
+        )
+        val queueItem = SyncQueueEntity(
+            id = 1L,
+            transactionId = "inf_charlie_50",
+            operationType = SyncQueueEntity.OP_LOG_CREDIT,
+            payloadJson = AccountingRequestJsonAdapter.creditRequestToJson(creditReq),
+            status = SyncQueueEntity.STATUS_PENDING,
+            retryCount = 0
+        )
+        qDao.insert(queueItem)
+
+        // Setup snapshot data with an open debt from Charlie
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 37.5, "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [["txn_lunch_123"]]
+                },
+                {
+                    "range": "'Nov26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                }
+            ]
+        }"""
+
+        // First attempt: simulate 503 Service Unavailable on readLedgerSnapshot
+        mock.failBatchGetOnce = true
+        val syncResult1 = repo.syncPendingTransactions()
+
+        // With the bug: snapshot error was swallowed into emptyList(), so an unlinked plan was generated and saved
+        // With the fix: Result.Error is returned, no plan is saved, item is marked for retry
+        val queueItemAfterFail = qDao.queue[1L]
+        org.junit.Assert.assertNotNull(queueItemAfterFail)
+        org.junit.Assert.assertNull(
+            "Plan must not be saved when snapshot read fails!",
+            queueItemAfterFail?.planJson
+        )
+        assertEquals(SyncQueueEntity.STATUS_PENDING, queueItemAfterFail?.status)
+        assertEquals(1, queueItemAfterFail?.retryCount)
+
+        // Second attempt: succeeds
+        val syncResult2 = repo.syncPendingTransactions()
+        assertTrue("Sync should succeed on retry", syncResult2 is Result.Success)
+        // Queue item deleted after successful sync
+        org.junit.Assert.assertNull(qDao.queue[1L])
     }
 }
