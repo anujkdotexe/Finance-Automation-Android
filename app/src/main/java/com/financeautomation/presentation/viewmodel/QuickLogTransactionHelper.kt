@@ -188,7 +188,7 @@ object QuickLogTransactionHelper {
             customShare = state.customShare,
             tripTag = state.activeTripTag?.name ?: "",
             sourcePackage = state.sourcePackage,
-            timestamp = System.currentTimeMillis(),
+            timestamp = state.captureTimestamp ?: System.currentTimeMillis(),
             reviewState = ReviewState.CONFIRMED
         )
 

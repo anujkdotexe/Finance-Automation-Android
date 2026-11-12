@@ -6,6 +6,7 @@ import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
+import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.data.local.dao.CategoryStatDao
@@ -94,6 +95,7 @@ class QuickLogViewModel(
                     val resolvedAccount = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: current.selectedAccount
                     current.copy(
                         captureId = capture.id,
+                        captureTimestamp = capture.timestamp,
                         sourcePackage = capture.sourcePackage,
                         amountText = amountStr,
                         amount = amountVal,
@@ -162,9 +164,9 @@ class QuickLogViewModel(
     }
 
     fun onAmountChanged(text: String) {
-        val sanitized = text.filter { it.isDigit() || it == '.' }
-        val parsed = sanitized.toDoubleOrNull() ?: 0.0
-        _uiState.update { it.copy(amountText = sanitized, amount = parsed) }
+        if (!AmountInputSanitizer.isValidAmountInput(text)) return
+        val parsed = text.toDoubleOrNull() ?: 0.0
+        _uiState.update { it.copy(amountText = text, amount = parsed) }
         recalculateSplit()
     }
 
@@ -212,9 +214,9 @@ class QuickLogViewModel(
     }
 
     fun onCustomShareChanged(shareText: String) {
-        val sanitized = shareText.filter { it.isDigit() || it == '.' }
-        val parsed = sanitized.toDoubleOrNull()
-        _uiState.update { it.copy(customShareText = sanitized, customShare = parsed) }
+        if (!AmountInputSanitizer.isValidAmountInput(shareText)) return
+        val parsed = shareText.toDoubleOrNull()
+        _uiState.update { it.copy(customShareText = shareText, customShare = parsed) }
         recalculateSplit()
     }
 

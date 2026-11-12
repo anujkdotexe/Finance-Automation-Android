@@ -23,7 +23,12 @@ import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.data.local.entity.TransactionEntity
+import com.financeautomation.core.model.ReviewState
+import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.overlay.OverlayRequest
@@ -48,6 +53,8 @@ class ForegroundWatcher(
     private val context: Context,
     private val directPendingCaptureDao: PendingCaptureDao? = null,
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
+    private val directTransactionDao: TransactionDao? = null,
+    private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
     private val predictCategoryUseCase: PredictCategoryUseCase? = null,
     private val overlayControllerProvider: (() -> OverlayController)? = null,
@@ -62,6 +69,8 @@ class ForegroundWatcher(
         context = context,
         directPendingCaptureDao = pendingCaptureDao,
         pendingCaptureDaoProvider = null,
+        directTransactionDao = null,
+        transactionDaoProvider = null,
         categoryStatDaoProvider = null,
         predictCategoryUseCase = null,
         overlayControllerProvider = null,
@@ -127,7 +136,7 @@ class ForegroundWatcher(
     fun isInForeground(targetPackage: String): Boolean {
         val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return false
         val now = System.currentTimeMillis()
-        val events = usageStats.queryEvents(now - 10 * 60_000L, now) ?: return false
+        val events = usageStats.queryEvents(now - 60 * 60_000L, now) ?: return false
 
         var lastResumeTime = 0L
         var lastPauseTime = 0L
@@ -206,6 +215,7 @@ class ForegroundWatcher(
         registerScreenReceiver()
         watcherJob = scope.launch(Dispatchers.IO) {
             try {
+                expireStaleCaptures(resolveDao())
                 while (isActive) {
                     val waitingList = resolveDao().getWaitingCaptures()
                     if (waitingList.isEmpty()) {
@@ -326,6 +336,36 @@ class ForegroundWatcher(
             if (e is CancellationException) throw e
             Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: triggerPrompt failed")
             return false
+        }
+    }
+
+    private suspend fun expireStaleCaptures(pDao: PendingCaptureDao) {
+        val cutoff = System.currentTimeMillis() - 24L * 60L * 60L * 1000L
+        val expired = pDao.getExpiredWaitingCaptures(cutoff)
+        if (expired.isEmpty()) return
+        val tDao = directTransactionDao ?: transactionDaoProvider?.invoke()
+        for (cap in expired) {
+            if (tDao != null) {
+                val txn = TransactionEntity(
+                    id = "txn_${java.util.UUID.randomUUID().toString().replace("-", "").take(12)}",
+                    timestamp = cap.timestamp,
+                    dateSerial = DateSerialUtils.toDateSerial(cap.timestamp),
+                    timeSerial = DateSerialUtils.toTimeSerial(cap.timestamp),
+                    merchant = cap.payee.ifBlank { "Expense" },
+                    category = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
+                    account = cap.inferredAccount?.takeIf { it.isNotBlank() } ?: "Other",
+                    totalAmount = cap.amount ?: 0.0,
+                    myShare = cap.amount ?: 0.0,
+                    owedToMe = 0.0,
+                    status = "Personal",
+                    companions = "Personal",
+                    reviewState = ReviewState.NEEDS_REVIEW.name,
+                    syncState = SyncState.PENDING.name,
+                    sourcePackage = cap.sourcePackage
+                )
+                tDao.insert(txn)
+            }
+            pDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
         }
     }
 
