@@ -189,7 +189,13 @@ class TransactionRepositoryImpl(
         resolveTransactionDao().getById(id)?.toDomain()
     }
 
-    override suspend fun insertTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun insertTransaction(transaction: Transaction): Result<Unit> =
+        insertTransactionWith(transaction) {}
+
+    override suspend fun insertTransactionWith(
+        transaction: Transaction,
+        inSameTransaction: suspend () -> Unit
+    ): Result<Unit> = withContext(ioDispatcher) {
         try {
             if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
@@ -197,6 +203,7 @@ class TransactionRepositoryImpl(
             val entity = TransactionEntity.fromDomain(transaction)
             runInDbTransaction {
                 tDao.insert(entity)
+                inSameTransaction()
 
                 if (transaction.syncState == SyncState.PENDING) {
                     val queueItem = SyncQueueEntity(
