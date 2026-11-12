@@ -46,6 +46,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -1014,7 +1015,24 @@ class TransactionRepositoryImpl(
                             val newCompanions = sheetDebit.companions
                             val newRow = sheetDebit.rowNumber
 
-                            if (localTxn.totalAmount != newTotal ||
+                            // Align local ID with non-blank sheet UUID if matched by tab/row to avoid orphan divergence
+                            if (!uuid.isNullOrBlank() && localTxn.id != uuid) {
+                                tDao.deleteById(localTxn.id)
+                                val aligned = localTxn.copy(
+                                    id = uuid,
+                                    totalAmount = newTotal,
+                                    merchant = newMerchant,
+                                    category = newCategory,
+                                    myShare = newMyShare,
+                                    owedToMe = newOwed,
+                                    status = newStatus,
+                                    companions = newCompanions,
+                                    sheetRowIndex = newRow,
+                                    syncState = SyncState.SYNCED.name
+                                )
+                                tDao.insert(aligned)
+                                reconciledCount++
+                            } else if (localTxn.totalAmount != newTotal ||
                                 localTxn.merchant != newMerchant ||
                                 localTxn.category != newCategory ||
                                 localTxn.myShare != newMyShare ||
@@ -1041,32 +1059,50 @@ class TransactionRepositoryImpl(
                         } else {
                             // 2.7: Sheet as source of truth: import debits by UUID into Room when local DB empty
                             val effectiveUuid = if (!uuid.isNullOrBlank()) uuid else "sheet_${month.tabName}_${sheetDebit.rowNumber}"
-                            val effectiveDateSerial = sheetDebit.dateSerial ?: DateSerialUtils.toDateSerial(System.currentTimeMillis())
-                            val effectiveTimeSerial = sheetDebit.timeSerial ?: DateSerialUtils.toTimeSerial(System.currentTimeMillis())
-                            val ld = DateSerialUtils.fromDateSerial(effectiveDateSerial)
-                            val lt = DateSerialUtils.fromTimeSerial(effectiveTimeSerial)
-                            val txnTimestamp = ld.atTime(lt).atZone(sheetTimeZone).toInstant().toEpochMilli()
+                            val existingByEffective = tDao.getById(effectiveUuid)
+                            if (existingByEffective != null) {
+                                tDao.update(
+                                    existingByEffective.copy(
+                                        totalAmount = sheetDebit.totalAmount,
+                                        merchant = sheetDebit.description,
+                                        category = sheetDebit.category,
+                                        myShare = sheetDebit.myShare,
+                                        owedToMe = sheetDebit.owedToMe,
+                                        status = sheetDebit.status,
+                                        companions = sheetDebit.companions,
+                                        sheetRowIndex = sheetDebit.rowNumber,
+                                        syncState = SyncState.SYNCED.name
+                                    )
+                                )
+                                reconciledCount++
+                            } else {
+                                val effectiveDateSerial = sheetDebit.dateSerial ?: DateSerialUtils.toDateSerial(System.currentTimeMillis())
+                                val effectiveTimeSerial = sheetDebit.timeSerial ?: DateSerialUtils.toTimeSerial(System.currentTimeMillis())
+                                val ld = DateSerialUtils.fromDateSerial(effectiveDateSerial)
+                                val lt = DateSerialUtils.fromTimeSerial(effectiveTimeSerial)
+                                val txnTimestamp = ld.atTime(lt).atZone(sheetTimeZone).toInstant().toEpochMilli()
 
-                            val imported = TransactionEntity(
-                                id = effectiveUuid,
-                                timestamp = txnTimestamp,
-                                dateSerial = effectiveDateSerial,
-                                timeSerial = effectiveTimeSerial,
-                                merchant = sheetDebit.description.ifBlank { "Expense" },
-                                category = sheetDebit.category.ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER },
-                                account = sheetDebit.account.ifBlank { "Cash" },
-                                totalAmount = sheetDebit.totalAmount,
-                                myShare = sheetDebit.myShare,
-                                owedToMe = sheetDebit.owedToMe,
-                                companions = sheetDebit.companions.orEmpty().ifBlank { "Personal" },
-                                status = sheetDebit.status.orEmpty().ifBlank { com.financeautomation.core.model.TransactionStatus.PERSONAL.value },
-                                tripTag = sheetDebit.tripTag.orEmpty(),
-                                sheetRowIndex = sheetDebit.rowNumber,
-                                syncState = SyncState.SYNCED.name,
-                                reviewState = ReviewState.CONFIRMED.name
-                            )
-                            tDao.insert(imported)
-                            reconciledCount++
+                                val imported = TransactionEntity(
+                                    id = effectiveUuid,
+                                    timestamp = txnTimestamp,
+                                    dateSerial = effectiveDateSerial,
+                                    timeSerial = effectiveTimeSerial,
+                                    merchant = sheetDebit.description.ifBlank { "Expense" },
+                                    category = sheetDebit.category.ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER },
+                                    account = sheetDebit.account.ifBlank { "Cash" },
+                                    totalAmount = sheetDebit.totalAmount,
+                                    myShare = sheetDebit.myShare,
+                                    owedToMe = sheetDebit.owedToMe,
+                                    companions = sheetDebit.companions.orEmpty().ifBlank { "Personal" },
+                                    status = sheetDebit.status.orEmpty().ifBlank { com.financeautomation.core.model.TransactionStatus.PERSONAL.value },
+                                    tripTag = sheetDebit.tripTag.orEmpty(),
+                                    sheetRowIndex = sheetDebit.rowNumber,
+                                    syncState = SyncState.SYNCED.name,
+                                    reviewState = ReviewState.CONFIRMED.name
+                                )
+                                tDao.insert(imported)
+                                reconciledCount++
+                            }
                         }
                     }
 
@@ -1121,6 +1157,7 @@ class TransactionRepositoryImpl(
     ): Result<Int?> {
         val sheets = googleSheetsClient ?: return Result.Error(IllegalStateException("GoogleSheetsClient unavailable"))
         var lastAppendedRow: Int? = null
+        var debitRow: Int? = null
 
         // Step 1: Appends first (with UUID in second step)
         for (append in plan.appends) {
@@ -1131,7 +1168,9 @@ class TransactionRepositoryImpl(
             }
             val existingCheck = sheets.findRowByUuid(spreadsheetId, append.tab, colUuid, append.uuid)
             if (existingCheck is Result.Success && existingCheck.data != null) {
-                lastAppendedRow = existingCheck.data
+                val row = existingCheck.data
+                lastAppendedRow = row
+                if (append.table == TableType.DEBIT) debitRow = row
                 continue
             } else if (existingCheck is Result.Error) {
                 val err = existingCheck.exception
@@ -1145,7 +1184,9 @@ class TransactionRepositoryImpl(
             }
 
             if (appendRes is Result.Success) {
-                lastAppendedRow = appendRes.data
+                val row = appendRes.data
+                lastAppendedRow = row
+                if (append.table == TableType.DEBIT) debitRow = row
             } else {
                 val err = (appendRes as Result.Error).exception
                 return Result.Error(err)
@@ -1166,7 +1207,7 @@ class TransactionRepositoryImpl(
         // Step 3: Apply plan edits and settled references locally to Room database via executor
         resolveExecutor().applyPlanToLocalDatabase(plan)
 
-        return Result.Success(lastAppendedRow)
+        return Result.Success(debitRow ?: lastAppendedRow)
     }
 
     private suspend fun handleItemTransportFailure(item: SyncQueueEntity) {
