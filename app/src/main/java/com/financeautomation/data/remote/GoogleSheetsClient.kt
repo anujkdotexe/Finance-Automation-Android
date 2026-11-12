@@ -156,7 +156,8 @@ open class GoogleSheetsClient(
     suspend fun appendDebit(
         spreadsheetId: String,
         tabName: String,
-        row: List<Any?>
+        row: List<Any?>,
+        uuid: String? = null
     ): Result<Int> {
         val slice = if (row.size > 11) row.take(11) else row
         return appendTableScoped(
@@ -165,7 +166,8 @@ open class GoogleSheetsClient(
             tableRange = SheetSchemaConstants.TABLE_1_DEBITS_RANGE,
             row = slice,
             keyCol = "A",
-            uuidCol = SheetSchemaConstants.COL_LETTER_DEBIT_UUID
+            uuidCol = SheetSchemaConstants.COL_LETTER_DEBIT_UUID,
+            uuid = uuid
         )
     }
 
@@ -175,7 +177,8 @@ open class GoogleSheetsClient(
     suspend fun appendInflow(
         spreadsheetId: String,
         tabName: String,
-        row: List<Any?>
+        row: List<Any?>,
+        uuid: String? = null
     ): Result<Int> {
         val slice = if (row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT) {
             row.subList(12, 20)
@@ -190,7 +193,8 @@ open class GoogleSheetsClient(
             tableRange = SheetSchemaConstants.TABLE_2_INFLOWS_RANGE,
             row = slice,
             keyCol = "M",
-            uuidCol = SheetSchemaConstants.COL_LETTER_INFLOW_UUID
+            uuidCol = SheetSchemaConstants.COL_LETTER_INFLOW_UUID,
+            uuid = uuid
         )
     }
 
@@ -200,7 +204,8 @@ open class GoogleSheetsClient(
     suspend fun appendPayable(
         spreadsheetId: String,
         tabName: String,
-        row: List<Any?>
+        row: List<Any?>,
+        uuid: String? = null
     ): Result<Int> {
         val slice = if (row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT) {
             row.subList(21, 28)
@@ -215,7 +220,8 @@ open class GoogleSheetsClient(
             tableRange = SheetSchemaConstants.TABLE_3_PAYABLES_RANGE,
             row = slice,
             keyCol = "V",
-            uuidCol = SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
+            uuidCol = SheetSchemaConstants.COL_LETTER_PAYABLE_UUID,
+            uuid = uuid
         )
     }
 
@@ -284,7 +290,8 @@ open class GoogleSheetsClient(
         row: List<Any?>,
         valueInputOption: String = "RAW",
         keyCol: String? = null,
-        uuidCol: String? = null
+        uuidCol: String? = null,
+        uuid: String? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val parts = tableRange.split(":")
@@ -313,6 +320,19 @@ open class GoogleSheetsClient(
             ensureGridCapacityBeforeAppend(spreadsheetId, tabName, threshold = 20, expandBy = 100, requiredRow = nextRow)
 
             val targetRange = "'$tabName'!$startCol$nextRow:$endCol$nextRow"
+
+            // Item 2.4: Write table cells and UUID in one atomic values:batchUpdate request
+            if (!uuid.isNullOrBlank() && resolvedUuidCol != null) {
+                val uuidRange = "'$tabName'!$resolvedUuidCol$nextRow"
+                val updatesMap = mapOf(
+                    targetRange to listOf(row),
+                    uuidRange to listOf(listOf(uuid))
+                )
+                val batchRes = batchUpdateValues(spreadsheetId, updatesMap, valueInputOption)
+                if (batchRes is Result.Error) return@withContext Result.Error(batchRes.exception)
+                return@withContext Result.Success(nextRow)
+            }
+
             val encodedRange = URLEncoder.encode(targetRange, "UTF-8")
             val url = "$baseUrl/$spreadsheetId/values/$encodedRange?valueInputOption=$valueInputOption"
 

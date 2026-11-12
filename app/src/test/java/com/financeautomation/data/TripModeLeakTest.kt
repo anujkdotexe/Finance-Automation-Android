@@ -137,6 +137,7 @@ class TripModeLeakTest {
         val items = ConcurrentHashMap<Long, SyncQueueEntity>()
         override fun getPendingQueueFlow(): Flow<List<SyncQueueEntity>> = emptyFlow()
         override fun getAllQueueFlow(): Flow<List<SyncQueueEntity>> = emptyFlow()
+        override fun getFailedQueueFlow(): Flow<List<SyncQueueEntity>> = emptyFlow()
         override suspend fun insert(item: SyncQueueEntity): Long {
             items[item.id] = item
             return item.id

@@ -259,8 +259,16 @@ class DashboardViewModel(
 
             // Global unsettled receivables
             if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
-                val friend = txn.companions.ifBlank { "Others" }
-                receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + txn.owedToMe
+                val tokens = com.financeautomation.domain.utils.AccountingUtils.tokens(txn.companions)
+                if (tokens.isEmpty() || txn.companions.equals("Personal", ignoreCase = true)) {
+                    val friend = "Others"
+                    receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + txn.owedToMe
+                } else {
+                    val sharePerPerson = txn.owedToMe / tokens.size
+                    for (friend in tokens) {
+                        receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + sharePerPerson
+                    }
+                }
             }
 
             // Prior month burn

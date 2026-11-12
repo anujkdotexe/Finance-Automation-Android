@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
         val app = application as FinanceApplication
         ReviewInboxViewModel.provideFactory(
             transactionRepository = app.appContainer.transactionRepository,
+            syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }

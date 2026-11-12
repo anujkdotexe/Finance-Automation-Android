@@ -30,6 +30,7 @@ data class QuickLogUiState(
     val owedToMe: Double = 0.0,
     val activeTripTag: TripTag? = null,
     val isNeedsAmount: Boolean = false,
+    val isFinancialLocked: Boolean = false,
     val isPossibleDuplicate: Boolean = false,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,

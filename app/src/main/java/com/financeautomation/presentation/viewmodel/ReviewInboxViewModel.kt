@@ -8,6 +8,8 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -24,6 +26,7 @@ import kotlinx.coroutines.launch
  */
 data class ReviewInboxUiState(
     val items: List<Transaction> = emptyList(),
+    val failedQueueItems: List<SyncQueueEntity> = emptyList(),
     val isLoading: Boolean = false,
     val selectedTransaction: Transaction? = null,
     val userMessage: String? = null,
@@ -32,18 +35,74 @@ data class ReviewInboxUiState(
 
 /**
  * ViewModel managing transactions needing review, 1-tap confirmation,
- * duplicate review flags, and non-destructive void operations.
+ * duplicate review flags, failed queue recovery, and non-destructive void operations.
  */
 class ReviewInboxViewModel(
     private val transactionRepository: TransactionRepository,
+    private val directSyncQueueDao: SyncQueueDao? = null,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDao: SyncQueueDao?,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = syncQueueDao,
+        syncQueueDaoProvider = null,
+        ioDispatcher = ioDispatcher
+    )
+
+    constructor(
+        transactionRepository: TransactionRepository,
+        syncQueueDaoProvider: suspend () -> SyncQueueDao,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ) : this(
+        transactionRepository = transactionRepository,
+        directSyncQueueDao = null,
+        syncQueueDaoProvider = syncQueueDaoProvider,
+        ioDispatcher = ioDispatcher
+    )
 
     private val _uiState = MutableStateFlow(ReviewInboxUiState(isLoading = true))
     val uiState: StateFlow<ReviewInboxUiState> = _uiState.asStateFlow()
 
     init {
         observeNeedsReview()
+        observeFailedQueue()
+    }
+
+    private suspend fun resolveSyncQueueDao(): SyncQueueDao? =
+        directSyncQueueDao ?: syncQueueDaoProvider?.invoke()
+
+    private fun observeFailedQueue() {
+        viewModelScope.launch(ioDispatcher) {
+            val qDao = resolveSyncQueueDao() ?: return@launch
+            qDao.getFailedQueueFlow()
+                .catch { /* ignore */ }
+                .collect { failedItems ->
+                    _uiState.update { it.copy(failedQueueItems = failedItems) }
+                }
+        }
+    }
+
+    fun retryQueueItem(id: Long) {
+        viewModelScope.launch(ioDispatcher) {
+            val qDao = resolveSyncQueueDao() ?: return@launch
+            qDao.setStatusAndRetryCount(id, SyncQueueEntity.STATUS_PENDING, 0)
+            transactionRepository.syncPendingTransactions()
+            _uiState.update { it.copy(userMessage = "Operation queued for retry") }
+        }
+    }
+
+    fun discardQueueItem(id: Long) {
+        viewModelScope.launch(ioDispatcher) {
+            val qDao = resolveSyncQueueDao() ?: return@launch
+            qDao.deleteById(id)
+            _uiState.update { it.copy(userMessage = "Operation discarded") }
+        }
     }
 
     private fun observeNeedsReview() {
@@ -163,12 +222,14 @@ class ReviewInboxViewModel(
     companion object {
         fun provideFactory(
             transactionRepository: TransactionRepository,
+            syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ReviewInboxViewModel(
                     transactionRepository = transactionRepository,
+                    syncQueueDaoProvider = syncQueueDaoProvider,
                     ioDispatcher = ioDispatcher
                 ) as T
             }
