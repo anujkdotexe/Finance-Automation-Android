@@ -354,6 +354,11 @@ class DashboardViewModel(
         var income = 0.0
         var txnCount = 0
         var needsReviewCount = 0
+        var needsReviewWithoutFailedSync = 0
+        val failedTransactionIds = queueItems
+            .filter { it.status == SyncQueueEntity.STATUS_FAILED }
+            .map { it.transactionId }
+            .toSet()
 
         val categorySums = mutableMapOf<String, Double>()
         val monthTransactions = mutableListOf<Transaction>()
@@ -362,6 +367,8 @@ class DashboardViewModel(
         for (txn in transactions) {
             if (txn.reviewState == ReviewState.NEEDS_REVIEW && txn.status != TransactionStatus.VOID) {
                 needsReviewCount++
+                // A failed sync also puts its transaction back in review; count it once, as a failed item
+                if (txn.id !in failedTransactionIds) needsReviewWithoutFailedSync++
             }
 
             // Global unsettled receivables
@@ -446,7 +453,7 @@ class DashboardViewModel(
             it.status == SyncQueueEntity.STATUS_FAILED
         }
         val capturesInNeedsReview = needsReviewCaptures.size
-        val needsReviewTotal = needsReviewCount + capturesInNeedsReview + failedCount
+        val needsReviewTotal = needsReviewWithoutFailedSync + capturesInNeedsReview + failedCount
 
         return DashboardUiState(
             selectedMonthLabel = selectedMonthLabel,
