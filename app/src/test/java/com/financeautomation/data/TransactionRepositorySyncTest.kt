@@ -62,6 +62,7 @@ class TransactionRepositorySyncTest {
         override fun getTransactionsFlow(): Flow<List<TransactionEntity>> = flowOf(transactions.values.toList())
         override fun getNeedsReviewFlow(): Flow<List<TransactionEntity>> = emptyFlow()
         override fun getConfirmedUnsyncedFlow(): Flow<List<TransactionEntity>> = emptyFlow()
+        override fun getAccountTransactionCounts(from: Long, to: Long): Flow<List<com.financeautomation.data.local.dao.AccountTransactionCount>> = emptyFlow()
         override suspend fun getById(id: String): TransactionEntity? = transactions[id]
         override suspend fun getBySheetRowIndex(rowIndex: Int): TransactionEntity? =
             transactions.values.firstOrNull { it.sheetRowIndex == rowIndex }
