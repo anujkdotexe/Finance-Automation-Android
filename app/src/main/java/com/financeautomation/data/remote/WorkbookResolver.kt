@@ -27,7 +27,7 @@ import java.util.Locale
  * For an existing workbook: pulls Config tab first from the resolved workbook and only then regenerates Dashboard.
  * If restore fails with a transport error, dashboard regeneration is skipped and a recoverable error returned.
  * If Config tab is empty or missing, pushes local defaults once and then regenerates.
- * For a newly created workbook: provisions Dashboard, Template and current month tab,
+ * For a newly created workbook: provisions Dashboard and the current month tab,
  * mirrors default configuration to the Config tab, and regenerates Dashboard.
  */
 open class WorkbookResolver(
