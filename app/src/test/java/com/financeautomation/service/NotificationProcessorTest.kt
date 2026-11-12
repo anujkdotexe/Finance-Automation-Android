@@ -273,6 +273,33 @@ class NotificationProcessorTest {
         assertEquals(1, pDao.captures.size)
         assertEquals(1, hDao.handled.size)
     }
+
+    @Test
+    fun testProcess_unknownAccount_storedWithDefaultAccountAndHint() = runBlocking {
+        val pDao = FakePendingCaptureDao()
+        val hDao = FakeHandledNotificationDao()
+
+        val proc = NotificationProcessor(
+            pendingCaptureDao = pDao,
+            handledNotificationDao = hDao,
+            accountDao = null,
+            ownPackageName = "com.financeautomation"
+        )
+
+        val outcome = proc.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Paid to Starbucks",
+            text = "Paid Rs 350 from A/c XX4821 to Starbucks",
+            postTime = 1700000000000L,
+            sbnKey = "starbucks_key_unknown_acc"
+        )
+
+        assertTrue(outcome is NotificationProcessingOutcome.Captured)
+        val capture = pDao.captures.values.first()
+        assertEquals(CategoryConstants.ACCOUNT_OTHER, capture.inferredAccount)
+        assertTrue(capture.flags.contains("NEW_ACCOUNT"))
+        assertEquals("A/c XX4821", capture.detectedAccountHint)
+    }
 }
 
 

@@ -48,4 +48,33 @@ class DatabaseMigrationTest {
         assertTrue(indexNames.contains("index_payables_paidBy"))
         assertTrue(indexNames.contains("index_payables_repaymentStatus"))
     }
+
+    @Test
+    fun testMigration8to9_matchesSchema9Json() {
+        // Assert migration registration
+        assertEquals(8, DatabaseMigrations.MIGRATION_8_9.startVersion)
+        assertEquals(9, DatabaseMigrations.MIGRATION_8_9.endVersion)
+        assertTrue(DatabaseMigrations.ALL_MIGRATIONS.contains(DatabaseMigrations.MIGRATION_8_9))
+
+        val schemaFile = File("schemas/com.financeautomation.data.local.FinanceDatabase/9.json")
+        val altFile = File("app/schemas/com.financeautomation.data.local.FinanceDatabase/9.json")
+        val targetFile = if (schemaFile.exists()) schemaFile else altFile
+        assertTrue("Schema 9.json must exist", targetFile.exists())
+
+        val json = Json { ignoreUnknownKeys = true }
+        val root = json.parseToJsonElement(targetFile.readText()).jsonObject
+        val entities = root["database"]!!.jsonObject["entities"]!!.jsonArray
+
+        val pendingCapturesEntity = entities.find { it.jsonObject["tableName"]?.jsonPrimitive?.content == "pending_captures" }?.jsonObject
+        assertNotNull("pending_captures table must exist in schema 9.json", pendingCapturesEntity)
+
+        val fields = pendingCapturesEntity!!["fields"]!!.jsonArray
+        val hintField = fields.find { it.jsonObject["columnName"]?.jsonPrimitive?.content == "detectedAccountHint" }?.jsonObject
+        assertNotNull("detectedAccountHint column must exist in schema 9.json pending_captures table", hintField)
+        assertEquals("TEXT", hintField!!["affinity"]?.jsonPrimitive?.content)
+        assertEquals("false", hintField["notNull"]?.jsonPrimitive?.content)
+
+        val createSql = pendingCapturesEntity["createSql"]!!.jsonPrimitive.content
+        assertTrue(createSql.contains("`detectedAccountHint` TEXT"))
+    }
 }
