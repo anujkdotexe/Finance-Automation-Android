@@ -178,6 +178,8 @@ class SettingsViewModel(
 
     fun onSpreadsheetIdChanged(newId: String) = syncCoordinator.onSpreadsheetIdChanged(newId)
 
+    fun onCreateFreshWorkbook() = syncCoordinator.onCreateFreshWorkbook()
+
     fun onSyncNow() = syncCoordinator.onSyncNow()
 
     // --- Bank & Funding Accounts ---

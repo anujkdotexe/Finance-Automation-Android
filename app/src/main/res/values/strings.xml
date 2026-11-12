@@ -80,6 +80,10 @@
     <string name="action_restore_config">Restore config</string>
     <string name="action_regenerate_dashboard">Regenerate dashboard formulas</string>
     <string name="action_repair_workbook">Repair workbook</string>
+    <string name="action_create_fresh_workbook">Create a fresh workbook</string>
+    <string name="create_fresh_workbook_confirm_title">Create a fresh workbook</string>
+    <string name="create_fresh_workbook_confirm_body">This creates a new empty workbook and switches the app to it. Your old workbook stays in Google Drive.</string>
+    <string name="action_create">Create</string>
     <string name="action_repair_workbook_desc">Recreates missing tabs or 31-column layouts in the current year workbook.</string>
     <string name="msg_repair_workbook_success">Successfully repaired %1$s master workbook</string>
     <string name="raw_http_errors_title">Raw Google API Errors</string>

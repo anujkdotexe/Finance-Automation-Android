@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -56,13 +58,32 @@ fun SettingsSyncSection(
     onRestoreConfigFromCloud: () -> Unit,
     onRegenerateDashboard: () -> Unit,
     onRepairWorkbook: () -> Unit = {},
+    onCreateFreshWorkbook: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     // Reset to the stored id when it changes or when a save is rejected
     var spreadsheetInput by remember(state.spreadsheetId, state.errorMessage) { mutableStateOf(state.spreadsheetId) }
     var sliderValue by remember(state.settleDelaySeconds) { mutableFloatStateOf(state.settleDelaySeconds.toFloat()) }
+    var showFreshWorkbookConfirm by remember { mutableStateOf(false) }
     var isCrashlyticsOptedIn by remember { mutableStateOf(CrashlyticsManager.isOptedIn(context)) }
+
+    if (showFreshWorkbookConfirm) {
+        AlertDialog(
+            onDismissRequest = { showFreshWorkbookConfirm = false },
+            title = { Text(stringResource(R.string.create_fresh_workbook_confirm_title)) },
+            text = { Text(stringResource(R.string.create_fresh_workbook_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showFreshWorkbookConfirm = false
+                    onCreateFreshWorkbook()
+                }) { Text(stringResource(R.string.action_create)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFreshWorkbookConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
+            }
+        )
+    }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)) {
         // 1. Google Sheets Connection & Cloud Sync
@@ -171,6 +192,19 @@ fun SettingsSyncSection(
                     Icon(imageVector = Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
                     Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
                     Text(stringResource(R.string.action_repair_workbook))
+                }
+            }
+
+            if (state.developerMode) {
+                OutlinedButton(
+                    onClick = { showFreshWorkbookConfirm = true },
+                    enabled = !state.isProvisioning,
+                    shape = FinanceTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                    Text(stringResource(R.string.action_create_fresh_workbook))
                 }
             }
 

@@ -1134,7 +1134,7 @@ open class GoogleSheetsClient(
      *    monthly summary table, category spend table, and active settlements query table.
      * 2. Active month tab (e.g. Nov26): Programmatically created with 31-column master ledger schema from code.
      */
-    suspend fun provisionMasterWorkbook(
+    open suspend fun provisionMasterWorkbook(
         spreadsheetId: String,
         accounts: List<String> = emptyList(),
         categories: List<String> = emptyList()
