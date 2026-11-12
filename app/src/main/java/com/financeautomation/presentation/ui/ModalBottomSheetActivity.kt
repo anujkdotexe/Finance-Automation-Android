@@ -101,6 +101,14 @@ class ModalBottomSheetActivity : ComponentActivity() {
                     value = withContext(Dispatchers.IO) { app.appContainer.tripTagRepository.getActiveTagSync() }
                 }
                 var openDebts by remember { mutableStateOf<List<OpenDebtItem>>(emptyList()) }
+                val preselectedFriend = remember { intent.getStringExtra(EXTRA_PRESELECT_FRIEND) }
+
+                LaunchedEffect(preselectedFriend) {
+                    if (!preselectedFriend.isNullOrBlank()) {
+                        val useCase = app.appContainer.getOpenDebtsForPersonUseCase
+                        openDebts = withContext(Dispatchers.IO) { useCase.invoke(preselectedFriend) }
+                    }
+                }
 
                 val initialScreen = resolveInitialScreen(
                     intent = intent,
@@ -126,6 +134,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         companions = companions,
                         activeTripTag = activeTripTag,
                         openDebts = openDebts,
+                        preselectedFriend = preselectedFriend,
                         onPersonChanged = { person ->
                             lifecycleScope.launch(Dispatchers.IO) {
                                 val useCase = app.appContainer.getOpenDebtsForPersonUseCase
@@ -252,6 +261,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
         const val EXTRA_TRANSACTION_ID: String = "com.financeautomation.extra.TRANSACTION_ID"
         const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
         const val EXTRA_FLOW: String = "com.financeautomation.extra.FLOW"
+        const val EXTRA_PRESELECT_FRIEND: String = "com.financeautomation.extra.PRESELECT_FRIEND"
         const val EXTRA_INTERNAL_AUTH: String = "com.financeautomation.extra.INTERNAL_AUTH"
 
         fun resolveInitialScreen(

@@ -87,14 +87,17 @@ fun OwedSummaryCard(
     amount: Double,
     tone: AmountTone,
     topFriends: List<DebtSummary>,
-    onClick: () -> Unit,
+    onPersonClick: (personName: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         shape = FinanceTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
         border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
-        modifier = modifier.clickable(onClick = onClick)
+        modifier = modifier.clickable {
+            val primary = topFriends.firstOrNull()?.name ?: ""
+            onPersonClick(primary)
+        }
     ) {
         Column(
             modifier = Modifier
@@ -123,7 +126,10 @@ fun OwedSummaryCard(
                         text = "${friend.name} ${formatRupeesAuto(friend.amount)}",
                         style = FinanceTheme.typography.labelMedium,
                         color = FinanceTheme.colors.onSurfaceVariant,
-                        maxLines = 1
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPersonClick(friend.name) }
                     )
                 }
             } else {

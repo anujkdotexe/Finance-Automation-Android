@@ -317,6 +317,21 @@ fun MainScreen(
                 DashboardScreen(
                     viewModel = dashboardViewModel,
                     onNavigateToReview = { currentDestination = MainNavDestination.INBOX },
+                    onNavigateToSettlements = { personName, owedToMe ->
+                        val extras = com.financeautomation.presentation.overlay.FlowAuthGate.mapSettlementToExtras(personName, owedToMe)
+                        val authIntent = android.app.PendingIntent.getActivity(
+                            context,
+                            0,
+                            Intent(),
+                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                        val intent = Intent(context, ModalBottomSheetActivity::class.java).apply {
+                            putExtra(ModalBottomSheetActivity.EXTRA_FLOW, extras.flow)
+                            putExtra(ModalBottomSheetActivity.EXTRA_PRESELECT_FRIEND, extras.preselectedFriend)
+                            putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
+                        }
+                        context.startActivity(intent)
+                    },
                     onAddExpense = {
                         context.startActivity(Intent(context, ModalBottomSheetActivity::class.java))
                     },
