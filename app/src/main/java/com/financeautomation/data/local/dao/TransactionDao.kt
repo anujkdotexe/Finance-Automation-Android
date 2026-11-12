@@ -27,6 +27,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): TransactionEntity?
 
+    @Query("SELECT * FROM transactions WHERE sheetRowIndex = :rowIndex LIMIT 1")
+    suspend fun getBySheetRowIndex(rowIndex: Int): TransactionEntity?
+
     @Query("SELECT * FROM transactions WHERE timestamp BETWEEN :minTimestamp AND :maxTimestamp AND totalAmount BETWEEN :minAmount AND :maxAmount ORDER BY timestamp DESC")
     suspend fun getRecentSimilar(
         minTimestamp: Long,

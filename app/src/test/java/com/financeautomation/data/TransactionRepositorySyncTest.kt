@@ -45,6 +45,8 @@ class TransactionRepositorySyncTest {
         override fun getNeedsReviewFlow(): Flow<List<TransactionEntity>> = emptyFlow()
         override fun getConfirmedUnsyncedFlow(): Flow<List<TransactionEntity>> = emptyFlow()
         override suspend fun getById(id: String): TransactionEntity? = transactions[id]
+        override suspend fun getBySheetRowIndex(rowIndex: Int): TransactionEntity? =
+            transactions.values.firstOrNull { it.sheetRowIndex == rowIndex }
         override suspend fun getRecentSimilar(minTimestamp: Long, maxTimestamp: Long, minAmount: Double, maxAmount: Double): List<TransactionEntity> = emptyList()
         override suspend fun insert(transaction: TransactionEntity) { transactions[transaction.id] = transaction }
         override suspend fun insertAll(transactions: List<TransactionEntity>) { transactions.forEach { insert(it) } }
@@ -170,11 +172,11 @@ class TransactionRepositorySyncTest {
                     method == "GET" && !url.contains("/values/") -> {
                         """{"spreadsheetId":"test_sheet_id","sheets":[{"properties":{"sheetId":0,"title":"Nov26","gridProperties":{"rowCount":1000,"columnCount":35}}}]}"""
                     }
-                    // appendTableScoped (appendDebit)
-                    method == "POST" && url.contains(":append") -> {
+                    // appendTableScoped (values.update to row range or legacy append)
+                    (method == "POST" && url.contains(":append")) || (method == "PUT" && url.contains("/values/") && (url.contains(":K") || url.contains("%3AK"))) -> {
                         val count = appendDebitCount.incrementAndGet()
-                        val rowNum = 3 + count
-                        """{"spreadsheetId":"test_sheet_id","updates":{"updatedRange":"'Nov26'!A$rowNum:K$rowNum"}}"""
+                        val rowMatch = Regex("""\d+""").find(url)?.value?.toIntOrNull() ?: (3 + count)
+                        """{"spreadsheetId":"test_sheet_id","updatedRange":"'Nov26'!A$rowMatch:K$rowMatch","updatedCells":11}"""
                     }
                     // updateCell (AC rowIdx)
                     method == "PUT" && url.contains("/values/") -> {
@@ -417,5 +419,113 @@ class TransactionRepositorySyncTest {
 
         // Verify deduplication: retry MUST NOT append a second debit row
         assertEquals("Retry sync must yield exactly ONE appendDebit call via UUID deduplication", 1, mock.appendDebitCount.get())
+    }
+
+    @Test
+    fun testSettlementAndNettingPlanUpdatesLocalRoomDatabaseMatchingSheet() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val mock = CountingSheetsMock()
+        val client = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            googleSheetsClient = client,
+            preferencesRepository = FakePreferencesRepository("test_spreadsheet_id")
+        )
+
+        // Pre-populate Room DB with 2 transactions representing Dinner (row 5) and Lunch (row 7)
+        val dinnerTxn = TransactionEntity(
+            id = "txn_dinner_row5",
+            timestamp = 1794380000000L,
+            dateSerial = 46338,
+            timeSerial = 0.5,
+            account = "SBI",
+            merchant = "Dinner",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 300.0,
+            companions = "AliceBobk, Charlie",
+            myShare = 100.0,
+            owedToMe = 200.0,
+            status = "Pending",
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED.name,
+            syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 5,
+            isPossibleDuplicate = false
+        )
+        val lunchTxn = TransactionEntity(
+            id = "txn_lunch_row7",
+            timestamp = 1794381000000L,
+            dateSerial = 46338,
+            timeSerial = 0.55,
+            account = "SBI",
+            merchant = "Lunch",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 150.0,
+            companions = "Charlie",
+            myShare = 75.0,
+            owedToMe = 75.0,
+            status = "Pending",
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED.name,
+            syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 7,
+            isPossibleDuplicate = false
+        )
+        tDao.insert(dinnerTxn)
+        tDao.insert(lunchTxn)
+
+        val initialOwed = tDao.transactions.values.sumOf { it.owedToMe }
+        assertEquals(275.0, initialOwed, 0.001)
+
+        // Queue a credit/settlement operation with an AccountingPlan applying edits
+        val plan = com.financeautomation.domain.model.AccountingPlan(
+            edits = listOf(
+                com.financeautomation.domain.model.CellEdit(tab = "Nov26", row = 5, column = "H", value = "AliceBobk"),
+                com.financeautomation.domain.model.CellEdit(tab = "Nov26", row = 5, column = "J", value = 62.5),
+                com.financeautomation.domain.model.CellEdit(tab = "Nov26", row = 5, column = "K", value = "Pending"),
+                com.financeautomation.domain.model.CellEdit(tab = "Nov26", row = 7, column = "J", value = 37.5),
+                com.financeautomation.domain.model.CellEdit(tab = "Nov26", row = 7, column = "K", value = "Pending")
+            ),
+            settled = listOf(
+                com.financeautomation.domain.model.SettledRef(tab = "Nov26", row = 5, uuid = dinnerTxn.id, applied = 137.5, remaining = 62.5),
+                com.financeautomation.domain.model.SettledRef(tab = "Nov26", row = 7, uuid = lunchTxn.id, applied = 37.5, remaining = 37.5)
+            )
+        )
+        val planJson = com.financeautomation.data.remote.AccountingPlanJsonAdapter.toJson(plan)
+
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = dinnerTxn.id,
+                operationType = SyncQueueEntity.OP_VOID, // Triggers applyPlan with planJson
+                payloadJson = dinnerTxn.id,
+                planJson = planJson
+            )
+        )
+
+        // Execute sync
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue(syncRes is Result.Success)
+
+        // Verify local Room DB transactions updated strictly matching sheet plan edits
+        val updatedDinner = tDao.getById(dinnerTxn.id)
+        val updatedLunch = tDao.getById(lunchTxn.id)
+
+        org.junit.Assert.assertNotNull(updatedDinner)
+        org.junit.Assert.assertNotNull(updatedLunch)
+
+        assertEquals("AliceBobk", updatedDinner!!.companions)
+        assertEquals(62.5, updatedDinner.owedToMe, 0.001)
+        assertEquals("Pending", updatedDinner.status)
+
+        assertEquals(37.5, updatedLunch!!.owedToMe, 0.001)
+        assertEquals("Pending", updatedLunch.status)
+
+        val finalOwed = tDao.transactions.values.sumOf { it.owedToMe }
+        assertEquals("Total local owed must equal 100.0 matching sheet state (62.5 + 37.5)", 100.0, finalOwed, 0.001)
     }
 }

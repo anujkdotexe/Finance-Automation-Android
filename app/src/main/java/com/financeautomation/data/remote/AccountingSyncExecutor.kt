@@ -4,6 +4,7 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.AccountingPlan
@@ -33,8 +34,10 @@ class AccountingSyncExecutor(
     private val googleDriveClient: GoogleDriveClient,
     private val syncQueueDao: SyncQueueDao? = null,
     private val lineageDao: LineageDao? = null,
+    private val transactionDao: TransactionDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
+    private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val settlementWaterfallUseCase: SettlementWaterfallUseCase = SettlementWaterfallUseCase(),
     private val repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
     private val carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
@@ -56,8 +59,10 @@ class AccountingSyncExecutor(
         googleDriveClient = googleDriveClient,
         syncQueueDao = syncQueueDao,
         lineageDao = lineageDao,
+        transactionDao = null,
         syncQueueDaoProvider = null,
         lineageDaoProvider = null,
+        transactionDaoProvider = null,
         settlementWaterfallUseCase = settlementWaterfallUseCase,
         repaymentWaterfallUseCase = repaymentWaterfallUseCase,
         carryForwardUseCase = carryForwardUseCase,
@@ -72,6 +77,9 @@ class AccountingSyncExecutor(
     private suspend fun resolveLineageDao(): LineageDao =
         lineageDao ?: lineageDaoProvider?.invoke()
             ?: throw IllegalStateException("LineageDao or provider must be supplied")
+
+    private suspend fun resolveTransactionDao(): TransactionDao? =
+        transactionDao ?: transactionDaoProvider?.invoke()
 
     suspend fun executeLogCredit(
         item: SyncQueueEntity,
@@ -361,7 +369,68 @@ class AccountingSyncExecutor(
             if (editRes is Result.Error) return Result.Error(editRes.exception)
         }
 
+        // Apply plan edits and settled references locally to Room database
+        applyPlanToLocalDatabase(plan)
+
         return Result.Success(Unit)
+    }
+
+    private suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
+        try {
+            val tDao = resolveTransactionDao() ?: return
+            val editsByRow = plan.edits.groupBy { it.row }
+            val allTargetRows = (editsByRow.keys + plan.settled.map { it.row }).distinct()
+
+            for (rowNum in allTargetRows) {
+                val settledRef = plan.settled.firstOrNull { it.row == rowNum }
+                val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
+                    ?: tDao.getBySheetRowIndex(rowNum)
+
+                if (existingTxn != null) {
+                    var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn
+                    val rowEdits = editsByRow[rowNum].orEmpty()
+                    for (edit in rowEdits) {
+                        val col = edit.column.uppercase()
+                        updated = when (col) {
+                            "D" -> updated.copy(merchant = edit.value?.toString() ?: updated.merchant)
+                            "G" -> {
+                                val amt = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.totalAmount
+                                updated.copy(totalAmount = amt)
+                            }
+                            "H" -> updated.copy(companions = edit.value?.toString() ?: updated.companions)
+                            "I" -> {
+                                val share = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.myShare
+                                updated.copy(myShare = share)
+                            }
+                            "J" -> {
+                                val owed = (edit.value as? Number)?.toDouble()
+                                    ?: edit.value?.toString()?.toDoubleOrNull()
+                                    ?: updated.owedToMe
+                                updated.copy(owedToMe = owed)
+                            }
+                            "K" -> updated.copy(status = edit.value?.toString() ?: updated.status)
+                            else -> updated
+                        }
+                    }
+                    if (settledRef != null) {
+                        val owed = settledRef.remaining
+                        val st = if (owed <= 0.0) "Settled" else "Pending"
+                        updated = updated.copy(owedToMe = owed, status = st)
+                    }
+                    tDao.update(updated)
+                }
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            com.financeautomation.core.utils.Diagnostics.record(
+                "AccountingSyncExecutor",
+                "applyPlanToLocalDatabase failed: ${e.message}"
+            )
+        }
     }
 
     private fun mapDebitsFromSnapshot(snapshot: LedgerWorkbookSnapshot): List<LedgerDebit> {
