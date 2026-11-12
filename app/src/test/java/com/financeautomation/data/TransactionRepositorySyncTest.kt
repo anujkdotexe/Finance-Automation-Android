@@ -225,24 +225,35 @@ class TransactionRepositorySyncTest {
                     method == "GET" && (url.contains("AC3") || url.contains("AC")) && url.contains("/values/") -> {
                         val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") }
                         if (matchingEntries.isEmpty()) {
-                            """{"range":"'Nov26'!AC3:AC","majorDimension":"ROWS","values":[]}"""
+                            """{"range":"'Sheet'!AC3:AC","majorDimension":"ROWS","values":[]}"""
                         } else {
-                            val rows = (3..10).map { rowIdx ->
+                            val maxRow = writtenUuids.keys.mapNotNull { Regex("""\d+""").find(it)?.value?.toIntOrNull() }.maxOrNull() ?: 10
+                            val rows = (4..maxRow).map { rowIdx ->
                                 val uuid = writtenUuids["AC$rowIdx"] ?: ""
                                 if (uuid.isNotEmpty()) "[\"$uuid\"]" else "[\"\"]"
                             }
-                            """{"range":"'Nov26'!AC3:AC","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
+                            """{"range":"'Sheet'!AC4:AC","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
                         }
                     }
                     // getCellString for AC column
                     method == "GET" && url.contains("!AC") -> {
                         val row = Regex("""AC(\d+)""").find(url)?.groupValues?.get(1) ?: "4"
                         val uuid = writtenUuids["AC$row"] ?: "txn_test_void"
-                        """{"range":"'Nov26'!AC$row","majorDimension":"ROWS","values":[["$uuid"]]}"""
+                        """{"range":"'Sheet'!AC$row","majorDimension":"ROWS","values":[["$uuid"]]}"""
                     }
                     // findOrphanDebitRow or table range read
                     method == "GET" && url.contains("/values/") -> {
-                        """{"range":"'Nov26'!A3:K","majorDimension":"ROWS","values":[]}"""
+                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") }
+                        if (matchingEntries.isEmpty()) {
+                            """{"range":"'Sheet'!A3:K","majorDimension":"ROWS","values":[]}"""
+                        } else {
+                            val maxRow = writtenUuids.keys.mapNotNull { Regex("""\d+""").find(it)?.value?.toIntOrNull() }.maxOrNull() ?: 3
+                            val rows = (4..maxRow).map { rowIdx ->
+                                val hasEntry = writtenUuids.containsKey("AC$rowIdx")
+                                if (hasEntry) "[\"46358\"]" else "[\"\"]"
+                            }
+                            """{"range":"'Sheet'!A4:A","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
+                        }
                     }
                     // All metadata GET requests (tabs, grid capacity, sheet properties)
                     method == "GET" && !url.contains("/values/") -> {
@@ -252,11 +263,11 @@ class TransactionRepositorySyncTest {
                     (method == "POST" && url.contains(":append")) || (method == "PUT" && url.contains("/values/") && (url.contains(":K") || url.contains("%3AK"))) -> {
                         val count = appendDebitCount.incrementAndGet()
                         val rowMatch = Regex("""\d+""").find(url)?.value?.toIntOrNull() ?: (3 + count)
-                        """{"spreadsheetId":"test_sheet_id","updatedRange":"'Nov26'!A$rowMatch:K$rowMatch","updatedCells":11}"""
+                        """{"spreadsheetId":"test_sheet_id","updatedRange":"'Sheet'!A$rowMatch:K$rowMatch","updatedCells":11}"""
                     }
                     // updateCell (AC rowIdx)
                     method == "PUT" && url.contains("/values/") -> {
-                        val cellMatch = Regex("""'Nov26'!([A-Z0-9]+)""").find(url)
+                        val cellMatch = Regex("""'[^']+'!([A-Z0-9]+)""").find(url)
                         val cellRef = cellMatch?.groupValues?.get(1) ?: "AC4"
                         val bodyText = request.body?.let { b ->
                             val buf = okio.Buffer()
@@ -277,10 +288,10 @@ class TransactionRepositorySyncTest {
                         if (bodyText.contains(":K") || bodyText.contains(":k") || bodyText.contains("%3AK")) {
                             appendDebitCount.incrementAndGet()
                         }
-                        val acMatch = Regex("""'Nov26'!(AC\d+)""").find(bodyText)
+                        val acMatch = Regex("""'[^']+'!(AC\d+)""").find(bodyText)
                         val acRef = acMatch?.groupValues?.get(1)
                         if (acRef != null) {
-                            val uuidMatch = Regex("""'Nov26'!AC\d+.*?"values":\s*\[\s*\[\s*"([^"]+)"""").find(bodyText)
+                            val uuidMatch = Regex("""'[^']+'!AC\d+.*?"values":\s*\[\s*\[\s*"([^"]+)"""").find(bodyText)
                                 ?: Regex(""""values":\s*\[\s*\[\s*"([^"]+)""").findAll(bodyText).lastOrNull()
                             val uuidVal = uuidMatch?.groupValues?.get(1).orEmpty()
                             writtenUuids[acRef] = uuidVal
@@ -1273,6 +1284,12 @@ class TransactionRepositorySyncTest {
         val lineage = lineageDao.getAll()
         assertEquals(1, lineage.size)
         assertEquals("txn_nov_charlie_1", lineage[0].carriedFromUuid)
+
+        // Verify ordering: row 4 contains the carried debit row; the new Dec26 transaction lands after it at row 5 and is not overwritten
+        val syncedDec = tDao.getById("txn_dec_1")
+        assertNotNull("Synced Dec26 transaction must exist in local database", syncedDec)
+        assertEquals(SyncState.SYNCED.name, syncedDec?.syncState)
+        assertEquals(5, syncedDec?.sheetRowIndex)
 
         // After first carry forward, update mock snapshot:
         // Nov26 row status is now "Carried Fwd" and Dec26 contains the carried debit
