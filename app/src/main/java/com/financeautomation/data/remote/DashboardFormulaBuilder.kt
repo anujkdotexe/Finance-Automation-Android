@@ -1,5 +1,6 @@
 package com.financeautomation.data.remote
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 
@@ -13,14 +14,25 @@ import com.financeautomation.domain.model.Category
  */
 object DashboardFormulaBuilder {
 
+    private const val CATEGORY_TRANSFER = "Transfer"
+
+    /**
+     * Categories always left out of living burn, as in the iOS reference: Savings and Transfer (in that order),
+     * followed by any other categories the user excluded in the app. Duplicates are ignored case-insensitively.
+     */
+    fun livingBurnExclusions(excludedCategoryNames: List<String>): List<String> {
+        val result = mutableListOf(CategoryConstants.CATEGORY_SAVINGS, CATEGORY_TRANSFER)
+        excludedCategoryNames.map { it.trim() }.filter { it.isNotEmpty() }.forEach { name ->
+            if (result.none { it.equals(name, ignoreCase = true) }) result.add(name)
+        }
+        return result
+    }
+
     /**
      * Builds the SUMIFS formula for current month living burn KPI (cell A5 / range A5:C5).
      */
     fun buildCurrentBurnFormula(excludedCategoryNames: List<String>): String {
-        val activeExcluded = excludedCategoryNames.map { it.trim() }.filter { it.isNotEmpty() }
-        if (activeExcluded.isEmpty()) {
-            return """=IFERROR(SUM(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
-        }
+        val activeExcluded = livingBurnExclusions(excludedCategoryNames)
         val exclusions = activeExcluded.joinToString("") { name ->
             """, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>$name""""
         }
@@ -31,10 +43,7 @@ object DashboardFormulaBuilder {
      * Builds the SUMIFS formula for previous month living burn KPI (cell D5 / range D5:F5).
      */
     fun buildPrevMonthBurnFormula(excludedCategoryNames: List<String>): String {
-        val activeExcluded = excludedCategoryNames.map { it.trim() }.filter { it.isNotEmpty() }
-        if (activeExcluded.isEmpty()) {
-            return """=IFERROR(SUM(INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!I4:I")), 0)"""
-        }
+        val activeExcluded = livingBurnExclusions(excludedCategoryNames)
         val exclusions = activeExcluded.joinToString("") { name ->
             """, INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!F4:F"), "<>$name""""
         }
@@ -45,10 +54,7 @@ object DashboardFormulaBuilder {
      * Builds the SUMIFS formula for monthly summary row [rowNumber] (cells V6 to V17, referencing U{rowNumber}).
      */
     fun buildMonthlySummaryBurnFormula(rowNumber: Int, excludedCategoryNames: List<String>): String {
-        val activeExcluded = excludedCategoryNames.map { it.trim() }.filter { it.isNotEmpty() }
-        if (activeExcluded.isEmpty()) {
-            return """=IFERROR(SUM(INDIRECT("'" & ${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
-        }
+        val activeExcluded = livingBurnExclusions(excludedCategoryNames)
         val exclusions = activeExcluded.joinToString("") { name ->
             """, INDIRECT("'" & ${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>$name""""
         }
