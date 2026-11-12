@@ -1,10 +1,13 @@
 package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.data.local.dao.PayableDao
+import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PayableEntity
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Transaction
@@ -14,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -23,9 +25,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.Calendar
+import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -70,17 +76,24 @@ class DashboardViewModelTest {
     private class FakeSyncQueueDao : SyncQueueDao {
         val queue = ConcurrentHashMap<Long, SyncQueueEntity>()
         private val idGen = AtomicLong(1)
+        private val queueFlow = MutableStateFlow<List<SyncQueueEntity>>(emptyList())
+
+        fun refreshFlow() {
+            queueFlow.value = queue.values.toList()
+        }
+
         override fun getPendingQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(emptyList())
-        override fun getAllQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(emptyList())
+        override fun getAllQueueFlow(): Flow<List<SyncQueueEntity>> = queueFlow
         override fun getFailedQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(emptyList())
         override suspend fun insert(item: SyncQueueEntity): Long {
             val id = if (item.id == 0L) idGen.getAndIncrement() else item.id
             queue[id] = item.copy(id = id)
+            refreshFlow()
             return id
         }
-        override suspend fun update(item: SyncQueueEntity) { queue[item.id] = item }
-        override suspend fun delete(item: SyncQueueEntity) { queue.remove(item.id) }
-        override suspend fun deleteById(id: Long) { queue.remove(id) }
+        override suspend fun update(item: SyncQueueEntity) { queue[item.id] = item; refreshFlow() }
+        override suspend fun delete(item: SyncQueueEntity) { queue.remove(item.id); refreshFlow() }
+        override suspend fun deleteById(id: Long) { queue.remove(id); refreshFlow() }
         override suspend fun deleteByTransactionId(transactionId: String) {}
         override suspend fun getNextPending(maxRetries: Int): SyncQueueEntity? = null
         override suspend fun getAllPending(maxRetries: Int): List<SyncQueueEntity> = emptyList()
@@ -110,6 +123,26 @@ class DashboardViewModelTest {
         }
         override suspend fun deleteByUuid(uuid: String) { payables.value = payables.value.filter { it.uuid != uuid } }
         override suspend fun deleteAll() { payables.value = emptyList() }
+    }
+
+    private class FakePendingCaptureDao : PendingCaptureDao {
+        val captures = MutableStateFlow<List<PendingCaptureEntity>>(emptyList())
+        override fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(emptyList())
+        override fun getNeedsReviewCapturesFlow(): Flow<List<PendingCaptureEntity>> = captures
+        override fun getNewAccountCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(emptyList())
+        override suspend fun getWaitingCaptures(): List<PendingCaptureEntity> = emptyList()
+        override suspend fun getById(id: String): PendingCaptureEntity? = captures.value.find { it.id == id }
+        override suspend fun getByNotificationKey(key: String): PendingCaptureEntity? = null
+        override suspend fun getByState(state: String): List<PendingCaptureEntity> = emptyList()
+        override suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity> = emptyList()
+        override suspend fun getAwaitingSuccessCaptures(): List<PendingCaptureEntity> = emptyList()
+        override suspend fun findSimilarByAmountAndTime(amount: Double, minTime: Long, maxTime: Long): List<PendingCaptureEntity> = emptyList()
+        override suspend fun insert(capture: PendingCaptureEntity) { captures.value = captures.value + capture }
+        override suspend fun update(capture: PendingCaptureEntity) { captures.value = captures.value.map { if (it.id == capture.id) capture else it } }
+        override suspend fun updateState(id: String, state: String, updatedAt: Long) {}
+        override suspend fun resetShownToWaiting(updatedAt: Long): Int = 0
+        override suspend fun deleteById(id: String) { captures.value = captures.value.filter { it.id != id } }
+        override suspend fun pruneOldCompletedCaptures(cutoffTime: Long) {}
     }
 
     private class FakeCategoryRepo : CategoryRepository {
@@ -199,16 +232,286 @@ class DashboardViewModelTest {
         advanceUntilIdle()
 
         val state = vm.uiState.value
-        // Current burn must only include foodTxn.myShare (100.0), NOT savings (5000.0)
         assertEquals(100.0, state.currentBurn, 0.001)
         assertEquals(5000.0, state.savings, 0.001)
         assertEquals(400.0, state.owedToMe, 0.001)
         assertEquals(120.0, state.iOwePeople, 0.001)
 
-        // Per-person owed split tokens
         val topOwed = state.topOwedToMe
         assertEquals(2, topOwed.size)
         assertTrue(topOwed.any { it.name == "Alice" && it.amount == 200.0 })
         assertTrue(topOwed.any { it.name == "Bob" && it.amount == 200.0 })
+    }
+
+    @Test
+    fun testDashboardMetrics_sameDayLastMonthPacing_onTrackTrue() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cRepo = FakeCategoryRepo()
+
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz)
+        val currentDay = nowCal.get(Calendar.DAY_OF_MONTH)
+
+        val currentMonthTxnCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_cur",
+                timestamp = currentMonthTxnCal.timeInMillis,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Grocery",
+                category = "Food & Drink",
+                totalAmount = 200.0,
+                companions = "Personal",
+                myShare = 200.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
+        )
+
+        val priorMonthTxn1Cal = Calendar.getInstance(kolkataTz).apply {
+            add(Calendar.MONTH, -1)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_prior_1",
+                timestamp = priorMonthTxn1Cal.timeInMillis,
+                dateSerial = 46300,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Grocery Prior",
+                category = "Food & Drink",
+                totalAmount = 300.0,
+                companions = "Personal",
+                myShare = 300.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(200.0, state.currentBurn, 0.001)
+        assertEquals(300.0, state.lastMonthSameDayBurn, 0.001)
+        assertTrue(state.onTrack)
+        val delta = state.paceDeltaPercent
+        assertTrue(delta != null)
+        assertEquals(((200.0 - 300.0) / 300.0) * 100.0, delta!!, 0.001)
+    }
+
+    @Test
+    fun testDashboardMetrics_sameDayLastMonthPacing_onTrackFalse() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cRepo = FakeCategoryRepo()
+
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val currentMonthTxnCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_cur",
+                timestamp = currentMonthTxnCal.timeInMillis,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Electronics",
+                category = "Shopping",
+                totalAmount = 500.0,
+                companions = "Personal",
+                myShare = 500.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
+        )
+
+        val priorMonthTxnCal = Calendar.getInstance(kolkataTz).apply {
+            add(Calendar.MONTH, -1)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_prior",
+                timestamp = priorMonthTxnCal.timeInMillis,
+                dateSerial = 46300,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Shopping Prior",
+                category = "Shopping",
+                totalAmount = 250.0,
+                companions = "Personal",
+                myShare = 250.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(500.0, state.currentBurn, 0.001)
+        assertEquals(250.0, state.lastMonthSameDayBurn, 0.001)
+        assertFalse(state.onTrack)
+        val delta = state.paceDeltaPercent
+        assertTrue(delta != null)
+        assertEquals(((500.0 - 250.0) / 250.0) * 100.0, delta!!, 0.001)
+    }
+
+    @Test
+    fun testDashboardMetrics_zeroLastMonth_paceDeltaNull() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cRepo = FakeCategoryRepo()
+
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val currentMonthTxnCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_cur",
+                timestamp = currentMonthTxnCal.timeInMillis,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Coffee",
+                category = "Food & Drink",
+                totalAmount = 150.0,
+                companions = "Personal",
+                myShare = 150.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(150.0, state.currentBurn, 0.001)
+        assertEquals(0.0, state.lastMonthSameDayBurn, 0.001)
+        assertNull(state.paceDeltaPercent)
+        assertFalse(state.onTrack)
+    }
+
+    @Test
+    fun testDashboardMetrics_syncCountsAndNeedsReviewTotal() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val captureDao = FakePendingCaptureDao()
+        val cRepo = FakeCategoryRepo()
+
+        val now = System.currentTimeMillis()
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_review",
+                timestamp = now,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Unconfirmed Merchant",
+                category = "Food & Drink",
+                totalAmount = 250.0,
+                companions = "Personal",
+                myShare = 250.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.PENDING,
+                reviewState = ReviewState.NEEDS_REVIEW
+            )
+        )
+
+        captureDao.insert(
+            PendingCaptureEntity(
+                id = "cap_review",
+                sourcePackage = "com.google.android.apps.nbu.paisa.user",
+                amount = 99.0,
+                payee = "Tea Stall",
+                inferredAccount = "HDFC",
+                timestamp = now,
+                kind = PendingCaptureEntity.KIND_DEBIT,
+                state = PendingCaptureEntity.STATE_NEEDS_REVIEW,
+                notificationKey = null,
+                contentHash = null,
+                updatedAt = now
+            )
+        )
+
+        qDao.insert(
+            SyncQueueEntity(
+                id = 1L,
+                transactionId = "txn_1",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "{}",
+                status = SyncQueueEntity.STATUS_PENDING
+            )
+        )
+        qDao.insert(
+            SyncQueueEntity(
+                id = 2L,
+                transactionId = "txn_2",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "{}",
+                status = SyncQueueEntity.STATUS_IN_PROGRESS
+            )
+        )
+        qDao.insert(
+            SyncQueueEntity(
+                id = 3L,
+                transactionId = "txn_3",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "{}",
+                status = SyncQueueEntity.STATUS_FAILED
+            )
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPayableDao = null,
+            directPendingCaptureDao = captureDao,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(2, state.waitingCount)
+        assertEquals(1, state.failedCount)
+        assertEquals(1, state.needsReviewCount)
+        // needsReviewTotal = 1 txn + 1 capture in NEEDS_REVIEW + 1 failed queue item = 3
+        assertEquals(3, state.needsReviewTotal)
     }
 }

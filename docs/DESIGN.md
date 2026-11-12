@@ -183,6 +183,9 @@ These are decisions, not questions. The designer should build to them.
 - One add button that expands to: Expense, Friend settled, Friend paid for me, Repaid a friend, Trip mode, Income or refund.
 - Settings is no longer one long screen; each drawer item is its own screen.
 
+12.1b Account avatar
+The top bar of Dashboard, Needs Review and Transactions shows a small circular avatar at the right with the first letter of the signed-in Google account (the app only holds the email, not a photo). Content description "Google account". Tapping it opens a small menu with the email address, "Sync and Backup" and "Sign out". Screens opened with a back arrow (Accounts, Categories and the other drawer screens) do not show it. Onboarding has no top bar.
+
 12.2 Dashboard order
 Month switcher; living burn with daily average and last month; Owed to me and I owe per person (tap a person to settle); one sync status line (Synced just now, N waiting, N failed; tap opens Sync and Backup); a needs-review chip; categories; recent transactions. No settings controls on this screen.
 

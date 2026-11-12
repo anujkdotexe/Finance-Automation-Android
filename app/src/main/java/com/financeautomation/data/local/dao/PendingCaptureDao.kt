@@ -32,6 +32,12 @@ interface PendingCaptureDao {
     @Query("SELECT * FROM pending_captures WHERE state = 'WAITING' ORDER BY timestamp ASC")
     fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>>
 
+    @Query("SELECT * FROM pending_captures WHERE state = 'NEEDS_REVIEW' ORDER BY timestamp ASC")
+    fun getNeedsReviewCapturesFlow(): Flow<List<PendingCaptureEntity>>
+
+    @Query("SELECT * FROM pending_captures WHERE flags LIKE '%NEW_ACCOUNT%' AND state NOT IN ('DONE', 'DISMISSED') ORDER BY timestamp ASC")
+    fun getNewAccountCapturesFlow(): Flow<List<PendingCaptureEntity>>
+
     @Query("SELECT * FROM pending_captures WHERE state = 'WAITING' ORDER BY timestamp ASC")
     suspend fun getWaitingCaptures(): List<PendingCaptureEntity>
 
