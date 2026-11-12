@@ -6,8 +6,10 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.remote.GoogleSheetsClient
@@ -101,6 +103,25 @@ class TransactionRepositorySyncTest {
         }
     }
 
+    private class FakePayableDao : PayableDao {
+        val payables = ConcurrentHashMap<String, PayableEntity>()
+
+        override fun observeAll(): Flow<List<PayableEntity>> = flowOf(payables.values.toList())
+        override fun observePending(): Flow<List<PayableEntity>> = flowOf(
+            payables.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) }
+        )
+        override suspend fun getPending(): List<PayableEntity> =
+            payables.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) }
+        override suspend fun getAll(): List<PayableEntity> = payables.values.toList()
+        override suspend fun getByUuid(uuid: String): PayableEntity? = payables[uuid]
+        override suspend fun upsert(payable: PayableEntity) { payables[payable.uuid] = payable }
+        override suspend fun upsertAll(payablesList: List<PayableEntity>) {
+            payablesList.forEach { payables[it.uuid] = it }
+        }
+        override suspend fun deleteByUuid(uuid: String) { payables.remove(uuid) }
+        override suspend fun deleteAll() { payables.clear() }
+    }
+
     private class FakePreferencesRepository(private val spreadsheetId: String = "test_sheet_id") : PreferencesRepository {
         override fun getSpreadsheetId(): Flow<String?> = flowOf(spreadsheetId)
         override suspend fun getSpreadsheetIdSync(): String? = spreadsheetId
@@ -129,6 +150,7 @@ class TransactionRepositorySyncTest {
     private class CountingSheetsMock {
         val appendDebitCount = AtomicInteger(0)
         val writtenUuids = ConcurrentHashMap<String, String>() // cell -> uuid
+        var customBatchGetResponse: String? = null
 
         val fakeTokenProvider = object : TokenProvider {
             override fun getAccessToken(): String = "test_token"
@@ -144,9 +166,11 @@ class TransactionRepositorySyncTest {
                 val responseBody: String = when {
                     // values:batchGet (readLedgerSnapshot)
                     method == "GET" && url.contains("values:batchGet") -> {
-                        """{"valueRanges":[
+                        customBatchGetResponse ?: """{"valueRanges":[
                             {"range":"'Nov26'!A4:K","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!AC4:AC","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
                         ]}"""
@@ -527,5 +551,135 @@ class TransactionRepositorySyncTest {
 
         val finalOwed = tDao.transactions.values.sumOf { it.owedToMe }
         assertEquals("Total local owed must equal 100.0 matching sheet state (62.5 + 37.5)", 100.0, finalOwed, 0.001)
+    }
+
+    @Test
+    fun testReconcileWithSheet_healsStaleLocalDebitsAndPayables() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val pDao = FakePayableDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+
+        // Stale local transactions:
+        // Dinner local has owed=125, companions="AliceBobk, Charlie"
+        val staleDinner = Transaction(
+            id = "txn_dinner_uuid_123",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.5,
+            account = "SBI",
+            merchant = "Dinner",
+            category = "Food & Drink",
+            totalAmount = 200.0,
+            companions = "AliceBobk, Charlie",
+            myShare = 75.0,
+            owedToMe = 125.0,
+            status = TransactionStatus.PENDING,
+            syncState = SyncState.SYNCED,
+            reviewState = ReviewState.CONFIRMED,
+            sheetRowIndex = 5
+        )
+        // Lunch local has owed=37.5, status=Pending
+        val staleLunch = Transaction(
+            id = "txn_lunch_uuid_456",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.4,
+            account = "SBI",
+            merchant = "Lunch",
+            category = "Food & Drink",
+            totalAmount = 75.0,
+            companions = "Charlie",
+            myShare = 37.5,
+            owedToMe = 37.5,
+            status = TransactionStatus.PENDING,
+            syncState = SyncState.SYNCED,
+            reviewState = ReviewState.CONFIRMED,
+            sheetRowIndex = 4
+        )
+        tDao.insert(TransactionEntity.fromDomain(staleDinner))
+        tDao.insert(TransactionEntity.fromDomain(staleLunch))
+
+        // Remote sheet has Dinner with owed=62.5 and companions="AliceBobk", Lunch settled to 0.0,
+        // and payables: Coffee (60.0) and Excess credit (5061.5)
+        mock.customBatchGetResponse = """{
+            "valueRanges": [
+                {
+                    "range": "'Nov26'!A4:K",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 0.0, "Settled"],
+                        [46338, 0.5, "SBI", "Dinner", "", "Food & Drink", 200.0, "AliceBobk", 75.0, 62.5, "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AC4:AC",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        ["txn_lunch_uuid_456"],
+                        ["txn_dinner_uuid_123"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!M4:T",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AD4:AD",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!V4:AB",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46338, 0.5, "Charlie", "Excess settlement credit", 5061.5, "", "Pending"],
+                        [46338, 0.6, "Charlie", "Coffee", 60.0, "", "Pending"]
+                    ]
+                },
+                {
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        ["pay_excess_uuid_789"],
+                        ["pay_coffee_uuid_012"]
+                    ]
+                }
+            ]
+        }"""
+
+        val sheets = mock.createClient()
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO
+        )
+
+        // Execute reconcileWithSheet
+        val reconcileRes = repo.reconcileWithSheet("test_sheet_id")
+        assertTrue(reconcileRes is Result.Success)
+
+        // Verify local debits are brought to sheet values
+        val healedDinner = tDao.getById("txn_dinner_uuid_123")
+        org.junit.Assert.assertNotNull(healedDinner)
+        assertEquals(62.5, healedDinner!!.owedToMe, 0.001)
+        assertEquals("AliceBobk", healedDinner.companions)
+        assertEquals("Pending", healedDinner.status)
+
+        val healedLunch = tDao.getById("txn_lunch_uuid_456")
+        org.junit.Assert.assertNotNull(healedLunch)
+        assertEquals(0.0, healedLunch!!.owedToMe, 0.001)
+        assertEquals("Settled", healedLunch.status)
+
+        // Verify payables are synced to local DB
+        val payables = pDao.getAll()
+        assertEquals(2, payables.size)
+        val totalIOwe = pDao.getPending().sumOf { it.amountIOwe }
+        assertEquals(5121.5, totalIOwe, 0.001)
     }
 }

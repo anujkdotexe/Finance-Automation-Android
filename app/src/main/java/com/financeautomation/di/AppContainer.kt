@@ -246,6 +246,7 @@ class DefaultAppContainer(
         TransactionRepositoryImpl(
             transactionDaoProvider = { awaitDatabase().transactionDao() },
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            payableDaoProvider = { awaitDatabase().payableDao() },
             googleSheetsClient = googleSheetsClient,
             preferencesRepository = preferencesRepository,
             workbookResolver = workbookResolver,

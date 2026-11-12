@@ -1623,11 +1623,14 @@ open class GoogleSheetsClient(
 
             // Construct batch ranges for all sorted month tabs:
             // Table 1: 'Tab'!A4:K and 'Tab'!AC4:AC
+            // Table 2: 'Tab'!M4:T and 'Tab'!AD4:AD
             // Table 3: 'Tab'!V4:AB and 'Tab'!AE4:AE
             val batchRanges = mutableListOf<String>()
             sortedTabs.forEach { tab ->
                 batchRanges.add("'$tab'!A4:K")
                 batchRanges.add("'$tab'!AC4:AC")
+                batchRanges.add("'$tab'!M4:T")
+                batchRanges.add("'$tab'!AD4:AD")
                 batchRanges.add("'$tab'!V4:AB")
                 batchRanges.add("'$tab'!AE4:AE")
             }
@@ -1656,6 +1659,8 @@ open class GoogleSheetsClient(
                 val sheetId = tabsMap[tab] ?: 0
                 val debitsData = getValuesForRange(tab, "A4:K")
                 val debitsUuids = getValuesForRange(tab, "AC4:AC")
+                val inflowsData = getValuesForRange(tab, "M4:T")
+                val inflowsUuids = getValuesForRange(tab, "AD4:AD")
                 val payablesData = getValuesForRange(tab, "V4:AB")
                 val payablesUuids = getValuesForRange(tab, "AE4:AE")
 
@@ -1698,6 +1703,39 @@ open class GoogleSheetsClient(
                     }
                 }
 
+                val inflowsList = mutableListOf<LedgerInflowRow>()
+                for (i in inflowsData.indices) {
+                    val row = inflowsData[i]
+                    if (row.isEmpty()) continue
+                    val dateSerial = row.getOrNull(0)?.toString()?.toDoubleOrNull()?.toInt()
+                    val timeSerial = row.getOrNull(1)?.toString()?.toDoubleOrNull()
+                    val account = row.getOrNull(2)?.toString().orEmpty()
+                    val inflowType = row.getOrNull(3)?.toString().orEmpty()
+                    val sender = row.getOrNull(4)?.toString().orEmpty()
+                    val reason = row.getOrNull(5)?.toString().orEmpty()
+                    val amountReceived = row.getOrNull(6)?.toString()?.replace(",", "")?.toDoubleOrNull() ?: 0.0
+                    val linkedDebits = row.getOrNull(7)?.toString().orEmpty()
+                    val uuid = inflowsUuids.getOrNull(i)?.firstOrNull()?.toString()?.trim()?.takeIf { it.isNotBlank() }
+
+                    val isBlankRow = dateSerial == null && reason.isBlank() && amountReceived == 0.0
+                    if (!isBlankRow) {
+                        inflowsList.add(
+                            LedgerInflowRow(
+                                rowNumber = i + 4,
+                                dateSerial = dateSerial,
+                                timeSerial = timeSerial,
+                                account = account,
+                                inflowType = inflowType,
+                                sender = sender,
+                                reason = reason,
+                                amountReceived = amountReceived,
+                                linkedDebits = linkedDebits,
+                                uuid = uuid
+                            )
+                        )
+                    }
+                }
+
                 val payablesList = mutableListOf<LedgerPayableRow>()
                 for (i in payablesData.indices) {
                     val row = payablesData[i]
@@ -1734,7 +1772,8 @@ open class GoogleSheetsClient(
                         tabName = tab,
                         sheetId = sheetId,
                         debits = debitsList,
-                        payables = payablesList
+                        payables = payablesList,
+                        inflows = inflowsList
                     )
                 )
             }

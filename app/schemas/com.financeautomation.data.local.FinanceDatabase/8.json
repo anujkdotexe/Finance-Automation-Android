@@ -1,0 +1,1007 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 8,
+    "identityHash": "fbf7c1d51d430abfb9c4a9157e3a6283",
+    "entities": [
+      {
+        "tableName": "transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `dateSerial` INTEGER NOT NULL, `timeSerial` REAL NOT NULL, `account` TEXT NOT NULL, `merchant` TEXT NOT NULL, `tripTag` TEXT NOT NULL, `category` TEXT NOT NULL, `totalAmount` REAL NOT NULL, `companions` TEXT NOT NULL, `myShare` REAL NOT NULL, `owedToMe` REAL NOT NULL, `status` TEXT NOT NULL, `sourcePackage` TEXT NOT NULL, `reviewState` TEXT NOT NULL, `syncState` TEXT NOT NULL, `sheetRowIndex` INTEGER, `isPossibleDuplicate` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateSerial",
+            "columnName": "dateSerial",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timeSerial",
+            "columnName": "timeSerial",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "account",
+            "columnName": "account",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "merchant",
+            "columnName": "merchant",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tripTag",
+            "columnName": "tripTag",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalAmount",
+            "columnName": "totalAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "companions",
+            "columnName": "companions",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "myShare",
+            "columnName": "myShare",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "owedToMe",
+            "columnName": "owedToMe",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePackage",
+            "columnName": "sourcePackage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reviewState",
+            "columnName": "reviewState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sheetRowIndex",
+            "columnName": "sheetRowIndex",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isPossibleDuplicate",
+            "columnName": "isPossibleDuplicate",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_transactions_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          },
+          {
+            "name": "index_transactions_reviewState",
+            "unique": false,
+            "columnNames": [
+              "reviewState"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_reviewState` ON `${TABLE_NAME}` (`reviewState`)"
+          },
+          {
+            "name": "index_transactions_syncState",
+            "unique": false,
+            "columnNames": [
+              "syncState"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_syncState` ON `${TABLE_NAME}` (`syncState`)"
+          },
+          {
+            "name": "index_transactions_sheetRowIndex",
+            "unique": false,
+            "columnNames": [
+              "sheetRowIndex"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_sheetRowIndex` ON `${TABLE_NAME}` (`sheetRowIndex`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "companions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `isSelected` INTEGER NOT NULL, `balance` REAL NOT NULL, `lastSplitTimestamp` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL DEFAULT 0, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isSelected",
+            "columnName": "isSelected",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "balance",
+            "columnName": "balance",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSplitTimestamp",
+            "columnName": "lastSplitTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_companions_name",
+            "unique": true,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_companions_name` ON `${TABLE_NAME}` (`name`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "categories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `isDefault` INTEGER NOT NULL, `isExcludedFromLivingBurn` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, `displayOrder` INTEGER NOT NULL, `iconName` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isExcludedFromLivingBurn",
+            "columnName": "isExcludedFromLivingBurn",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayOrder",
+            "columnName": "displayOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "iconName",
+            "columnName": "iconName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_categories_name",
+            "unique": true,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_categories_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_categories_displayOrder",
+            "unique": false,
+            "columnNames": [
+              "displayOrder"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_categories_displayOrder` ON `${TABLE_NAME}` (`displayOrder`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "sync_queue",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `transactionId` TEXT NOT NULL, `operationType` TEXT NOT NULL, `payloadJson` TEXT NOT NULL, `retryCount` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `status` TEXT NOT NULL, `planJson` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transactionId",
+            "columnName": "transactionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationType",
+            "columnName": "operationType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payloadJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "retryCount",
+            "columnName": "retryCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "planJson",
+            "columnName": "planJson",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_queue_transactionId",
+            "unique": false,
+            "columnNames": [
+              "transactionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_queue_transactionId` ON `${TABLE_NAME}` (`transactionId`)"
+          },
+          {
+            "name": "index_sync_queue_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_queue_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_sync_queue_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_queue_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "accounts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `lastFourDigits` TEXT, `isDefault` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, `displayOrder` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastFourDigits",
+            "columnName": "lastFourDigits",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayOrder",
+            "columnName": "displayOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_accounts_name",
+            "unique": true,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_accounts_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_accounts_displayOrder",
+            "unique": false,
+            "columnNames": [
+              "displayOrder"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_accounts_displayOrder` ON `${TABLE_NAME}` (`displayOrder`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "trip_tags",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trip_tags_name",
+            "unique": true,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_trip_tags_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_trip_tags_isActive",
+            "unique": false,
+            "columnNames": [
+              "isActive"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trip_tags_isActive` ON `${TABLE_NAME}` (`isActive`)"
+          },
+          {
+            "name": "index_trip_tags_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trip_tags_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "preferences_table",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "lineage",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uuid` TEXT NOT NULL, `carried_from_uuid` TEXT NOT NULL, `root_uuid` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`uuid`))",
+        "fields": [
+          {
+            "fieldPath": "uuid",
+            "columnName": "uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "carriedFromUuid",
+            "columnName": "carried_from_uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rootUuid",
+            "columnName": "root_uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "uuid"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "pending_captures",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sourcePackage` TEXT NOT NULL, `amount` REAL, `payee` TEXT NOT NULL, `inferredAccount` TEXT, `timestamp` INTEGER NOT NULL, `kind` TEXT NOT NULL, `flags` TEXT NOT NULL DEFAULT '', `state` TEXT NOT NULL, `notificationKey` TEXT, `contentHash` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePackage",
+            "columnName": "sourcePackage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "payee",
+            "columnName": "payee",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "inferredAccount",
+            "columnName": "inferredAccount",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "flags",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationKey",
+            "columnName": "notificationKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "contentHash",
+            "columnName": "contentHash",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "handled_notifications",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `postTime` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `handledAt` INTEGER NOT NULL, PRIMARY KEY(`key`, `postTime`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "postTime",
+            "columnName": "postTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentHash",
+            "columnName": "contentHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "handledAt",
+            "columnName": "handledAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key",
+            "postTime"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "category_stats",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`payeeKey` TEXT NOT NULL, `category` TEXT NOT NULL, `count` INTEGER NOT NULL, `lastUsed` INTEGER NOT NULL, PRIMARY KEY(`payeeKey`, `category`))",
+        "fields": [
+          {
+            "fieldPath": "payeeKey",
+            "columnName": "payeeKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "count",
+            "columnName": "count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUsed",
+            "columnName": "lastUsed",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "payeeKey",
+            "category"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "pipeline_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `time` INTEGER NOT NULL, `stage` TEXT NOT NULL, `code` TEXT NOT NULL, `a` INTEGER, `b` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "time",
+            "columnName": "time",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stage",
+            "columnName": "stage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "a",
+            "columnName": "a",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "b",
+            "columnName": "b",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_pipeline_events_time",
+            "unique": false,
+            "columnNames": [
+              "time"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_pipeline_events_time` ON `${TABLE_NAME}` (`time`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "payables",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uuid` TEXT NOT NULL, `dateIncurredSerial` INTEGER, `timeSerial` REAL, `paidBy` TEXT NOT NULL, `whatFor` TEXT NOT NULL, `amountIOwe` REAL NOT NULL, `dateRepaidSerial` INTEGER, `repaymentStatus` TEXT NOT NULL, `tabName` TEXT NOT NULL, `sheetRowIndex` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`uuid`))",
+        "fields": [
+          {
+            "fieldPath": "uuid",
+            "columnName": "uuid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateIncurredSerial",
+            "columnName": "dateIncurredSerial",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timeSerial",
+            "columnName": "timeSerial",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "paidBy",
+            "columnName": "paidBy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "whatFor",
+            "columnName": "whatFor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amountIOwe",
+            "columnName": "amountIOwe",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateRepaidSerial",
+            "columnName": "dateRepaidSerial",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "repaymentStatus",
+            "columnName": "repaymentStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tabName",
+            "columnName": "tabName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sheetRowIndex",
+            "columnName": "sheetRowIndex",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "uuid"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_payables_uuid",
+            "unique": true,
+            "columnNames": [
+              "uuid"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_payables_uuid` ON `${TABLE_NAME}` (`uuid`)"
+          },
+          {
+            "name": "index_payables_paidBy",
+            "unique": false,
+            "columnNames": [
+              "paidBy"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_payables_paidBy` ON `${TABLE_NAME}` (`paidBy`)"
+          },
+          {
+            "name": "index_payables_repaymentStatus",
+            "unique": false,
+            "columnNames": [
+              "repaymentStatus"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_payables_repaymentStatus` ON `${TABLE_NAME}` (`repaymentStatus`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fbf7c1d51d430abfb9c4a9157e3a6283')"
+    ]
+  }
+}

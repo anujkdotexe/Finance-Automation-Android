@@ -73,12 +73,42 @@ object DatabaseMigrations {
         }
     }
 
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `payables` (
+                    `uuid` TEXT NOT NULL,
+                    `dateIncurredSerial` INTEGER,
+                    `timeSerial` REAL,
+                    `paidBy` TEXT NOT NULL,
+                    `whatFor` TEXT NOT NULL,
+                    `amountIOwe` REAL NOT NULL,
+                    `dateRepaidSerial` INTEGER,
+                    `repaymentStatus` TEXT NOT NULL,
+                    `tabName` TEXT NOT NULL,
+                    `sheetRowIndex` INTEGER,
+                    `updatedAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`uuid`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_payables_uuid` ON `payables` (`uuid`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_payables_paidBy` ON `payables` (`paidBy`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_payables_repaymentStatus` ON `payables` (`repaymentStatus`)")
+            db.execSQL("DELETE FROM companions WHERE LOWER(name) LIKE 'txn_%' OR LOWER(name) LIKE 'pay_%' OR LOWER(name) LIKE 'inf_%' OR LOWER(name) LIKE 'row_%'")
+            db.execSQL("UPDATE trip_tags SET isActive = 0, dirty = 1")
+            db.execSQL("UPDATE preferences_table SET value = NULL, dirty = 1 WHERE `key` = 'active_trip'")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_2_3,
         MIGRATION_3_4,
         MIGRATION_4_5,
         MIGRATION_5_6,
-        MIGRATION_6_7
+        MIGRATION_6_7,
+        MIGRATION_7_8
     )
 }
 
