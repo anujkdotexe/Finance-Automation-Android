@@ -59,5 +59,6 @@ data class PendingCaptureEntity(
 
         const val FLAG_NEEDS_AMOUNT: String = "NEEDS_AMOUNT"
         const val FLAG_POSSIBLE_DUPLICATE: String = "POSSIBLE_DUPLICATE"
+        const val FLAG_NEW_ACCOUNT: String = "NEW_ACCOUNT"
     }
 }

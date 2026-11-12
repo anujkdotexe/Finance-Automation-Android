@@ -45,7 +45,7 @@ sealed interface NotificationParseResult {
         val message: String,
         val sourcePackage: String,
         val wording: WordingClass = WordingClass.UNKNOWN,
-        val inferredAccount: String = CategoryConstants.ACCOUNT_SBI,
+        val inferredAccount: String = "Other",
         val kind: String = "DEBIT",
         val flags: String = "NEEDS_AMOUNT",
         val timestamp: Long = System.currentTimeMillis()
@@ -97,14 +97,11 @@ class ParseNotificationUseCase(
             return WordingClass.UNKNOWN
         }
 
-        fun inferAccount(
+        fun inferAccountWithFlag(
             text: String,
             configuredAccounts: List<String>,
-            defaultAccount: String = CategoryConstants.ACCOUNT_SBI
-        ): String {
-            if (configuredAccounts.isEmpty()) {
-                return RegexPatterns.extractAccount(text) ?: defaultAccount
-            }
+            defaultAccount: String = "Other"
+        ): Pair<String, Boolean> {
             val digitMatch = Regex("""(?i)(?:xx|x|ending\s+|a/c\s*no\.?\s*|\.\.)(\d{3,4})\b""").find(text)
             val extractedDigits = digitMatch?.groupValues?.get(1)
 
@@ -114,15 +111,29 @@ class ParseNotificationUseCase(
 
                 val wordPattern = Regex("""(?i)\b${Regex.escape(trimmedAccount)}\b""")
                 if (wordPattern.containsMatchIn(text)) {
-                    return trimmedAccount
+                    return Pair(trimmedAccount, false)
                 }
 
                 if (extractedDigits != null && trimmedAccount.contains(extractedDigits)) {
-                    return trimmedAccount
+                    return Pair(trimmedAccount, false)
                 }
             }
 
-            return RegexPatterns.extractAccount(text) ?: defaultAccount
+            // Check if text mentions an unconfigured/unknown account pattern (e.g. A/c XX4821 or HDFC Bank)
+            val extractedUnknown = RegexPatterns.extractAccount(text)
+            if (extractedUnknown != null) {
+                return Pair(extractedUnknown, true)
+            }
+
+            return Pair(defaultAccount, false)
+        }
+
+        fun inferAccount(
+            text: String,
+            configuredAccounts: List<String>,
+            defaultAccount: String = "Other"
+        ): String {
+            return inferAccountWithFlag(text, configuredAccounts, defaultAccount).first
         }
     }
 
@@ -133,7 +144,7 @@ class ParseNotificationUseCase(
         appName: String? = null,
         timestamp: Long = System.currentTimeMillis(),
         configuredAccounts: List<String> = emptyList(),
-        defaultAccount: String = CategoryConstants.ACCOUNT_SBI
+        defaultAccount: String = "Other"
     ): NotificationParseResult {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
@@ -204,7 +215,7 @@ class ParseNotificationUseCase(
         val kind = if (isCredit) "CREDIT" else "DEBIT"
 
         // 8. Funding account inference
-        val account = inferAccount(fullContent, configuredAccounts, defaultAccount)
+        val (account, isNewAccount) = inferAccountWithFlag(fullContent, configuredAccounts, defaultAccount)
 
         // 9. Amount extraction
         val amount = RegexPatterns.extractAmount(fullContent)
@@ -216,13 +227,14 @@ class ParseNotificationUseCase(
                     sourcePackage = sourcePackage
                 )
             }
+            val fallbackFlags = if (isNewAccount) "NEEDS_AMOUNT,NEW_ACCOUNT" else "NEEDS_AMOUNT"
             return NotificationParseResult.FallbackPrompt(
                 message = "Payment detected, tap to enter amount",
                 sourcePackage = sourcePackage,
                 wording = wording,
                 inferredAccount = account,
                 kind = kind,
-                flags = "NEEDS_AMOUNT",
+                flags = fallbackFlags,
                 timestamp = timestamp
             )
         }
@@ -258,12 +270,13 @@ class ParseNotificationUseCase(
             isPossibleDuplicate = false
         )
 
+        val flags = if (isNewAccount) "NEW_ACCOUNT" else ""
         return NotificationParseResult.Success(
             transaction = transaction,
             isDebit = isDebit,
             isCredit = isCredit,
             wording = wording,
-            flags = "",
+            flags = flags,
             inferredAccount = account
         )
     }

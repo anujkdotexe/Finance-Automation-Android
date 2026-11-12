@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
  */
 data class SettingsUiState(
     val spreadsheetId: String = "",
-    val defaultAccount: String = CategoryConstants.ACCOUNT_SBI,
+    val defaultAccount: String = "Other",
     val activeTripTag: String = "",
     val settleDelaySeconds: Int = 120,
     val googleAccountEmail: String? = null,

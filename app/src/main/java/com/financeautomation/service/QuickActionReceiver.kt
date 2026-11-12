@@ -79,7 +79,7 @@ class QuickActionReceiver : BroadcastReceiver() {
                     if (capture != null) {
                         val amount = capture.amount ?: 0.0
                         val resolvedCategory = category ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
-                        val account = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: CategoryConstants.ACCOUNT_SBI
+                        val account = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: "Other"
 
                         if (amount > 0.0) {
                             val logResult = container.logExpenseUseCase(

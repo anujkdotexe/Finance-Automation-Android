@@ -134,11 +134,11 @@ class NotificationProcessor(
             emptyList()
         }
         val defaultAccount: String = try {
-            preferenceDao?.getPreference("default_account") ?: CategoryConstants.ACCOUNT_SBI
+            preferenceDao?.getPreference("default_account") ?: "Other"
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: defaultAccount preference fallback")
-            CategoryConstants.ACCOUNT_SBI
+            "Other"
         }
 
         // 7. Parse financial alert candidate via domain ParseNotificationUseCase
@@ -172,7 +172,6 @@ class NotificationProcessor(
             }
             is NotificationParseResult.FallbackPrompt -> {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_UNREADABLE)
-                // Unreadable alert: amount = null, payee = "Unknown Payee", flags = NEEDS_AMOUNT
                 val outcome = handleCaptureDecision(
                     sourcePackage = sourcePackage,
                     amount = null,
@@ -180,7 +179,7 @@ class NotificationProcessor(
                     inferredAccount = parseResult.inferredAccount,
                     kind = parseResult.kind,
                     wording = parseResult.wording,
-                    flags = PendingCaptureEntity.FLAG_NEEDS_AMOUNT,
+                    flags = parseResult.flags,
                     postTime = postTime,
                     sbnKey = sbnKey,
                     contentHash = contentHash,
@@ -202,7 +201,7 @@ class NotificationProcessor(
                     inferredAccount = parseResult.inferredAccount,
                     kind = kind,
                     wording = parseResult.wording,
-                    flags = "",
+                    flags = parseResult.flags,
                     postTime = postTime,
                     sbnKey = sbnKey,
                     contentHash = contentHash,
