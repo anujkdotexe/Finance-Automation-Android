@@ -77,10 +77,16 @@ class AccountRepositoryImpl(
 
     override suspend fun insertAccount(account: Account): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
-        if (account.isDefault) {
+        val isFirstUserAccount = dao.count() <= 2 // Only Cash and Other existed
+        val effectiveAccount = if (isFirstUserAccount && !account.isDefault) {
+            account.copy(isDefault = true)
+        } else {
+            account
+        }
+        if (effectiveAccount.isDefault) {
             dao.clearDefaultFlag()
         }
-        dao.insert(AccountEntity.fromDomain(account))
+        dao.insert(AccountEntity.fromDomain(effectiveAccount))
         configSyncCoordinator?.schedulePush()
     }
 
@@ -111,7 +117,12 @@ class AccountRepositoryImpl(
     }
 
     override suspend fun deleteAccount(id: String): Unit = withContext(ioDispatcher) {
-        resolveDao().deleteById(id)
+        val dao = resolveDao()
+        val account = dao.getById(id)
+        if (account != null && (account.name.equals("Cash", ignoreCase = true) || account.name.equals("Other", ignoreCase = true))) {
+            return@withContext
+        }
+        dao.deleteById(id)
         configSyncCoordinator?.schedulePush()
     }
 

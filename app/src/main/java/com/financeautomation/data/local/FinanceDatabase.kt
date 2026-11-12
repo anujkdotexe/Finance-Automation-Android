@@ -290,36 +290,20 @@ abstract class FinanceDatabase : RoomDatabase() {
             if (accountDao.count() == 0) {
                 val presetAccounts = listOf(
                     AccountEntity(
-                        id = "acc_1",
-                        name = CategoryConstants.ACCOUNT_SBI,
-                        lastFourDigits = null,
-                        isDefault = true,
-                        isArchived = false,
-                        displayOrder = 0
-                    ),
-                    AccountEntity(
-                        id = "acc_2",
-                        name = CategoryConstants.ACCOUNT_CANARA,
-                        lastFourDigits = null,
-                        isDefault = false,
-                        isArchived = false,
-                        displayOrder = 1
-                    ),
-                    AccountEntity(
-                        id = "acc_3",
+                        id = "acc_cash",
                         name = "Cash",
                         lastFourDigits = null,
                         isDefault = false,
                         isArchived = false,
-                        displayOrder = 2
+                        displayOrder = 0
                     ),
                     AccountEntity(
-                        id = "acc_4",
+                        id = "acc_other",
                         name = "Other",
                         lastFourDigits = null,
                         isDefault = false,
                         isArchived = false,
-                        displayOrder = 3
+                        displayOrder = 1
                     )
                 )
                 accountDao.insertAll(presetAccounts)
@@ -330,7 +314,7 @@ abstract class FinanceDatabase : RoomDatabase() {
                 preferenceDao.setPreference(
                     PreferenceEntity(
                         key = "key_default_account",
-                        value = CategoryConstants.ACCOUNT_SBI
+                        value = "Other"
                     )
                 )
             }

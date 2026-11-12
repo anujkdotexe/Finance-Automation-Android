@@ -18,7 +18,7 @@ data class QuickLogUiState(
     val amountText: String = "",
     val amount: Double = 0.0,
     val payee: String = "",
-    val selectedAccount: String = CategoryConstants.ACCOUNT_SBI,
+    val selectedAccount: String = "Other",
     val selectedCategory: String = CategoryConstants.CATEGORY_FOOD_AND_DRINK,
     val splitMode: SplitMode = SplitMode.JUST_ME,
     val availableAccounts: List<Account> = emptyList(),

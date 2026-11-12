@@ -30,14 +30,10 @@ object CategoryConstants {
         CATEGORY_OTHER
     )
 
-    const val ACCOUNT_SBI: String = "SBI"
-    const val ACCOUNT_CANARA: String = "Canara"
     const val ACCOUNT_CASH: String = "Cash"
     const val ACCOUNT_OTHER: String = "Other"
 
     val DEFAULT_ACCOUNTS: List<String> = listOf(
-        ACCOUNT_SBI,
-        ACCOUNT_CANARA,
         ACCOUNT_CASH,
         ACCOUNT_OTHER
     )
