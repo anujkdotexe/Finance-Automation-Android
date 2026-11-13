@@ -31,12 +31,14 @@ object SheetProvisioner {
     /** Sheets API pixelSize is in pixels; the iOS reference gives row heights in points (1 pixel = 0.75 point). */
     fun pointsToPixels(points: Double): Int = Math.round(points / 0.75).toInt()
 
-    /** Dashboard row heights from the iOS reference: start row, end row (exclusive), 0-based, and points. */
+    /**
+     * Dashboard row heights from the live iOS workbook: start row, end row (exclusive), 0-based, and points.
+     * Row 3 and rows after 36 have no custom height and stay unset.
+     */
     val DASHBOARD_ROW_HEIGHT_POINTS: List<Triple<Int, Int, Double>> = listOf(
-        Triple(0, 1, 24.0), Triple(1, 2, 13.5), Triple(2, 3, 14.0), Triple(3, 4, 10.5),
+        Triple(0, 1, 24.0), Triple(1, 2, 13.5), Triple(3, 4, 14.25),
         Triple(4, 5, 21.0), Triple(5, 6, 16.5), Triple(6, 7, 12.75), Triple(7, 23, 13.5),
-        Triple(23, 24, 18.0), Triple(24, 25, 16.5), Triple(25, 26, 21.0), Triple(26, 36, 15.0),
-        Triple(36, 37, 12.5)
+        Triple(23, 24, 18.0), Triple(24, 25, 16.5), Triple(25, 26, 21.0), Triple(26, 36, 15.0)
     )
 
     /** Month tab row heights from the iOS reference (rows 4 to 1000 are 12.5 points). */
@@ -863,7 +865,7 @@ object SheetProvisioner {
 
         // 12. Dashboard Column Widths (matching iOS master reference)
         val dashboardColWidths = listOf(
-            0 to 68, 1 to 68, 2 to 68, 3 to 68, 4 to 93, 5 to 68, 6 to 10, 7 to 104, 8 to 59,
+            0 to 383, 1 to 68, 2 to 68, 3 to 68, 4 to 93, 5 to 68, 6 to 10, 7 to 104, 8 to 59,
             9 to 71, 10 to 84, 11 to 68, 12 to 68, 13 to 68, 14 to 68, 15 to 68, 16 to 68, 17 to 68,
             18 to 85, 19 to 20, 20 to 85, 21 to 98, 22 to 144, 23 to 96, 24 to 104, 25 to 85,
             26 to 85, 27 to 85, 28 to 85

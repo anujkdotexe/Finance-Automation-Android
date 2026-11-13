@@ -65,8 +65,14 @@ class SheetDimensionsTest {
     @Test
     fun testDashboardRowHeightsMatchIosReference() {
         val d = dims(SheetProvisioner.buildDashboardRequests(dashboardSheetId = 4), 4)
-        val expectedRows1To7 = listOf(32, 18, 19, 14, 28, 22, 17)
-        expectedRows1To7.forEachIndexed { i, px -> assertEquals("row ${i + 1}", px, d.pixelsFor("ROWS", i)) }
+        // Live iOS rows 1 to 7: 24, 13.5, default, 14.25, 21, 16.5, 12.75 points
+        assertEquals(32, d.pixelsFor("ROWS", 0))
+        assertEquals(18, d.pixelsFor("ROWS", 1))
+        assertEquals(null, d.pixelsFor("ROWS", 2))
+        assertEquals(19, d.pixelsFor("ROWS", 3))
+        assertEquals(28, d.pixelsFor("ROWS", 4))
+        assertEquals(22, d.pixelsFor("ROWS", 5))
+        assertEquals(17, d.pixelsFor("ROWS", 6))
         assertEquals(18, d.pixelsFor("ROWS", 7))
         assertEquals(18, d.pixelsFor("ROWS", 22))
         assertEquals(24, d.pixelsFor("ROWS", 23))
@@ -74,18 +80,20 @@ class SheetDimensionsTest {
         assertEquals(28, d.pixelsFor("ROWS", 25))
         assertEquals(20, d.pixelsFor("ROWS", 26))
         assertEquals(20, d.pixelsFor("ROWS", 35))
-        assertEquals(17, d.pixelsFor("ROWS", 36))
+        assertEquals(null, d.pixelsFor("ROWS", 36))
     }
 
     @Test
     fun testDashboardColumnWidthsMatchIosReference() {
         val d = dims(SheetProvisioner.buildDashboardRequests(dashboardSheetId = 4), 4)
-        assertEquals(68, d.pixelsFor("COLUMNS", 0))
-        assertEquals(68, d.pixelsFor("COLUMNS", 1)) // B shares the A width in iOS
+        // Live column A is 48.0 characters wide (383 px with the calibration N / 8 + 0.125); B to D are 8.6
+        assertEquals(383, d.pixelsFor("COLUMNS", 0))
+        assertEquals(68, d.pixelsFor("COLUMNS", 1))
+        assertEquals(68, d.pixelsFor("COLUMNS", 3))
         assertEquals(93, d.pixelsFor("COLUMNS", 4))
         assertEquals(10, d.pixelsFor("COLUMNS", 6))
         assertEquals(68, d.pixelsFor("COLUMNS", 12)) // M shares the L width in iOS
         assertEquals(144, d.pixelsFor("COLUMNS", 22))
-        assertFalse(d.any { it.dimension == "COLUMNS" && it.pixels > 200 })
+        assertFalse(d.any { it.dimension == "COLUMNS" && it.start != 0 && it.pixels > 200 })
     }
 }
