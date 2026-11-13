@@ -229,9 +229,16 @@ class ParseNotificationUseCase(
             )
         }
 
-        // 6b. Promotions and reminders are ignored unless the text confirms a completed payment with an amount
-        if (!RegexPatterns.hasConfirmation(fullContent) && RegexPatterns.isPromotional(fullContent)) {
-            return NotificationParseResult.Dropped(reason = DropReason.PROMOTIONAL, sourcePackage = sourcePackage)
+        // 6b. Promotions and reminders are ignored. A text that confirms a completed payment with an amount is kept.
+        // Soft words (bill, recharge, EMI, due, earn, win, loan) are promotional only without success wording.
+        if (!RegexPatterns.hasConfirmation(fullContent)) {
+            val successWithAmount = wording == WordingClass.SUCCESS && RegexPatterns.extractAmount(fullContent) != null
+            val hard = RegexPatterns.isHardPromotional(fullContent)
+            val soft = RegexPatterns.isSoftPromotional(fullContent) &&
+                !RegexPatterns.isPaymentSuccessful(fullContent) && !successWithAmount
+            if (hard || soft) {
+                return NotificationParseResult.Dropped(reason = DropReason.PROMOTIONAL, sourcePackage = sourcePackage)
+            }
         }
 
         // 6c. Payment apps must show success (or in-progress) wording and a known direction
@@ -247,8 +254,9 @@ class ParseNotificationUseCase(
             }
         }
 
-        // 7. Direction discrimination
-        val isCredit = RegexPatterns.isCredit(fullContent)
+        // 7. Direction discrimination. A paid or debited amount wins over an advertised cashback or "added" wording.
+        // (SMS keep the older rule: fixture 24 in sms_fixtures.json expects an ATM withdrawal to read as credit)
+        val isCredit = RegexPatterns.isCredit(fullContent) && (isSms || !RegexPatterns.hasDebitConfirmation(fullContent))
         val isDebit = RegexPatterns.isDebit(fullContent) || !isCredit
         val kind = if (isCredit) "CREDIT" else "DEBIT"
 
