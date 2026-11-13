@@ -3,13 +3,19 @@ package com.financeautomation.presentation.components
 import android.content.res.Configuration
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.sp
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.core.utils.formatRupeesCompact
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 
@@ -42,21 +48,42 @@ fun AmountText(
         AmountTone.INFO -> FinanceTheme.colors.info
     }
 
-    val formatted = if (includeDecimals == null) {
+    val exactFormatted = if (includeDecimals == null) {
         formatRupeesAuto(amount)
     } else {
         formatRupees(amount, includeDecimals)
     }
-    val displayText = if (prefix.isNotBlank() && !formatted.startsWith("-")) "$prefix$formatted" else formatted
+    val exactText = if (prefix.isNotBlank() && !exactFormatted.startsWith("-")) "$prefix$exactFormatted" else exactFormatted
+    val compactFormatted = formatRupeesCompact(amount)
+    val compactText = if (prefix.isNotBlank() && !compactFormatted.startsWith("-")) "$prefix$compactFormatted" else compactFormatted
+
+    val floorFontSize = 10.sp
+    var fontSize by remember(exactText) { mutableStateOf(style.fontSize) }
+    var useCompact by remember(exactText) { mutableStateOf(false) }
+    var allowWrap by remember(exactText) { mutableStateOf(false) }
+
+    val currentText = if (useCompact) compactText else exactText
 
     Text(
-        text = displayText,
-        style = style,
+        text = currentText,
+        style = style.copy(fontSize = fontSize),
         color = color,
-        maxLines = 1,
-        softWrap = false,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier
+        maxLines = if (allowWrap) 2 else 1,
+        softWrap = allowWrap,
+        overflow = TextOverflow.Clip,
+        modifier = modifier,
+        onTextLayout = { textLayoutResult ->
+            if (textLayoutResult.didOverflowWidth) {
+                if (fontSize.value > floorFontSize.value) {
+                    fontSize = (fontSize.value - 1f).sp
+                } else if (!useCompact && exactText != compactText) {
+                    useCompact = true
+                    fontSize = style.fontSize
+                } else if (!allowWrap) {
+                    allowWrap = true
+                }
+            }
+        }
     )
 }
 

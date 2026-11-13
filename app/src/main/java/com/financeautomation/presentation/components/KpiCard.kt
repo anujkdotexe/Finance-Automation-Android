@@ -80,7 +80,7 @@ fun ShrinkToFitAmount(
         color = color,
         maxLines = 1,
         softWrap = false,
-        overflow = TextOverflow.Ellipsis,
+        overflow = TextOverflow.Clip,
         modifier = modifier,
         onTextLayout = { textLayoutResult ->
             if (textLayoutResult.didOverflowWidth) {

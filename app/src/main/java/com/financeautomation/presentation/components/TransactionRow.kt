@@ -122,7 +122,7 @@ fun TransactionRow(
                     style = FinanceTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Clip
                 )
             } else if (status.isNotBlank()) {
                 StatusChip(status = status)
@@ -233,7 +233,7 @@ fun InflowRow(
                     style = FinanceTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Clip
                 )
 
                 Row(
