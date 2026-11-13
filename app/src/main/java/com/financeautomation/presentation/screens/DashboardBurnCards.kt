@@ -270,7 +270,7 @@ fun OwedSummarySection(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.CallReceived,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = if (owedToMe > 0.0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -279,7 +279,7 @@ fun OwedSummarySection(
 
             AmountText(
                 amount = owedToMe,
-                tone = AmountTone.MONEY_IN,
+                tone = if (owedToMe > 0.0) AmountTone.MONEY_IN else AmountTone.DEFAULT,
                 style = FinanceTheme.typography.kpiMedium
             )
 
@@ -329,7 +329,7 @@ fun OwedSummarySection(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.CallMade,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = if (iOwePeople > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -338,7 +338,7 @@ fun OwedSummarySection(
 
             AmountText(
                 amount = iOwePeople,
-                tone = AmountTone.MONEY_OUT,
+                tone = if (iOwePeople > 0.0) AmountTone.MONEY_OUT else AmountTone.DEFAULT,
                 style = FinanceTheme.typography.kpiMedium
             )
 
