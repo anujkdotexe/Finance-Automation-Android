@@ -265,7 +265,9 @@ class MainActivity : FragmentActivity() {
     private fun extractRouteFromIntent(intent: Intent?) {
         val extraRoute = intent?.getStringExtra("extra_route")
         val dataUriString = intent?.dataString
-        val validatedRoute = MainRouteValidator.resolveRoute(extraRoute, dataUriString)
+        val validatedRoute = MainRouteValidator.resolveRoute(
+            extraRoute, dataUriString, internal = InternalIntentAuth.isInternal(intent, packageName)
+        )
         if (validatedRoute != null) {
             pendingRoute = validatedRoute
         }
