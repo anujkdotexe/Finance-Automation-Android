@@ -485,4 +485,41 @@ class QuickLogViewModelTest {
         assertEquals(200.0, vm.uiState.value.customShare!!, 0.001)
         assertEquals(300.0, vm.uiState.value.owedToMe, 0.001)
     }
+
+    @Test
+    fun testCustomSplit_withOwedAmountAndNoCompanions_saveIsDisabled() = runTest {
+        val repo = FakeTransactionRepo()
+        val peopleRepo = FakePeopleRepo()
+        val vm = QuickLogViewModel(
+            transactionRepository = repo,
+            peopleRepository = peopleRepo,
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.onAmountChanged("500")
+        vm.onSplitModeChanged(SplitMode.CUSTOM)
+        vm.onCustomShareChanged("200") // Owed = 300, no companion selected
+
+        assertEquals(false, vm.uiState.value.isSaveEnabled)
+        vm.onConfirmAndSave { }
+        advanceUntilIdle()
+        assertTrue("No transaction should be saved when custom split owes money without companions", repo.inserted.isEmpty())
+
+        // Now select a companion -> Save becomes enabled
+        vm.onCompanionToggled("1")
+        advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.isSaveEnabled)
+
+        // Deselect companion, but set custom share equal to total amount (owed = 0) -> Save becomes enabled
+        vm.onCompanionToggled("1")
+        vm.onCustomShareChanged("500")
+        advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.isSaveEnabled)
+    }
 }
