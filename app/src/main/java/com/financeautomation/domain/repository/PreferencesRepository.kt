@@ -165,6 +165,21 @@ interface PreferencesRepository {
     suspend fun deletePreference(key: String)
 
     /**
+     * Keys of recurring payment suggestions the owner dismissed (the normalised description of the payment).
+     * Stored as one comma separated preference so it also travels with the Config tab mirror.
+     */
+    suspend fun getDismissedRecurring(): Set<String> =
+        getPreference(DISMISSED_RECURRING_KEY).orEmpty().split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+
+    /** Adds [key] to the dismissed recurring suggestions. Blank keys and keys with a comma are ignored. */
+    suspend fun addDismissedRecurring(key: String) {
+        val clean = key.trim()
+        if (clean.isEmpty() || clean.contains(",")) return
+        val updated = getDismissedRecurring() + clean
+        setPreference(DISMISSED_RECURRING_KEY, updated.sorted().joinToString(","))
+    }
+
+    /**
      * Observes the local time (HH:mm, Asia/Kolkata) at which subscription reminders run (default 21:00).
      * The default implementation is built on [getPreference]; implementations backed by a database override it.
      */
@@ -184,6 +199,7 @@ interface PreferencesRepository {
 
     companion object {
         const val KEY_SUBSCRIPTION_REMINDER_TIME: String = "subscription_reminder_time"
+        const val DISMISSED_RECURRING_KEY: String = "dismissed_recurring"
         const val DEFAULT_SUBSCRIPTION_REMINDER_TIME: String = "21:00"
 
         /** Returns the zero padded HH:mm form of [raw], or null when it is not a valid time. */
