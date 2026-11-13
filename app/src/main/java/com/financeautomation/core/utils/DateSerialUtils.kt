@@ -16,6 +16,9 @@ import kotlin.math.roundToLong
  */
 object DateSerialUtils {
 
+    /** The one zone the ledger uses for tabs, dates and times, whatever the phone is set to. */
+    val SHEET_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
+
     val SHEETS_EPOCH: LocalDate = LocalDate.of(1899, 12, 30)
     const val SECONDS_PER_DAY: Double = 86400.0
 
@@ -73,30 +76,30 @@ object DateSerialUtils {
     }
 
     /**
-     * Converts epoch milliseconds to a [LocalDate] using the specified time zone.
+     * Converts epoch milliseconds to a [LocalDate] in the sheet zone (Asia/Kolkata).
      */
-    fun toLocalDate(epochMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): LocalDate {
-        return Instant.ofEpochMilli(epochMillis).atZone(zoneId).toLocalDate()
+    fun toLocalDate(epochMillis: Long): LocalDate {
+        return Instant.ofEpochMilli(epochMillis).atZone(SHEET_ZONE).toLocalDate()
     }
 
     /**
-     * Converts epoch milliseconds to a [LocalTime] using the specified time zone.
+     * Converts epoch milliseconds to a [LocalTime] in the sheet zone (Asia/Kolkata).
      */
-    fun toLocalTime(epochMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): LocalTime {
-        return Instant.ofEpochMilli(epochMillis).atZone(zoneId).toLocalTime()
+    fun toLocalTime(epochMillis: Long): LocalTime {
+        return Instant.ofEpochMilli(epochMillis).atZone(SHEET_ZONE).toLocalTime()
     }
 
     /**
      * Converts epoch milliseconds directly to an integer date serial.
      */
-    fun toDateSerial(epochMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): Int {
-        return toDateSerial(toLocalDate(epochMillis, zoneId))
+    fun toDateSerial(epochMillis: Long): Int {
+        return toDateSerial(toLocalDate(epochMillis))
     }
 
     /**
      * Converts epoch milliseconds directly to a fractional time serial.
      */
-    fun toTimeSerial(epochMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): Double {
-        return toTimeSerial(toLocalTime(epochMillis, zoneId))
+    fun toTimeSerial(epochMillis: Long): Double {
+        return toTimeSerial(toLocalTime(epochMillis))
     }
 }

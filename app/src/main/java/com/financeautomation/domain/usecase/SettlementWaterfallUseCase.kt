@@ -52,7 +52,11 @@ class SettlementWaterfallUseCase {
         val handledKeys = mutableSetOf<RowKey>()
 
         // Working copy of debits to reflect sequential in-memory modifications
-        val workingDebits = allDebits.map { it.copy() }.toMutableList()
+        // Oldest first: order by date then time, undated rows last, and keep the snapshot order for ties
+        val workingDebits = allDebits
+            .map { it.copy() }
+            .sortedWith(compareBy<LedgerDebit>({ it.dateSerial ?: Int.MAX_VALUE }, { it.timeSerial ?: Double.MAX_VALUE }))
+            .toMutableList()
 
         fun findWorkingRow(tab: String, row: Int): Int {
             return workingDebits.indexOfFirst { it.tab == tab && it.row == row }

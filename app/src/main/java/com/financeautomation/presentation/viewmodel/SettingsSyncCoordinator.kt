@@ -66,6 +66,12 @@ class SettingsSyncCoordinator(
             }
             syncConfigUseCase?.pull()
             autoProvisionMasterSheet()
+            // A run paused by an expired sign-in left its items pending; resume them now
+            try {
+                transactionRepository?.syncPendingTransactions()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
         }
     }
 

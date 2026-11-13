@@ -44,6 +44,22 @@ class AuthExpiredException(message: String) : GoogleSheetsException(message)
 class MalformedResponseException(message: String, cause: Throwable? = null) : GoogleSheetsException(message, cause)
 class GoogleSheetsApiException(val statusCode: Int, message: String, val apiError: GoogleApiError? = null) : GoogleSheetsException(message)
 
+private val RATE_LIMIT_REASONS = setOf("ratelimitexceeded", "userratelimitexceeded", "quotaexceeded", "sharingratelimitexceeded")
+
+/**
+ * True when the same request is worth repeating later: server errors, 408 timeouts, 429 and a 403 whose reason says
+ * the quota or rate limit was hit. A plain 403 (permission) is not retryable.
+ */
+fun GoogleSheetsApiException.isRetryable(): Boolean = when (statusCode) {
+    in 500..599, 408, 429 -> true
+    403 -> apiError?.reason?.lowercase() in RATE_LIMIT_REASONS
+    else -> false
+}
+
+/** True when waiting is the right answer for the whole run, not only this item (limits, timeouts, unavailable). */
+fun GoogleSheetsApiException.isRunWideBackoff(): Boolean = statusCode == 408 || statusCode == 429 || statusCode == 503 ||
+    (statusCode == 403 && isRetryable())
+
 internal fun createHttpException(
     code: Int,
     body: String,
@@ -548,7 +564,9 @@ open class GoogleSheetsClient(
         tabName: String,
         dateSerial: Int,
         timeSerial: Double,
-        amount: Double
+        amount: Double,
+        account: String? = null,
+        description: String? = null
     ): Result<Int?> = withContext(Dispatchers.IO) {
         try {
             val dataResult = getRangeValuesRaw(spreadsheetId, "'$tabName'!A4:G")
@@ -574,7 +592,12 @@ open class GoogleSheetsClient(
                     val amountMatches = Math.abs(rowAmount - amount) < 0.01
                     val rowSeconds = Math.round(rowTime * 86400.0)
                     val timeMatches = targetSeconds == rowSeconds
-                    if (dateMatches && amountMatches && timeMatches) {
+                    // A row typed by hand can share date, time and amount; account and description tell them apart
+                    val accountMatches = account == null ||
+                        row.getOrNull(2)?.toString().orEmpty().trim().equals(account.trim(), ignoreCase = true)
+                    val descriptionMatches = description == null ||
+                        row.getOrNull(3)?.toString().orEmpty().trim().equals(description.trim(), ignoreCase = true)
+                    if (dateMatches && amountMatches && timeMatches && accountMatches && descriptionMatches) {
                         return@withContext Result.Success(i + 4)
                     }
                 }
