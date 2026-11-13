@@ -230,6 +230,7 @@
     <string name="action_retry">Retry</string>
     <string name="action_discard">Discard</string>
     <string name="action_not_yet">Not yet</string>
+    <string name="action_skip">Skip</string>
     <string name="action_skip_this_time">Skip</string>
     <string name="action_confirm_all">Confirm all</string>
     <string name="action_clear_search">Clear search</string>
