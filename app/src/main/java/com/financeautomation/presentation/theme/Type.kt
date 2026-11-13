@@ -148,6 +148,7 @@ data class FinanceTypography(
     ),
     val amountHero: TextStyle = kpiLarge,
     val amountLarge: TextStyle = kpiMedium,
+    val amountMedium: TextStyle = kpiMedium,
     val titleMedium: TextStyle = Typography.titleMedium,
     val bodyMedium: TextStyle = Typography.bodyMedium,
     val labelMedium: TextStyle = Typography.labelMedium,
