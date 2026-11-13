@@ -15,9 +15,13 @@ import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.domain.model.Budget
 import com.financeautomation.domain.model.Inflow
+import com.financeautomation.domain.usecase.BudgetProgress
+import com.financeautomation.domain.usecase.BudgetProgressUseCase
 import com.financeautomation.domain.usecase.LivingBurn
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.PreferencesRepository
@@ -43,7 +47,8 @@ import java.util.TimeZone
 data class CategorySpend(
     val category: String,
     val amount: Double,
-    val percentage: Float
+    val percentage: Float,
+    val budgetProgress: BudgetProgress? = null
 )
 
 /**
@@ -114,6 +119,8 @@ class DashboardViewModel(
     private val inflowRepository: InflowRepository? = null,
     private val onlineState: Flow<Boolean>? = null,
     private val preferencesRepository: PreferencesRepository? = null,
+    private val budgetRepository: BudgetRepository? = null,
+    private val budgetProgressUseCase: BudgetProgressUseCase = BudgetProgressUseCase(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -285,6 +292,7 @@ class DashboardViewModel(
             val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
             val needsReviewCapturesFlow = pendingCaptureDao?.getNeedsReviewCapturesFlow() ?: flowOf(emptyList())
             val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
+            val budgetsFlow = budgetRepository?.observeBudgets() ?: flowOf(emptyList())
 
             combine(
                 transactionRepository.getTransactions(),
@@ -294,7 +302,8 @@ class DashboardViewModel(
                 needsReviewCapturesFlow,
                 monthOffsetFlow,
                 onlineState ?: flowOf(true),
-                inflowsFlow
+                inflowsFlow,
+                budgetsFlow
             ) { flows ->
                 @Suppress("UNCHECKED_CAST")
                 val transactions = flows[0] as List<Transaction>
@@ -310,6 +319,8 @@ class DashboardViewModel(
                 val isOnline = flows[6] as Boolean
                 @Suppress("UNCHECKED_CAST")
                 val inflows = flows[7] as List<Inflow>
+                @Suppress("UNCHECKED_CAST")
+                val budgets = flows[8] as List<Budget>
 
                 calculateDashboardMetrics(
                     transactions = transactions,
@@ -318,7 +329,8 @@ class DashboardViewModel(
                     categories = categories,
                     needsReviewCaptures = needsReviewCaptures,
                     monthOffset = monthOffset,
-                    inflows = inflows
+                    inflows = inflows,
+                    budgets = budgets
                 ).copy(
                     isOffline = !isOnline,
                     queuedItems = buildQueuedItems(transactions, queueItems)
@@ -373,7 +385,8 @@ class DashboardViewModel(
         categories: List<com.financeautomation.domain.model.Category> = emptyList(),
         needsReviewCaptures: List<PendingCaptureEntity> = emptyList(),
         monthOffset: Int,
-        inflows: List<Inflow> = emptyList()
+        inflows: List<Inflow> = emptyList(),
+        budgets: List<Budget> = emptyList()
     ): DashboardUiState {
         // The living burn rule lives in LivingBurn so budgets and the widget use exactly the same one
         val excludedCategoryNames: Set<String> = LivingBurn.excludedNames(categories)
@@ -389,6 +402,8 @@ class DashboardViewModel(
             set(Calendar.MILLISECOND, 0)
         }
         val startOfMonth = cal.timeInMillis
+        val selectedYear = cal.get(Calendar.YEAR)
+        val selectedMonth = cal.get(Calendar.MONTH) + 1
 
         val monthLabelFormat = SimpleDateFormat("MMMM yyyy", Locale.US).apply {
             timeZone = kolkataTz
@@ -500,10 +515,28 @@ class DashboardViewModel(
 
         val dailyAverage = LivingBurn.dailyAverage(currentBurn, daysElapsed)
 
+        val budgetProgressMap = if (budgets.isNotEmpty()) {
+            budgetProgressUseCase.forMonth(
+                year = selectedYear,
+                month = selectedMonth,
+                budgets = budgets,
+                transactions = transactions,
+                categories = categories
+            ).associateBy { it.category.trim().lowercase() }
+        } else {
+            emptyMap()
+        }
+
         val allCategories = categorySums.entries
             .map { (cat, sum) ->
                 val pct = if (currentBurn > 0.0) (sum / currentBurn).toFloat().coerceIn(0f, 1f) else 0f
-                CategorySpend(category = cat, amount = sum, percentage = pct)
+                val progress = budgetProgressMap[cat.trim().lowercase()]
+                CategorySpend(
+                    category = cat,
+                    amount = sum,
+                    percentage = pct,
+                    budgetProgress = progress
+                )
             }
             .sortedByDescending { it.amount }
 
@@ -611,6 +644,8 @@ class DashboardViewModel(
             pendingCaptureDao: PendingCaptureDao? = null,
             categoryRepository: CategoryRepository? = null,
             inflowRepository: InflowRepository? = null,
+            budgetRepository: BudgetRepository? = null,
+            budgetProgressUseCase: BudgetProgressUseCase = BudgetProgressUseCase(),
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -622,6 +657,8 @@ class DashboardViewModel(
                     directPendingCaptureDao = pendingCaptureDao,
                     categoryRepository = categoryRepository,
                     inflowRepository = inflowRepository,
+                    budgetRepository = budgetRepository,
+                    budgetProgressUseCase = budgetProgressUseCase,
                     ioDispatcher = ioDispatcher
                 ) as T
             }
@@ -636,6 +673,8 @@ class DashboardViewModel(
             inflowRepository: InflowRepository? = null,
             onlineState: Flow<Boolean>? = null,
             preferencesRepository: PreferencesRepository? = null,
+            budgetRepository: BudgetRepository? = null,
+            budgetProgressUseCase: BudgetProgressUseCase = BudgetProgressUseCase(),
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -649,6 +688,8 @@ class DashboardViewModel(
                     inflowRepository = inflowRepository,
                     onlineState = onlineState,
                     preferencesRepository = preferencesRepository,
+                    budgetRepository = budgetRepository,
+                    budgetProgressUseCase = budgetProgressUseCase,
                     ioDispatcher = ioDispatcher
                 ) as T
             }
