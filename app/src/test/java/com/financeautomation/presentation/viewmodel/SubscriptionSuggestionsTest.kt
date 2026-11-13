@@ -144,7 +144,7 @@ class SubscriptionSuggestionsTest {
         vm.addSubscription("Gym", 500.0)
         val created = vm.uiState.value.subscriptions.single()
         assertEquals("Subscriptions", created.category)
-        assertEquals(LocalDate.now().toEpochDay(), created.anchorEpochDay)
+        assertEquals(java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay(), created.anchorEpochDay)
     }
 
     @Test

@@ -379,6 +379,8 @@
     <string name="sub_per_month">/ month</string>
     <string name="sub_active_title">Active subscriptions</string>
     <string name="sub_next_due">Next due %1$s</string>
+    <string name="sub_paused_label">Paused</string>
+    <string name="sub_total_excludes_varies">%1$d without a fixed amount, not in this total</string>
     <string name="sub_next_due_formatted">Next due %1$s, %2$s</string>
     <string name="sub_paused_title">Paused subscriptions</string>
     <string name="sub_empty_title">No active subscriptions</string>
