@@ -166,7 +166,7 @@ object SheetProvisioner {
     private val buttonNavyBg = hexToColorMap("283593")
     private val headerSlateBg = hexToColorMap("37474F")
     private val settlementsBannerBg = hexToColorMap("37464E")
-    private val settlementsHeaderBg = hexToColorMap("455964")
+    private val settlementsHeaderBg = hexToColorMap("1A237E")
     private val amberBg = hexToColorMap("F47F17")
     private val owePeopleHeaderBg = hexToColorMap("F57F17")
     private val debitsHeaderBg = hexToColorMap("C62828")
@@ -811,6 +811,7 @@ object SheetProvisioner {
                         "backgroundColor" to settlementsHeaderBg,
                         "horizontalAlignment" to "CENTER",
                         "verticalAlignment" to "MIDDLE",
+                        "wrapStrategy" to "WRAP",
                         "textFormat" to mapOf(
                             "foregroundColor" to whiteColor,
                             "bold" to true,
@@ -821,7 +822,7 @@ object SheetProvisioner {
             )
         }
 
-        val iOwePeopleHeaders = listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date")
+        val iOwePeopleHeaders = listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date", "Status")
         iOwePeopleHeaders.forEachIndexed { cIdx, h ->
             requests.add(
                 createCellRequest(
@@ -833,6 +834,7 @@ object SheetProvisioner {
                         "backgroundColor" to settlementsHeaderBg,
                         "horizontalAlignment" to "CENTER",
                         "verticalAlignment" to "MIDDLE",
+                        "wrapStrategy" to "WRAP",
                         "textFormat" to mapOf(
                             "foregroundColor" to whiteColor,
                             "bold" to true,
@@ -842,6 +844,30 @@ object SheetProvisioner {
                 )
             )
         }
+
+        // Thin borders as in the live workbook: banners, the header row (A26:L26, no right edge on L26) and the query cells
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 23, endRow = 24, startCol = 0, endCol = 12))
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 24, endRow = 25, startCol = 0, endCol = 6))
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 24, endRow = 25, startCol = 7, endCol = 12))
+        requests.add(
+            mapOf(
+                "updateBorders" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to dashboardSheetId,
+                        "startRowIndex" to 25,
+                        "endRowIndex" to 26,
+                        "startColumnIndex" to 0,
+                        "endColumnIndex" to 12
+                    ),
+                    "top" to thinBorder(),
+                    "bottom" to thinBorder(),
+                    "left" to thinBorder(),
+                    "innerVertical" to thinBorder()
+                )
+            )
+        )
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 26, endRow = 27, startCol = 0, endCol = 1))
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 26, endRow = 27, startCol = 7, endCol = 8))
 
         // Row 27: Dynamic Two-Stage QUERY Formulas
         val theyOweMeQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:K"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
@@ -1377,7 +1403,7 @@ object SheetProvisioner {
                         )
                     )
                 ),
-                "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,numberFormat)"
+                "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,numberFormat,wrapStrategy)"
             )
         )
     }
