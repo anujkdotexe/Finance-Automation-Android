@@ -11,25 +11,31 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,8 +44,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
+import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.ButtonPair
-import com.financeautomation.presentation.screens.settings.SettingsSyncSection
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
@@ -55,17 +61,10 @@ fun SyncBackupScreen(
     val scrollState = rememberScrollState()
 
     val accountEmail = state.googleAccountEmail
-    val accountDisplayName = remember(accountEmail) {
-        if (!accountEmail.isNullOrBlank()) {
-            if (accountEmail.contains("@")) {
-                accountEmail.substringBefore("@")
-            } else {
-                accountEmail
-            }
-        } else {
-            "Local offline storage"
-        }
-    }
+    val accountDisplayName = state.googleAccountDisplayName?.takeIf { it.isNotBlank() }
+    val showNameAndEmail = !accountDisplayName.isNullOrBlank() &&
+        !accountEmail.isNullOrBlank() &&
+        accountDisplayName != accountEmail
 
     Column(
         modifier = modifier
@@ -118,19 +117,28 @@ fun SyncBackupScreen(
                             style = FinanceTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            text = accountDisplayName,
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (!accountEmail.isNullOrBlank()) {
+                        if (showNameAndEmail) {
                             Text(
-                                text = accountEmail,
+                                text = accountDisplayName!!,
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = accountEmail!!,
                                 style = FinanceTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text(
+                                text = accountEmail?.ifBlank { null } ?: "Local offline storage",
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -182,7 +190,7 @@ fun SyncBackupScreen(
                                 style = FinanceTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
@@ -250,7 +258,7 @@ fun SyncBackupScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = if (state.isSyncing) "Syncing..." else "Synced",
+                            text = if (state.isSyncing) "Syncing..." else "Synced 2m ago",
                             style = FinanceTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
@@ -278,20 +286,88 @@ fun SyncBackupScreen(
             }
         }
 
-        // Developer Mode advanced tools
-        if (state.developerMode) {
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-            SettingsSyncSection(
-                state = state,
-                onSpreadsheetIdChanged = viewModel::onSpreadsheetIdChanged,
-                onSettleDelayChanged = viewModel::onSettleDelayChanged,
-                onSyncNow = viewModel::onSyncNow,
-                onMirrorConfigToCloud = viewModel::onMirrorConfigToCloud,
-                onRestoreConfigFromCloud = viewModel::onRestoreConfigFromCloud,
-                onRegenerateDashboard = viewModel::onRegenerateDashboard,
-                onRepairWorkbook = viewModel::autoProvisionMasterSheet,
-                onCreateFreshWorkbook = viewModel::onCreateFreshWorkbook
-            )
+        // Advanced Section
+        Text(
+            text = "Advanced",
+            style = FinanceTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        AppCard(
+            containerColor = FinanceTheme.colors.surfaceContainerLowest,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+            ) {
+                if (state.developerMode) {
+                    var spreadsheetInput by remember(state.spreadsheetId) { mutableStateOf(state.spreadsheetId) }
+                    OutlinedTextField(
+                        value = spreadsheetInput,
+                        onValueChange = { spreadsheetInput = it },
+                        label = { Text(stringResource(R.string.settings_spreadsheet_id_label)) },
+                        placeholder = { Text(stringResource(R.string.settings_spreadsheet_id_placeholder)) },
+                        singleLine = true,
+                        shape = FinanceTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedButton(
+                        onClick = { viewModel.onSpreadsheetIdChanged(spreadsheetInput) },
+                        shape = FinanceTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Save,
+                            contentDescription = null,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                        Text(stringResource(R.string.settings_save_id))
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    OutlinedButton(
+                        onClick = viewModel::onMirrorConfigToCloud,
+                        enabled = !state.isConfigSyncing,
+                        shape = FinanceTheme.shapes.medium,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Mirror",
+                            maxLines = 1
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::onRestoreConfigFromCloud,
+                        enabled = !state.isConfigSyncing,
+                        shape = FinanceTheme.shapes.medium,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Restore",
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = viewModel::onRegenerateDashboard,
+                    enabled = !state.isRegeneratingDashboard,
+                    shape = FinanceTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Regenerate dashboard formulas",
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
 }

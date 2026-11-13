@@ -38,6 +38,7 @@ data class SettingsUiState(
     val activeTripTag: String = "",
     val settleDelaySeconds: Int = 120,
     val googleAccountEmail: String? = null,
+    val googleAccountDisplayName: String? = null,
     val accounts: List<Account> = emptyList(),
     val accountTransactionCounts: Map<String, Int> = emptyMap(),
     val categories: List<Category> = emptyList(),
