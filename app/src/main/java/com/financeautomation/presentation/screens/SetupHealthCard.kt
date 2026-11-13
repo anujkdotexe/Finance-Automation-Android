@@ -341,14 +341,10 @@ private fun HealthCheckRow(
                 }
                 Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                 if (item.status == HealthStatus.MISSING && item.canFix) {
-                    Button(
-                        onClick = onFix,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-                        shape = FinanceTheme.shapes.small,
-                        modifier = Modifier.height(FinanceTheme.sizes.buttonHeightSmall)
-                    ) {
-                        Text(text = stringResource(R.string.health_fix_button), style = MaterialTheme.typography.labelMedium)
-                    }
+                    com.financeautomation.presentation.components.OutlinedButton(
+                        text = stringResource(R.string.health_fix_button),
+                        onClick = onFix
+                    )
                 } else if (item.status == HealthStatus.OK) {
                     Text(text = stringResource(R.string.health_status_ok), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
                 }
@@ -363,9 +359,10 @@ private fun HealthCheckRow(
                     Checkbox(checked = item.isOemToggleDone, onCheckedChange = onToggleOemDone, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
                     Text(text = stringResource(R.string.health_oem_configured), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = onFix, shape = FinanceTheme.shapes.small, modifier = Modifier.height(FinanceTheme.sizes.buttonHeightSmall)) {
-                        Text(text = stringResource(R.string.health_oem_open_settings), style = MaterialTheme.typography.labelSmall)
-                    }
+                    com.financeautomation.presentation.components.OutlinedButton(
+                        text = stringResource(R.string.health_oem_open_settings),
+                        onClick = onFix
+                    )
                 }
 
                 Row(

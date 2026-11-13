@@ -136,6 +136,7 @@ data class TransactionsUiState(
     val rowStatuses: Map<String, RowStatus> = emptyMap(),
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
+    val monthOffset: Int = 0,
     /** Budget progress of the filtered category for the selected month, or null when no category or no budget. */
     val categoryBudget: com.financeautomation.domain.usecase.BudgetProgress? = null
 )
@@ -571,7 +572,8 @@ class TransactionsViewModel(
             groupedTransactions = grouped,
             rowStatuses = filteredTransactions.associate { it.id to computeRowStatus(it, queueIds) },
             isLoading = false,
-            isSyncing = isSyncing
+            isSyncing = isSyncing,
+            monthOffset = monthOffset
         )
     }
 

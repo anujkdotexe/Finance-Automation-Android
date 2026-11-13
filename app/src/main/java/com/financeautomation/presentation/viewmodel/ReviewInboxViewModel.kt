@@ -17,6 +17,7 @@ import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.model.SubscriptionCycleWithSubscription
 import com.financeautomation.domain.repository.AccountRepository
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.SubscriptionRepository
 import com.financeautomation.domain.usecase.SubscriptionActionUseCase
 import com.financeautomation.domain.usecase.SubscriptionYesOutcome
@@ -41,6 +42,7 @@ data class ReviewInboxUiState(
     val captures: List<PendingCaptureEntity> = emptyList(),
     val newAccountCaptures: List<PendingCaptureEntity> = emptyList(),
     val failedQueueItems: List<SyncQueueEntity> = emptyList(),
+    val isHintDismissed: Boolean = false,
     val isLoading: Boolean = false,
     val selectedTransaction: Transaction? = null,
     val openQuickLogCaptureId: String? = null,
@@ -64,7 +66,8 @@ class ReviewInboxViewModel(
     private val accountRepository: AccountRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val subscriptionRepository: SubscriptionRepository? = null,
-    private val subscriptionActions: SubscriptionActionUseCase? = null
+    private val subscriptionActions: SubscriptionActionUseCase? = null,
+    private val preferencesRepository: PreferencesRepository? = null
 ) : ViewModel() {
 
     constructor(
@@ -124,6 +127,24 @@ class ReviewInboxViewModel(
         observeFailedQueue()
         observeCaptures()
         observeSubscriptionsDue()
+        loadHintDismissed()
+    }
+
+    private fun loadHintDismissed() {
+        viewModelScope.launch(ioDispatcher) {
+            val dismissed = preferencesRepository?.isNeedsReviewHintDismissed() ?: false
+            _uiState.update { it.copy(isHintDismissed = dismissed) }
+        }
+    }
+
+    /**
+     * Dismisses the first-run onboarding hint and persists the choice.
+     */
+    fun dismissFirstRunHint() {
+        _uiState.update { it.copy(isHintDismissed = true) }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository?.setNeedsReviewHintDismissed(true)
+        }
     }
 
     private fun observeSubscriptionsDue() {
@@ -517,7 +538,8 @@ class ReviewInboxViewModel(
             accountRepository: AccountRepository? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
             subscriptionRepository: SubscriptionRepository? = null,
-            subscriptionActions: SubscriptionActionUseCase? = null
+            subscriptionActions: SubscriptionActionUseCase? = null,
+            preferencesRepository: PreferencesRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -528,7 +550,8 @@ class ReviewInboxViewModel(
                     accountRepository = accountRepository,
                     ioDispatcher = ioDispatcher,
                     subscriptionRepository = subscriptionRepository,
-                    subscriptionActions = subscriptionActions
+                    subscriptionActions = subscriptionActions,
+                    preferencesRepository = preferencesRepository
                 ) as T
             }
         }

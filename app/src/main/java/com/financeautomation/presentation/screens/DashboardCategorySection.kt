@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import java.text.DateFormatSymbols
 import java.util.Calendar
 import java.util.Locale
@@ -47,8 +46,6 @@ import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.BudgetBar
-import com.financeautomation.domain.usecase.BudgetProgress
-import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.presentation.components.SectionTitle
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -114,7 +111,7 @@ fun MonthSwitcher(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(FinanceShapes.small)
                     .then(
                         if (onSelectMonthOffset != null) {
                             Modifier.clickable(
@@ -230,8 +227,8 @@ fun MonthPickerDialog(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .height(FinanceTheme.sizes.buttonHeightMedium)
+                                    .clip(FinanceShapes.small)
                                     .background(
                                         when {
                                             isDisplayedMonth -> MaterialTheme.colorScheme.primaryContainer
@@ -289,7 +286,6 @@ fun CategoryBreakdownSection(
     onToggleExpand: () -> Unit,
     onCategoryClick: ((String) -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
-    budgetProgress: Map<String, BudgetProgress> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     if (categories.isEmpty()) return
@@ -348,34 +344,11 @@ fun CategoryBreakdownSection(
                             }
                         }
 
-                        // Proportional progress bar (thin 4dp)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FinanceTheme.sizes.proportionBarHeight)
-                                .clip(CircleShape)
-                                .background(FinanceTheme.colors.surfaceContainer)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(fraction = item.percentage.coerceIn(0f, 1f))
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                        }
-
-                        // Budget progress, only for categories that have a monthly budget
-                        budgetProgress[item.category.trim().lowercase()]?.let { progress ->
-                            BudgetBar(progress = progress)
-                            Text(
-                                text = stringResource(
-                                    R.string.budget_progress_caption,
-                                    formatRupees(progress.spent),
-                                    formatRupees(progress.budget)
-                                ),
-                                style = FinanceTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        // BudgetBar for categories with a budget; show nothing for categories without a budget
+                        if (item.budgetProgress != null) {
+                            BudgetBar(
+                                progress = item.budgetProgress,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }

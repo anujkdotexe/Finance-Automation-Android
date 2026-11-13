@@ -19,10 +19,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,9 +42,12 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +57,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +69,7 @@ import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AppCard
+import com.financeautomation.presentation.util.MonthCsvExporter
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.FilledButton
@@ -106,6 +119,7 @@ fun TransactionsScreen(
     var selectedInflow by remember { mutableStateOf<Inflow?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -138,6 +152,29 @@ fun TransactionsScreen(
                     selectedInflow = inf
                 },
                 onNavigateToSync = onNavigateToSync,
+                onVoidTransaction = { targetTxn ->
+                    viewModel.voidTransaction(targetTxn)
+                    coroutineScope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Transaction voided",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.undoVoid()
+                        }
+                    }
+                },
+                onExportThisMonth = {
+                    coroutineScope.launch {
+                        MonthCsvExporter.exportMonth(context, state.monthOffset)
+                            .onFailure { e ->
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.export_failed, e.message ?: "Unknown error")
+                                )
+                            }
+                    }
+                },
                 onAddExpense = onAddExpense,
                 modifier = Modifier.fillMaxSize()
             )
@@ -202,6 +239,8 @@ fun TransactionsContent(
     onTransactionClick: (Transaction) -> Unit,
     onInflowClick: (Inflow) -> Unit = {},
     onNavigateToSync: () -> Unit = {},
+    onVoidTransaction: (Transaction) -> Unit = {},
+    onExportThisMonth: () -> Unit = {},
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -221,13 +260,53 @@ fun TransactionsContent(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-        // 2. Month Switcher (shared component with Dashboard)
-        MonthSwitcher(
-            monthLabel = state.selectedMonthLabel,
-            onPreviousMonth = onPreviousMonth,
-            onNextMonth = onNextMonth,
-            onSelectMonthOffset = onSelectMonthOffset
-        )
+        // 2. Month Switcher (shared component with Dashboard) + Overflow Menu
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                MonthSwitcher(
+                    monthLabel = state.selectedMonthLabel,
+                    onPreviousMonth = onPreviousMonth,
+                    onNextMonth = onNextMonth,
+                    onSelectMonthOffset = onSelectMonthOffset
+                )
+            }
+
+            var showMenu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreHoriz,
+                        contentDescription = stringResource(R.string.action_export_this_month),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_export_this_month)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onExportThisMonth()
+                        }
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
@@ -560,15 +639,12 @@ fun TransactionsContent(
                                     val splitText = if (txn.owedToMe > 0.0) "Split (${formatRupeesAuto(txn.myShare)})" else null
                                     val timeStr = timeFormat.format(Date(txn.timestamp))
 
-                                    TransactionRow(
-                                        merchant = txn.merchant.ifBlank { txn.category },
-                                        amount = txn.totalAmount,
-                                        category = txn.category,
-                                        account = txn.account,
-                                        time = timeStr,
-                                        status = txn.status.value,
+                                    SwipeableTransactionRow(
+                                        txn = txn,
                                         splitText = splitText,
-                                        onClick = { onTransactionClick(txn) }
+                                        timeStr = timeStr,
+                                        onTransactionClick = onTransactionClick,
+                                        onVoid = onVoidTransaction
                                     )
                                 }
                                 is TransactionListItem.IncomeItem -> {
@@ -591,6 +667,97 @@ fun TransactionsContent(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableTransactionRow(
+    txn: Transaction,
+    splitText: String?,
+    timeStr: String,
+    onTransactionClick: (Transaction) -> Unit,
+    onVoid: (Transaction) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { dismissValue ->
+            when (dismissValue) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onTransactionClick(txn)
+                    false
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onVoid(txn)
+                    false
+                }
+                SwipeToDismissBoxValue.Settled -> false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            val color = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primaryContainer
+                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.errorContainer
+                else -> Color.Transparent
+            }
+            val alignment = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+            val icon = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Icons.Rounded.Edit
+                SwipeToDismissBoxValue.EndToStart -> Icons.Rounded.Block
+                else -> null
+            }
+            val iconTint = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.onPrimaryContainer
+                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.onErrorContainer
+                else -> Color.Transparent
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(FinanceTheme.shapes.card)
+                    .background(color)
+                    .padding(horizontal = FinanceTheme.spacing.l),
+                contentAlignment = alignment
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = if (direction == SwipeToDismissBoxValue.StartToEnd) {
+                            stringResource(R.string.action_edit)
+                        } else {
+                            stringResource(R.string.action_void)
+                        },
+                        tint = iconTint,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
+                    )
+                }
+            }
+        },
+        modifier = modifier
+    ) {
+        TransactionRow(
+            merchant = txn.merchant.ifBlank { txn.category },
+            amount = txn.totalAmount,
+            category = txn.category,
+            account = txn.account,
+            time = timeStr,
+            status = txn.status.value,
+            splitText = splitText,
+            onClick = { onTransactionClick(txn) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+        )
     }
 }
 

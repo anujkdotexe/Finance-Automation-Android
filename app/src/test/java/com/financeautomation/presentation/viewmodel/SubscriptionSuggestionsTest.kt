@@ -146,4 +146,25 @@ class SubscriptionSuggestionsTest {
         assertEquals("Subscriptions", created.category)
         assertEquals(LocalDate.now().toEpochDay(), created.anchorEpochDay)
     }
+
+    @Test
+    fun testSuggestionCard_appearsWhenDetected_andHiddenAfterNotNow() = runTest {
+        val prefs = headlessPrefs()
+        val txns = monthly("YouTube Premium", 149.0, "Entertainment")
+        val vm = viewModel(txns, prefs)
+
+        // 1. Proves the suggestion card data appears when RecurringDetector returns a suggestion
+        assertEquals(1, vm.uiState.value.suggestions.size)
+        val suggestion = vm.uiState.value.suggestions.first()
+        assertEquals("YouTube Premium", suggestion.name)
+        assertEquals(149.0, suggestion.amount, 0.0)
+        assertEquals(SubscriptionFrequency.MONTHLY, suggestion.frequency)
+
+        // 2. User taps "Not now", which calls dismissSuggestion()
+        vm.dismissSuggestion(suggestion)
+
+        // 3. Proves the suggestion card is hidden from the UI state and persisted
+        assertTrue(vm.uiState.value.suggestions.isEmpty())
+        assertTrue(suggestion.key in prefs.getDismissedRecurring())
+    }
 }

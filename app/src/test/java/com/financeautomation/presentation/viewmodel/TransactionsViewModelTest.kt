@@ -1182,4 +1182,25 @@ class TransactionsViewModelTest {
         advanceUntilIdle()
         assertEquals(0.0, vm.uiState.value.categoryBudget!!.spent, 0.001)
     }
+
+    @Test
+    fun testTransactionsUiState_monthOffsetTracked() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        assertEquals(0, vm.uiState.value.monthOffset)
+
+        vm.previousMonth()
+        advanceUntilIdle()
+        assertEquals(-1, vm.uiState.value.monthOffset)
+
+        vm.nextMonth()
+        advanceUntilIdle()
+        assertEquals(0, vm.uiState.value.monthOffset)
+
+        vm.setMonthOffset(-3)
+        advanceUntilIdle()
+        assertEquals(-3, vm.uiState.value.monthOffset)
+    }
 }
