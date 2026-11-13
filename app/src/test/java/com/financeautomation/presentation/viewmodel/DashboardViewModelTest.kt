@@ -9,6 +9,7 @@ import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.data.repository.PreferencesRepositoryImpl
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.CategoryRepository
@@ -852,5 +853,41 @@ class DashboardViewModelTest {
         advanceUntilIdle()
 
         assertEquals(-2, vm.uiState.value.monthOffset)
+    }
+
+    @Test
+    fun testFirstRunHint_dismissAndPersist() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val prefs = PreferencesRepositoryImpl(isTestHeadless = true)
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            preferencesRepository = prefs,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isHintDismissed)
+
+        vm.dismissFirstRunHint()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isHintDismissed)
+        assertTrue(prefs.isDashboardHintDismissed())
+
+        val vm2 = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            preferencesRepository = prefs,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertTrue(vm2.uiState.value.isHintDismissed)
     }
 }

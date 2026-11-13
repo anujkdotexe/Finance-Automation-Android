@@ -20,6 +20,7 @@ import com.financeautomation.domain.usecase.LivingBurn
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.InflowRepository
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +83,7 @@ data class DashboardUiState(
     val syncQueueItems: List<SyncQueueEntity> = emptyList(),
     val isOffline: Boolean = false,
     val queuedItems: List<QueuedItem> = emptyList(),
+    val isHintDismissed: Boolean = false,
     val isSyncing: Boolean = false,
     val syncMessage: String? = null,
     val errorMessage: String? = null
@@ -111,6 +113,7 @@ class DashboardViewModel(
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
     private val inflowRepository: InflowRepository? = null,
     private val onlineState: Flow<Boolean>? = null,
+    private val preferencesRepository: PreferencesRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -240,6 +243,24 @@ class DashboardViewModel(
 
     init {
         observeData()
+        loadHintDismissed()
+    }
+
+    private fun loadHintDismissed() {
+        viewModelScope.launch(ioDispatcher) {
+            val dismissed = preferencesRepository?.isDashboardHintDismissed() ?: false
+            _uiState.update { it.copy(isHintDismissed = dismissed) }
+        }
+    }
+
+    /**
+     * Dismisses the first-run onboarding hint and persists the choice.
+     */
+    fun dismissFirstRunHint() {
+        _uiState.update { it.copy(isHintDismissed = true) }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository?.setDashboardHintDismissed(true)
+        }
     }
 
     private suspend fun resolveSyncQueueDao(): SyncQueueDao {
@@ -307,7 +328,8 @@ class DashboardViewModel(
                     calculatedState.copy(
                         isSyncing = current.isSyncing,
                         syncMessage = current.syncMessage,
-                        errorMessage = current.errorMessage
+                        errorMessage = current.errorMessage,
+                        isHintDismissed = current.isHintDismissed
                     )
                 }
             }
@@ -613,6 +635,7 @@ class DashboardViewModel(
             categoryRepository: CategoryRepository? = null,
             inflowRepository: InflowRepository? = null,
             onlineState: Flow<Boolean>? = null,
+            preferencesRepository: PreferencesRepository? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -625,6 +648,7 @@ class DashboardViewModel(
                     categoryRepository = categoryRepository,
                     inflowRepository = inflowRepository,
                     onlineState = onlineState,
+                    preferencesRepository = preferencesRepository,
                     ioDispatcher = ioDispatcher
                 ) as T
             }
