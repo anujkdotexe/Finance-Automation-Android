@@ -363,7 +363,7 @@
     <!-- Navigation & Main Screen Titles -->
     <string name="nav_inbox_title">Needs Review</string>
     <string name="nav_inbox_subtitle">Automated UPI &amp; Card Interceptions</string>
-    <string name="nav_dashboard_title">Dashboard &amp; Queue</string>
+    <string name="nav_dashboard_title">Dashboard</string>
     <string name="nav_dashboard_subtitle">Live Monthly KPIs &amp; Sync Status</string>
     <string name="nav_settings_title">Settings &amp; Sync</string>
     <string name="nav_settings_subtitle">Google Sheets &amp; Split Configuration</string>
