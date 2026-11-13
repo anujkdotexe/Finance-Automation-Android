@@ -11,6 +11,7 @@ import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
@@ -26,6 +27,8 @@ class SyncConfigUseCase(
     private val configSheetManager: ConfigSheetManager? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
+
+    private val pushMutex = kotlinx.coroutines.sync.Mutex()
 
     @Volatile
     private var lastPullTimestamp: Long = 0L
@@ -171,7 +174,8 @@ class SyncConfigUseCase(
      * Pushes locally modified items (dirty = 1) to the remote Config tab.
      */
     suspend fun push(targetSpreadsheetId: String? = null): Result<Unit> = withContext(ioDispatcher) {
-        safeCall {
+        // One push at a time: the queued push and an immediate push must not append the same Config row twice
+        pushMutex.withLock { safeCall {
             val spreadsheetId = targetSpreadsheetId ?: preferencesRepository.getSpreadsheetIdSync()
             if (spreadsheetId.isNullOrBlank()) {
                 throw IllegalArgumentException("Spreadsheet ID is not configured")
@@ -320,7 +324,7 @@ class SyncConfigUseCase(
             localGateway.markSubscriptionsClean(dirty.subscriptions.map { it.id })
             localGateway.markBudgetsClean(dirty.budgets.map { it.category })
         }
-    }
+    } }
 
     /**
      * Marks all local items dirty and pushes them to populate an initially empty Config tab.
