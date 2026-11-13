@@ -6,9 +6,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +41,7 @@ import com.financeautomation.domain.model.SubscriptionCycleWithSubscription
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.FirstRunHintCard
 import com.financeautomation.presentation.components.HeaderActionButton
 import com.financeautomation.presentation.components.OutlinedButton
 import com.financeautomation.presentation.components.SyncStatusLine
@@ -104,6 +107,7 @@ fun ReviewInboxScreen(
             onRetryQueueItem = reviewInboxViewModel::retryQueueItem,
             onDiscardQueueItem = reviewInboxViewModel::discardQueueItem,
             onNavigateToDashboard = onNavigateToDashboard,
+            onDismissHint = reviewInboxViewModel::dismissFirstRunHint,
             modifier = Modifier.padding(innerPadding)
         )
     }
@@ -125,6 +129,7 @@ fun ReviewInboxContent(
     onRetryQueueItem: (Long) -> Unit = {},
     onDiscardQueueItem: (Long) -> Unit = {},
     onNavigateToDashboard: () -> Unit = {},
+    onDismissHint: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val totalPendingCount = state.items.size + subscriptionsDue.size
@@ -157,7 +162,9 @@ fun ReviewInboxContent(
                     contentAlignment = Alignment.Center
                 ) {
                     EmptyInboxState(
-                        onNavigateToDashboard = onNavigateToDashboard
+                        onNavigateToDashboard = onNavigateToDashboard,
+                        showHint = !state.isHintDismissed,
+                        onDismissHint = onDismissHint
                     )
                 }
             }
@@ -291,6 +298,8 @@ fun FailedQueueItemCard(
 @Composable
 fun EmptyInboxState(
     onNavigateToDashboard: () -> Unit,
+    showHint: Boolean = false,
+    onDismissHint: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -300,6 +309,13 @@ fun EmptyInboxState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
+        if (showHint) {
+            FirstRunHintCard(
+                text = stringResource(R.string.hint_needs_review_first_run),
+                onDismiss = onDismissHint
+            )
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+        }
         Icon(
             imageVector = Icons.Rounded.CheckCircle,
             contentDescription = null,

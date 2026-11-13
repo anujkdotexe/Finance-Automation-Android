@@ -30,6 +30,7 @@ import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.presentation.components.EmptyState
+import com.financeautomation.presentation.components.FirstRunHintCard
 import com.financeautomation.presentation.components.SyncStatusLine
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -108,6 +109,7 @@ fun DashboardScreen(
                 onNavigateToBalances = onNavigateToBalances,
                 onNavigateToSync = onNavigateToSync,
                 onShowExact = ::showExactSnackbar,
+                onDismissHint = viewModel::dismissFirstRunHint,
                 onAddExpense = onAddExpense,
                 modifier = Modifier.fillMaxSize()
             )
@@ -129,6 +131,7 @@ fun DashboardContent(
     onNavigateToBalances: () -> Unit,
     onNavigateToSync: () -> Unit = {},
     onShowExact: (String, Double) -> Unit,
+    onDismissHint: () -> Unit = {},
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -173,6 +176,14 @@ fun DashboardContent(
 
         // Empty Month State vs Populated Dashboard
         if (state.transactionCount == 0 && state.currentBurn == 0.0) {
+            if (!state.isHintDismissed) {
+                item {
+                    FirstRunHintCard(
+                        text = stringResource(R.string.hint_dashboard_first_run),
+                        onDismiss = onDismissHint
+                    )
+                }
+            }
             item {
                 EmptyState(
                     message = stringResource(R.string.dashboard_empty_message),

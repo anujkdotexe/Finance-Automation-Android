@@ -226,7 +226,23 @@ interface PreferencesRepository {
         setPreference(KEY_SUBSCRIPTION_REMINDER_TIME, normalized, isDirty = true)
     }
 
+    /** Whether the first-run dismissible onboarding hint on Dashboard has been dismissed (default false). */
+    suspend fun isDashboardHintDismissed(): Boolean = getPreference(KEY_DASHBOARD_HINT_DISMISSED) == "true"
+
+    suspend fun setDashboardHintDismissed(dismissed: Boolean) {
+        setPreference(KEY_DASHBOARD_HINT_DISMISSED, dismissed.toString(), isDirty = false)
+    }
+
+    /** Whether the first-run dismissible onboarding hint on Needs Review has been dismissed (default false). */
+    suspend fun isNeedsReviewHintDismissed(): Boolean = getPreference(KEY_NEEDS_REVIEW_HINT_DISMISSED) == "true"
+
+    suspend fun setNeedsReviewHintDismissed(dismissed: Boolean) {
+        setPreference(KEY_NEEDS_REVIEW_HINT_DISMISSED, dismissed.toString(), isDirty = false)
+    }
+
     companion object {
+        const val KEY_DASHBOARD_HINT_DISMISSED: String = "dashboard_hint_dismissed"
+        const val KEY_NEEDS_REVIEW_HINT_DISMISSED: String = "needs_review_hint_dismissed"
         const val KEY_SUBSCRIPTION_REMINDER_TIME: String = "subscription_reminder_time"
         const val DISMISSED_RECURRING_KEY: String = "dismissed_recurring"
         const val KEY_APP_LOCK_ENABLED: String = "app_lock_enabled"

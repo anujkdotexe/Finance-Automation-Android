@@ -52,7 +52,8 @@ class MainActivity : FragmentActivity() {
             accountRepository = app.appContainer.accountRepository,
             ioDispatcher = app.appContainer.ioDispatcher,
             subscriptionRepository = app.appContainer.subscriptionRepository,
-            subscriptionActions = app.appContainer.subscriptionActionUseCase
+            subscriptionActions = app.appContainer.subscriptionActionUseCase,
+            preferencesRepository = app.appContainer.preferencesRepository
         )
     }
 
@@ -66,6 +67,7 @@ class MainActivity : FragmentActivity() {
             categoryRepository = app.appContainer.categoryRepository,
             inflowRepository = app.appContainer.inflowRepository,
             onlineState = app.appContainer.connectivityObserver.isOnline,
+            preferencesRepository = app.appContainer.preferencesRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
