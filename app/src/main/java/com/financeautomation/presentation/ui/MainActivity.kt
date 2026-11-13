@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
             googleSheetsClient = app.appContainer.googleSheetsClient,
             googleAuthTokenProvider = app.appContainer.googleAuthTokenProvider,
             workbookResolver = app.appContainer.workbookResolver,
+            payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }

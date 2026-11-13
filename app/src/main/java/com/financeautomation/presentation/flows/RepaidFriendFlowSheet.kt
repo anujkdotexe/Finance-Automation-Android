@@ -201,7 +201,7 @@ fun RepaidFriendFlowSheet(
             }
 
             // Quick Amount Chips ("Pay full" / "Custom amount")
-            val openBalance = selectedCompanion?.balance ?: 0.0
+            val openBalance = selectedCompanion?.balance?.let { kotlin.math.abs(it) } ?: 0.0
             if (openBalance > 0.0) {
                 Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
                 val formattedBalance = formatRupeesAuto(openBalance)
@@ -232,7 +232,7 @@ fun RepaidFriendFlowSheet(
         }
 
         // 2. Who You Repaid (Companion chips with open balance)
-        val hasOpenDebts = companions.any { it.balance > 0.0 }
+        val hasOpenDebts = companions.any { kotlin.math.abs(it.balance) > 0.0 }
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.prompt_friend_repaid),
@@ -250,8 +250,9 @@ fun RepaidFriendFlowSheet(
                 ) {
                     companions.forEach { companion ->
                         val isSelected = personName.equals(companion.name, ignoreCase = true)
-                        val label = if (companion.balance > 0.0) {
-                            "${companion.name}  ${formatRupeesAuto(companion.balance)}"
+                        val debtBalance = kotlin.math.abs(companion.balance)
+                        val label = if (debtBalance > 0.0) {
+                            "${companion.name}  ${formatRupeesAuto(debtBalance)}"
                         } else {
                             companion.name
                         }
@@ -262,8 +263,8 @@ fun RepaidFriendFlowSheet(
                             onClick = {
                                 focusManager.clearFocus()
                                 personName = companion.name
-                                if (companion.balance > 0.0 && amountText.isEmpty()) {
-                                    amountText = formatRupees(companion.balance, includeDecimals = true).removePrefix("₹")
+                                if (debtBalance > 0.0 && amountText.isEmpty()) {
+                                    amountText = formatRupees(debtBalance, includeDecimals = true).removePrefix("₹")
                                 }
                             }
                         )

@@ -2,6 +2,8 @@ package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.core.model.Result
 import com.financeautomation.R
+import com.financeautomation.data.local.dao.PayableDao
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.remote.GoogleApiError
 import com.financeautomation.data.remote.GoogleEndpoint
 import com.financeautomation.data.remote.GoogleDriveClient
@@ -30,6 +32,7 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -282,16 +285,32 @@ class SettingsViewModelTest {
         assertEquals(R.string.onboarding_error_unknown, withoutMessage.resId)
     }
 
-    private class FakePeopleRepo : PeopleRepository {
-        override fun getCompanions(): Flow<List<Companion>> = flowOf(emptyList())
-        override suspend fun getAllCompanions(): List<Companion> = emptyList()
-        override suspend fun getCompanionById(id: String): Companion? = null
-        override suspend fun getCompanionByName(name: String): Companion? = null
+    private class FakePeopleRepo(
+        private val list: List<Companion> = emptyList()
+    ) : PeopleRepository {
+        override fun getCompanions(): Flow<List<Companion>> = flowOf(list)
+        override suspend fun getAllCompanions(): List<Companion> = list
+        override suspend fun getCompanionById(id: String): Companion? = list.find { it.id == id }
+        override suspend fun getCompanionByName(name: String): Companion? = list.find { it.name.equals(name, ignoreCase = true) }
         override suspend fun insertCompanion(companion: Companion) {}
         override suspend fun updateCompanion(companion: Companion) {}
         override suspend fun updateCompanionName(id: String, newName: String) {}
         override suspend fun deleteCompanion(companion: Companion) {}
         override suspend fun deleteCompanionById(id: String) {}
+    }
+
+    private class FakePayableDao(
+        private val pending: List<PayableEntity> = emptyList()
+    ) : PayableDao {
+        override fun observeAll(): Flow<List<PayableEntity>> = flowOf(pending)
+        override fun observePending(): Flow<List<PayableEntity>> = flowOf(pending)
+        override suspend fun getPending(): List<PayableEntity> = pending
+        override suspend fun getAll(): List<PayableEntity> = pending
+        override suspend fun getByUuid(uuid: String): PayableEntity? = pending.find { it.uuid == uuid }
+        override suspend fun upsert(payable: PayableEntity) {}
+        override suspend fun upsertAll(payables: List<PayableEntity>) {}
+        override suspend fun deleteByUuid(uuid: String) {}
+        override suspend fun deleteAll() {}
     }
 
     private class FakeTransactionRepo : TransactionRepository {
@@ -413,6 +432,40 @@ class SettingsViewModelTest {
         )
 
         assertEquals(mapOf("HDFC" to 4, "Cash" to 1), vm.uiState.value.accountTransactionCounts)
+    }
+
+    @Test
+    fun testCompanionsObserveNetBalancesWithOpenPayable() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val people = FakePeopleRepo(listOf(Companion("c1", "Charlie", balance = 0.0)))
+        val payableDao = FakePayableDao(
+            listOf(
+                PayableEntity(
+                    uuid = "p_charlie_1",
+                    dateIncurredSerial = 46000,
+                    timeSerial = 0.5,
+                    paidBy = "Charlie",
+                    whatFor = "Dinner",
+                    amountIOwe = 1200.0,
+                    dateRepaidSerial = null,
+                    repaymentStatus = "Pending",
+                    tabName = "Nov26",
+                    sheetRowIndex = 5
+                )
+            )
+        )
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = people,
+            transactionRepository = FakeTransactionRepo(),
+            directPayableDao = payableDao,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        val companions = vm.uiState.value.companions
+        val charlie = companions.find { it.name.equals("Charlie", ignoreCase = true) }
+        assertNotNull("Charlie must be present in companions", charlie)
+        assertEquals(-1200.0, charlie!!.balance, 0.001)
     }
 
     private class AccessSheetsClient(

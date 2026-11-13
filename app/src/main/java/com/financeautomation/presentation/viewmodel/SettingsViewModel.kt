@@ -15,6 +15,7 @@ import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
@@ -72,6 +73,8 @@ class SettingsViewModel(
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val googleAuthTokenProvider: GoogleAuthTokenProvider? = null,
     private val workbookResolver: WorkbookResolver? = null,
+    directPayableDao: PayableDao? = null,
+    payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -81,6 +84,9 @@ class SettingsViewModel(
     private val customizationCoordinator = SettingsCustomizationCoordinator(
         preferencesRepository = preferencesRepository,
         peopleRepository = peopleRepository,
+        transactionRepository = transactionRepository,
+        payableDao = directPayableDao,
+        payableDaoProvider = payableDaoProvider,
         accountRepository = accountRepository,
         categoryRepository = categoryRepository,
         tripTagRepository = tripTagRepository,
@@ -306,6 +312,8 @@ class SettingsViewModel(
             googleSheetsClient: GoogleSheetsClient? = null,
             googleAuthTokenProvider: GoogleAuthTokenProvider? = null,
             workbookResolver: WorkbookResolver? = null,
+            payableDao: PayableDao? = null,
+            payableDaoProvider: (suspend () -> PayableDao)? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -323,6 +331,8 @@ class SettingsViewModel(
                     googleSheetsClient = googleSheetsClient,
                     googleAuthTokenProvider = googleAuthTokenProvider,
                     workbookResolver = workbookResolver,
+                    directPayableDao = payableDao,
+                    payableDaoProvider = payableDaoProvider,
                     ioDispatcher = ioDispatcher
                 ) as T
             }

@@ -1,17 +1,24 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
+import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
+import com.financeautomation.domain.utils.AccountingUtils
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -22,6 +29,9 @@ import java.util.UUID
 class SettingsCustomizationCoordinator(
     private val preferencesRepository: PreferencesRepository,
     private val peopleRepository: PeopleRepository,
+    private val transactionRepository: TransactionRepository? = null,
+    private val payableDao: PayableDao? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val accountRepository: AccountRepository?,
     private val categoryRepository: CategoryRepository?,
     private val tripTagRepository: TripTagRepository?,
@@ -30,9 +40,71 @@ class SettingsCustomizationCoordinator(
     private val ioDispatcher: CoroutineDispatcher
 ) {
 
+    private suspend fun resolvePayableDao(): PayableDao? {
+        return payableDao ?: payableDaoProvider?.invoke()
+    }
+
     fun observeEntities() {
         scope.launch(ioDispatcher) {
-            peopleRepository.getCompanions().collect { list ->
+            val resolvedPayableDao = resolvePayableDao()
+            val payablesFlow = resolvedPayableDao?.observePending() ?: flowOf(emptyList())
+            val transactionsFlow = transactionRepository?.getTransactions() ?: flowOf(emptyList())
+
+            combine(
+                peopleRepository.getCompanions(),
+                transactionsFlow,
+                payablesFlow
+            ) { companions, transactions, pendingPayables ->
+                val receivablesByFriend = mutableMapOf<String, Double>()
+                for (txn in transactions) {
+                    if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
+                        val tokens = AccountingUtils.tokens(txn.companions)
+                        if (tokens.isNotEmpty() && !txn.companions.equals("Personal", ignoreCase = true)) {
+                            val sharePerPerson = txn.owedToMe / tokens.size
+                            for (friend in tokens) {
+                                val key = friend.trim().lowercase()
+                                receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + sharePerPerson
+                            }
+                        }
+                    }
+                }
+
+                val payablesByFriend = mutableMapOf<String, Double>()
+                for (payable in pendingPayables) {
+                    val key = payable.paidBy.trim().lowercase()
+                    payablesByFriend[key] = (payablesByFriend[key] ?: 0.0) + payable.amountIOwe
+                }
+
+                val updatedCompanions = companions.map { comp ->
+                    val key = comp.name.trim().lowercase()
+                    val rec = receivablesByFriend[key] ?: 0.0
+                    val pay = payablesByFriend[key] ?: 0.0
+                    val net = rec - pay
+                    comp.copy(balance = net)
+                }.toMutableList()
+
+                val allKeys = receivablesByFriend.keys + payablesByFriend.keys
+                for (key in allKeys) {
+                    if (updatedCompanions.none { it.name.trim().lowercase() == key }) {
+                        val rec = receivablesByFriend[key] ?: 0.0
+                        val pay = payablesByFriend[key] ?: 0.0
+                        val net = rec - pay
+                        if (kotlin.math.abs(net) > 0.001) {
+                            val originalName = pendingPayables.firstOrNull { it.paidBy.trim().lowercase() == key }?.paidBy?.trim()
+                                ?: key.replaceFirstChar { it.uppercase() }
+                            updatedCompanions.add(
+                                Companion(
+                                    id = "friend_$key",
+                                    name = originalName,
+                                    balance = net
+                                )
+                            )
+                        }
+                    }
+                }
+
+                updatedCompanions
+            }.collect { list ->
                 uiState.update { it.copy(companions = list) }
             }
         }
