@@ -318,6 +318,9 @@ class DefaultAppContainer(
                     syncTransactionsUseCase.invoke()
                 }
             }
+            impl.onSyncCompleted = {
+                com.financeautomation.service.MonthBurnWidgetProvider.requestUpdate(applicationContext)
+            }
         }
     }
 
