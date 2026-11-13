@@ -50,10 +50,9 @@ class PeopleListRebuilder(
             val domainSnapshot = LedgerSnapshotMapper.mapToDomain(snapRes.data)
 
             val rebuilt = rebuildPeopleListUseCase(domainSnapshot, currentTab, prevTab)
-            val existing = peopleRepository.getAllCompanions()
-
             for (name in rebuilt.allNames) {
-                if (existing.none { it.name.equals(name, ignoreCase = true) }) {
+                // getCompanionByName also finds removed (archived) people, so a removed friend is not added again
+                if (peopleRepository.getCompanionByName(name) == null) {
                     peopleRepository.insertCompanion(
                         Companion(
                             id = UUID.randomUUID().toString(),

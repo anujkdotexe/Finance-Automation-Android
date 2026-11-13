@@ -129,6 +129,20 @@ class TripTagRepositoryImpl(
         configSyncCoordinator?.schedulePush()
     }
 
+    override suspend fun removeTripTag(name: String): com.financeautomation.core.model.Result<Unit> = withContext(ioDispatcher) {
+        val dao = resolveDao()
+        val tag = dao.getByName(name.trim())
+            ?: return@withContext com.financeautomation.core.model.Result.Error(IllegalArgumentException("Trip not found: ${name.trim()}"))
+        if (tag.isActive && !tag.isArchived) {
+            return@withContext com.financeautomation.core.model.Result.Error(
+                IllegalStateException("${tag.name} is the active trip. End the trip before removing it.")
+            )
+        }
+        dao.archiveTag(tag.id)
+        configSyncCoordinator?.schedulePush()
+        com.financeautomation.core.model.Result.Success(Unit)
+    }
+
     override suspend fun unarchiveTripTag(id: String): Unit = withContext(ioDispatcher) {
         resolveDao().unarchiveTag(id)
         configSyncCoordinator?.schedulePush()
