@@ -1,6 +1,8 @@
 package com.financeautomation.presentation.screens.drawer
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +63,11 @@ fun CategoriesScreen(
 ) {
     val scrollState = rememberScrollState()
     var showAddCategorySheet by remember { mutableStateOf(false) }
+    var budgetCategory by remember { mutableStateOf<String?>(null) }
+    val budgetRepository = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.financeautomation.FinanceApplication)
+        .appContainer.budgetRepository
+    val budgets by budgetRepository.observeBudgets().collectAsState(initial = emptyList())
+    val budgetByName = remember(budgets) { budgets.associateBy { it.category.trim().lowercase() } }
 
     Column(
         modifier = modifier
@@ -108,6 +115,8 @@ fun CategoriesScreen(
                     category = category,
                     dotColor = dotColor,
                     isLocked = isLocked,
+                    budgetAmount = budgetByName[category.name.trim().lowercase()]?.monthlyAmount,
+                    onOpenBudget = { budgetCategory = category.name },
                     onToggleBurn = { enabled ->
                         // Switch is "Count toward living burn" so enabled == true means !isExcludedFromLivingBurn
                         viewModel.onToggleCategoryLivingBurnExclusion(category.id, !enabled)
@@ -115,6 +124,15 @@ fun CategoriesScreen(
                 )
             }
         }
+    }
+
+    budgetCategory?.let { name ->
+        BudgetSheet(
+            category = name,
+            existingAmount = budgetByName[name.trim().lowercase()]?.monthlyAmount,
+            repository = budgetRepository,
+            onDismiss = { budgetCategory = null }
+        )
     }
 
     if (showAddCategorySheet) {
@@ -133,6 +151,8 @@ private fun CategoryItemCard(
     category: Category,
     dotColor: Color,
     isLocked: Boolean,
+    budgetAmount: Double?,
+    onOpenBudget: () -> Unit,
     onToggleBurn: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -150,8 +170,13 @@ private fun CategoryItemCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            val editDescription = stringResource(R.string.budget_row_edit_cd, category.name)
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    .clip(FinanceShapes.small)
+                    .clickable(onClickLabel = editDescription, onClick = onOpenBudget),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
             ) {
@@ -178,6 +203,15 @@ private fun CategoryItemCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Text(
+                        text = if (budgetAmount != null) {
+                            stringResource(R.string.budget_row_amount, com.financeautomation.core.utils.formatRupees(budgetAmount))
+                        } else {
+                            stringResource(R.string.budget_row_none)
+                        },
+                        style = FinanceTheme.typography.bodySmall,
+                        color = if (budgetAmount != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

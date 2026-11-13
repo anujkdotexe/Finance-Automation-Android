@@ -701,4 +701,19 @@
     <string name="app_lock_title">Finance Automation is locked</string>
     <string name="app_lock_message">Unlock to see your spending.</string>
     <string name="app_lock_unlock">Unlock</string>
+
+    <!-- Budgets -->
+    <string name="budget_sheet_title">Monthly budget for %1$s</string>
+    <string name="budget_sheet_amount_label">Amount per month</string>
+    <string name="budget_sheet_amount_placeholder">e.g. 5000 or 3000+2000</string>
+    <string name="budget_sheet_hint">You can type a sum such as 1,200+300</string>
+    <string name="budget_sheet_result">Budget: %1$s a month</string>
+    <string name="budget_sheet_invalid">Enter an amount above zero, for example 5000 or 3000+2000</string>
+    <string name="budget_sheet_save_failed">Could not save the budget. Try again.</string>
+    <string name="budget_sheet_clear">Clear budget</string>
+    <string name="budget_row_none">No budget set</string>
+    <string name="budget_row_amount">Budget %1$s a month</string>
+    <string name="budget_row_edit_cd">Set the monthly budget for %1$s</string>
+    <string name="budget_bar_cd_used">%1$s: %2$d percent of the monthly budget used</string>
+    <string name="budget_bar_cd_over">%1$s: over the monthly budget, %2$d percent used</string>
 </resources>
