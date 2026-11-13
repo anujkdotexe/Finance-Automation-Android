@@ -30,12 +30,12 @@ object QuickLogCategoryRanker {
         val reordered = rankedNames.mapNotNull { nameToCategory[it.lowercase()] }
         val firstChoice = rankedNames.firstOrNull() ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
 
-        val selectedCategory = if (currentSelected == CategoryConstants.CATEGORY_FOOD_AND_DRINK ||
-            !categories.any { it.name.equals(currentSelected, ignoreCase = true) }
+        val selectedCategory = if (currentSelected.isNotBlank() &&
+            categories.any { it.name.equals(currentSelected, ignoreCase = true) }
         ) {
-            firstChoice
-        } else {
             currentSelected
+        } else {
+            firstChoice
         }
 
         return Pair(if (reordered.isNotEmpty()) reordered else categories, selectedCategory)

@@ -91,8 +91,15 @@ object QuickLogTransactionHelper {
             txn.companions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         } else emptyList()
 
+        val repoCompanions = try {
+            peopleRepository.getAllCompanions()
+        } catch (_: Exception) {
+            currentState.availableCompanions
+        }
+        val allCompanions = (currentState.availableCompanions + repoCompanions).distinctBy { it.id }
+
         val matchedIds = matchOrInsertCompanions(
-            companionsList, currentState.availableCompanions, peopleRepository
+            companionsList, allCompanions, peopleRepository
         )
         val determinedMode = determineSplitMode(
             txn.companions, txn.owedToMe, txn.totalAmount, txn.myShare, companionsList
@@ -103,11 +110,13 @@ object QuickLogTransactionHelper {
 
         return currentState.copy(
             transactionId = txn.id,
+            captureTimestamp = txn.timestamp,
             amount = txn.totalAmount,
             amountText = formatAmountInput(txn.totalAmount),
             payee = txn.merchant,
             selectedCategory = txn.category,
             selectedAccount = txn.account,
+            availableCompanions = if (allCompanions.isNotEmpty()) allCompanions else currentState.availableCompanions,
             splitMode = determinedMode,
             selectedCompanionIds = matchedIds,
             customShare = if (determinedMode == SplitMode.CUSTOM) txn.myShare else null,
