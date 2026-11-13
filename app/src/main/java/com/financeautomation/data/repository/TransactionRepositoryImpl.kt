@@ -618,6 +618,7 @@ class TransactionRepositoryImpl(
                 }
 
                 if (item.operationType == SyncQueueEntity.OP_LOG_CREDIT ||
+                    item.operationType == SyncQueueEntity.OP_VOID_INFLOW ||
                     item.operationType == SyncQueueEntity.OP_LOG_PAYABLE ||
                     item.operationType == SyncQueueEntity.OP_LOG_REPAYMENT ||
                     item.operationType == SyncQueueEntity.OP_CARRY_FORWARD ||
@@ -630,6 +631,10 @@ class TransactionRepositoryImpl(
                         }
                         SyncQueueEntity.OP_LOG_CREDIT -> {
                             val req = AccountingRequestJsonAdapter.creditRequestFromJson(item.payloadJson)
+                            Instant.ofEpochMilli(req.timestamp).atZone(sheetTimeZone).year
+                        }
+                        SyncQueueEntity.OP_VOID_INFLOW -> {
+                            val req = AccountingRequestJsonAdapter.voidInflowRequestFromJson(item.payloadJson)
                             Instant.ofEpochMilli(req.timestamp).atZone(sheetTimeZone).year
                         }
                         SyncQueueEntity.OP_LOG_PAYABLE -> {
@@ -677,6 +682,10 @@ class TransactionRepositoryImpl(
                             val req = AccountingRequestJsonAdapter.creditRequestFromJson(item.payloadJson)
                             formatMonthTabName(req.timestamp)
                         }
+                        SyncQueueEntity.OP_VOID_INFLOW -> {
+                            val req = AccountingRequestJsonAdapter.voidInflowRequestFromJson(item.payloadJson)
+                            formatMonthTabName(req.timestamp)
+                        }
                         SyncQueueEntity.OP_LOG_PAYABLE -> {
                             val req = AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson)
                             formatMonthTabName(req.timestamp)
@@ -710,6 +719,7 @@ class TransactionRepositoryImpl(
                     val executor = accountingSyncExecutor
                     val opResult = when (item.operationType) {
                         SyncQueueEntity.OP_LOG_CREDIT -> executor?.executeLogCredit(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_VOID_INFLOW -> executor?.executeVoidInflow(item, spreadsheetId, opTabName)
                         SyncQueueEntity.OP_LOG_PAYABLE -> executor?.executeLogPayable(item, spreadsheetId, opTabName)
                         SyncQueueEntity.OP_LOG_REPAYMENT -> executor?.executeLogRepayment(item, spreadsheetId, opTabName)
                         SyncQueueEntity.OP_CARRY_FORWARD -> executor?.executeCarryForward(item, spreadsheetId)

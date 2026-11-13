@@ -46,6 +46,24 @@ class VoidTransactionUseCase {
     }
 
     /**
+     * Voids a Table 2 inflow row in-place, with the same convention as a debit: the row and its UUID in column AD
+     * stay, the amount is zeroed and the text is prefixed with "[Void] ". Table 2 has no status column.
+     * Edits:
+     * - Column R (Reason): prefixed with "[Void] " if not already present
+     * - Column S (Amount Received): 0.0
+     */
+    fun voidInflow(tab: String, row: Int, currentReason: String): AccountingPlan {
+        val voidReason = if (currentReason.startsWith("[Void] ")) currentReason else "[Void] $currentReason"
+        return AccountingPlan(
+            edits = listOf(
+                CellEdit(tab = tab, row = row, column = "R", value = voidReason),
+                CellEdit(tab = tab, row = row, column = "S", value = 0.0)
+            ),
+            message = "Voided inflow in $tab row $row"
+        )
+    }
+
+    /**
      * Voids a Table 3 payable row in-place without deleting or blanking the row.
      * Edits:
      * - Column Y (What For): prefixed with "[Void] " if not already present

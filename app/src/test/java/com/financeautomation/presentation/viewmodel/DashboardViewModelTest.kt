@@ -656,6 +656,40 @@ class DashboardViewModelTest {
         override suspend fun updateStatus(id: String, status: String) {
             inflows.value = inflows.value.map { if (it.id == id) it.copy(status = status) else it }
         }
+        override suspend fun voidInflow(id: String): com.financeautomation.core.model.Result<Unit> {
+            if (inflows.value.none { it.id == id }) {
+                return com.financeautomation.core.model.Result.Error(IllegalArgumentException("not found"))
+            }
+            updateStatus(id, "VOID")
+            return com.financeautomation.core.model.Result.Success(Unit)
+        }
+    }
+
+    @Test
+    fun testVoidingAnInflowReducesTheIncomeFigure() = runTest {
+        val now = System.currentTimeMillis()
+        val inflowRepo = FakeInflowRepo()
+        inflowRepo.inflows.value = listOf(
+            com.financeautomation.domain.model.Inflow("inf_a", now, 50000.0, "SBI", "Income / Salary", "Employer", "Salary"),
+            com.financeautomation.domain.model.Inflow("inf_b", now, 2500.0, "SBI", "Refund / Return", "Amazon", "Return")
+        )
+        val vm = DashboardViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            inflowRepository = inflowRepo,
+            onlineState = kotlinx.coroutines.flow.MutableStateFlow(true),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertEquals(52500.0, vm.uiState.value.income, 0.001)
+
+        inflowRepo.voidInflow("inf_a")
+        advanceUntilIdle()
+
+        assertEquals(2500.0, vm.uiState.value.income, 0.001)
     }
 
     @Test

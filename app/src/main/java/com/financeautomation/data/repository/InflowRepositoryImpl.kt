@@ -1,6 +1,11 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.model.Result
 import com.financeautomation.data.local.dao.InflowDao
+import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.data.remote.AccountingRequestJsonAdapter
+import com.financeautomation.domain.model.VoidInflowRequest
 import com.financeautomation.data.local.entity.InflowEntity
 import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.repository.InflowRepository
@@ -15,7 +20,10 @@ import kotlinx.coroutines.withContext
 class InflowRepositoryImpl(
     private val inflowDao: InflowDao? = null,
     private val inflowDaoProvider: (suspend () -> InflowDao)? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val syncQueueDao: SyncQueueDao? = null,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+    private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { block -> block() }
 ) : InflowRepository {
 
     constructor(
@@ -60,6 +68,41 @@ class InflowRepositoryImpl(
 
     override suspend fun updateStatus(id: String, status: String) = withContext(ioDispatcher) {
         resolveDao().updateStatus(id, status)
+    }
+
+    override suspend fun voidInflow(id: String): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val dao = resolveDao()
+            val existing = dao.getById(id)
+                ?: return@withContext Result.Error(IllegalArgumentException("Inflow not found: $id"))
+            if (existing.status == VOID_STATUS) return@withContext Result.Success(Unit)
+
+            val queue = syncQueueDao ?: syncQueueDaoProvider?.invoke()
+                ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")
+            val request = VoidInflowRequest(inflowId = id, timestamp = existing.timestamp)
+            transactionRunner {
+                dao.updateStatus(id, VOID_STATUS)
+                queue.insert(
+                    SyncQueueEntity(
+                        transactionId = id,
+                        operationType = SyncQueueEntity.OP_VOID_INFLOW,
+                        payloadJson = AccountingRequestJsonAdapter.voidInflowRequestToJson(request)
+                    )
+                )
+            }
+            onTriggerSync?.invoke()
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.Error(e)
+        }
+    }
+
+    /** Set by the app container to start a sync after a void is queued. */
+    var onTriggerSync: (() -> Unit)? = null
+
+    private companion object {
+        const val VOID_STATUS = "VOID"
     }
 }
 
