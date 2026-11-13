@@ -19,10 +19,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.financeautomation.core.utils.formatRupeesAuto
@@ -31,6 +34,61 @@ import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import kotlin.math.abs
+
+/**
+ * Auto-shrinking amount text composable for KPI cards.
+ * Displays formatted amount and gracefully reduces font size down to 16sp floor
+ * if width overflows under large font scales before falling back to compact representation.
+ */
+@Composable
+fun ShrinkToFitAmount(
+    amount: Double,
+    isLargeAmount: Boolean,
+    showExact: Boolean,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    floorFontSize: TextUnit = 16.sp
+) {
+    val baseStyle = if (isLargeAmount) FinanceTheme.typography.amountHero else FinanceTheme.typography.amountMedium
+    val exactText = formatRupeesAuto(amount)
+    val compactText = formatRupeesCompact(amount)
+
+    // Primary display text according to threshold rules:
+    // Full-width: exact up to 7 digits (< 10,000,000), compact beyond
+    // Half-width: exact up to 5 digits (< 100,000), compact beyond
+    val primaryText = if (showExact) {
+        exactText
+    } else if (isLargeAmount) {
+        if (abs(amount) < 10000000.0) exactText else compactText
+    } else {
+        if (abs(amount) < 100000.0) exactText else compactText
+    }
+
+    var fontSize by remember(primaryText) { mutableStateOf(baseStyle.fontSize) }
+    var useFallbackCompact by remember(primaryText) { mutableStateOf(false) }
+
+    val currentText = if (useFallbackCompact) compactText else primaryText
+
+    Text(
+        text = currentText,
+        style = baseStyle.copy(fontSize = fontSize),
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+        onTextLayout = { textLayoutResult ->
+            if (textLayoutResult.didOverflowWidth) {
+                if (fontSize.value > floorFontSize.value) {
+                    fontSize = (fontSize.value - 1f).sp
+                } else if (!useFallbackCompact && primaryText != compactText) {
+                    useFallbackCompact = true
+                    fontSize = baseStyle.fontSize
+                }
+            }
+        }
+    )
+}
 
 /**
  * KPI card for dashboard metrics row (Y1 final).
@@ -49,16 +107,6 @@ fun KpiCard(
     onClick: (() -> Unit)? = null
 ) {
     var showExact by remember { mutableStateOf(false) }
-
-    val formattedAmount = if (showExact) {
-        formatRupeesAuto(amount)
-    } else if (isLargeAmount) {
-        // Full-width Living burn card shows exact figure up to 7 digits before compact
-        if (abs(amount) < 10000000.0) formatRupeesAuto(amount) else formatRupeesCompact(amount)
-    } else {
-        // Half-width cards: 5-digit and larger amounts switch to compact
-        formatRupeesCompact(amount)
-    }
 
     Card(
         shape = FinanceShapes.appCard,
@@ -93,12 +141,10 @@ fun KpiCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Text(
-                text = formattedAmount,
-                style = if (isLargeAmount) FinanceTheme.typography.amountHero else FinanceTheme.typography.amountMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            ShrinkToFitAmount(
+                amount = amount,
+                isLargeAmount = isLargeAmount,
+                showExact = showExact,
                 modifier = Modifier.padding(vertical = FinanceTheme.spacing.xs)
             )
 
