@@ -511,6 +511,7 @@
     <string name="budget_row_none">No budget set</string>
     <string name="budget_row_amount">Budget %1$s a month</string>
     <string name="budget_row_edit_cd">Set the monthly budget for %1$s</string>
+    <string name="budget_progress_caption">%1$s of %2$s budget</string>
     <string name="budget_bar_cd_used">%1$s: %2$d percent of the monthly budget used</string>
     <string name="budget_bar_cd_over">%1$s: over the monthly budget, %2$d percent used</string>
 
@@ -547,4 +548,54 @@
     <string name="widget_month_burn_placeholder_month">Month</string>
     <string name="widget_month_burn_placeholder_amount">&#8377;0</string>
     <string name="widget_month_burn_placeholder_per_day">&#8377;0 a day</string>
+
+    <!-- Moved from screen literals -->
+    <string name="dashboard_picker_previous_year">Previous year</string>
+    <string name="dashboard_picker_next_year">Next year</string>
+    <string name="dashboard_picker_select_month">Select month</string>
+    <string name="dashboard_picker_this_month">This month</string>
+    <string name="accounts_edit_title">Edit account</string>
+    <string name="accounts_field_name">Account name</string>
+    <string name="accounts_field_last4">Last 4 digits</string>
+    <string name="accounts_set_default">Set as default account</string>
+    <string name="accounts_archive">Archive account</string>
+    <string name="accounts_name_placeholder">e.g. HDFC Salary</string>
+    <string name="accounts_last4_placeholder">e.g. 1234</string>
+    <string name="categories_edit_title">Edit category</string>
+    <string name="categories_field_name">Category name</string>
+    <string name="categories_hide">Hide category</string>
+    <string name="trips_isolate_hint">Isolate living burn with a dedicated trip ledger</string>
+    <string name="trips_end_trip">End trip</string>
+    <string name="trips_reactivate">Reactivate</string>
+    <string name="friends_remove">Remove</string>
+    <string name="friends_details_title">Friend details</string>
+    <string name="friends_field_name">Name</string>
+    <string name="friends_save_name">Save name</string>
+    <string name="friends_remove_friend">Remove friend</string>
+    <string name="sync_disconnect_title">Disconnect Google account?</string>
+    <string name="sync_disconnect_body">Disconnect your Google account? Items waiting to sync stay on this phone.</string>
+    <string name="sync_disconnect_action">Disconnect</string>
+    <string name="sync_sign_in">Sign in</string>
+    <string name="sync_advanced">Advanced</string>
+    <string name="sync_mirror">Mirror</string>
+    <string name="sync_restore">Restore</string>
+    <string name="sync_regenerate_formulas">Regenerate dashboard formulas</string>
+    <string name="sync_provisioning">Provisioning workbook...</string>
+    <string name="txn_your_share">Your share</string>
+    <string name="txn_clear_search">Clear search</string>
+    <string name="txn_chip_all">All</string>
+    <string name="txn_chip_upi">UPI</string>
+    <string name="txn_chip_card">Card</string>
+    <string name="txn_chip_cash">Cash</string>
+    <string name="txn_chip_show_void">Show void</string>
+    <string name="txn_chip_needs_review">Needs review</string>
+    <string name="txn_chip_income">Income</string>
+    <string name="txn_detail_category">Category</string>
+    <string name="txn_detail_account">Account</string>
+    <string name="txn_detail_datetime">Date &amp; time</string>
+    <string name="txn_detail_split">Split</string>
+    <string name="txn_detail_source">Source</string>
+    <string name="txn_detail_type">Type</string>
+    <string name="txn_detail_note">Note</string>
+    <string name="txn_void_entry_confirm">Void this entry? It is removed from totals and marked void in your sheet.</string>
 </resources>

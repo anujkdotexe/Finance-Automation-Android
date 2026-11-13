@@ -18,7 +18,11 @@ import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.usecase.LivingBurn
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.repository.CategoryRepository
+import com.financeautomation.domain.model.Budget
+import com.financeautomation.domain.usecase.BudgetProgress
+import com.financeautomation.domain.usecase.BudgetProgressUseCase
 import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -75,6 +79,8 @@ data class DashboardUiState(
     val failedCount: Int = 0,
     val topCategories: List<CategorySpend> = emptyList(),
     val allCategories: List<CategorySpend> = emptyList(),
+    /** Budget progress of the selected month, keyed by the trimmed lower case category name. */
+    val budgetProgress: Map<String, BudgetProgress> = emptyMap(),
     val recentTransactions: List<Transaction> = emptyList(),
     val savings: Double = 0.0,
     val income: Double = 0.0,
@@ -111,7 +117,8 @@ class DashboardViewModel(
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
     private val inflowRepository: InflowRepository? = null,
     private val onlineState: Flow<Boolean>? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val budgetRepository: BudgetRepository? = null
 ) : ViewModel() {
 
     constructor(
@@ -264,6 +271,7 @@ class DashboardViewModel(
             val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
             val needsReviewCapturesFlow = pendingCaptureDao?.getNeedsReviewCapturesFlow() ?: flowOf(emptyList())
             val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
+            val budgetsFlow = budgetRepository?.observeBudgets() ?: flowOf(emptyList())
 
             combine(
                 transactionRepository.getTransactions(),
@@ -273,7 +281,8 @@ class DashboardViewModel(
                 needsReviewCapturesFlow,
                 monthOffsetFlow,
                 onlineState ?: flowOf(true),
-                inflowsFlow
+                inflowsFlow,
+                budgetsFlow
             ) { flows ->
                 @Suppress("UNCHECKED_CAST")
                 val transactions = flows[0] as List<Transaction>
@@ -289,6 +298,8 @@ class DashboardViewModel(
                 val isOnline = flows[6] as Boolean
                 @Suppress("UNCHECKED_CAST")
                 val inflows = flows[7] as List<Inflow>
+                @Suppress("UNCHECKED_CAST")
+                val budgets = flows[8] as List<Budget>
 
                 calculateDashboardMetrics(
                     transactions = transactions,
@@ -299,6 +310,7 @@ class DashboardViewModel(
                     monthOffset = monthOffset,
                     inflows = inflows
                 ).copy(
+                    budgetProgress = budgetProgressFor(monthOffset, budgets, transactions, categories),
                     isOffline = !isOnline,
                     queuedItems = buildQueuedItems(transactions, queueItems)
                 )
@@ -328,6 +340,19 @@ class DashboardViewModel(
 
     fun setMonthOffset(offset: Int) {
         monthOffsetFlow.value = offset
+    }
+
+    private fun budgetProgressFor(
+        monthOffset: Int,
+        budgets: List<Budget>,
+        transactions: List<Transaction>,
+        categories: List<com.financeautomation.domain.model.Category>
+    ): Map<String, BudgetProgress> {
+        if (budgets.isEmpty()) return emptyMap()
+        val month = java.time.YearMonth.now(LivingBurn.KOLKATA).plusMonths(monthOffset.toLong())
+        return BudgetProgressUseCase()
+            .forMonth(month.year, month.monthValue, budgets, transactions, categories)
+            .associateBy { it.category.trim().lowercase() }
     }
 
     private fun buildQueuedItems(
@@ -589,7 +614,8 @@ class DashboardViewModel(
             pendingCaptureDao: PendingCaptureDao? = null,
             categoryRepository: CategoryRepository? = null,
             inflowRepository: InflowRepository? = null,
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            budgetRepository: BudgetRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -600,7 +626,8 @@ class DashboardViewModel(
                     directPendingCaptureDao = pendingCaptureDao,
                     categoryRepository = categoryRepository,
                     inflowRepository = inflowRepository,
-                    ioDispatcher = ioDispatcher
+                    ioDispatcher = ioDispatcher,
+                    budgetRepository = budgetRepository
                 ) as T
             }
         }
@@ -613,7 +640,8 @@ class DashboardViewModel(
             categoryRepository: CategoryRepository? = null,
             inflowRepository: InflowRepository? = null,
             onlineState: Flow<Boolean>? = null,
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            budgetRepository: BudgetRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -625,7 +653,8 @@ class DashboardViewModel(
                     categoryRepository = categoryRepository,
                     inflowRepository = inflowRepository,
                     onlineState = onlineState,
-                    ioDispatcher = ioDispatcher
+                    ioDispatcher = ioDispatcher,
+                    budgetRepository = budgetRepository
                 ) as T
             }
         }

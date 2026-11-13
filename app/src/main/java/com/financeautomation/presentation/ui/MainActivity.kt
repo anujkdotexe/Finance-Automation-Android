@@ -66,7 +66,8 @@ class MainActivity : FragmentActivity() {
             categoryRepository = app.appContainer.categoryRepository,
             inflowRepository = app.appContainer.inflowRepository,
             onlineState = app.appContainer.connectivityObserver.isOnline,
-            ioDispatcher = app.appContainer.ioDispatcher
+            ioDispatcher = app.appContainer.ioDispatcher,
+            budgetRepository = app.appContainer.budgetRepository
         )
     }
 
@@ -76,7 +77,9 @@ class MainActivity : FragmentActivity() {
             transactionRepository = app.appContainer.transactionRepository,
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
             inflowRepository = app.appContainer.inflowRepository,
-            ioDispatcher = app.appContainer.ioDispatcher
+            ioDispatcher = app.appContainer.ioDispatcher,
+            budgetRepository = app.appContainer.budgetRepository,
+            categoryRepository = app.appContainer.categoryRepository
         )
     }
 

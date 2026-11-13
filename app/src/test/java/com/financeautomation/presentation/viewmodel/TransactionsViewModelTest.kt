@@ -1133,4 +1133,53 @@ class TransactionsViewModelTest {
         assertTrue(foodUpiWithVoid.any { it.id == "t_food_upi" })
         assertTrue(foodUpiWithVoid.any { it.id == "t_food_upi_void" })
     }
+
+    private fun shoppingTxn(id: String, amount: Double): Transaction {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Kolkata")).apply {
+            set(java.util.Calendar.DAY_OF_MONTH, 1)
+            set(java.util.Calendar.HOUR_OF_DAY, 10)
+        }
+        return Transaction(
+            id = id,
+            timestamp = cal.timeInMillis,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Shop",
+            category = "Shopping",
+            totalAmount = amount,
+            companions = "Personal",
+            myShare = amount,
+            owedToMe = 0.0,
+            status = com.financeautomation.core.model.TransactionStatus.SETTLED
+        )
+    }
+
+    @Test
+    fun categoryBudgetAppearsOnlyWhenTheFilteredCategoryHasABudget() = runTest {
+        val tRepo = FakeTransactionRepo()
+        tRepo.insertTransaction(shoppingTxn("c1", 600.0))
+        val vm = TransactionsViewModel(
+            tRepo,
+            ioDispatcher = testDispatcher,
+            budgetRepository = FakeBudgetFlowRepository(mapOf("Shopping" to 1000.0))
+        )
+        advanceUntilIdle()
+        assertEquals(null, vm.uiState.value.categoryBudget)
+
+        vm.setFilter(com.financeautomation.presentation.viewmodel.TransactionFilter(category = "Shopping"))
+        advanceUntilIdle()
+        val budget = vm.uiState.value.categoryBudget!!
+        assertEquals(600.0, budget.spent, 0.001)
+        assertEquals(60.0, budget.percentUsed, 0.001)
+
+        vm.setFilter(com.financeautomation.presentation.viewmodel.TransactionFilter(category = "Transit"))
+        advanceUntilIdle()
+        assertEquals(null, vm.uiState.value.categoryBudget)
+
+        vm.previousMonth()
+        vm.setFilter(com.financeautomation.presentation.viewmodel.TransactionFilter(category = "Shopping"))
+        advanceUntilIdle()
+        assertEquals(0.0, vm.uiState.value.categoryBudget!!.spent, 0.001)
+    }
 }

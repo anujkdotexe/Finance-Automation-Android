@@ -853,4 +853,75 @@ class DashboardViewModelTest {
 
         assertEquals(-2, vm.uiState.value.monthOffset)
     }
+
+    private fun shoppingTxn(id: String, amount: Double, share: Double = amount): Transaction {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }
+        return Transaction(
+            id = id,
+            timestamp = cal.timeInMillis,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Shop",
+            category = "Shopping",
+            totalAmount = amount,
+            companions = "Personal",
+            myShare = share,
+            owedToMe = amount - share,
+            status = TransactionStatus.SETTLED
+        )
+    }
+
+    @Test
+    fun budgetProgressIsKeyedByCategoryAndUsesMyShare() = runTest {
+        val tRepo = FakeTransactionRepo()
+        tRepo.insertTransaction(shoppingTxn("b1", amount = 1000.0, share = 500.0))
+        tRepo.insertTransaction(shoppingTxn("b2", amount = 300.0))
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            categoryRepository = FakeCategoryRepo(),
+            budgetRepository = FakeBudgetFlowRepository(mapOf("Shopping" to 1000.0, "Food & Drink" to 500.0)),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val progress = vm.uiState.value.budgetProgress
+        assertEquals(setOf("shopping", "food & drink"), progress.keys)
+        assertEquals(800.0, progress.getValue("shopping").spent, 0.001)
+        assertEquals(80.0, progress.getValue("shopping").percentUsed, 0.001)
+        assertEquals(com.financeautomation.domain.usecase.BudgetState.WARNING, progress.getValue("shopping").state)
+        assertEquals(0.0, progress.getValue("food & drink").spent, 0.001)
+    }
+
+    @Test
+    fun budgetProgressIsEmptyWithoutBudgetsAndForOtherMonths() = runTest {
+        val tRepo = FakeTransactionRepo()
+        tRepo.insertTransaction(shoppingTxn("b3", amount = 300.0))
+        val withoutBudgets = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            categoryRepository = FakeCategoryRepo(),
+            budgetRepository = FakeBudgetFlowRepository(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertTrue(withoutBudgets.uiState.value.budgetProgress.isEmpty())
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            categoryRepository = FakeCategoryRepo(),
+            budgetRepository = FakeBudgetFlowRepository(mapOf("Shopping" to 1000.0)),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertEquals(300.0, vm.uiState.value.budgetProgress.getValue("shopping").spent, 0.001)
+        vm.previousMonth()
+        advanceUntilIdle()
+        assertEquals(0.0, vm.uiState.value.budgetProgress.getValue("shopping").spent, 0.001)
+    }
 }

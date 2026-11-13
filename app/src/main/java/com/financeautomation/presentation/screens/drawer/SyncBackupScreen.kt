@@ -130,14 +130,14 @@ fun SyncBackupScreen(
             onDismissRequest = { showSignOutDialog = false },
             title = {
                 Text(
-                    text = "Disconnect Google account?",
+                    text = stringResource(R.string.sync_disconnect_title),
                     style = FinanceTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
                 Text(
-                    text = "Disconnect your Google account? Items waiting to sync stay on this phone.",
+                    text = stringResource(R.string.sync_disconnect_body),
                     style = FinanceTheme.typography.bodyMedium
                 )
             },
@@ -148,7 +148,7 @@ fun SyncBackupScreen(
                         viewModel.onGoogleSignOut(context)
                     }
                 ) {
-                    Text("Disconnect")
+                    Text(stringResource(R.string.sync_disconnect_action))
                 }
             },
             dismissButton = {
@@ -291,7 +291,7 @@ fun SyncBackupScreen(
                             shape = FinanceTheme.shapes.small,
                             modifier = Modifier.padding(start = FinanceTheme.spacing.xs)
                         ) {
-                            Text("Sign in", style = FinanceTheme.typography.labelMedium)
+                            Text(stringResource(R.string.sync_sign_in), style = FinanceTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -438,7 +438,7 @@ fun SyncBackupScreen(
 
         // Advanced Section
         Text(
-            text = "Advanced",
+            text = stringResource(R.string.sync_advanced),
             style = FinanceTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
@@ -495,7 +495,7 @@ fun SyncBackupScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = "Mirror",
+                            text = stringResource(R.string.sync_mirror),
                             maxLines = 1
                         )
                     }
@@ -506,7 +506,7 @@ fun SyncBackupScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = "Restore",
+                            text = stringResource(R.string.sync_restore),
                             maxLines = 1
                         )
                     }
@@ -519,7 +519,7 @@ fun SyncBackupScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Regenerate dashboard formulas",
+                        text = stringResource(R.string.sync_regenerate_formulas),
                         maxLines = 1
                     )
                 }
@@ -562,7 +562,7 @@ fun SyncBackupScreen(
                         )
                         Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                         Text(
-                            text = "Provisioning workbook...",
+                            text = stringResource(R.string.sync_provisioning),
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -160,7 +160,7 @@ fun CategoriesScreen(
             onDismissRequest = { selectedCategoryForEdit = null },
             title = {
                 Text(
-                    text = "Edit Category",
+                    text = stringResource(R.string.categories_edit_title),
                     style = FinanceTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -172,7 +172,7 @@ fun CategoriesScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
                         Text(
-                            text = "Category Name",
+                            text = stringResource(R.string.categories_field_name),
                             style = FinanceTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -192,7 +192,7 @@ fun CategoriesScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Hide category", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.categories_hide), color = MaterialTheme.colorScheme.error)
                     }
                 }
             },
@@ -206,12 +206,12 @@ fun CategoriesScreen(
                     },
                     enabled = editName.isNotBlank() && editName.trim() != cat.name
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.action_save))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { selectedCategoryForEdit = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -278,21 +278,23 @@ private fun CategoryItemCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        text = if (budgetAmount != null) {
-                            stringResource(R.string.budget_row_amount, com.financeautomation.core.utils.formatRupees(budgetAmount))
-                        } else {
-                            stringResource(R.string.budget_row_none)
-                        },
-                        style = FinanceTheme.typography.bodySmall,
-                        color = if (budgetAmount != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .defaultMinSize(
-                                minWidth = FinanceTheme.sizes.minTouchTarget,
-                                minHeight = FinanceTheme.sizes.minTouchTarget
-                            )
-                            .clickable(onClickLabel = editDescription, onClick = onOpenBudget)
-                    )
+                    if (!isLocked) {
+                        Text(
+                            text = if (budgetAmount != null) {
+                                stringResource(R.string.budget_row_amount, com.financeautomation.core.utils.formatRupees(budgetAmount))
+                            } else {
+                                stringResource(R.string.budget_row_none)
+                            },
+                            style = FinanceTheme.typography.bodySmall,
+                            color = if (budgetAmount != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .defaultMinSize(
+                                    minWidth = FinanceTheme.sizes.minTouchTarget,
+                                    minHeight = FinanceTheme.sizes.minTouchTarget
+                                )
+                                .clickable(onClickLabel = editDescription, onClick = onOpenBudget)
+                        )
+                    }
                 }
             }
 

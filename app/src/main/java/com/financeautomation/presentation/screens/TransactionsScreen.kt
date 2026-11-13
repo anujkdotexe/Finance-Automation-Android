@@ -241,7 +241,7 @@ fun TransactionsContent(
         ) {
             Column {
                 Text(
-                    text = "Your share",
+                    text = stringResource(R.string.txn_your_share),
                     style = FinanceTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -286,7 +286,7 @@ fun TransactionsContent(
                     IconButton(onClick = { onSearchQueryChange("") }) {
                         Icon(
                             imageVector = Icons.Rounded.Clear,
-                            contentDescription = "Clear search",
+                            contentDescription = stringResource(R.string.txn_clear_search),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -335,12 +335,12 @@ fun TransactionsContent(
                 )
             }
             AppChip(
-                text = "All",
+                text = stringResource(R.string.txn_chip_all),
                 selected = isAllSelected,
                 onClick = onClearFilter
             )
             AppChip(
-                text = "UPI",
+                text = stringResource(R.string.txn_chip_upi),
                 selected = currentAccount.equals("UPI", ignoreCase = true),
                 onClick = {
                     val newAcc = if (currentAccount.equals("UPI", ignoreCase = true)) null else "UPI"
@@ -348,7 +348,7 @@ fun TransactionsContent(
                 }
             )
             AppChip(
-                text = "Card",
+                text = stringResource(R.string.txn_chip_card),
                 selected = currentAccount.equals("Card", ignoreCase = true),
                 onClick = {
                     val newAcc = if (currentAccount.equals("Card", ignoreCase = true)) null else "Card"
@@ -356,7 +356,7 @@ fun TransactionsContent(
                 }
             )
             AppChip(
-                text = "Cash",
+                text = stringResource(R.string.txn_chip_cash),
                 selected = currentAccount.equals("Cash", ignoreCase = true),
                 onClick = {
                     val newAcc = if (currentAccount.equals("Cash", ignoreCase = true)) null else "Cash"
@@ -364,14 +364,14 @@ fun TransactionsContent(
                 }
             )
             AppChip(
-                text = "Show void",
+                text = stringResource(R.string.txn_chip_show_void),
                 selected = isShowVoid,
                 onClick = {
                     onFilterChange(state.activeFilter.copy(showVoid = !isShowVoid))
                 }
             )
             AppChip(
-                text = "Needs Review",
+                text = stringResource(R.string.txn_chip_needs_review),
                 selected = currentStatus.equals("review", ignoreCase = true),
                 onClick = {
                     val newStatus = if (currentStatus.equals("review", ignoreCase = true)) null else "review"
@@ -379,7 +379,7 @@ fun TransactionsContent(
                 }
             )
             AppChip(
-                text = "Income",
+                text = stringResource(R.string.txn_chip_income),
                 selected = currentStatus.equals("income", ignoreCase = true),
                 onClick = {
                     val newStatus = if (currentStatus.equals("income", ignoreCase = true)) null else "income"
@@ -405,6 +405,20 @@ fun TransactionsContent(
                     )
                 }
             }
+        }
+
+        state.categoryBudget?.let { progress ->
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
+            com.financeautomation.presentation.components.BudgetBar(progress = progress)
+            Text(
+                text = androidx.compose.ui.res.stringResource(
+                    com.financeautomation.R.string.budget_progress_caption,
+                    com.financeautomation.core.utils.formatRupees(progress.spent),
+                    com.financeautomation.core.utils.formatRupees(progress.budget)
+                ),
+                style = FinanceTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
@@ -645,16 +659,16 @@ fun TransactionDetailSheet(
                 containerColor = FinanceTheme.colors.surfaceContainerLow
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-                    DetailRow(label = "Category", value = transaction.category)
-                    DetailRow(label = "Account", value = transaction.account)
-                    DetailRow(label = "Date & time", value = fullDateFormat.format(Date(transaction.timestamp)))
+                    DetailRow(label = stringResource(R.string.txn_detail_category), value = transaction.category)
+                    DetailRow(label = stringResource(R.string.txn_detail_account), value = transaction.account)
+                    DetailRow(label = stringResource(R.string.txn_detail_datetime), value = fullDateFormat.format(Date(transaction.timestamp)))
 
                     val splitSummary = if (transaction.owedToMe > 0.0) {
                         "My share ${formatRupeesAuto(transaction.myShare)} · Owed ${formatRupeesAuto(transaction.owedToMe)}"
                     } else {
                         "Personal (My share ${formatRupeesAuto(transaction.myShare)})"
                     }
-                    DetailRow(label = "Split", value = splitSummary)
+                    DetailRow(label = stringResource(R.string.txn_detail_split), value = splitSummary)
                 }
             }
 
@@ -771,13 +785,13 @@ fun IncomeDetailSheet(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
                     if (inflow.source.isNotBlank()) {
-                        DetailRow(label = "Source", value = inflow.source)
+                        DetailRow(label = stringResource(R.string.txn_detail_source), value = inflow.source)
                     }
-                    DetailRow(label = "Type", value = inflow.inflowType)
-                    DetailRow(label = "Account", value = inflow.account)
-                    DetailRow(label = "Date & time", value = fullDateFormat.format(Date(inflow.timestamp)))
+                    DetailRow(label = stringResource(R.string.txn_detail_type), value = inflow.inflowType)
+                    DetailRow(label = stringResource(R.string.txn_detail_account), value = inflow.account)
+                    DetailRow(label = stringResource(R.string.txn_detail_datetime), value = fullDateFormat.format(Date(inflow.timestamp)))
                     if (inflow.note.isNotBlank()) {
-                        DetailRow(label = "Note", value = inflow.note)
+                        DetailRow(label = stringResource(R.string.txn_detail_note), value = inflow.note)
                     }
                 }
             }
@@ -791,7 +805,7 @@ fun IncomeDetailSheet(
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                     ) {
                         Text(
-                            text = "Void this entry? It is removed from totals and marked void in your sheet.",
+                            text = stringResource(R.string.txn_void_entry_confirm),
                             style = FinanceTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
