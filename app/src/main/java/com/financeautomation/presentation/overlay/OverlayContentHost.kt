@@ -64,6 +64,7 @@ fun OverlayContentHost(
     accounts: List<Account>,
     companions: List<Companion>,
     activeTripTag: TripTag?,
+    tripSummary: com.financeautomation.domain.usecase.TripSummary? = null,
     openDebts: List<OpenDebtItem>,
     preselectedFriend: String? = null,
     onPersonChanged: (String) -> Unit = {},
@@ -230,6 +231,7 @@ fun OverlayContentHost(
                     TripModeFlowSheet(
                         activeTag = activeTripTag,
                         companions = companions,
+                        tripSummary = tripSummary,
                         onBack = {
                             if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
                         },

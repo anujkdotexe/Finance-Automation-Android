@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.ui
 
+import kotlinx.coroutines.flow.first
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.graphics.drawable.ColorDrawable
@@ -126,6 +127,13 @@ class ModalBottomSheetActivity : ComponentActivity() {
                 val activeTripTag by produceState<TripTag?>(initialValue = null) {
                     value = withContext(Dispatchers.IO) { app.appContainer.tripTagRepository.getActiveTagSync() }
                 }
+                val tripSummary by produceState<com.financeautomation.domain.usecase.TripSummary?>(initialValue = null, activeTripTag, lockedNow) {
+                    val tag = activeTripTag
+                    value = if (lockedNow || tag == null) null else withContext(Dispatchers.IO) {
+                        com.financeautomation.domain.usecase.TripSummaryUseCase()
+                            .forTrip(tag.name, app.appContainer.transactionRepository.getTransactions().first())
+                    }
+                }
                 var openDebts by remember { mutableStateOf<List<OpenDebtItem>>(emptyList()) }
                 val preselectedFriend = if (lockedNow) null else remember { intent.getStringExtra(EXTRA_PRESELECT_FRIEND) }
 
@@ -164,6 +172,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         accounts = accounts,
                         companions = companions,
                         activeTripTag = activeTripTag,
+                        tripSummary = tripSummary,
                         openDebts = openDebts,
                         preselectedFriend = preselectedFriend,
                         onPersonChanged = { person ->
