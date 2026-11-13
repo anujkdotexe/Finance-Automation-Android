@@ -51,10 +51,10 @@ fun MonthSwitcher(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(FinanceTheme.sizes.minTouchTarget)
             .clip(FinanceShapes.card)
             .background(FinanceTheme.colors.surfaceContainerLowest)
-            .padding(horizontal = 4.dp),
+            .padding(horizontal = FinanceTheme.spacing.xs),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -64,7 +64,7 @@ fun MonthSwitcher(
         ) {
             IconButton(
                 onClick = onPreviousMonth,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
@@ -75,13 +75,13 @@ fun MonthSwitcher(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.CalendarToday,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(FinanceTheme.sizes.icon18)
                 )
                 Text(
                     text = monthLabel,
@@ -92,7 +92,7 @@ fun MonthSwitcher(
 
             IconButton(
                 onClick = onNextMonth,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
@@ -127,12 +127,12 @@ fun CategoryBreakdownSection(
         )
 
         TonalCard {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.cardGap)) {
                 categories.forEach { item ->
                     val percentageInt = (item.percentage * 100).toInt()
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.sm)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -146,7 +146,7 @@ fun CategoryBreakdownSection(
                             )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                             ) {
                                 AmountText(
                                     amount = item.amount,
@@ -165,7 +165,7 @@ fun CategoryBreakdownSection(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
+                                .height(FinanceTheme.sizes.proportionBarHeight)
                                 .clip(CircleShape)
                                 .background(FinanceTheme.colors.surfaceContainer)
                         ) {
