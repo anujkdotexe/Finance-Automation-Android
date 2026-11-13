@@ -551,15 +551,16 @@
 
     <!-- Subscriptions Screen (U11) -->
     <string name="sub_title">Subscriptions</string>
-    <string name="sub_total_monthly">Total Monthly</string>
+    <string name="sub_total_monthly">Total monthly</string>
     <string name="sub_active_count">%1$d active</string>
     <string name="sub_per_month">/ month</string>
-    <string name="sub_active_title">Active Subscriptions</string>
+    <string name="sub_active_title">Active subscriptions</string>
     <string name="sub_next_due">Next due %1$s</string>
+    <string name="sub_next_due_formatted">Next due %1$s, %2$s</string>
     <string name="sub_next_due_today">Next due today</string>
-    <string name="sub_paused_title">Paused Subscriptions</string>
+    <string name="sub_paused_title">Paused subscriptions</string>
     <string name="sub_empty_title">No active subscriptions</string>
-    <string name="sub_empty_subtitle">Add recurring subscriptions to track upcoming bills and living burn.</string>
+    <string name="sub_empty_subtitle">Tap Add to track a recurring payment</string>
     <string name="sub_add_title">Add subscription</string>
     <string name="sub_add_name_label">NAME</string>
     <string name="sub_add_name_placeholder">e.g. Netflix, Gym, Google One</string>
