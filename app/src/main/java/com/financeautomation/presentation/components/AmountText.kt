@@ -36,9 +36,9 @@ fun AmountText(
 ) {
     val color: Color = when (tone) {
         AmountTone.DEFAULT -> FinanceTheme.colors.onSurface
-        AmountTone.MONEY_OUT -> FinanceTheme.colors.moneyOut
-        AmountTone.MONEY_IN -> FinanceTheme.colors.moneyIn
-        AmountTone.MONEY_OWED -> FinanceTheme.colors.moneyOwed
+        AmountTone.MONEY_OUT -> if (amount > 0.0) FinanceTheme.colors.moneyOut else FinanceTheme.colors.onSurface
+        AmountTone.MONEY_IN -> if (amount > 0.0) FinanceTheme.colors.moneyIn else FinanceTheme.colors.onSurface
+        AmountTone.MONEY_OWED -> if (amount > 0.0) FinanceTheme.colors.moneyOwed else FinanceTheme.colors.onSurface
         AmountTone.INFO -> FinanceTheme.colors.info
     }
 
