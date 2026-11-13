@@ -26,8 +26,8 @@ import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Standard 140dp-wide KPI card for horizontally scrolling KPI row.
- * Design: 16dp radius, surfaceContainerLow fill, no border, 16dp padding.
+ * KPI card for dashboard metrics row.
+ * Design: 16dp radius, surfaceContainerLow fill, no border, equal-weight layout.
  */
 @Composable
 fun KpiCard(
@@ -45,7 +45,6 @@ fun KpiCard(
         elevation = CardDefaults.cardElevation(defaultElevation = FinanceTheme.spacing.none),
         border = null,
         modifier = modifier
-            .width(FinanceTheme.sizes.kpiCardWidth)
             .defaultMinSize(minHeight = FinanceTheme.sizes.kpiCardMinHeight)
             .then(
                 if (onClick != null) {
@@ -56,7 +55,7 @@ fun KpiCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(FinanceTheme.sizes.cardPadding),
+                .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
@@ -109,7 +108,8 @@ private fun KpiCardPreviewNormalLight() {
             amount = 28549.0,
             line1Text = "Down 12% vs last month",
             line1IsPrimary = true,
-            line2Text = "₹951.63 / day"
+            line2Text = "₹951.63 / day",
+            modifier = Modifier.width(104.dp)
         )
     }
 }
@@ -123,7 +123,8 @@ private fun KpiCardPreviewLargeFontLight() {
             amount = 28549.0,
             line1Text = "Down 12% vs last month",
             line1IsPrimary = true,
-            line2Text = "₹951.63 / day"
+            line2Text = "₹951.63 / day",
+            modifier = Modifier.width(104.dp)
         )
     }
 }
@@ -135,7 +136,8 @@ private fun KpiCardPreviewNormalDark() {
         KpiCard(
             label = "Savings",
             amount = 42000.0,
-            line1Text = "36.5% of income"
+            line1Text = "36.5% of income",
+            modifier = Modifier.width(104.dp)
         )
     }
 }
