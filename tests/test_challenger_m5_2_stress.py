@@ -1045,7 +1045,7 @@ class TestStaticAnalysisAndArchitectureInvariants(unittest.TestCase):
             os.path.join("app", "src", "main", "java", "com", "financeautomation", "presentation", "viewmodel", "ReviewInboxViewModel.kt"),
             os.path.join("app", "src", "main", "java", "com", "financeautomation", "presentation", "viewmodel", "SettingsViewModel.kt"),
             os.path.join("app", "src", "main", "java", "com", "financeautomation", "presentation", "screens", "ReviewInboxScreen.kt"),
-            os.path.join("app", "src", "main", "java", "com", "financeautomation", "presentation", "screens", "SettingsScreen.kt"),
+            os.path.join("app", "src", "main", "java", "com", "financeautomation", "presentation", "screens", "drawer", "SyncBackupScreen.kt"),
             os.path.join("app", "src", "main", "java", "com", "financeautomation", "service", "QuickActionReceiver.kt"),
             os.path.join("app", "src", "test", "java", "com", "financeautomation", "presentation", "ReviewInboxViewModelTest.kt"),
             os.path.join("app", "src", "test", "java", "com", "financeautomation", "presentation", "SettingsViewModelTest.kt"),

@@ -28,14 +28,6 @@ enum class SplitMode {
 }
 
 /**
- * Direction of transaction flow.
- */
-enum class TransactionDirection {
-    DEBIT,
-    CREDIT
-}
-
-/**
  * Standardized transaction status strictly adhering to master ledger rules.
  */
 enum class TransactionStatus(val value: String) {
