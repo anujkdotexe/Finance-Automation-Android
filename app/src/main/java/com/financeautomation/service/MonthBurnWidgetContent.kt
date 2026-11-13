@@ -27,7 +27,9 @@ data class MonthBurnWidgetLabels(
     /** Template with one %1$d for the number of waiting items, for example "%1$d waiting". */
     val waitingTemplate: String,
     /** Template for the spoken summary: month, amount, per day text, sync text. */
-    val descriptionTemplate: String
+    val descriptionTemplate: String,
+    /** Shown instead of the amount while the app lock is on. */
+    val unlockToView: String = "Unlock to view"
 )
 
 /**
@@ -39,9 +41,21 @@ object MonthBurnWidgetFormatter {
     fun format(
         summary: MonthBurnSummary,
         labels: MonthBurnWidgetLabels,
-        locale: Locale = Locale.getDefault()
+        locale: Locale = Locale.getDefault(),
+        appLockOn: Boolean = false
     ): MonthBurnWidgetContent {
         val monthName = Month.of(summary.month).getDisplayName(TextStyle.FULL, locale)
+        if (appLockOn) {
+            // No figure leaves the app while the lock is on
+            return MonthBurnWidgetContent(
+                monthName = monthName,
+                title = labels.title,
+                amount = labels.unlockToView,
+                perDay = "",
+                syncState = "",
+                description = "$monthName ${labels.title}, ${labels.unlockToView}"
+            )
+        }
         val amount = formatRupees(summary.livingBurn)
         val perDay = String.format(locale, labels.perDayTemplate, formatRupees(summary.perDayAverage))
         val sync = when (val state = summary.syncState) {
