@@ -98,6 +98,12 @@ class NotificationProcessor(
             return NotificationProcessingOutcome.Ignored("Non-whitelisted package: $sourcePackage")
         }
 
+        // 3b. SMS from a personal number is rejected on the sender alone, before any text is examined
+        if (PackageWhitelist.isSmsPackage(sourcePackage) && com.financeautomation.core.utils.RegexPatterns.isPersonalSender(title)) {
+            PipelineTrail.recordDroppedNotWhitelisted()
+            return NotificationProcessingOutcome.Ignored("Personal sender SMS dropped")
+        }
+
         // 4. OTP and verification suppression check
         val fullContent = if (title.isNotBlank()) "$title. $text".trim() else text.trim()
         if (PackageWhitelist.isOtpOrAuth(fullContent)) {
