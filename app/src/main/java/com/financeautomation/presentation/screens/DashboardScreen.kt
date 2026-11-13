@@ -288,6 +288,18 @@ fun DashboardContent(
                     )
                 }
             }
+
+            // Refunds are already taken off the burn above, so the rows above add up to the burn plus this line
+            if (state.refunds > 0.0) {
+                item {
+                    Text(
+                        text = stringResource(R.string.dashboard_refunds_line, formatRupees(state.refunds)),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = FinanceTheme.spacing.s)
+                    )
+                }
+            }
         }
     }
 }

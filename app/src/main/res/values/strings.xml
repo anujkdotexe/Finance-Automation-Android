@@ -863,4 +863,6 @@
     <string name="attn_lock_done">App lock is on</string>
     <string name="attn_lock_reason">App lock is on but this phone has no screen lock set, so it protects nothing.</string>
     <string name="attn_lock_action">Set a screen lock</string>
+
+    <string name="dashboard_refunds_line">Refunds %1$s taken off the total</string>
 </resources>
