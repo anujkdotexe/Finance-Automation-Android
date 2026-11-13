@@ -1,33 +1,43 @@
 package com.financeautomation.presentation.screens.drawer
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Timer
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.SettingsBrightness
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.financeautomation.R
 import com.financeautomation.domain.model.ThemeMode
-import com.financeautomation.presentation.screens.SettingsCard
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
@@ -39,72 +49,270 @@ fun PreferencesScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    var sliderValue by remember(state.settleDelaySeconds) {
-        mutableFloatStateOf(state.settleDelaySeconds.toFloat())
-    }
+    var showAccountDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(FinanceTheme.spacing.l),
+            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
     ) {
-        // 1. Appearance / Theme
-        SettingsCard(
-            title = "Appearance",
-            subtitle = "Choose light, dark, or follow system theme",
-            icon = Icons.Rounded.Palette
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                listOf(
-                    ThemeMode.SYSTEM to "System",
-                    ThemeMode.LIGHT to "Light",
-                    ThemeMode.DARK to "Dark"
-                ).forEach { (mode, label) ->
-                    val isSelected = state.themeMode == mode
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.setThemeMode(mode) },
-                        label = { Text(label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
-                }
-            }
-        }
-
-        // 2. Settle Delay Window
-        SettingsCard(
-            title = "Settlement Delay",
-            subtitle = "Delay before a notification transaction settles to cloud ledger",
-            icon = Icons.Rounded.Timer
-        ) {
+        Column {
             Text(
-                text = "${sliderValue.toInt()} seconds",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
+                text = stringResource(R.string.pref_section_title),
+                style = FinanceTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
             )
-
-            Slider(
-                value = sliderValue,
-                onValueChange = { sliderValue = it },
-                onValueChangeFinished = { viewModel.onSettleDelayChanged(sliderValue.toInt()) },
-                valueRange = 30f..300f,
-                steps = 8
-            )
-
             Text(
-                text = "Allowed range: 30s to 300s (default 120s)",
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(R.string.pref_section_subtitle),
+                style = FinanceTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        // Exactly Three Rows Card
+        Surface(
+            color = FinanceTheme.colors.surfaceContainerLowest,
+            shape = FinanceShapes.large,
+            shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // ROW 1: Theme (System | Light | Dark)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    Text(
+                        text = stringResource(R.string.pref_theme_title),
+                        style = FinanceTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Surface(
+                        color = FinanceTheme.colors.surfaceContainer,
+                        shape = FinanceShapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(FinanceTheme.spacing.xs),
+                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                        ) {
+                            listOf(
+                                Triple(ThemeMode.SYSTEM, stringResource(R.string.pref_theme_system), Icons.Rounded.SettingsBrightness),
+                                Triple(ThemeMode.LIGHT, stringResource(R.string.pref_theme_light), Icons.Rounded.LightMode),
+                                Triple(ThemeMode.DARK, stringResource(R.string.pref_theme_dark), Icons.Rounded.DarkMode)
+                            ).forEach { (mode, label, icon) ->
+                                val isSelected = state.themeMode == mode
+                                Surface(
+                                    color = if (isSelected) FinanceTheme.colors.surfaceContainerLowest else FinanceTheme.colors.surfaceContainer,
+                                    shape = FinanceShapes.small,
+                                    shadowElevation = if (isSelected) FinanceTheme.sizes.shadowElevationSmall else FinanceTheme.spacing.none,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                                        .clip(FinanceShapes.small)
+                                        .clickable { viewModel.setThemeMode(mode) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = FinanceTheme.spacing.s),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(FinanceTheme.sizes.icon18)
+                                        )
+                                        Text(
+                                            text = label,
+                                            style = FinanceTheme.typography.labelMedium,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(start = FinanceTheme.spacing.xs)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+
+                // ROW 2: Default Account
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .clip(FinanceShapes.medium)
+                        .clickable { showAccountDialog = true }
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.pref_default_account_title),
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.pref_default_account_desc),
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        Text(
+                            text = state.defaultAccount,
+                            style = FinanceTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+
+                // ROW 3: Subscription Reminder Time
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .clip(FinanceShapes.medium)
+                        .clickable {
+                            val nextDelay = when (state.settleDelaySeconds) {
+                                60 -> 120
+                                120 -> 180
+                                180 -> 300
+                                else -> 60
+                            }
+                            viewModel.onSettleDelayChanged(nextDelay)
+                        }
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.pref_reminder_time_title),
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.pref_reminder_time_desc),
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        Text(
+                            text = "9:00 PM",
+                            style = FinanceTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { showAccountDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.pref_default_account_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    val accountsList = if (state.accounts.isNotEmpty()) {
+                        state.accounts.map { it.name }
+                    } else {
+                        listOf("HDFC", "ICICI", "Cash", "Other")
+                    }
+                    accountsList.forEach { accountName ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(FinanceShapes.small)
+                                .clickable {
+                                    viewModel.onDefaultAccountChanged(accountName)
+                                    showAccountDialog = false
+                                }
+                                .padding(vertical = FinanceTheme.spacing.s),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                        ) {
+                            RadioButton(
+                                selected = state.defaultAccount == accountName,
+                                onClick = {
+                                    viewModel.onDefaultAccountChanged(accountName)
+                                    showAccountDialog = false
+                                }
+                            )
+                            Text(
+                                text = accountName,
+                                style = FinanceTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAccountDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
-

@@ -458,6 +458,178 @@
     <string name="trip_people_on_trip">People on trip</string>
     <string name="label_you">You</string>
 
+    <!-- Round 4 UI Redesign Strings -->
+    <!-- Navigation Drawer -->
+    <string name="nav_item_transactions">Transactions</string>
+    <string name="nav_item_accounts">Accounts</string>
+    <string name="nav_item_categories">Categories</string>
+    <string name="nav_item_people_trips">People and trips</string>
+    <string name="nav_item_subscriptions">Subscriptions</string>
+    <string name="nav_item_capture_permissions">Capture and permissions</string>
+    <string name="nav_item_sync_backup">Sync and backup</string>
+    <string name="nav_item_preferences">Preferences</string>
+    <string name="nav_item_diagnostics">Diagnostics</string>
+    <string name="nav_item_about">About</string>
+
+    <!-- Accounts Screen -->
+    <string name="accounts_title">Accounts</string>
+    <string name="accounts_action_add">Add</string>
+    <string name="accounts_section_title">All Accounts</string>
+    <string name="accounts_section_subtitle">Connected accounts for automatic expense tracking</string>
+    <string name="accounts_badge_default">Default</string>
+    <string name="accounts_tx_count">%1$d transactions this month</string>
+    <string name="accounts_empty_title">No connected accounts</string>
+    <string name="accounts_empty_subtitle">Add your bank or payment accounts to track expenses automatically.</string>
+    <string name="dialog_add_account_title">Add account</string>
+    <string name="dialog_add_account_name">Account name</string>
+    <string name="dialog_add_account_last4">Last 4 digits (optional)</string>
+
+    <!-- Categories Screen -->
+    <string name="categories_title">Categories</string>
+    <string name="categories_action_add">Add category</string>
+    <string name="categories_section_title">Spending categories</string>
+    <string name="categories_section_subtitle">Count toward your monthly living burn</string>
+    <string name="categories_always_excluded">Always excluded from living burn</string>
+    <string name="categories_add_sheet_title">Add category</string>
+    <string name="categories_add_sheet_name_label">Category name</string>
+    <string name="categories_add_sheet_name_placeholder">e.g. Utilities</string>
+    <string name="categories_add_sheet_color_label">Colour</string>
+
+    <!-- Capture and Permissions Screen -->
+    <string name="capture_title">Capture and permissions</string>
+    <string name="capture_notification_title">Notification access</string>
+    <string name="capture_notification_desc">Reads payment notifications</string>
+    <string name="capture_battery_title">Battery optimisation</string>
+    <string name="capture_battery_desc">Unrestricted background execution</string>
+    <string name="capture_overlay_title">Overlay</string>
+    <string name="capture_overlay_desc">Displays instant capture prompt</string>
+    <string name="capture_apps_title">Apps we read</string>
+    <string name="capture_apps_desc">Google Pay, BHIM, Supermoney, PhonePe, Paytm, Bank SMS</string>
+    <string name="capture_privacy_note">We never read WhatsApp, Telegram or OTP messages.</string>
+    <string name="status_on">On</string>
+    <string name="status_off">Off</string>
+    <string name="status_unrestricted">Unrestricted</string>
+    <string name="status_restricted">Restricted</string>
+
+    <!-- Sync and Backup Screen -->
+    <string name="sync_title">Sync and backup</string>
+    <string name="sync_cloud_storage">Cloud storage</string>
+    <string name="sync_google_account">Google account</string>
+    <string name="sync_workbook">Workbook</string>
+    <string name="sync_open_in_sheets">Open in Sheets</string>
+    <string name="sync_last_sync">Last sync</string>
+    <string name="sync_btn_sync_now">Sync now</string>
+    <string name="sync_btn_backup_now">Back up now</string>
+
+    <!-- Preferences Screen -->
+    <string name="pref_title">Preferences</string>
+    <string name="pref_section_title">App settings</string>
+    <string name="pref_section_subtitle">Customise behavior and schedules</string>
+    <string name="pref_theme_title">Theme</string>
+    <string name="pref_theme_system">System</string>
+    <string name="pref_theme_light">Light</string>
+    <string name="pref_theme_dark">Dark</string>
+    <string name="pref_default_account_title">Default account</string>
+    <string name="pref_default_account_desc">Destination for new transactions</string>
+    <string name="pref_reminder_time_title">Subscription reminder time</string>
+    <string name="pref_reminder_time_desc">Daily tracking prompt</string>
+
+    <!-- Diagnostics Screen -->
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_section_title">Developer actions</string>
+    <string name="diag_section_subtitle">Low-level sync and diagnostic utilities</string>
+    <string name="diag_run_sync_now">Run sync now</string>
+    <string name="diag_run_sync_now_desc">Force immediate two-way synchronization</string>
+    <string name="diag_run_sub_check">Run subscription check now</string>
+    <string name="diag_run_sub_check_desc">Scan upcoming recurring payments</string>
+    <string name="diag_view_sync_log">View sync log</string>
+    <string name="diag_view_sync_log_desc">Inspect timestamps and error codes</string>
+    <string name="diag_export_logs">Export logs</string>
+    <string name="diag_export_logs_desc">Share sanitized debug logs to disk</string>
+    <string name="diag_locked_title">Diagnostics Locked</string>
+    <string name="diag_locked_desc">Developer options are currently disabled. Open About and tap the version number 7 times to unlock.</string>
+
+    <!-- Subscriptions Screen (U11) -->
+    <string name="sub_title">Subscriptions</string>
+    <string name="sub_total_monthly">Total Monthly</string>
+    <string name="sub_active_count">%1$d active</string>
+    <string name="sub_per_month">/ month</string>
+    <string name="sub_active_title">Active Subscriptions</string>
+    <string name="sub_next_due">Next due %1$s</string>
+    <string name="sub_next_due_today">Next due today</string>
+    <string name="sub_paused_title">Paused Subscriptions</string>
+    <string name="sub_empty_title">No active subscriptions</string>
+    <string name="sub_empty_subtitle">Add recurring subscriptions to track upcoming bills and living burn.</string>
+    <string name="sub_add_title">Add subscription</string>
+    <string name="sub_add_name_label">NAME</string>
+    <string name="sub_add_name_placeholder">e.g. Netflix, Gym, Google One</string>
+    <string name="sub_add_amount_label">AMOUNT</string>
+    <string name="sub_add_fixed">Fixed amount</string>
+    <string name="sub_add_variable">Amount varies</string>
+    <string name="sub_add_freq_label">FREQUENCY</string>
+    <string name="sub_add_freq_weekly">Weekly</string>
+    <string name="sub_add_freq_monthly">Monthly</string>
+    <string name="sub_add_freq_yearly">Yearly</string>
+    <string name="sub_add_due_date_label">NEXT DUE DATE</string>
+    <string name="sub_add_paid_from_label">PAID FROM ACCOUNT</string>
+    <string name="sub_add_category_label">CATEGORY</string>
+    <string name="sub_add_remind_label">Remind me before due date</string>
+
+    <!-- People and Trips Screen (U11) -->
+    <string name="people_trips_title">People and trips</string>
+    <string name="people_add_friend">Add friend</string>
+    <string name="people_section_friends">Friends</string>
+    <string name="people_friends_desc">Net balances from split expenses</string>
+    <string name="people_section_trips">Trips</string>
+    <string name="people_trips_desc">Shared travel ledgers</string>
+    <string name="people_owed_to_you">Owed to you</string>
+    <string name="people_i_owe">I owe</string>
+    <string name="people_settled">Settled</string>
+    <string name="people_all_caught_up">All caught up</string>
+    <string name="people_empty_title">No friends added</string>
+    <string name="people_empty_subtitle">Add friends to split group expenses and track shared debts.</string>
+    <string name="friend_add_title">Add friend</string>
+    <string name="friend_add_name_label">Friend\'s name</string>
+    <string name="friend_add_name_placeholder">e.g. Karan Malhotra</string>
+    <string name="friend_add_name_helper">Used for splitting bills and tracking shared balances.</string>
+    <string name="trip_active">Active</string>
+    <string name="trip_settled_tag">Settled</string>
+    <string name="trip_total_spend_label">Total spend</string>
+    <string name="trip_people_count">%1$d people</string>
+
+    <!-- About Screen (U12) -->
+    <string name="about_title">About</string>
+    <string name="about_app_name">Finance Automation</string>
+    <string name="about_version_label">Version %1$s (Build %2$d)</string>
+    <string name="about_engine_active">On-device engine active</string>
+    <string name="about_privacy_title">Strict privacy sandbox</string>
+    <string name="about_privacy_desc">We never read WhatsApp, Telegram, or OTP messages.</string>
+    <string name="about_metric_sms_filter">SMS filter</string>
+    <string name="about_metric_sms_val">Zero Log</string>
+    <string name="about_metric_sms_sub">Ephemeral memory</string>
+    <string name="about_metric_storage">Storage</string>
+    <string name="about_metric_storage_val">Local First</string>
+    <string name="about_metric_storage_sub">Google Sheets target</string>
+    <string name="about_link_privacy">Privacy policy</string>
+    <string name="about_link_licences">Open source licences</string>
+    <string name="about_footer">Built for local-first Android finance automation with Google Sheets.</string>
+
+    <!-- Error Screens (U12) -->
+    <string name="error_53_title">Google Sheets API not enabled</string>
+    <string name="error_53_desc">Enable the Google Sheets API in your Google Cloud console to sync transactions.</string>
+    <string name="error_53_action_open_console">Open Google Cloud</string>
+    <string name="error_53_action_retry">Retry</string>
+    <string name="error_54_title">Permission not granted</string>
+    <string name="error_54_desc">Google Drive permission is required to create and update your spreadsheet.</string>
+    <string name="error_54_action_grant">Grant permission</string>
+    <string name="error_55_title">Google API rate limited</string>
+    <string name="error_55_desc">Too many requests to Google Sheets API. Waiting before next sync attempt.</string>
+
+    <!-- Outside-the-App Surfaces (U13) -->
+    <string name="notification_action_yes">Yes</string>
+    <string name="notification_action_not_yet">Not yet</string>
+    <string name="notification_action_skip">Skip this time</string>
+
     <!-- Plurals -->
     <plurals name="review_pending_count">
         <item quantity="one">%d transaction needs review</item>
