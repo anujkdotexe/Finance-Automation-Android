@@ -13,6 +13,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -21,6 +25,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.core.utils.formatRupeesCompact
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -39,6 +44,8 @@ fun KpiCard(
     line2Text: String? = null,
     onClick: (() -> Unit)? = null
 ) {
+    var showExact by remember { mutableStateOf(false) }
+
     Card(
         shape = FinanceShapes.appCard,
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surfaceContainerLow),
@@ -46,10 +53,15 @@ fun KpiCard(
         border = null,
         modifier = modifier
             .defaultMinSize(minHeight = FinanceTheme.sizes.kpiCardMinHeight)
-            .then(
-                if (onClick != null) {
-                    Modifier.clickable(role = Role.Button, onClick = onClick)
-                } else Modifier
+            .clickable(
+                role = Role.Button,
+                onClick = {
+                    if (onClick != null) {
+                        onClick()
+                    } else {
+                        showExact = !showExact
+                    }
+                }
             )
     ) {
         Column(
@@ -67,7 +79,7 @@ fun KpiCard(
             )
 
             Text(
-                text = formatRupeesAuto(amount),
+                text = if (showExact) formatRupeesAuto(amount) else formatRupeesCompact(amount),
                 style = FinanceTheme.typography.amountMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
