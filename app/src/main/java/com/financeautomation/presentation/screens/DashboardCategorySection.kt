@@ -46,6 +46,7 @@ import com.financeautomation.R
 import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
 import com.financeautomation.presentation.components.AppCard
+import com.financeautomation.presentation.components.BudgetBar
 import com.financeautomation.presentation.components.SectionTitle
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -344,20 +345,11 @@ fun CategoryBreakdownSection(
                             }
                         }
 
-                        // Proportional progress bar (thin 4dp)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(FinanceTheme.sizes.proportionBarHeight)
-                                .clip(CircleShape)
-                                .background(FinanceTheme.colors.surfaceContainer)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(fraction = item.percentage.coerceIn(0f, 1f))
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
+                        // BudgetBar for categories with a budget; show nothing for categories without a budget
+                        if (item.budgetProgress != null) {
+                            BudgetBar(
+                                progress = item.budgetProgress,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }

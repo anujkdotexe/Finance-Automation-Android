@@ -68,6 +68,7 @@ class MainActivity : FragmentActivity() {
             inflowRepository = app.appContainer.inflowRepository,
             onlineState = app.appContainer.connectivityObserver.isOnline,
             preferencesRepository = app.appContainer.preferencesRepository,
+            budgetRepository = app.appContainer.budgetRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
