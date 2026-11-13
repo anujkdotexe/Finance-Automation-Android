@@ -195,54 +195,56 @@ fun DiagnosticsScreen(
             }
 
             // Simulate Payment Notification Card
-            Column {
-                Text(
-                    text = "Simulate payment notification",
-                    style = FinanceTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Inject test financial notification into local pipeline",
-                    style = FinanceTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            if (com.financeautomation.BuildConfig.ENABLE_SIMULATOR && state.developerMode) {
+                Column {
+                    Text(
+                        text = "Simulate payment notification",
+                        style = FinanceTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Inject test financial notification into local pipeline",
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-            Surface(
-                color = FinanceTheme.colors.surfaceContainerLowest,
-                shape = FinanceShapes.large,
-                shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    NotificationSimulatorPresets.PRESETS.forEachIndexed { index, preset ->
-                        if (index > 0) {
-                            HorizontalDivider(
-                                color = FinanceTheme.colors.surfaceContainerLow,
-                                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                Surface(
+                    color = FinanceTheme.colors.surfaceContainerLowest,
+                    shape = FinanceShapes.large,
+                    shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        NotificationSimulatorPresets.PRESETS.forEachIndexed { index, preset ->
+                            if (index > 0) {
+                                HorizontalDivider(
+                                    color = FinanceTheme.colors.surfaceContainerLow,
+                                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                                )
+                            }
+                            DiagnosticActionRow(
+                                icon = Icons.Rounded.Notifications,
+                                title = preset.name,
+                                subtitle = preset.text,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        val outcome = NotificationProcessor.simulate(
+                                            context = context,
+                                            sourcePackage = preset.sourcePackage,
+                                            title = preset.title,
+                                            text = preset.text
+                                        )
+                                        Toast.makeText(
+                                            context,
+                                            "Simulated ${preset.name}: ${outcome.javaClass.simpleName}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
                             )
                         }
-                        DiagnosticActionRow(
-                            icon = Icons.Rounded.Notifications,
-                            title = preset.name,
-                            subtitle = preset.text,
-                            onClick = {
-                                coroutineScope.launch {
-                                    val outcome = NotificationProcessor.simulate(
-                                        context = context,
-                                        sourcePackage = preset.sourcePackage,
-                                        title = preset.title,
-                                        text = preset.text
-                                    )
-                                    Toast.makeText(
-                                        context,
-                                        "Simulated ${preset.name}: ${outcome.javaClass.simpleName}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        )
                     }
                 }
             }
