@@ -31,6 +31,7 @@ class RecordingTransactionRepository {
             if (name == "insert") inserted.add(args!![0] as TransactionEntity)
         },
         syncQueueDao = proxy(SyncQueueDao::class.java) { _, _ -> },
+        accountingSyncExecutor = createTestAccountingSyncExecutor(),
         ioDispatcher = Dispatchers.Unconfined
     )
 }

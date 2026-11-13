@@ -38,6 +38,7 @@ class FutureDateGuardTest {
     private fun repo() = TransactionRepositoryImpl(
         transactionDao = recordingDao(TransactionDao::class.java),
         syncQueueDao = recordingDao(SyncQueueDao::class.java),
+        accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(),
         ioDispatcher = Dispatchers.Unconfined
     )
 

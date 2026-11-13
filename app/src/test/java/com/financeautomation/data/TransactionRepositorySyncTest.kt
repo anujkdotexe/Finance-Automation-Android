@@ -393,6 +393,11 @@ class TransactionRepositorySyncTest {
             syncQueueDao = qDao,
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -442,6 +447,11 @@ class TransactionRepositorySyncTest {
             syncQueueDao = qDao,
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -489,6 +499,11 @@ class TransactionRepositorySyncTest {
             syncQueueDao = qDao,
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -539,6 +554,11 @@ class TransactionRepositorySyncTest {
             syncQueueDao = qDao,
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -597,7 +617,12 @@ class TransactionRepositorySyncTest {
             transactionDao = tDao,
             syncQueueDao = qDao,
             googleSheetsClient = client,
-            preferencesRepository = FakePreferencesRepository("test_spreadsheet_id")
+            preferencesRepository = FakePreferencesRepository("test_spreadsheet_id"),
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = client,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            )
         )
 
         // Pre-populate Room DB with 2 transactions representing Dinner (row 5) and Lunch (row 7)
@@ -798,6 +823,11 @@ class TransactionRepositorySyncTest {
             payableDao = pDao,
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -901,6 +931,11 @@ class TransactionRepositorySyncTest {
             payableDao = pDao,
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -999,6 +1034,11 @@ class TransactionRepositorySyncTest {
             payableDao = pDao,
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -1272,6 +1312,11 @@ class TransactionRepositorySyncTest {
             payableDao = pDao,
             googleSheetsClient = client,
             preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = client,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
 
@@ -1360,6 +1405,10 @@ class TransactionRepositorySyncTest {
         val repo = TransactionRepositoryImpl(
             transactionDao = tDao,
             syncQueueDao = qDao,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
         tDao.insert(undoTestTxn("txn_undo_1", sheetRowIndex = null))
@@ -1389,6 +1438,10 @@ class TransactionRepositorySyncTest {
         val repo = TransactionRepositoryImpl(
             transactionDao = tDao,
             syncQueueDao = qDao,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
             ioDispatcher = Dispatchers.IO
         )
         tDao.insert(undoTestTxn("txn_undo_2", sheetRowIndex = 7).copy(syncState = SyncState.SYNCED.name))
@@ -1822,7 +1875,13 @@ class TransactionRepositorySyncTest {
             payableDao = pDao,
             lineageDao = lineageDao,
             googleSheetsClient = sheets,
-            preferencesRepository = prefs
+            preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                lineageDao = lineageDao,
+                transactionDao = tDao
+            )
         )
 
         val oldLocalId = "txn_offline_temp_123"
