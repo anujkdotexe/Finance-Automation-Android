@@ -214,10 +214,10 @@ class DashboardViewModelTest {
             account = "Cash",
             merchant = "Cafe",
             category = "Food & Drink",
-            totalAmount = 500.0,
+            totalAmount = 300.0,
             companions = "Alice, Bob",
             myShare = 100.0,
-            owedToMe = 400.0,
+            owedToMe = 200.0,
             status = TransactionStatus.PENDING
         )
         val savingsTxn = Transaction(
@@ -266,13 +266,13 @@ class DashboardViewModelTest {
         val state = vm.uiState.value
         assertEquals(100.0, state.currentBurn, 0.001)
         assertEquals(5000.0, state.savings, 0.001)
-        assertEquals(400.0, state.owedToMe, 0.001)
+        assertEquals(200.0, state.owedToMe, 0.001)
         assertEquals(120.0, state.iOwePeople, 0.001)
 
         val topOwed = state.topOwedToMe
         assertEquals(2, topOwed.size)
-        assertTrue(topOwed.any { it.name == "Alice" && it.amount == 200.0 })
-        assertTrue(topOwed.any { it.name == "Bob" && it.amount == 200.0 })
+        assertTrue(topOwed.any { it.name == "Alice" && it.amount == 100.0 })
+        assertTrue(topOwed.any { it.name == "Bob" && it.amount == 100.0 })
     }
 
     @Test
