@@ -395,7 +395,7 @@ class DashboardViewModel(
         }
         val endOfPriorSameDay = minOf(priorSameDayCal.timeInMillis, endOfPriorMonth)
 
-        var currentBurn = 0.0
+        val currentBurn = LivingBurn.total(transactions, selectedWindow, excludedCategoryNames)
         var lastMonthBurn = 0.0
         var lastMonthSameDayBurn = 0.0
         var savings = 0.0
@@ -466,13 +466,12 @@ class DashboardViewModel(
                 if (isSav) {
                     savings += txn.myShare
                 } else if (LivingBurn.counts(txn, selectedWindow, excludedCategoryNames)) {
-                    currentBurn += txn.myShare
                     categorySums[txn.category] = (categorySums[txn.category] ?: 0.0) + txn.myShare
                 }
             }
         }
 
-        val dailyAverage = if (daysElapsed > 0 && currentBurn > 0.0) currentBurn / daysElapsed else 0.0
+        val dailyAverage = LivingBurn.dailyAverage(currentBurn, daysElapsed)
 
         val allCategories = categorySums.entries
             .map { (cat, sum) ->

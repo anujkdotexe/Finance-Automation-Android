@@ -666,6 +666,65 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun testWidgetSummaryEqualsTheDashboardFigureForTheSameData() = runTest {
+        val now = System.currentTimeMillis()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val lastMonth = Calendar.getInstance(kolkataTz).apply {
+            add(Calendar.MONTH, -1)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }.timeInMillis
+
+        fun txn(id: String, category: String, share: Double, total: Double = share, at: Long = now,
+                status: TransactionStatus = TransactionStatus.PERSONAL) = Transaction(
+            id = id, timestamp = at, dateSerial = 46330, timeSerial = 0.5, account = "UPI", merchant = id,
+            category = category, totalAmount = total, companions = "Personal", myShare = share,
+            owedToMe = total - share, status = status
+        )
+
+        val tRepo = FakeTransactionRepo()
+        listOf(
+            txn("food", "Food & Drink", 100.25),
+            txn("split", "Shopping", 250.0, total = 500.0),
+            txn("savings", "Savings", 300.0),
+            txn("transfer", "Transfer", 40.0),
+            txn("void", "Food & Drink", 999.0, status = TransactionStatus.VOID),
+            txn("old", "Food & Drink", 77.0, at = lastMonth)
+        ).forEach { tRepo.insertTransaction(it) }
+
+        val qDao = FakeSyncQueueDao()
+        qDao.insert(SyncQueueEntity(transactionId = "food", operationType = SyncQueueEntity.OP_INSERT, payloadJson = "food"))
+        qDao.insert(SyncQueueEntity(transactionId = "split", operationType = SyncQueueEntity.OP_INSERT, payloadJson = "split"))
+
+        val categories = listOf(
+            Category("1", "Food & Drink", isExcludedFromLivingBurn = false),
+            Category("2", "Savings", isExcludedFromLivingBurn = true),
+            Category("3", "Shopping", isExcludedFromLivingBurn = false)
+        )
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        val dashboard = vm.uiState.value
+
+        val widget = com.financeautomation.domain.usecase.MonthBurnSummaryUseCase()(
+            transactions = tRepo.txns.value,
+            categories = categories,
+            waitingCount = dashboard.waitingCount,
+            nowMillis = now
+        )
+
+        assertEquals(350.25, dashboard.currentBurn, 0.0001)
+        assertEquals("widget burn equals the Dashboard burn", dashboard.currentBurn, widget.livingBurn, 0.0)
+        assertEquals("widget average equals the Dashboard average", dashboard.dailyAverage, widget.perDayAverage, 0.0)
+        assertEquals(2, dashboard.waitingCount)
+        assertEquals(com.financeautomation.domain.usecase.WidgetSyncState.Waiting(2), widget.syncState)
+    }
+
+    @Test
     fun testVoidingAnInflowReducesTheIncomeFigure() = runTest {
         val now = System.currentTimeMillis()
         val inflowRepo = FakeInflowRepo()

@@ -47,6 +47,10 @@ object LivingBurn {
     fun total(transactions: List<Transaction>, window: LongRange, excludedNames: Set<String>): Double =
         transactions.filter { counts(it, window, excludedNames) }.sumOf { it.myShare }
 
+    /** Average living burn per elapsed day; zero when there is no burn or no elapsed day. */
+    fun dailyAverage(burn: Double, daysElapsed: Int): Double =
+        if (daysElapsed > 0 && burn > 0.0) burn / daysElapsed else 0.0
+
     /** Living burn per category inside [window]; keys are the category names as stored on the transactions. */
     fun byCategory(transactions: List<Transaction>, window: LongRange, excludedNames: Set<String>): Map<String, Double> {
         val sums = LinkedHashMap<String, Double>()
