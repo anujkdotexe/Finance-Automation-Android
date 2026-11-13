@@ -46,7 +46,10 @@ data class ReviewInboxUiState(
     val openQuickLogCaptureId: String? = null,
     val userMessage: String? = null,
     val errorMessage: String? = null
-)
+) {
+    val totalCount: Int
+        get() = items.size + captures.size + newAccountCaptures.size + failedQueueItems.size
+}
 
 /**
  * ViewModel managing transactions needing review, 1-tap confirmation,
