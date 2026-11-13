@@ -4,4 +4,8 @@
     <!-- Launcher Widget Colors -->
     <color name="widget_background">#006874</color>
     <color name="widget_symbol">#FFFFFF</color>
+    <!-- Month burn widget: one fixed colour pair, readable on any wallpaper in light or dark mode -->
+    <color name="widget_month_card">#0F3A40</color>
+    <color name="widget_month_text_primary">#FFFFFF</color>
+    <color name="widget_month_text_secondary">#B7D9DE</color>
 </resources>

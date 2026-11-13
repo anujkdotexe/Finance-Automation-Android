@@ -17,6 +17,9 @@ object ConfigConstants {
     const val TYPE_PREF = "pref"
     const val TYPE_SUBSCRIPTION = "subscription"
 
+    /** Monthly category budget: key = category name, Value1 = amount. */
+    const val TYPE_BUDGET = "budget"
+
     // Meta Keys
     const val KEY_SCHEMA_VERSION = "schemaVersion"
 
@@ -40,7 +43,9 @@ object ConfigConstants {
         "developer_mode",
         "key_developer_mode",
         "theme_mode",
-        "key_theme_mode"
+        "key_theme_mode",
+        "app_lock_enabled",
+        "hide_recents_preview"
     )
 
     fun isLocalOnlyPref(key: String): Boolean {

@@ -485,4 +485,66 @@
         <item quantity="one">%d transaction needs review</item>
         <item quantity="other">%d transactions need review</item>
     </plurals>
+
+    <!-- App lock and privacy -->
+    <string name="pref_privacy_title">Privacy</string>
+    <string name="pref_app_lock_title">App lock</string>
+    <string name="pref_app_lock_desc">Ask for your fingerprint, face or screen lock when you open the app</string>
+    <string name="pref_hide_preview_title">Hide app preview in recent apps</string>
+    <string name="pref_hide_preview_desc">Blocks screenshots and blanks the app in the recent apps list</string>
+    <string name="pref_app_lock_unavailable">Set up a screen lock or fingerprint in your phone settings first, then turn on app lock.</string>
+    <string name="app_lock_prompt_title">Unlock Finance Automation</string>
+    <string name="app_lock_prompt_enable_title">Turn on app lock</string>
+    <string name="app_lock_title">Finance Automation is locked</string>
+    <string name="app_lock_message">Unlock to see your spending.</string>
+    <string name="app_lock_unlock">Unlock</string>
+
+    <!-- Budgets -->
+    <string name="budget_sheet_title">Monthly budget for %1$s</string>
+    <string name="budget_sheet_amount_label">Amount per month</string>
+    <string name="budget_sheet_amount_placeholder">e.g. 5000 or 3000+2000</string>
+    <string name="budget_sheet_hint">You can type a sum such as 1,200+300</string>
+    <string name="budget_sheet_result">Budget: %1$s a month</string>
+    <string name="budget_sheet_invalid">Enter an amount above zero, for example 5000 or 3000+2000</string>
+    <string name="budget_sheet_save_failed">Could not save the budget. Try again.</string>
+    <string name="budget_sheet_clear">Clear budget</string>
+    <string name="budget_row_none">No budget set</string>
+    <string name="budget_row_amount">Budget %1$s a month</string>
+    <string name="budget_row_edit_cd">Set the monthly budget for %1$s</string>
+    <string name="budget_bar_cd_used">%1$s: %2$d percent of the monthly budget used</string>
+    <string name="budget_bar_cd_over">%1$s: over the monthly budget, %2$d percent used</string>
+
+    <!-- Insights -->
+    <string name="insights_title">Insights</string>
+    <string name="insights_by_category_title">Spending by category</string>
+    <string name="insights_last_months_title">Living burn, last 6 months</string>
+    <string name="insights_empty">Nothing to chart yet. Insights appear once you have logged some spending.</string>
+    <string name="insights_no_spend_month">No spending in this month.</string>
+    <string name="insights_other">Other</string>
+    <string name="insights_percent">%1$d%%</string>
+    <string name="insights_donut_center_label">Total</string>
+    <string name="insights_donut_cd">Spending by category, %1$s in total across %2$d groups</string>
+    <string name="insights_legend_row_cd">%1$s, %2$s, %3$d percent. Opens the transactions.</string>
+    <string name="insights_legend_other_cd">Other categories, %1$s, %2$d percent</string>
+    <string name="insights_bars_cd">Living burn by month: %1$s</string>
+
+    <!-- Subscription suggestions -->
+    <string name="sub_suggestion_text">Looks like %1$s repeats about every %2$s for %3$s. Track it?</string>
+    <string name="sub_suggestion_every_week">week</string>
+    <string name="sub_suggestion_every_month">month</string>
+    <string name="sub_suggestion_every_year">year</string>
+    <string name="sub_suggestion_track">Track it</string>
+    <string name="sub_suggestion_not_now">Not now</string>
+
+    <!-- Month burn widget -->
+    <string name="widget_month_burn_label">Month burn</string>
+    <string name="widget_month_burn_desc">This month\'s living burn and the per day average</string>
+    <string name="widget_month_burn_title">Living burn</string>
+    <string name="widget_month_burn_per_day">%1$s a day</string>
+    <string name="widget_month_burn_up_to_date">Up to date</string>
+    <string name="widget_month_burn_waiting">%1$d waiting</string>
+    <string name="widget_month_burn_description">%1$s living burn %2$s, %3$s, %4$s</string>
+    <string name="widget_month_burn_placeholder_month">Month</string>
+    <string name="widget_month_burn_placeholder_amount">&#8377;0</string>
+    <string name="widget_month_burn_placeholder_per_day">&#8377;0 a day</string>
 </resources>

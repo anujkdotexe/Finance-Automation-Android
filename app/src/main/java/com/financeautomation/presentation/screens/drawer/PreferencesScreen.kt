@@ -50,6 +50,9 @@ fun PreferencesScreen(
 ) {
     val scrollState = rememberScrollState()
     var showAccountDialog by remember { mutableStateOf(false) }
+    var lockUnavailable by remember { mutableStateOf(false) }
+    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.fragment.app.FragmentActivity
+    val promptTitle = stringResource(R.string.app_lock_prompt_enable_title)
 
     Column(
         modifier = modifier
@@ -257,6 +260,26 @@ fun PreferencesScreen(
                 }
             }
         }
+
+        PrivacyGroup(
+            appLockEnabled = state.appLockEnabled,
+            hidePreview = state.hideRecentsPreview,
+            lockUnavailable = lockUnavailable,
+            onAppLockChange = { wantOn ->
+                lockUnavailable = false
+                if (!wantOn) {
+                    viewModel.onAppLockDisabled()
+                } else if (activity != null) {
+                    val authenticator = com.financeautomation.presentation.security.AppAuthenticator(activity)
+                    if (authenticator.availability() != com.financeautomation.domain.security.AuthAvailability.AVAILABLE) {
+                        lockUnavailable = true
+                    } else {
+                        authenticator.authenticate(promptTitle, null) { ok -> viewModel.onAppLockAuthenticated(ok) }
+                    }
+                }
+            },
+            onHidePreviewChange = { viewModel.setHideRecentsPreview(it) }
+        )
     }
 
     if (showAccountDialog) {
@@ -314,5 +337,90 @@ fun PreferencesScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun PrivacyGroup(
+    appLockEnabled: Boolean,
+    hidePreview: Boolean,
+    lockUnavailable: Boolean,
+    onAppLockChange: (Boolean) -> Unit,
+    onHidePreviewChange: (Boolean) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
+        Text(
+            text = stringResource(R.string.pref_privacy_title),
+            style = FinanceTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Surface(
+            color = FinanceTheme.colors.surfaceContainerLowest,
+            shape = FinanceShapes.large,
+            shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SwitchRow(
+                    title = stringResource(R.string.pref_app_lock_title),
+                    description = stringResource(R.string.pref_app_lock_desc),
+                    checked = appLockEnabled,
+                    onCheckedChange = onAppLockChange
+                )
+                if (lockUnavailable) {
+                    Text(
+                        text = stringResource(R.string.pref_app_lock_unavailable),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                    )
+                }
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+                SwitchRow(
+                    title = stringResource(R.string.pref_hide_preview_title),
+                    description = stringResource(R.string.pref_hide_preview_desc),
+                    checked = hidePreview,
+                    onCheckedChange = onHidePreviewChange
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+            .clip(FinanceShapes.medium)
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = FinanceTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                style = FinanceTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        androidx.compose.material3.Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

@@ -41,6 +41,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Subscription
+import com.financeautomation.domain.model.SubscriptionFrequency
+import com.financeautomation.domain.usecase.RecurringSuggestion
+import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.components.HeaderActionButton
 import java.time.LocalDate
@@ -57,6 +60,7 @@ fun SubscriptionsScreen(
     val state by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     var showAddSubscriptionSheet by remember { mutableStateOf(false) }
+    var trackingSuggestion by remember { mutableStateOf<RecurringSuggestion?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -82,6 +86,14 @@ fun SubscriptionsScreen(
                 HeaderActionButton(
                     text = stringResource(R.string.accounts_action_add),
                     onClick = { showAddSubscriptionSheet = true }
+                )
+            }
+
+            state.suggestions.forEach { suggestion ->
+                SuggestionCard(
+                    suggestion = suggestion,
+                    onTrack = { trackingSuggestion = suggestion },
+                    onNotNow = { viewModel.dismissSuggestion(suggestion) }
                 )
             }
 
@@ -266,6 +278,27 @@ fun SubscriptionsScreen(
         }
     }
 
+    trackingSuggestion?.let { suggestion ->
+        AddSubscriptionSheet(
+            accounts = accounts,
+            prefill = suggestion,
+            onDismiss = { trackingSuggestion = null },
+            onSave = { name, amount, frequency, account, remind ->
+                viewModel.addSubscription(
+                    name = name,
+                    amount = amount,
+                    frequency = frequency,
+                    account = account,
+                    remind = remind,
+                    anchorEpochDay = suggestion.anchorEpochDay,
+                    category = suggestion.category
+                )
+                viewModel.dismissSuggestion(suggestion)
+                trackingSuggestion = null
+            }
+        )
+    }
+
     if (showAddSubscriptionSheet) {
         AddSubscriptionSheet(
             accounts = accounts,
@@ -368,3 +401,35 @@ private fun SubscriptionItemCard(
     }
 }
 
+
+/** One suggestion: a payment that repeats and is not tracked yet. Track it opens the Add sheet prefilled. */
+@Composable
+private fun SuggestionCard(
+    suggestion: RecurringSuggestion,
+    onTrack: () -> Unit,
+    onNotNow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val every = stringResource(
+        when (suggestion.frequency) {
+            SubscriptionFrequency.WEEKLY -> R.string.sub_suggestion_every_week
+            SubscriptionFrequency.MONTHLY -> R.string.sub_suggestion_every_month
+            SubscriptionFrequency.YEARLY -> R.string.sub_suggestion_every_year
+        }
+    )
+    com.financeautomation.presentation.components.AppCard(modifier = modifier) {
+        Text(
+            text = stringResource(R.string.sub_suggestion_text, suggestion.name, every, formatRupeesAuto(suggestion.amount)),
+            style = FinanceTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+        ButtonPair(
+            outlinedText = stringResource(R.string.sub_suggestion_not_now),
+            onOutlinedClick = onNotNow,
+            filledText = stringResource(R.string.sub_suggestion_track),
+            onFilledClick = onTrack,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}

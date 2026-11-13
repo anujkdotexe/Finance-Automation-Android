@@ -103,9 +103,12 @@ class SettingsViewModelTest {
         override fun getThemeMode(): Flow<ThemeMode> = themeModeFlow.asStateFlow()
         override suspend fun getThemeModeSync(): ThemeMode = themeModeFlow.value
         override suspend fun setThemeMode(mode: ThemeMode) { themeModeFlow.value = mode }
-        override suspend fun getPreference(key: String): String? = null
-        override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {}
-        override suspend fun deletePreference(key: String) {}
+        private val generic = mutableMapOf<String, String>()
+        override suspend fun getPreference(key: String): String? = generic[key]
+        override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {
+            if (value == null) generic.remove(key) else generic[key] = value
+        }
+        override suspend fun deletePreference(key: String) { generic.remove(key) }
     }
 
     private class FakeWorkbookResolver(
@@ -735,5 +738,61 @@ class SettingsViewModelTest {
         assertEquals(null, tripRepo.activeTagId)
         assertEquals("", state.value.activeTripTag)
         assertEquals("Deactivated trip tag", state.value.userMessage)
+    }
+
+    @Test
+    fun testAppLock_enableNeedsSuccessfulAuthentication() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val manager = com.financeautomation.domain.security.AppLockManager()
+        manager.onColdStart(false)
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined,
+            appLockManager = manager
+        )
+        assertFalse(vm.uiState.value.appLockEnabled)
+
+        vm.onAppLockAuthenticated(false)
+        assertFalse(vm.uiState.value.appLockEnabled)
+        assertFalse(prefs.getAppLockEnabled())
+        assertFalse(manager.isEnabled)
+
+        vm.onAppLockAuthenticated(true)
+        assertTrue(vm.uiState.value.appLockEnabled)
+        assertTrue(prefs.getAppLockEnabled())
+        assertTrue(manager.isEnabled)
+
+        vm.onAppLockDisabled()
+        assertFalse(vm.uiState.value.appLockEnabled)
+        assertFalse(prefs.getAppLockEnabled())
+        assertFalse(manager.isEnabled)
+    }
+
+    @Test
+    fun testHideRecentsPreview_savesAndUpdatesTheLiveSetting() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val privacy = com.financeautomation.domain.security.PrivacySettings()
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined,
+            privacySettings = privacy
+        )
+        vm.setHideRecentsPreview(false)
+        assertFalse(privacy.hideRecentsPreview.value)
+        assertFalse(prefs.getHideRecentsPreview())
+        vm.setHideRecentsPreview(true)
+        assertTrue(privacy.hideRecentsPreview.value)
+        assertTrue(prefs.getHideRecentsPreview())
+        assertTrue(vm.uiState.value.hideRecentsPreview)
+    }
+
+    @Test
+    fun testLockSettingsStayOnThisDevice() {
+        assertTrue(com.financeautomation.core.constants.ConfigConstants.isLocalOnlyPref("app_lock_enabled"))
+        assertTrue(com.financeautomation.core.constants.ConfigConstants.isLocalOnlyPref("hide_recents_preview"))
     }
 }
