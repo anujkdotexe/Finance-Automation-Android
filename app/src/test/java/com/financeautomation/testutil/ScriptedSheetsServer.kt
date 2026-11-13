@@ -22,7 +22,8 @@ import java.util.concurrent.CopyOnWriteArrayList
  * handling.
  */
 class ScriptedSheetsServer(
-    private val tabs: List<String> = listOf(currentTab())
+    private val tabs: List<String> = listOf(currentTab()),
+    private val gate: com.financeautomation.data.remote.SheetsReadGate? = null
 ) {
     /** One recorded request. */
     data class Call(val method: String, val url: String, val body: String)
@@ -31,6 +32,9 @@ class ScriptedSheetsServer(
 
     /** Return an HTTP status and body to fail this request, or null to let it succeed. */
     var fail: (Call, Int) -> Pair<Int, String>? = { _, _ -> null }
+
+    /** Headers added to every failure response, for example Retry-After. */
+    var failHeaders: Map<String, String> = emptyMap()
 
     /** Body of the next AC column read (a uuid lookup), by default an empty column. */
     var uuidColumnValues: (Call) -> List<String> = { emptyList() }
@@ -49,7 +53,10 @@ class ScriptedSheetsServer(
 
     fun client(): GoogleSheetsClient {
         val interceptor = Interceptor { chain -> respond(chain.request()) }
-        return GoogleSheetsClient(OkHttpClient.Builder().addInterceptor(interceptor).build(), tokenProvider)
+        val builder = OkHttpClient.Builder()
+        // The same interceptor the app installs, so a 429 here starts the same cooldown
+        gate?.let { builder.addInterceptor(com.financeautomation.data.remote.RateLimitInterceptor(it)) }
+        return GoogleSheetsClient(builder.addInterceptor(interceptor).build(), tokenProvider)
     }
 
     private fun bodyOf(request: Request): String {
@@ -65,13 +72,14 @@ class ScriptedSheetsServer(
         val index = counter++
         val failure = fail(call, index)
         val (code, body) = failure ?: (200 to successBody(call))
-        return Response.Builder()
+        val builder = Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
             .code(code)
             .message(if (code == 200) "OK" else "Error")
             .body(body.toResponseBody(json))
-            .build()
+        if (code != 200) failHeaders.forEach { (k, v) -> builder.header(k, v) }
+        return builder.build()
     }
 
     private fun successBody(call: Call): String {

@@ -23,7 +23,9 @@ class PeopleRepositoryImpl(
     private val companionDao: CompanionDao? = null,
     private val companionDaoProvider: (suspend () -> CompanionDao)? = null,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** True when the named person still has an open balance. Null means balances are not checked. */
+    private val openBalanceChecker: (suspend (String) -> Boolean)? = null
 ) : PeopleRepository {
 
     constructor(
@@ -44,15 +46,16 @@ class PeopleRepositoryImpl(
         companionDao ?: companionDaoProvider?.invoke()
             ?: throw IllegalStateException("CompanionDao or provider must be supplied")
 
+    // Removed (archived) people are not part of the list the app shows or offers
     override fun getCompanions(): Flow<List<Companion>> = flow {
         val dao = resolveDao()
         emitAll(dao.getCompanionsFlow().map { entities ->
-            entities.map { it.toDomain() }
+            entities.filter { !it.isArchived }.map { it.toDomain() }
         })
     }.flowOn(ioDispatcher)
 
     override suspend fun getAllCompanions(): List<Companion> = withContext(ioDispatcher) {
-        resolveDao().getCompanionsFlow().first().map { it.toDomain() }
+        resolveDao().getCompanionsFlow().first().filter { !it.isArchived }.map { it.toDomain() }
     }
 
     override suspend fun getCompanionById(id: String): Companion? = withContext(ioDispatcher) {
@@ -64,8 +67,40 @@ class PeopleRepositoryImpl(
     }
 
     override suspend fun insertCompanion(companion: Companion): Unit = withContext(ioDispatcher) {
-        resolveDao().insert(CompanionEntity.fromDomain(companion))
+        val dao = resolveDao()
+        val removed = dao.getByName(companion.name.trim())
+        if (removed != null && removed.isArchived) {
+            // A new transaction names a removed person again: bring the same entry back
+            dao.unarchiveCompanion(removed.id)
+        } else {
+            dao.insert(CompanionEntity.fromDomain(companion))
+        }
         configSyncCoordinator?.schedulePush()
+    }
+
+    override suspend fun removePerson(name: String): com.financeautomation.core.model.Result<Unit> = withContext(ioDispatcher) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) {
+            return@withContext com.financeautomation.core.model.Result.Error(IllegalArgumentException("Choose a person to remove"))
+        }
+        if (openBalanceChecker?.invoke(trimmed) == true) {
+            return@withContext com.financeautomation.core.model.Result.Error(
+                IllegalStateException("$trimmed still has an open balance. Settle it before removing them.")
+            )
+        }
+        val dao = resolveDao()
+        val existing = dao.getByName(trimmed)
+        if (existing != null) {
+            dao.archiveCompanion(existing.id)
+        } else {
+            // Not in the list yet (known only from transactions): record the removal so a rebuild does not add them
+            dao.insert(
+                CompanionEntity(id = "removed_${java.util.UUID.randomUUID().toString().take(8)}", name = trimmed, isArchived = true,
+                    updatedAt = System.currentTimeMillis(), dirty = 1)
+            )
+        }
+        configSyncCoordinator?.schedulePush()
+        com.financeautomation.core.model.Result.Success(Unit)
     }
 
     override suspend fun updateCompanion(companion: Companion): Unit = withContext(ioDispatcher) {

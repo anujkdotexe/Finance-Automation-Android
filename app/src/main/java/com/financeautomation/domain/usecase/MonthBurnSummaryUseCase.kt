@@ -39,11 +39,12 @@ class MonthBurnSummaryUseCase(private val zone: ZoneId = LivingBurn.KOLKATA) {
         transactions: List<Transaction>,
         categories: List<Category>,
         waitingCount: Int,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        inflows: List<com.financeautomation.domain.model.Inflow> = emptyList()
     ): MonthBurnSummary {
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
         val window = LivingBurn.monthWindow(today.year, today.monthValue, zone)
-        val burn = LivingBurn.total(transactions, window, LivingBurn.excludedNames(categories))
+        val burn = LivingBurn.total(transactions, window, LivingBurn.excludedNames(categories), inflows)
         val daysElapsed = today.dayOfMonth
         return MonthBurnSummary(
             year = today.year,

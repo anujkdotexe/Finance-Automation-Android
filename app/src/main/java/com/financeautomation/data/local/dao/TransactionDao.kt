@@ -26,7 +26,8 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
     fun getTransactionsFlow(): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE reviewState = 'NEEDS_REVIEW' ORDER BY timestamp DESC")
+    // A voided row is never waiting for review, even if it was voided while it still was
+    @Query("SELECT * FROM transactions WHERE reviewState = 'NEEDS_REVIEW' AND UPPER(status) != 'VOID' ORDER BY timestamp DESC")
     fun getNeedsReviewFlow(): Flow<List<TransactionEntity>>
 
     @Query("SELECT * FROM transactions WHERE reviewState = 'CONFIRMED' AND syncState = 'PENDING' ORDER BY timestamp ASC")
@@ -68,7 +69,7 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    @Query("UPDATE transactions SET totalAmount = 0.0, myShare = 0.0, owedToMe = 0.0, status = 'Void', syncState = 'VOID', merchant = :voidTitle WHERE id = :id")
+    @Query("UPDATE transactions SET totalAmount = 0.0, myShare = 0.0, owedToMe = 0.0, status = 'Void', syncState = 'VOID', reviewState = 'CONFIRMED', merchant = :voidTitle WHERE id = :id")
     suspend fun voidTransaction(id: String, voidTitle: String)
 
     @Query("UPDATE transactions SET syncState = :syncState, sheetRowIndex = COALESCE(:sheetRowIndex, sheetRowIndex) WHERE id = :id")

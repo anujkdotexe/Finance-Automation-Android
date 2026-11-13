@@ -1151,7 +1151,8 @@ class TransactionsViewModelTest {
             companions = "Personal",
             myShare = amount,
             owedToMe = 0.0,
-            status = com.financeautomation.core.model.TransactionStatus.SETTLED
+            status = com.financeautomation.core.model.TransactionStatus.SETTLED,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED
         )
     }
 

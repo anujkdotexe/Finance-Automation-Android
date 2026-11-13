@@ -27,7 +27,8 @@ class BudgetProgressUseCaseTest {
         id = "t_${category}_${share}_$at", timestamp = at, dateSerial = 0, timeSerial = 0.0, account = "SBI",
         merchant = "m", category = category, totalAmount = total, myShare = share, owedToMe = total - share,
         status = status
-    )
+    ,
+        reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
     private fun budget(category: String, amount: Double) = Budget(category, amount, 0L)
 
