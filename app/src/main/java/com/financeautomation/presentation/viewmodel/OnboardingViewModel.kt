@@ -10,6 +10,7 @@ import com.financeautomation.data.remote.AuthResult
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveApiException
 import com.financeautomation.data.remote.GoogleSheetsApiException
+import com.financeautomation.data.remote.ProfileAvatarManager
 import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -48,6 +49,7 @@ class OnboardingViewModel(
     private val googleAuthTokenProvider: GoogleAuthTokenProvider,
     private val workbookResolver: WorkbookResolver,
     private val preferencesRepository: PreferencesRepository,
+    private val profileAvatarManager: ProfileAvatarManager? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -140,8 +142,29 @@ class OnboardingViewModel(
         }
     }
 
+    fun onGoogleAccountDetails(email: String?, displayName: String?, photoUrl: String?) {
+        viewModelScope.launch(ioDispatcher) {
+            if (!email.isNullOrBlank()) {
+                preferencesRepository.setGoogleAccountEmail(email)
+            }
+            if (!displayName.isNullOrBlank()) {
+                preferencesRepository.setGoogleAccountDisplayName(displayName)
+            }
+            if (!photoUrl.isNullOrBlank()) {
+                preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
+                profileAvatarManager?.downloadAndSaveAvatar(photoUrl)
+            }
+            _uiState.update {
+                it.copy(
+                    googleAccountEmail = email ?: it.googleAccountEmail
+                )
+            }
+        }
+    }
+
     private suspend fun onTokenAcquired() {
-        val email = "Authorized User"
+        val existingEmail = preferencesRepository.getGoogleAccountEmailSync()
+        val email = if (!existingEmail.isNullOrBlank()) existingEmail else "Authorized User"
         preferencesRepository.setGoogleAccountEmail(email)
         _uiState.update {
             it.copy(
@@ -244,6 +267,7 @@ class OnboardingViewModel(
             googleAuthTokenProvider: GoogleAuthTokenProvider,
             workbookResolver: WorkbookResolver,
             preferencesRepository: PreferencesRepository,
+            profileAvatarManager: ProfileAvatarManager? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -252,6 +276,7 @@ class OnboardingViewModel(
                     googleAuthTokenProvider = googleAuthTokenProvider,
                     workbookResolver = workbookResolver,
                     preferencesRepository = preferencesRepository,
+                    profileAvatarManager = profileAvatarManager,
                     ioDispatcher = ioDispatcher
                 ) as T
             }

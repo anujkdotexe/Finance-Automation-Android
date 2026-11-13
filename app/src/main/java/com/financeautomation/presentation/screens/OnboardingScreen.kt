@@ -52,6 +52,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,6 +97,31 @@ fun OnboardingScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) {
         onOnboardingFinished()
+    }
+
+    val gso = remember {
+        com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+            com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+        ).requestEmail().build()
+    }
+    val googleSignInClient = remember(context) {
+        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+    }
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            if (account != null) {
+                viewModel.onGoogleAccountDetails(
+                    account.email,
+                    account.displayName,
+                    account.photoUrl?.toString()
+                )
+            }
+        } catch (_: Exception) {}
+        viewModel.startSignIn()
     }
 
     LaunchedEffect(viewModel) {
@@ -253,7 +279,11 @@ fun OnboardingScreen(
                     actionButtonText = if (!isStep1Done) stringResource(R.string.onboarding_checklist_step1_connect) else if (state.step2State == StepState.ERROR) stringResource(R.string.action_retry_workspace) else null,
                     onActionClick = {
                         if (!isStep1Done) {
-                            viewModel.startSignIn()
+                            try {
+                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                            } catch (_: Exception) {
+                                viewModel.startSignIn()
+                            }
                         } else if (state.step2State == StepState.ERROR) {
                             viewModel.startWorkspaceProvisioning(forceValidateTabs = true)
                         }

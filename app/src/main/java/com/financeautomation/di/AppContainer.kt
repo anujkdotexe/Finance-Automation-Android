@@ -11,6 +11,7 @@ import com.financeautomation.data.remote.GoogleApiError
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.ProfileAvatarManager
 import com.financeautomation.data.remote.RawHttpErrorStore
 import com.financeautomation.data.remote.TokenProvider
 import com.financeautomation.data.remote.TokenRecoveryInterceptor
@@ -85,6 +86,7 @@ interface AppContainer {
     val googleDriveClient: GoogleDriveClient
     val googleSheetsClient: GoogleSheetsClient
     val workbookResolver: WorkbookResolver
+    val profileAvatarManager: ProfileAvatarManager
     val transactionRepository: TransactionRepository
     val preferencesRepository: PreferencesRepository
     val peopleRepository: PeopleRepository
@@ -181,6 +183,14 @@ class DefaultAppContainer(
         GoogleSheetsClient(
             okHttpClient = okHttpClient,
             tokenProvider = tokenProvider
+        )
+    }
+
+    override val profileAvatarManager: ProfileAvatarManager by lazy {
+        ProfileAvatarManager(
+            context = applicationContext,
+            okHttpClient = okHttpClient,
+            ioDispatcher = ioDispatcher
         )
     }
 

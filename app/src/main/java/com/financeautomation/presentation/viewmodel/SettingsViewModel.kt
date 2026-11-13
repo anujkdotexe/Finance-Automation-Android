@@ -19,6 +19,7 @@ import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.ProfileAvatarManager
 import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.usecase.RegenerateDashboardUseCase
 import com.financeautomation.domain.usecase.SyncConfigUseCase
@@ -74,6 +75,7 @@ class SettingsViewModel(
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val googleAuthTokenProvider: GoogleAuthTokenProvider? = null,
     private val workbookResolver: WorkbookResolver? = null,
+    private val profileAvatarManager: ProfileAvatarManager? = null,
     directPayableDao: PayableDao? = null,
     payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -107,6 +109,7 @@ class SettingsViewModel(
         workbookResolver = workbookResolver,
         accountRepository = accountRepository,
         categoryRepository = categoryRepository,
+        profileAvatarManager = profileAvatarManager,
         scope = viewModelScope,
         uiState = _uiState,
         ioDispatcher = ioDispatcher
@@ -181,7 +184,8 @@ class SettingsViewModel(
 
     fun getGoogleAuthTokenProvider(): GoogleAuthTokenProvider? = syncCoordinator.getGoogleAuthTokenProvider()
 
-    fun onGoogleSignInSuccess(email: String) = syncCoordinator.onGoogleSignInSuccess(email)
+    fun onGoogleSignInSuccess(email: String, displayName: String? = null, photoUrl: String? = null) =
+        syncCoordinator.onGoogleSignInSuccess(email, displayName, photoUrl)
 
     fun onGoogleSignOut(context: android.content.Context? = null) = syncCoordinator.onGoogleSignOut(context)
 
@@ -322,6 +326,7 @@ class SettingsViewModel(
             googleSheetsClient: GoogleSheetsClient? = null,
             googleAuthTokenProvider: GoogleAuthTokenProvider? = null,
             workbookResolver: WorkbookResolver? = null,
+            profileAvatarManager: ProfileAvatarManager? = null,
             payableDao: PayableDao? = null,
             payableDaoProvider: (suspend () -> PayableDao)? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -341,6 +346,7 @@ class SettingsViewModel(
                     googleSheetsClient = googleSheetsClient,
                     googleAuthTokenProvider = googleAuthTokenProvider,
                     workbookResolver = workbookResolver,
+                    profileAvatarManager = profileAvatarManager,
                     directPayableDao = payableDao,
                     payableDaoProvider = payableDaoProvider,
                     ioDispatcher = ioDispatcher

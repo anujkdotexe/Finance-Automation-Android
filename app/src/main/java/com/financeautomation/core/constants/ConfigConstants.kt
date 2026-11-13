@@ -26,6 +26,8 @@ object ConfigConstants {
         "account_email",
         "active_account_email",
         "key_google_email",
+        "key_google_display_name",
+        "key_google_photo_url",
         "spreadsheet_id",
         "key_spreadsheet_id",
         "google_account",
