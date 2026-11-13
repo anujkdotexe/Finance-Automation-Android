@@ -293,7 +293,7 @@ class SettingsSyncCoordinator(
         val repo = transactionRepository ?: return
         scope.launch(ioDispatcher) {
             uiState.update { it.copy(isSyncing = true, syncResult = null, errorMessage = null) }
-            when (val result = repo.syncPendingTransactions()) {
+            when (val result = repo.syncPendingTransactions(userInitiated = true)) {
                 is Result.Success -> {
                     val count = result.data
                     uiState.update {

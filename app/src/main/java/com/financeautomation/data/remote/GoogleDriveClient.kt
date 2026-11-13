@@ -278,6 +278,33 @@ open class GoogleDriveClient(
     }
 
     /**
+     * The Drive modified time of a file. A cheap check (Drive quota, not Sheets quota) that tells a routine sync
+     * whether anything changed since the last full read.
+     */
+    open suspend fun getModifiedTime(fileId: String): Result<String?> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/files/$fileId".toHttpUrl().newBuilder()
+                .addQueryParameter("fields", "modifiedTime")
+                .build()
+            okHttpClient.newCall(newRequestBuilder(url.toString()).get().build()).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to read modified time"), apiError)
+                    )
+                }
+                val value = json.parseToJsonElement(bodyString).jsonObject["modifiedTime"]?.jsonPrimitive?.content
+                Result.Success(value)
+            }
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
      * Searches Google Drive for an existing spreadsheet named [spreadsheetName] across all user spaces.
      * Returns the file ID if found, or null if no matching spreadsheet exists.
      */

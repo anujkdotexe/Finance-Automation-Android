@@ -163,9 +163,13 @@ class DefaultAppContainer(
         GoogleApiError.rawHttpErrorStore = rawHttpErrorStore
     }
 
+    /** One gate for the whole app: the rate-limit cooldown and the minimum interval between full ledger reads. */
+    val sheetsReadGate: com.financeautomation.data.remote.SheetsReadGate = com.financeautomation.data.remote.SheetsReadGate()
+
     override val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addInterceptor(TokenRecoveryInterceptor(tokenProvider))
+            .addInterceptor(com.financeautomation.data.remote.RateLimitInterceptor(sheetsReadGate))
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -334,7 +338,9 @@ class DefaultAppContainer(
             nettingUseCase = nettingUseCase,
             voidTransactionUseCase = voidTransactionUseCase,
             accountingSyncExecutor = accountingSyncExecutor,
-            ioDispatcher = ioDispatcher
+            ioDispatcher = ioDispatcher,
+            readGate = sheetsReadGate,
+            modifiedTimeProvider = { id -> googleDriveClient.getModifiedTime(id) }
         ).also { impl ->
             // WorkManager keeps the retry alive across process death, unlike a plain coroutine
             impl.onTriggerSync = {
@@ -547,7 +553,8 @@ class DefaultAppContainer(
             preferencesRepository = preferencesRepository,
             googleSheetsClient = googleSheetsClient,
             peopleRepository = peopleRepository,
-            ioDispatcher = ioDispatcher
+            ioDispatcher = ioDispatcher,
+            readGate = sheetsReadGate
         )
     }
 

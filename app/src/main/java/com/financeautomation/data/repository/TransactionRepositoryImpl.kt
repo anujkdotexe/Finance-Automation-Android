@@ -24,6 +24,7 @@ import com.financeautomation.data.remote.AccountingPlanJsonAdapter
 import com.financeautomation.data.remote.AccountingRequestJsonAdapter
 import com.financeautomation.data.remote.AccountingSyncExecutor
 import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.SheetsReadGate
 import com.financeautomation.data.remote.isRetryable
 import com.financeautomation.data.remote.isRunWideBackoff
 import com.financeautomation.data.remote.SheetPayloadMapper
@@ -95,7 +96,11 @@ class TransactionRepositoryImpl(
     private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
     val accountingSyncExecutor: AccountingSyncExecutor,
     var onTriggerSync: (() -> Unit)? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val readGate: SheetsReadGate = SheetsReadGate(),
+    /** Drive modified time of a spreadsheet; lets an idle sync skip the full read when nothing changed. */
+    private val modifiedTimeProvider: (suspend (String) -> Result<String?>)? = null,
+    private val clock: () -> Long = System::currentTimeMillis
 ) : TransactionRepository {
 
     constructor(
@@ -115,7 +120,10 @@ class TransactionRepositoryImpl(
         voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
         accountingSyncExecutor: AccountingSyncExecutor,
         onTriggerSync: (() -> Unit)? = null,
-        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        readGate: SheetsReadGate = SheetsReadGate(),
+        modifiedTimeProvider: (suspend (String) -> Result<String?>)? = null,
+        clock: () -> Long = System::currentTimeMillis
     ) : this(
         transactionDao = transactionDao,
         syncQueueDao = syncQueueDao,
@@ -139,7 +147,10 @@ class TransactionRepositoryImpl(
         voidTransactionUseCase = voidTransactionUseCase,
         accountingSyncExecutor = accountingSyncExecutor,
         onTriggerSync = onTriggerSync,
-        ioDispatcher = ioDispatcher
+        ioDispatcher = ioDispatcher,
+        readGate = readGate,
+        modifiedTimeProvider = modifiedTimeProvider,
+        clock = clock
     )
 
     private val syncMutex = Mutex()
@@ -640,9 +651,11 @@ class TransactionRepositoryImpl(
     /** Called after every sync attempt, successful or not, for example to refresh the home screen widget. */
     var onSyncCompleted: (() -> Unit)? = null
 
-    override suspend fun syncPendingTransactions(): Result<Int> {
+    override suspend fun syncPendingTransactions(): Result<Int> = syncPendingTransactions(userInitiated = false)
+
+    override suspend fun syncPendingTransactions(userInitiated: Boolean): Result<Int> {
         try {
-            return runSyncPendingTransactions()
+            return runSyncPendingTransactions(userInitiated)
         } finally {
             try {
                 onSyncCompleted?.invoke()
@@ -652,11 +665,19 @@ class TransactionRepositoryImpl(
         }
     }
 
-    private suspend fun runSyncPendingTransactions(): Result<Int> = withContext(ioDispatcher) {
+    private suspend fun runSyncPendingTransactions(userInitiated: Boolean): Result<Int> = withContext(ioDispatcher) {
         syncMutex.withLock {
             try {
                 if (googleSheetsClient == null || preferencesRepository == null) {
                     return@withLock Result.Success(0)
+                }
+                // Google asked the app to wait: make no request at all until the cooldown is over
+                if (readGate.isCoolingDown()) {
+                    return@withLock Result.Error(
+                        com.financeautomation.data.remote.GoogleSheetsApiException(
+                            429, "Google asked the app to wait ${readGate.cooldownRemainingMillis() / 1000} seconds; sync will retry"
+                        )
+                    )
                 }
 
             val transactionDao = resolveTransactionDao()
@@ -664,7 +685,7 @@ class TransactionRepositoryImpl(
 
             val pendingItems = syncQueueDao.getPendingQueueFifo(maxRetries = MAX_SYNC_RETRIES)
             if (pendingItems.isEmpty()) {
-                reconcileWithSheet()
+                reconcileIfDue(userInitiated, queueHadWork = false)
                 return@withLock Result.Success(0)
             }
 
@@ -925,7 +946,8 @@ class TransactionRepositoryImpl(
                             }
 
                             // Check for orphan row (same date, time, amount with blank AC from interrupted prior run)
-                            val orphanCheck = googleSheetsClient.findOrphanDebitRow(
+                            // A first attempt cannot have left a half written row behind, so skip the two reads it costs
+                            val orphanCheck: Result<Int?> = if (item.retryCount == 0) Result.Success(null) else googleSheetsClient.findOrphanDebitRow(
                                 spreadsheetId, tabName, txn.dateSerial, txn.timeSerial, txn.totalAmount,
                                 account = txn.account, description = txn.merchant
                             )
@@ -1003,7 +1025,8 @@ class TransactionRepositoryImpl(
                             syncQueueDao.updatePlanJson(item.id, planJson)
                         }
 
-                        val applyRes = applyPlan(spreadsheetId, plan)
+                        // The uuid lookup above already showed the row is absent when the plan was just built
+                        val applyRes = applyPlan(spreadsheetId, plan, knownAbsent = if (item.planJson == null) setOf(txn.id) else emptySet())
                         if (applyRes is Result.Success) {
                             val rowIndex = applyRes.data ?: txn.sheetRowIndex
                             transactionDao.updateSyncState(txn.id, SyncState.SYNCED.name, rowIndex)
@@ -1120,7 +1143,7 @@ class TransactionRepositoryImpl(
             } else if (st.transportFailure) {
                 Result.Error(com.financeautomation.data.remote.GoogleSheetsException("Transport failure occurred during synchronization; scheduled for exponential backoff retry"))
             } else {
-                reconcileWithSheet()
+                reconcileIfDue(userInitiated, queueHadWork = syncedCount > 0)
                 Result.Success(syncedCount)
             }
         } catch (e: CancellationException) {
@@ -1131,21 +1154,55 @@ class TransactionRepositoryImpl(
     }
 }
 
-    suspend fun reconcileWithSheet(targetSpreadsheetId: String? = null): Result<Int> = withContext(ioDispatcher) {
+    private val lastSeenModified = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private suspend fun reconcileSpreadsheetId(): String? {
+        val currentYear = java.time.ZonedDateTime.now(sheetTimeZone).year
+        return when (val res = workbookResolver?.resolveForYear(currentYear)) {
+            is Result.Success -> res.data
+            else -> preferencesRepository?.getSpreadsheetIdSync()
+        }
+    }
+
+    /** The month tabs a routine reconcile reads: the current one and the one before, in Asia/Kolkata. */
+    private fun recentTabs(): Set<String> {
+        val now = Instant.ofEpochMilli(clock()).atZone(sheetTimeZone)
+        return setOf(now, now.minusMonths(1)).map { it.format(DateTimeFormatter.ofPattern("MMMyy", Locale.US)) }.toSet()
+    }
+
+    /**
+     * Runs a reconcile only when it is worth the read quota: the minimum interval has passed (a user action may bypass
+     * it once a minute), and either this run delivered queue items or the Drive modified time changed.
+     */
+    private suspend fun reconcileIfDue(force: Boolean, queueHadWork: Boolean) {
+        if (!readGate.canRun(RECONCILE_KEY, SheetsReadGate.RECONCILE_INTERVAL_MS, force)) return
+        val id = reconcileSpreadsheetId() ?: return
+        val provider = modifiedTimeProvider
+        var modified: String? = null
+        if (provider != null) {
+            modified = (provider(id) as? Result.Success)?.data
+            val unchanged = modified != null && modified == lastSeenModified[id]
+            if (unchanged && !queueHadWork && !force) return
+        }
+        if (!readGate.tryAcquire(RECONCILE_KEY, SheetsReadGate.RECONCILE_INTERVAL_MS, force)) return
+        if (reconcileWithSheet(id) is Result.Success && modified != null) lastSeenModified[id] = modified
+    }
+
+    /** [tabs] limits the read; the default is the current and the previous month. */
+    suspend fun reconcileWithSheet(
+        targetSpreadsheetId: String? = null,
+        tabs: Set<String>? = null
+    ): Result<Int> = withContext(ioDispatcher) {
         try {
             val sheets = googleSheetsClient ?: return@withContext Result.Success(0)
             val tDao = resolveTransactionDao()
             val pDao = resolvePayableDao()
 
-            val spreadsheetId = targetSpreadsheetId ?: run {
-                val currentYear = java.time.ZonedDateTime.now(sheetTimeZone).year
-                when (val res = workbookResolver?.resolveForYear(currentYear)) {
-                    is Result.Success -> res.data
-                    else -> preferencesRepository?.getSpreadsheetIdSync()
-                }
-            } ?: return@withContext Result.Success(0)
+            val spreadsheetId = targetSpreadsheetId ?: reconcileSpreadsheetId()
+                ?: return@withContext Result.Success(0)
 
-            val snapRes = sheets.readLedgerSnapshot(spreadsheetId)
+            val readTabs = (tabs ?: recentTabs()).map { it.lowercase() }.toSet()
+            val snapRes = sheets.readLedgerSnapshot(spreadsheetId) { it.lowercase() in readTabs }
             if (snapRes is Result.Error) {
                 return@withContext Result.Error(snapRes.exception)
             }
@@ -1287,8 +1344,10 @@ class TransactionRepositoryImpl(
                 if (pDao != null) {
                     val remoteUuids = remotePayables.map { it.uuid }.toSet()
                     val localPayables = pDao.getAll()
+                    // Only tabs that were read can tell us a payable is gone
+                    val readTabNames = snapshot.monthTabs.map { it.tabName.lowercase() }.toSet()
                     for (local in localPayables) {
-                        if (!remoteUuids.contains(local.uuid)) {
+                        if (local.tabName.lowercase() in readTabNames && !remoteUuids.contains(local.uuid)) {
                             pDao.deleteByUuid(local.uuid)
                         }
                     }
@@ -1311,7 +1370,8 @@ class TransactionRepositoryImpl(
 
     private suspend fun applyPlan(
         spreadsheetId: String,
-        plan: AccountingPlan
+        plan: AccountingPlan,
+        knownAbsent: Set<String> = emptySet()
     ): Result<Int?> {
         val sheets = googleSheetsClient ?: return Result.Error(IllegalStateException("GoogleSheetsClient unavailable"))
         var lastAppendedRow: Int? = null
@@ -1324,7 +1384,7 @@ class TransactionRepositoryImpl(
                 TableType.INFLOW -> "AD"
                 TableType.PAYABLE -> "AE"
             }
-            val existingCheck = sheets.findRowByUuid(spreadsheetId, append.tab, colUuid, append.uuid)
+            val existingCheck: Result<Int?> = if (append.uuid in knownAbsent) Result.Success(null) else sheets.findRowByUuid(spreadsheetId, append.tab, colUuid, append.uuid)
             if (existingCheck is Result.Success && existingCheck.data != null) {
                 val row = existingCheck.data
                 lastAppendedRow = row
@@ -1453,6 +1513,7 @@ class TransactionRepositoryImpl(
 
     companion object {
         const val MAX_SYNC_RETRIES: Int = 8
+        private const val RECONCILE_KEY = "reconcile"
         const val AMOUNT_MESSAGE: String = "Enter an amount greater than zero"
     }
 }
