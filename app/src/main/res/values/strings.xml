@@ -666,6 +666,8 @@
 
     <!-- Transactions -->
     <string name="txns_voided_msg">Transaction voided</string>
+    <string name="txns_voided_named_msg">Voided %1$s</string>
+    <string name="status_voided">Voided</string>
     <string name="txns_entry_voided_msg">Entry voided</string>
     <string name="txns_total_paid">Total paid: %1$s</string>
     <string name="txns_filter_living_burn_dismiss">Living burn ✕</string>

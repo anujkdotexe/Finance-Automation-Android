@@ -19,16 +19,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.R
+import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.core.utils.stripVoidPrefix
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.FilledButton
 import com.financeautomation.presentation.components.OutlinedButton
+import com.financeautomation.presentation.components.StatusChip
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -93,17 +97,38 @@ fun ReviewTransactionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
+                val isVoid = transaction.status == TransactionStatus.VOID
+                val cleanMerchant = stripVoidPrefix(transaction.merchant.ifBlank { transaction.category })
+
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                 ) {
-                    Text(
-                        text = transaction.merchant.ifBlank { transaction.category },
-                        style = FinanceTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        Text(
+                            text = cleanMerchant,
+                            style = if (isVoid) {
+                                FinanceTheme.typography.titleMedium.copy(textDecoration = TextDecoration.LineThrough)
+                            } else {
+                                FinanceTheme.typography.titleMedium
+                            },
+                            color = if (isVoid) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+
+                        if (isVoid) {
+                            StatusChip(status = "Voided")
+                        }
+                    }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -129,7 +154,7 @@ fun ReviewTransactionCard(
                 Text(
                     text = formatRupeesAuto(transaction.totalAmount),
                     style = FinanceTheme.typography.amountMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(start = FinanceTheme.spacing.m)
                 )
             }
