@@ -21,8 +21,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Transaction
@@ -138,9 +136,9 @@ fun ReviewTransactionCard(
 
             // Button Pair: Outlined "Edit" on left, Filled "Confirm" on right (equal width, 48dp height)
             ButtonPair(
-                outlinedText = "Edit",
+                outlinedText = stringResource(R.string.action_edit),
                 onOutlinedClick = onEdit,
-                filledText = "Confirm",
+                filledText = stringResource(R.string.action_confirm),
                 onFilledClick = onConfirm
             )
         }
@@ -173,13 +171,13 @@ fun SubscriptionDueCard(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
                 Text(
-                    text = "Did you pay $subscriptionName?",
+                    text = stringResource(R.string.subscription_review_title, subscriptionName),
                     style = FinanceTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                val amountText = if (amount != null && amount > 0.0) formatRupeesAuto(amount) else "Amount varies"
+                val amountText = if (amount != null && amount > 0.0) formatRupeesAuto(amount) else stringResource(R.string.subscription_amount_varies)
                 Text(
-                    text = "$amountText, due $dueFormatted",
+                    text = stringResource(R.string.subscription_review_subtitle, amountText, dueFormatted),
                     style = FinanceTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -191,17 +189,17 @@ fun SubscriptionDueCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 FilledButton(
-                    text = "Yes",
+                    text = stringResource(R.string.action_yes),
                     onClick = onYes,
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedButton(
-                    text = "Not yet",
+                    text = stringResource(R.string.action_not_yet),
                     onClick = onNotYet,
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedButton(
-                    text = "Skip this time",
+                    text = stringResource(R.string.action_skip_this_time),
                     onClick = onSkipThisTime,
                     modifier = Modifier.weight(1.3f)
                 )
