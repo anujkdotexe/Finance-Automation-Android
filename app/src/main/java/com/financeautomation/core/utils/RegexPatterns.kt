@@ -65,12 +65,24 @@ object RegexPatterns {
 
     // "Payment successful" style wording that confirms an outgoing payment without a separate debit verb
     val PAYMENT_SUCCESS_REGEX: Regex = Regex(
-        """(?i)\bpayment\b[^.]{0,40}\bsuccessful(?:ly)?\b|\bsuccessful(?:ly)?\s+payment\b|\bpaid\s+successfully\b"""
+        """(?i)\b(?:payment|recharge|bill|emi)\b[^.]{0,40}\bsuccessful(?:ly)?\b|\bsuccessful(?:ly)?\s+payment\b|\bpaid\s+successfully\b"""
     )
 
-    // Promotional or reminder wording used by payment apps
-    val PROMO_REGEX: Regex = Regex(
-        """(?i)\b(cashbacks?|offers?|rewards?|coupons?|vouchers?|discounts?|scratch\s*cards?|win|earn|refer(?:ral)?|invite|bonus|due|overdue|reminder|bills?|recharge|expires?|expiring|apply\s+now|pre-?approved|loans?|emi|limited\s+time|get\s+up\s+to|upto)\b"""
+    // A completed outgoing payment: a debit verb tied to an amount
+    val DEBIT_CONFIRMATION_REGEX: Regex = Regex(
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn)\b"""
+    )
+
+    // Advertising wording. It marks a message as a promotion even next to an amount, unless a purchase was paid.
+    val HARD_PROMO_REGEX: Regex = Regex(
+        """(?i)\b(cashbacks?|offers?|rewards?|coupons?|vouchers?|discounts?|scratch\s*cards?|refer(?:ral)?|invite|bonus|expires?|expiring|apply\s+now|pre-?approved|limited\s+time|get\s+up\s+to|upto)\b"""
+    )
+
+    // Words that also appear in real completed payments ("bill payment successful", "EMI paid").
+    // They count as promotional only when the text shows no success wording.
+    val SOFT_PROMO_REGEX: Regex = Regex(
+        """(?i)\b(win|earn|due|overdue|reminder|bills?|recharge|loans?|emi)\b"""
     )
 
     /** True when the text states a completed payment with an amount (verb and amount together). */
@@ -79,8 +91,15 @@ object RegexPatterns {
     /** True for "payment successful" wording. */
     fun isPaymentSuccessful(text: String): Boolean = PAYMENT_SUCCESS_REGEX.containsMatchIn(text)
 
-    /** True for promotional or reminder wording. */
-    fun isPromotional(text: String): Boolean = PROMO_REGEX.containsMatchIn(text)
+    /** True for promotional or reminder wording of either kind. */
+    fun isPromotional(text: String): Boolean = isHardPromotional(text) || isSoftPromotional(text)
+
+    fun isHardPromotional(text: String): Boolean = HARD_PROMO_REGEX.containsMatchIn(text)
+
+    fun isSoftPromotional(text: String): Boolean = SOFT_PROMO_REGEX.containsMatchIn(text)
+
+    /** True when the text states a completed outgoing payment (debit verb tied to an amount). */
+    fun hasDebitConfirmation(text: String): Boolean = DEBIT_CONFIRMATION_REGEX.containsMatchIn(text)
 
     /**
      * Extracts parsed currency amount from arbitrary notification text.

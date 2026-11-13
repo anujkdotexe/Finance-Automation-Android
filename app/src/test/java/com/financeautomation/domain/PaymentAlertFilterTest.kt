@@ -7,6 +7,7 @@ import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.service.NotificationProcessor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -119,5 +120,74 @@ class PaymentAlertFilterTest {
         assertEquals(PipelineCode.DROPPED_NO_SUCCESS_WORDING, NotificationProcessor.pipelineCodeFor(DropReason.NO_SUCCESS_WORDING))
         assertEquals(PipelineCode.DROPPED_UNKNOWN_DIRECTION, NotificationProcessor.pipelineCodeFor(DropReason.UNKNOWN_DIRECTION))
         assertEquals(PipelineCode.DROPPED_BLACKLIST, NotificationProcessor.pipelineCodeFor(DropReason.BLACKLISTED))
+    }
+
+    // ---- completed payments that contain a soft promo word are still captured
+
+    @Test
+    fun billPaymentSuccessfulIsCaptured() {
+        assertCaptured(PackageWhitelist.PACKAGE_PAYTM, "Bill payment", "Your electricity bill payment of Rs 899 is successful", 899.0)
+    }
+
+    @Test
+    fun rechargeSuccessfulIsCaptured() {
+        assertCaptured(PackageWhitelist.PACKAGE_PHONEPE, "Recharge", "Recharge of Rs 299 successful", 299.0)
+    }
+
+    @Test
+    fun emiPaidSuccessfullyIsCaptured() {
+        assertCaptured(PackageWhitelist.PACKAGE_GPAY, "EMI", "EMI of Rs 4,500 paid successfully", 4500.0)
+    }
+
+    @Test
+    fun paymentToAWaterBillDepartmentIsCaptured() {
+        assertCaptured(PackageWhitelist.PACKAGE_BHIM, "BHIM", "Payment of Rs 150 to Water Bill Dept successful", 150.0)
+    }
+
+    @Test
+    fun aRealPaymentThatAdvertisesCashbackIsStillCaptured() {
+        assertCaptured(PackageWhitelist.PACKAGE_GPAY, "Paid Rs 349 to Swiggy", "Earn cashback on your next payment", 349.0)
+    }
+
+    // ---- pure promotions with an amount are still dropped
+
+    @Test
+    fun cashbackOfferWithAnAmountIsDropped() {
+        assertDroppedFor(PackageWhitelist.PACKAGE_PAYTM, "Offer", "Get Rs 100 cashback offer on your next recharge", "PROMOTIONAL")
+        assertDroppedFor(PackageWhitelist.PACKAGE_GPAY, "Scratch card", "You won a scratch card worth Rs 50", "PROMOTIONAL")
+        assertDroppedFor(PackageWhitelist.PACKAGE_PHONEPE, "Voucher", "Voucher of Rs 200 is waiting. Refer a friend to claim", "PROMOTIONAL")
+    }
+
+    @Test
+    fun billDueReminderWithAnAmountIsDropped() {
+        assertDroppedFor(PackageWhitelist.PACKAGE_PAYTM, "Reminder", "Your electricity bill of Rs 1,240 is due tomorrow", "PROMOTIONAL")
+        assertDroppedFor(PackageWhitelist.PACKAGE_GPAY, "EMI due", "Your EMI of Rs 4,500 is due on 5 Dec. Pay now", "PROMOTIONAL")
+        assertDroppedFor(PackageWhitelist.PACKAGE_SUPERMONEY, "Loan", "Pre-approved loan of Rs 50,000 is waiting for you", "PROMOTIONAL")
+    }
+
+    // ---- diagnostics counters hold codes only, never text
+
+    @Test
+    fun droppedReasonsAreCountedWithoutAnyText() = kotlinx.coroutines.runBlocking {
+        com.financeautomation.core.utils.PipelineTrail.resetForTesting()
+        val processor = NotificationProcessor()
+        processor.process(PackageWhitelist.PACKAGE_GPAY, "Get cashback", "Get up to Rs 100 cashback on your next payment")
+        processor.process(PackageWhitelist.PACKAGE_PHONEPE, "Your order", "Your order of Rs 777 is being prepared")
+        processor.process(PackageWhitelist.PACKAGE_PAYTM, "Transaction", "Transaction successful for Rs 888")
+        processor.process(sms, "HDFCBK", "482910 is your OTP for payment of Rs 555. Do not share.")
+
+        val events = com.financeautomation.core.utils.PipelineTrail.bufferedEventsForTesting()
+        val codes = events.map { it.code }
+        assertTrue(codes.contains(PipelineCode.DROPPED_PROMO.name))
+        assertTrue(codes.contains(PipelineCode.DROPPED_NO_SUCCESS_WORDING.name))
+        assertTrue(codes.contains(PipelineCode.DROPPED_UNKNOWN_DIRECTION.name))
+        assertTrue(codes.contains(PipelineCode.DROPPED_OTP.name))
+        for (e in events) {
+            assertEquals(null, e.a)
+            assertEquals(null, e.b)
+            val dump = "${e.stage} ${e.code}"
+            assertFalse(dump.contains("777") || dump.contains("888") || dump.contains("555") || dump.contains("482910"))
+        }
+        com.financeautomation.core.utils.PipelineTrail.resetForTesting()
     }
 }
