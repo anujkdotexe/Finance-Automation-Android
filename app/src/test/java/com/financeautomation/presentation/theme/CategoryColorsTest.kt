@@ -84,4 +84,26 @@ class CategoryColorsTest {
         assertTrue(categoriesScreen.contains("categoryDotColor("))
         assertTrue(addCategorySheet.contains("categoryPaletteColors("))
     }
+
+    @Test
+    fun noRawColorWhiteOrBlackOutsideThemeFolder() {
+        val rootDir = File("src/main/java/com/financeautomation/presentation")
+        val themeDir = File("src/main/java/com/financeautomation/presentation/theme")
+        val ktFiles = rootDir.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .filter { !it.absolutePath.startsWith(themeDir.absolutePath) }
+            .toList()
+
+        for (file in ktFiles) {
+            val content = file.readText()
+            assertFalse(
+                "File ${file.name} must not contain raw Color.White",
+                content.contains("Color.White")
+            )
+            assertFalse(
+                "File ${file.name} must not contain raw Color.Black",
+                content.contains("Color.Black")
+            )
+        }
+    }
 }
