@@ -45,6 +45,10 @@ class SubscriptionActionUseCase(
         return minOf(nowMillis, dueNoon)
     }
 
+    /** True when the cycle belongs to a subscription whose amount varies, so Yes must open the expense sheet. */
+    suspend fun amountVaries(cycleId: String): Boolean =
+        repository.getCycleWithSubscription(cycleId)?.subscription?.amount == null
+
     suspend fun yes(cycleId: String, nowMillis: Long = System.currentTimeMillis()): SubscriptionYesOutcome {
         val item = repository.getCycleWithSubscription(cycleId) ?: return SubscriptionYesOutcome.NotFound
         val cycle = item.cycle

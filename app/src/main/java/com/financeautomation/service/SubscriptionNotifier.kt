@@ -15,6 +15,7 @@ import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionCycle
 import com.financeautomation.presentation.ui.EntryActivity
+import com.financeautomation.presentation.ui.SubscriptionYesActivity
 import com.financeautomation.service.worker.SubscriptionReminderNotifier
 
 /**
@@ -36,7 +37,21 @@ class SubscriptionNotifier(private val context: Context) : SubscriptionReminderN
         val notificationId = notificationId(cycle.id)
         val amountText = subscription.amount?.let { formatRupees(it) } ?: "Amount varies"
 
-        val yesIntent = receiverIntent(SubscriptionActionReceiver.ACTION_YES, cycle.id, notificationId, 0)
+        val yesIntent = if (yesOpensSheet(subscription.amount)) {
+            // The action itself starts an activity, which is allowed; a receiver could not do this on Android 12 and later
+            PendingIntent.getActivity(
+                context,
+                requestCode(cycle.id, 0),
+                Intent(context, SubscriptionYesActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra(SubscriptionActionReceiver.EXTRA_CYCLE_ID, cycle.id)
+                    putExtra(SubscriptionActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+                },
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        } else {
+            receiverIntent(SubscriptionActionReceiver.ACTION_YES, cycle.id, notificationId, 0)
+        }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
@@ -80,6 +95,9 @@ class SubscriptionNotifier(private val context: Context) : SubscriptionReminderN
     companion object {
         const val CHANNEL_ID: String = "subscription_reminders"
         const val CHANNEL_NAME: String = "Subscription reminders"
+
+        /** Yes needs the expense sheet when the amount varies; otherwise the receiver logs the expense directly. */
+        fun yesOpensSheet(amount: Double?): Boolean = amount == null
 
         fun notificationId(cycleId: String): Int = cycleId.hashCode()
         private fun requestCode(cycleId: String, slot: Int): Int = cycleId.hashCode() * 3 + slot
