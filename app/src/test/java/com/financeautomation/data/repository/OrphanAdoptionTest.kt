@@ -27,6 +27,7 @@ class OrphanAdoptionTest {
         val h = SyncHarness()
         h.sheetHasRow(account = "SBI", description = "Something I typed myself")
         h.repo.insertTransaction(h.expense("txn_a", merchant = "Tea"))
+        h.qDao.setStatusAndRetryCount(h.qDao.queue.values.single().id, com.financeautomation.data.local.entity.SyncQueueEntity.STATUS_PENDING, 1) // an earlier attempt
         h.repo.syncPendingTransactions()
         assertEquals("the manual row must not be claimed", 0, h.adoptionWrites())
         assertEquals(SyncState.SYNCED.name, h.tDao.rows["txn_a"]!!.syncState)
@@ -37,6 +38,7 @@ class OrphanAdoptionTest {
         val h = SyncHarness()
         h.sheetHasRow(account = "HDFC", description = "Tea")
         h.repo.insertTransaction(h.expense("txn_a", merchant = "Tea"))
+        h.qDao.setStatusAndRetryCount(h.qDao.queue.values.single().id, com.financeautomation.data.local.entity.SyncQueueEntity.STATUS_PENDING, 1) // an earlier attempt
         h.repo.syncPendingTransactions()
         assertEquals(0, h.adoptionWrites())
     }
@@ -46,6 +48,7 @@ class OrphanAdoptionTest {
         val h = SyncHarness()
         h.sheetHasRow(account = "SBI", description = "tea")
         h.repo.insertTransaction(h.expense("txn_a", merchant = "Tea"))
+        h.qDao.setStatusAndRetryCount(h.qDao.queue.values.single().id, com.financeautomation.data.local.entity.SyncQueueEntity.STATUS_PENDING, 1) // an earlier attempt
         h.repo.syncPendingTransactions()
         assertTrue(h.adoptionWrites() >= 1)
         assertEquals(4, h.tDao.rows["txn_a"]!!.sheetRowIndex)

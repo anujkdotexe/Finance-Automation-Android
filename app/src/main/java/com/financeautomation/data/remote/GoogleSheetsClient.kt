@@ -438,8 +438,11 @@ open class GoogleSheetsClient(
                     val sheetId = targetSheet["sheetId"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
                     val totalRows = targetSheet["gridProperties"]?.jsonObject?.get("rowCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 1000
 
-                    val readResult = getRangeValuesRaw(spreadsheetId, "'$tabName'!A4:A")
-                    val currentDataRows = if (readResult is Result.Success) readResult.data.size else 0
+                    // The caller already scanned the sheet to find requiredRow, so do not read the column again
+                    val currentDataRows = if (requiredRow > 0) 0 else {
+                        val readResult = getRangeValuesRaw(spreadsheetId, "'$tabName'!A4:A")
+                        if (readResult is Result.Success) readResult.data.size else 0
+                    }
                     val lastRow = maxOf(currentDataRows + 3, requiredRow) // header occupies rows 1-3
 
                     if (lastRow >= totalRows - threshold) {
@@ -1546,14 +1549,18 @@ open class GoogleSheetsClient(
      * across [spreadsheetId], sorted oldest first by year then month.
      * Table 1 rows (A:K + AC) and Table 3 rows (V:AB + AE) are returned with their sheet row indices.
      */
-    suspend fun readLedgerSnapshot(spreadsheetId: String): Result<LedgerWorkbookSnapshot> = withContext(Dispatchers.IO) {
+    /** Reads the month tabs; [tabFilter] limits which ones (null reads all), so routine syncs can skip old months. */
+    suspend fun readLedgerSnapshot(
+        spreadsheetId: String,
+        tabFilter: ((String) -> Boolean)? = null
+    ): Result<LedgerWorkbookSnapshot> = withContext(Dispatchers.IO) {
         try {
             val tabsResult = getSheetTabsWithIds(spreadsheetId)
             if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
             val tabsMap = (tabsResult as Result.Success).data
 
             // Filter month tabs matching MmmYY (e.g. Nov26, Dec26, Jan27)
-            val matchingTabs = tabsMap.keys.filter { MONTH_TAB_REGEX.matches(it) }
+            val matchingTabs = tabsMap.keys.filter { MONTH_TAB_REGEX.matches(it) && (tabFilter?.invoke(it) ?: true) }
             if (matchingTabs.isEmpty()) {
                 return@withContext Result.Success(LedgerWorkbookSnapshot(spreadsheetId, emptyList()))
             }

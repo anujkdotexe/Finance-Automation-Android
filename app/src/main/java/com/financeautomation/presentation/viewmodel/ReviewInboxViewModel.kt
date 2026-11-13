@@ -395,7 +395,7 @@ class ReviewInboxViewModel(
         viewModelScope.launch(ioDispatcher) {
             val qDao = resolveSyncQueueDao() ?: return@launch
             qDao.resetQueueItem(id)
-            transactionRepository.syncPendingTransactions()
+            transactionRepository.syncPendingTransactions(userInitiated = true)
             _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_queued_for_retry)) }
         }
     }

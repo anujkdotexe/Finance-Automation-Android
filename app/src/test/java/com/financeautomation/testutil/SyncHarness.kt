@@ -20,13 +20,18 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
     val qDao = InMemoryQueueDao()
     val iDao = InMemoryInflowDao()
     val lDao = InMemoryLineageDao()
-    val server = ScriptedSheetsServer(tabs)
+    /** Test clock shared by the repository and the read gate; move it to test intervals and cooldowns. */
+    var now = System.currentTimeMillis()
+    val gate = com.financeautomation.data.remote.SheetsReadGate { now }
+    /** Drive modified time returned to the repository; null means the provider is not installed. */
+    var modifiedTime: String? = null
+    val server = ScriptedSheetsServer(tabs, gate)
     val sheets = server.client()
     var syncRequests = 0
     val preferences = mutableMapOf<String, String?>()
 
     @Suppress("UNCHECKED_CAST")
-    private val prefs: PreferencesRepository = Proxy.newProxyInstance(
+    val prefs: PreferencesRepository = Proxy.newProxyInstance(
         PreferencesRepository::class.java.classLoader,
         arrayOf(PreferencesRepository::class.java)
     ) { _, method, args ->
@@ -52,7 +57,10 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
             sheetsClient = sheets, syncQueueDao = qDao, lineageDao = lDao, transactionDao = tDao
         ),
         onTriggerSync = { syncRequests++ },
-        ioDispatcher = Dispatchers.Unconfined
+        ioDispatcher = Dispatchers.Unconfined,
+        readGate = gate,
+        modifiedTimeProvider = { _ -> modifiedTime?.let { com.financeautomation.core.model.Result.Success<String?>(it) } ?: com.financeautomation.core.model.Result.Success<String?>(null) },
+        clock = { now }
     )
 
     fun expense(id: String, merchant: String = "Tea", amount: Double = 40.0, ageMillis: Long = 60_000L) = Transaction(

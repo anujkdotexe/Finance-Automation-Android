@@ -609,7 +609,7 @@ class DashboardViewModel(
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
 
-            when (val res = transactionRepository.syncPendingTransactions()) {
+            when (val res = transactionRepository.syncPendingTransactions(userInitiated = true)) {
                 is Result.Success -> {
                     val count = res.data
                     _uiState.update {

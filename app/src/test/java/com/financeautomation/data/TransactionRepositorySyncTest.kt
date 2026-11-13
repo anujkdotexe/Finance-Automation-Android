@@ -832,7 +832,7 @@ class TransactionRepositorySyncTest {
         )
 
         // Execute reconcileWithSheet
-        val reconcileRes = repo.reconcileWithSheet("test_sheet_id")
+        val reconcileRes = repo.reconcileWithSheet("test_sheet_id", tabs = setOf("Nov26"))
         assertTrue(reconcileRes is Result.Success)
 
         // Verify local debits are brought to sheet values
@@ -939,7 +939,7 @@ class TransactionRepositorySyncTest {
             ioDispatcher = Dispatchers.IO
         )
 
-        val res = repo.reconcileWithSheet("test_sheet_id")
+        val res = repo.reconcileWithSheet("test_sheet_id", tabs = setOf("Nov26"))
         assertTrue(res is Result.Success)
 
         // Verify corrected fields
@@ -1042,7 +1042,7 @@ class TransactionRepositorySyncTest {
             ioDispatcher = Dispatchers.IO
         )
 
-        val res = repo.reconcileWithSheet("test_sheet_id")
+        val res = repo.reconcileWithSheet("test_sheet_id", tabs = setOf("Nov26"))
         assertTrue(res is Result.Success)
 
         // Must assert exactly one local row afterwards
@@ -1848,7 +1848,7 @@ class TransactionRepositorySyncTest {
             ]
         }"""
 
-        val reconcileRes = repo.reconcileWithSheet("test_sheet_id")
+        val reconcileRes = repo.reconcileWithSheet("test_sheet_id", tabs = setOf("Nov26"))
         assertTrue(reconcileRes is Result.Success)
 
         // Assert exactly one local row afterwards
