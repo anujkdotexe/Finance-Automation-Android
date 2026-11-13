@@ -41,7 +41,9 @@ object ConfigConstants {
         "developer_mode",
         "key_developer_mode",
         "theme_mode",
-        "key_theme_mode"
+        "key_theme_mode",
+        "app_lock_enabled",
+        "hide_recents_preview"
     )
 
     fun isLocalOnlyPref(key: String): Boolean {

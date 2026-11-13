@@ -2,7 +2,7 @@ package com.financeautomation.presentation.ui
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.financeautomation.FinanceApplication
+import com.financeautomation.R
 import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.presentation.screens.OnboardingScreen
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
@@ -38,7 +39,7 @@ import java.time.ZonedDateTime
  * Main launcher Activity for Finance Automation.
  * Hosts modular navigation drawer, bottom bar, and deep links via AppNavHost.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private var pendingRoute by mutableStateOf<String?>(null)
 
@@ -95,7 +96,9 @@ class MainActivity : ComponentActivity() {
             googleAuthTokenProvider = app.appContainer.googleAuthTokenProvider,
             workbookResolver = app.appContainer.workbookResolver,
             payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
-            ioDispatcher = app.appContainer.ioDispatcher
+            ioDispatcher = app.appContainer.ioDispatcher,
+            appLockManager = app.appContainer.appLockManager,
+            privacySettings = app.appContainer.privacySettings
         )
     }
 
@@ -130,8 +133,40 @@ class MainActivity : ComponentActivity() {
         setupHealthViewModel.refreshChecks()
     }
 
+    override fun onStart() {
+        super.onStart()
+        (application as FinanceApplication).appContainer.appLockManager.onForegrounded()
+    }
+
+    override fun onStop() {
+        (application as FinanceApplication).appContainer.appLockManager.onBackgrounded()
+        super.onStop()
+    }
+
+    private var unlockPromptShowing = false
+
+    /** Starts the system authentication. If the phone no longer has any screen lock, the app lock is switched off. */
+    private fun promptUnlock() {
+        if (unlockPromptShowing) return
+        val app = application as FinanceApplication
+        val authenticator = com.financeautomation.presentation.security.AppAuthenticator(this)
+        if (authenticator.availability() != com.financeautomation.domain.security.AuthAvailability.AVAILABLE) {
+            app.appContainer.appLockManager.disable()
+            lifecycleScope.launch(Dispatchers.IO) { app.appContainer.preferencesRepository.setAppLockEnabled(false) }
+            return
+        }
+        unlockPromptShowing = true
+        authenticator.authenticate(getString(R.string.app_lock_prompt_title), null) { ok ->
+            unlockPromptShowing = false
+            app.appContainer.appLockManager.onUnlockResult(ok)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.financeautomation.presentation.security.SecureWindow.follow(
+            window, (application as FinanceApplication).appContainer.privacySettings, lifecycleScope
+        )
         extractRouteFromIntent(intent)
 
         try {
@@ -152,6 +187,12 @@ class MainActivity : ComponentActivity() {
             val spreadsheetId by app.appContainer.preferencesRepository.getSpreadsheetIdForYear(currentYear).collectAsState(initial = null)
             val themeMode by app.appContainer.preferencesRepository.getThemeMode().collectAsState(initial = ThemeMode.SYSTEM)
             var forceOnboarding by remember { mutableStateOf(false) }
+            var lockReady by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                app.appContainer.ensureAppLockStarted()
+                lockReady = true
+            }
+            val locked by app.appContainer.appLockManager.locked.collectAsState()
 
             val needsOnboarding = forceOnboarding || googleEmail.isNullOrBlank() || spreadsheetId.isNullOrBlank()
 
@@ -160,7 +201,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (needsOnboarding) {
+                    if (!lockReady) {
+                        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize())
+                    } else if (locked) {
+                        com.financeautomation.presentation.security.AppLockScreen(onUnlock = { promptUnlock() })
+                    } else if (needsOnboarding) {
                         OnboardingScreen(
                             viewModel = onboardingViewModel,
                             onOnboardingFinished = { forceOnboarding = false }

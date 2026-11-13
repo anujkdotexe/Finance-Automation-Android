@@ -78,6 +78,9 @@ class ModalBottomSheetActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.setDimAmount(0.48f)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        com.financeautomation.presentation.security.SecureWindow.follow(
+            window, (application as FinanceApplication).appContainer.privacySettings, lifecycleScope
+        )
 
         handleIntent(intent)
 
@@ -95,7 +98,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
                 val accounts by produceState<List<Account>>(initialValue = emptyList()) {
                     value = withContext(Dispatchers.IO) { app.appContainer.accountRepository.getAllAccounts() }
                 }
-                val companions by produceState<List<FriendCompanion>>(initialValue = emptyList()) {
+                val lockedNow = lockedState.value
+                val companions by produceState<List<FriendCompanion>>(initialValue = emptyList(), lockedNow) {
+                    if (lockedNow) {
+                        value = emptyList()
+                        return@produceState
+                    }
                     val rawCompanions = withContext(Dispatchers.IO) { app.appContainer.peopleRepository.getAllCompanions() }
                     val db = withContext(Dispatchers.IO) { app.appContainer.awaitDatabase() }
                     val payables = withContext(Dispatchers.IO) { db.payableDao().getPending() }
@@ -119,7 +127,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                     value = withContext(Dispatchers.IO) { app.appContainer.tripTagRepository.getActiveTagSync() }
                 }
                 var openDebts by remember { mutableStateOf<List<OpenDebtItem>>(emptyList()) }
-                val preselectedFriend = remember { intent.getStringExtra(EXTRA_PRESELECT_FRIEND) }
+                val preselectedFriend = if (lockedNow) null else remember { intent.getStringExtra(EXTRA_PRESELECT_FRIEND) }
 
                 LaunchedEffect(preselectedFriend) {
                     if (!preselectedFriend.isNullOrBlank()) {
@@ -128,11 +136,16 @@ class ModalBottomSheetActivity : ComponentActivity() {
                     }
                 }
 
-                val initialScreen = resolveInitialScreen(
-                    intent = intent,
-                    callingPackage = callingPackage,
-                    ownPackageName = packageName
-                )
+                // While the app lock is active only the plain expense form is offered: the friend flows list names and balances
+                val initialScreen = if (lockedNow) {
+                    OverlayFlowScreen.EXPENSE
+                } else {
+                    resolveInitialScreen(
+                        intent = intent,
+                        callingPackage = callingPackage,
+                        ownPackageName = packageName
+                    )
+                }
 
                 // Transparent clickable backdrop for 1-tap outside dismiss
                 Box(
@@ -256,21 +269,31 @@ class ModalBottomSheetActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    /** True until the saved lock state is known, and while the app lock is active. Hides friend names and balances. */
+    private val lockedState = androidx.compose.runtime.mutableStateOf(true)
+
     private fun handleIntent(intent: Intent) {
         val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
         val txnId = intent.getStringExtra(EXTRA_TRANSACTION_ID)
             ?: intent.getStringExtra("txn_id")
             ?: intent.getStringExtra("txn_uuid")
 
-        when {
-            !captureId.isNullOrBlank() -> {
-                quickLogViewModel.loadCapture(captureId)
-            }
-            !txnId.isNullOrBlank() -> {
-                quickLogViewModel.loadTransaction(txnId)
-            }
-            else -> {
-                quickLogViewModel.setManualMode()
+        lifecycleScope.launch {
+            val container = (application as FinanceApplication).appContainer
+            withContext(Dispatchers.IO) { container.ensureAppLockStarted() }
+            val locked = container.appLockManager.isLockedNow()
+            lockedState.value = locked
+            when {
+                !captureId.isNullOrBlank() -> {
+                    quickLogViewModel.loadCapture(captureId)
+                }
+                // An existing transaction is never shown while locked
+                !txnId.isNullOrBlank() && !locked -> {
+                    quickLogViewModel.loadTransaction(txnId)
+                }
+                else -> {
+                    quickLogViewModel.setManualMode()
+                }
             }
         }
     }
