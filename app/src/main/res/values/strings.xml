@@ -802,4 +802,8 @@
     <string name="onboarding_needs_attention">Needs attention</string>
     <string name="onboarding_sign_in">Sign in</string>
     <string name="onboarding_set_up_workbook">Set up workbook</string>
+
+    <!-- Rows waiting in review, not counted in the burn -->
+    <string name="dashboard_unconfirmed_one">1 unconfirmed row, %1$s not counted</string>
+    <string name="dashboard_unconfirmed_many">%1$d unconfirmed rows, %2$s not counted</string>
 </resources>
