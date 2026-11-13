@@ -16,6 +16,7 @@ import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -57,9 +58,15 @@ class QuickLogViewModel(
 
     private val _uiState = MutableStateFlow(QuickLogUiState())
     val uiState: StateFlow<QuickLogUiState> = _uiState.asStateFlow()
+    private var pastTransactions: List<Transaction> = emptyList()
 
     init {
         viewModelScope.launch(ioDispatcher) {
+            launch {
+                transactionRepository.getTransactions().collect { txns ->
+                    pastTransactions = txns
+                }
+            }
             launch { peopleRepository.getCompanions().collect { c -> _uiState.update { it.copy(availableCompanions = c) } } }
             launch {
                 categoryRepository.getCategories().collect { cats ->
@@ -124,11 +131,37 @@ class QuickLogViewModel(
                     )
                 }
                 recalculateSplit()
+                applyLastUsedAccountAndCategory(capture.payee)
                 refreshPredictedCategories(capture.payee)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: loadCapture")
             }
+        }
+    }
+
+    private fun applyLastUsedAccountAndCategory(payee: String) {
+        if (_uiState.value.transactionId != null) return
+        val trimmed = payee.trim()
+        if (trimmed.isBlank()) return
+
+        val matching = pastTransactions
+            .filter { it.merchant.trim().equals(trimmed, ignoreCase = true) }
+            .maxByOrNull { it.timestamp }
+            ?: return
+
+        _uiState.update { curr ->
+            val matchingAcc = curr.availableAccounts.firstOrNull {
+                it.name.equals(matching.account, ignoreCase = true)
+            }?.name ?: matching.account
+            val matchingCat = curr.availableCategories.firstOrNull {
+                it.name.equals(matching.category, ignoreCase = true)
+            }?.name ?: matching.category
+
+            curr.copy(
+                selectedAccount = matchingAcc,
+                selectedCategory = matchingCat
+            )
         }
     }
 
@@ -144,7 +177,12 @@ class QuickLogViewModel(
                     statDaoProvider = categoryStatDaoProvider,
                     predictCategoryUseCase = predictCategoryUseCase
                 ) ?: return@launch
-                _uiState.update { it.copy(availableCategories = ranked.first, selectedCategory = ranked.second) }
+
+                val hasExactMatch = pastTransactions.any {
+                    it.merchant.trim().equals(payee.trim(), ignoreCase = true)
+                }
+                val selectedCat = if (hasExactMatch) current.selectedCategory else ranked.second
+                _uiState.update { it.copy(availableCategories = ranked.first, selectedCategory = selectedCat) }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: refreshPredictedCategories")
@@ -191,6 +229,7 @@ class QuickLogViewModel(
 
     fun onPayeeChanged(text: String) {
         _uiState.update { it.copy(payee = text) }
+        applyLastUsedAccountAndCategory(text)
         refreshPredictedCategories(text)
     }
 
