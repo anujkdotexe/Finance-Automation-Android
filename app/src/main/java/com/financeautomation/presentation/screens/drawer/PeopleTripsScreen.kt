@@ -260,7 +260,7 @@ fun PeopleTripsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Isolate living burn with a dedicated trip ledger",
+                            text = stringResource(R.string.trips_isolate_hint),
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -499,14 +499,14 @@ private fun TripCard(
                         onClick = onEndTrip,
                         shape = FinanceTheme.shapes.small
                     ) {
-                        Text("End trip", style = FinanceTheme.typography.labelMedium)
+                        Text(stringResource(R.string.trips_end_trip), style = FinanceTheme.typography.labelMedium)
                     }
                 } else {
                     Button(
                         onClick = onReactivateTrip,
                         shape = FinanceTheme.shapes.small
                     ) {
-                        Text("Reactivate", style = FinanceTheme.typography.labelMedium)
+                        Text(stringResource(R.string.trips_reactivate), style = FinanceTheme.typography.labelMedium)
                     }
                 }
 
@@ -566,12 +566,12 @@ private fun FriendDetailSheet(
                         onRemove()
                     }
                 ) {
-                    Text("Remove")
+                    Text(stringResource(R.string.friends_remove))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showRemoveConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -589,7 +589,7 @@ private fun FriendDetailSheet(
             verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             Text(
-                text = "Friend details",
+                text = stringResource(R.string.friends_details_title),
                 style = FinanceTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -611,7 +611,7 @@ private fun FriendDetailSheet(
             // Rename section
             Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
                 Text(
-                    text = "Name",
+                    text = stringResource(R.string.friends_field_name),
                     style = FinanceTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -633,7 +633,7 @@ private fun FriendDetailSheet(
                 enabled = renameInput.isNotBlank() && renameInput.trim() != companion.name,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save name")
+                Text(stringResource(R.string.friends_save_name))
             }
 
             androidx.compose.material3.HorizontalDivider()
@@ -650,14 +650,14 @@ private fun FriendDetailSheet(
                     enabled = false,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Remove friend")
+                    Text(stringResource(R.string.friends_remove_friend))
                 }
             } else {
                 OutlinedButton(
                     onClick = { showRemoveConfirm = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Remove friend", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.friends_remove_friend), color = MaterialTheme.colorScheme.error)
                 }
             }
 

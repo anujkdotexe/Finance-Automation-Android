@@ -245,7 +245,8 @@ fun DashboardContent(
                         },
                         onSeeAllClick = {
                             onNavigateToTransactions(state.monthOffset, null, null)
-                        }
+                        },
+                        budgetProgress = state.budgetProgress
                     )
                 }
             }

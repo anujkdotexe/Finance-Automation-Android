@@ -46,6 +46,9 @@ import com.financeautomation.R
 import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
 import com.financeautomation.presentation.components.AppCard
+import com.financeautomation.presentation.components.BudgetBar
+import com.financeautomation.domain.usecase.BudgetProgress
+import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.presentation.components.SectionTitle
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -116,7 +119,7 @@ fun MonthSwitcher(
                         if (onSelectMonthOffset != null) {
                             Modifier.clickable(
                                 role = Role.Button,
-                                onClickLabel = "Select month",
+                                onClickLabel = stringResource(R.string.dashboard_picker_select_month),
                                 onClick = { showMonthPicker = true }
                             )
                         } else {
@@ -194,7 +197,7 @@ fun MonthPickerDialog(
                 IconButton(onClick = { selectedYear-- }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                        contentDescription = "Previous year"
+                        contentDescription = stringResource(R.string.dashboard_picker_previous_year)
                     )
                 }
                 Text(
@@ -204,7 +207,7 @@ fun MonthPickerDialog(
                 IconButton(onClick = { selectedYear++ }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = "Next year"
+                        contentDescription = stringResource(R.string.dashboard_picker_next_year)
                     )
                 }
             }
@@ -264,12 +267,12 @@ fun MonthPickerDialog(
                     onMonthOffsetSelected(0)
                 }
             ) {
-                Text("This month")
+                Text(stringResource(R.string.dashboard_picker_this_month))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )
@@ -286,6 +289,7 @@ fun CategoryBreakdownSection(
     onToggleExpand: () -> Unit,
     onCategoryClick: ((String) -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
+    budgetProgress: Map<String, BudgetProgress> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     if (categories.isEmpty()) return
@@ -358,6 +362,20 @@ fun CategoryBreakdownSection(
                                     .fillMaxWidth(fraction = item.percentage.coerceIn(0f, 1f))
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+
+                        // Budget progress, only for categories that have a monthly budget
+                        budgetProgress[item.category.trim().lowercase()]?.let { progress ->
+                            BudgetBar(progress = progress)
+                            Text(
+                                text = stringResource(
+                                    R.string.budget_progress_caption,
+                                    formatRupees(progress.spent),
+                                    formatRupees(progress.budget)
+                                ),
+                                style = FinanceTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

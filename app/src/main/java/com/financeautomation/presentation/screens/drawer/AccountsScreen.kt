@@ -134,7 +134,7 @@ fun AccountsScreen(
             onDismissRequest = { selectedAccountForEdit = null },
             title = {
                 Text(
-                    text = "Edit Account",
+                    text = stringResource(R.string.accounts_edit_title),
                     style = FinanceTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -146,7 +146,7 @@ fun AccountsScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
                         Text(
-                            text = "Account Name",
+                            text = stringResource(R.string.accounts_field_name),
                             style = FinanceTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -160,7 +160,7 @@ fun AccountsScreen(
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
                         Text(
-                            text = "Last 4 Digits",
+                            text = stringResource(R.string.accounts_field_last4),
                             style = FinanceTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -181,7 +181,7 @@ fun AccountsScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Set as default account")
+                            Text(stringResource(R.string.accounts_set_default))
                         }
 
                         androidx.compose.material3.OutlinedButton(
@@ -191,7 +191,7 @@ fun AccountsScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Archive account", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(R.string.accounts_archive), color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -242,7 +242,7 @@ fun AccountsScreen(
                         OutlinedTextField(
                             value = newAccountName,
                             onValueChange = { newAccountName = it },
-                            placeholder = { Text("e.g. HDFC Salary", style = FinanceTheme.typography.bodyMedium) },
+                            placeholder = { Text(stringResource(R.string.accounts_name_placeholder), style = FinanceTheme.typography.bodyMedium) },
                             singleLine = true,
                             shape = FinanceShapes.card,
                             modifier = Modifier.fillMaxWidth()
@@ -257,7 +257,7 @@ fun AccountsScreen(
                         OutlinedTextField(
                             value = newAccountDigits,
                             onValueChange = { if (it.length <= 4) newAccountDigits = it },
-                            placeholder = { Text("e.g. 1234", style = FinanceTheme.typography.bodyMedium) },
+                            placeholder = { Text(stringResource(R.string.accounts_last4_placeholder), style = FinanceTheme.typography.bodyMedium) },
                             singleLine = true,
                             shape = FinanceShapes.card,
                             modifier = Modifier.fillMaxWidth()

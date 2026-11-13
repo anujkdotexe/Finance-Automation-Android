@@ -135,7 +135,9 @@ data class TransactionsUiState(
     val groupedTransactions: List<DayTransactionGroup> = emptyList(),
     val rowStatuses: Map<String, RowStatus> = emptyMap(),
     val isLoading: Boolean = false,
-    val isSyncing: Boolean = false
+    val isSyncing: Boolean = false,
+    /** Budget progress of the filtered category for the selected month, or null when no category or no budget. */
+    val categoryBudget: com.financeautomation.domain.usecase.BudgetProgress? = null
 )
 
 /**
@@ -146,7 +148,9 @@ class TransactionsViewModel(
     private val transactionRepository: TransactionRepository,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val inflowRepository: InflowRepository? = null
+    private val inflowRepository: InflowRepository? = null,
+    private val budgetRepository: com.financeautomation.domain.repository.BudgetRepository? = null,
+    private val categoryRepository: com.financeautomation.domain.repository.CategoryRepository? = null
 ) : ViewModel() {
 
     private val monthOffsetFlow = MutableStateFlow(0)
@@ -180,6 +184,8 @@ class TransactionsViewModel(
 
     private fun observeTransactions() {
         val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
+        val budgetsFlow = budgetRepository?.observeBudgets() ?: flowOf(emptyList())
+        val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
         viewModelScope.launch(ioDispatcher) {
             combine(
                 transactionRepository.getTransactions(),
@@ -189,10 +195,12 @@ class TransactionsViewModel(
                 filterFlow,
                 queueIdsFlow(),
                 searchScopeFlow,
-                isSyncingFlow
+                isSyncingFlow,
+                budgetsFlow,
+                categoriesFlow
             ) { values ->
                 @Suppress("UNCHECKED_CAST")
-                calculateState(
+                val state = calculateState(
                     transactions = values[0] as List<Transaction>,
                     inflows = values[1] as List<Inflow>,
                     monthOffset = values[2] as Int,
@@ -202,10 +210,33 @@ class TransactionsViewModel(
                     scope = values[6] as SearchScope,
                     isSyncing = values[7] as Boolean
                 )
+                @Suppress("UNCHECKED_CAST")
+                state.copy(
+                    categoryBudget = categoryBudgetFor(
+                        category = (values[4] as TransactionFilter).category,
+                        monthOffset = values[2] as Int,
+                        budgets = values[8] as List<com.financeautomation.domain.model.Budget>,
+                        transactions = values[0] as List<Transaction>,
+                        categories = values[9] as List<com.financeautomation.domain.model.Category>
+                    )
+                )
             }.collect { newState ->
                 _uiState.value = newState
             }
         }
+    }
+
+    private fun categoryBudgetFor(
+        category: String?,
+        monthOffset: Int,
+        budgets: List<com.financeautomation.domain.model.Budget>,
+        transactions: List<Transaction>,
+        categories: List<com.financeautomation.domain.model.Category>
+    ): com.financeautomation.domain.usecase.BudgetProgress? {
+        if (category.isNullOrBlank() || budgets.isEmpty()) return null
+        val month = java.time.YearMonth.now(com.financeautomation.domain.usecase.LivingBurn.KOLKATA).plusMonths(monthOffset.toLong())
+        return com.financeautomation.domain.usecase.BudgetProgressUseCase()
+            .forCategory(category, month.year, month.monthValue, budgets, transactions, categories)
     }
 
     fun nextMonth() {
@@ -639,7 +670,9 @@ class TransactionsViewModel(
             transactionRepository: TransactionRepository,
             syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
             inflowRepository: InflowRepository? = null,
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            budgetRepository: com.financeautomation.domain.repository.BudgetRepository? = null,
+            categoryRepository: com.financeautomation.domain.repository.CategoryRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -647,7 +680,9 @@ class TransactionsViewModel(
                     transactionRepository = transactionRepository,
                     syncQueueDaoProvider = syncQueueDaoProvider,
                     inflowRepository = inflowRepository,
-                    ioDispatcher = ioDispatcher
+                    ioDispatcher = ioDispatcher,
+                    budgetRepository = budgetRepository,
+                    categoryRepository = categoryRepository
                 ) as T
             }
         }
