@@ -24,6 +24,8 @@ import com.financeautomation.data.remote.AccountingPlanJsonAdapter
 import com.financeautomation.data.remote.AccountingRequestJsonAdapter
 import com.financeautomation.data.remote.AccountingSyncExecutor
 import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.isRetryable
+import com.financeautomation.data.remote.isRunWideBackoff
 import com.financeautomation.data.remote.SheetPayloadMapper
 import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.model.AccountingPlan
@@ -546,7 +548,7 @@ class TransactionRepositoryImpl(
         is java.net.UnknownHostException,
         is java.net.ConnectException,
         is java.net.NoRouteToHostException -> true
-        is com.financeautomation.data.remote.GoogleSheetsApiException -> throwable.statusCode in 500..599
+        is com.financeautomation.data.remote.GoogleSheetsApiException -> throwable.isRetryable()
         is java.io.IOException -> {
             throwable !is com.financeautomation.data.remote.SheetNotFoundException &&
             throwable !is com.financeautomation.data.remote.MalformedResponseException &&
@@ -605,9 +607,12 @@ class TransactionRepositoryImpl(
             val knownTabsBySpreadsheet = mutableMapOf<String, MutableSet<String>>()
 
             var syncedCount = 0
-            var hasTransportFailure = false
+            val st = RunState()
+            val failedIds = st.failedIds
 
             for (item in pendingItems) {
+                // Items that touch a transaction whose earlier item just failed wait for the next run to keep their order
+                if (item.transactionId in failedIds) continue
                 if (item.operationType == SyncQueueEntity.OP_CONFIG_PUSH) {
                     val configRes = syncConfigUseCase?.push()
                     if (configRes is Result.Success) {
@@ -622,7 +627,7 @@ class TransactionRepositoryImpl(
                             } else {
                                 syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_PENDING, newRetries)
                             }
-                            hasTransportFailure = true
+                            st.transportFailure = true
                             break
                         } else {
                             syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, MAX_SYNC_RETRIES)
@@ -667,17 +672,10 @@ class TransactionRepositoryImpl(
                             is Result.Success -> resolveResult.data
                             is Result.Error -> {
                                 val err = resolveResult.exception
-                                if (isTransportOrServerError(err)) {
-                                    handleItemTransportFailure(item)
-                                    hasTransportFailure = true
-                                    break
-                                } else {
-                                    syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                    continue
-                                }
+                                if (failItem(item, null, err, st)) break else continue
                             }
                             is Result.Loading -> {
-                                hasTransportFailure = true
+                                st.transportFailure = true
                                 break
                             }
                         }
@@ -687,7 +685,7 @@ class TransactionRepositoryImpl(
 
                     if (spreadsheetId.isNullOrBlank()) {
                         handleItemTransportFailure(item)
-                        hasTransportFailure = true
+                        st.transportFailure = true
                         break
                     }
 
@@ -746,13 +744,7 @@ class TransactionRepositoryImpl(
                         syncedCount++
                     } else if (opResult is Result.Error) {
                         val err = opResult.exception
-                        if (isTransportOrServerError(err)) {
-                            handleItemTransportFailure(item)
-                            hasTransportFailure = true
-                            break
-                        } else {
-                            syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                        }
+                        if (failItem(item, null, err, st)) break else continue
                     }
                     continue
                 }
@@ -776,18 +768,10 @@ class TransactionRepositoryImpl(
                         is Result.Success -> resolveResult.data
                         is Result.Error -> {
                             val err = resolveResult.exception
-                            if (isTransportOrServerError(err)) {
-                                markTransportFailure(item, txn)
-                                hasTransportFailure = true
-                                break
-                            } else {
-                                syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                continue
-                            }
+                            if (failItem(item, txn, err, st)) break else continue
                         }
                         is Result.Loading -> {
-                            hasTransportFailure = true
+                            st.transportFailure = true
                             break
                         }
                     }
@@ -797,7 +781,7 @@ class TransactionRepositoryImpl(
 
                 if (spreadsheetId.isNullOrBlank()) {
                     markTransportFailure(item, txn)
-                    hasTransportFailure = true
+                    st.transportFailure = true
                     break
                 }
 
@@ -814,18 +798,10 @@ class TransactionRepositoryImpl(
                         }
                         is Result.Error -> {
                             val err = tabsResult.exception
-                            if (isTransportOrServerError(err)) {
-                                markTransportFailure(item, txn)
-                                hasTransportFailure = true
-                                break
-                            } else {
-                                syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                continue
-                            }
+                            if (failItem(item, txn, err, st)) break else continue
                         }
                         is Result.Loading -> {
-                            hasTransportFailure = true
+                            st.transportFailure = true
                             break
                         }
                     }
@@ -835,15 +811,7 @@ class TransactionRepositoryImpl(
                     val tabCheckResult = googleSheetsClient.ensureMonthTabExists(spreadsheetId, tabName, accounts, categories)
                     if (tabCheckResult is Result.Error) {
                         val err = tabCheckResult.exception
-                        if (isTransportOrServerError(err)) {
-                            markTransportFailure(item, txn)
-                            hasTransportFailure = true
-                            break
-                        } else {
-                            syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                            transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                            continue
-                        }
+                        if (failItem(item, txn, err, st)) break else continue
                     }
                     val wasCreated = (tabCheckResult as Result.Success).data
                     if (wasCreated) {
@@ -884,15 +852,7 @@ class TransactionRepositoryImpl(
                                 continue
                             } else if (uuidCheck is Result.Error) {
                                 val err = uuidCheck.exception
-                                if (isTransportOrServerError(err)) {
-                                    markTransportFailure(item, txn)
-                                    hasTransportFailure = true
-                                    break
-                                } else {
-                                    syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                    transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                    continue
-                                }
+                                if (failItem(item, txn, err, st)) break else continue
                             }
 
                             // Check for orphan row (same date, time, amount with blank AC from interrupted prior run)
@@ -909,27 +869,11 @@ class TransactionRepositoryImpl(
                                     continue
                                 } else {
                                     val err = (writeUuidRes as Result.Error).exception
-                                    if (isTransportOrServerError(err)) {
-                                        markTransportFailure(item, txn)
-                                        hasTransportFailure = true
-                                        break
-                                    } else {
-                                        syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                        transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                        continue
-                                    }
+                                    if (failItem(item, txn, err, st)) break else continue
                                 }
                             } else if (orphanCheck is Result.Error) {
                                 val err = orphanCheck.exception
-                                if (isTransportOrServerError(err)) {
-                                    markTransportFailure(item, txn)
-                                    hasTransportFailure = true
-                                    break
-                                } else {
-                                    syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                    transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                    continue
-                                }
+                                if (failItem(item, txn, err, st)) break else continue
                             }
 
                             // Gather open payables if shared
@@ -956,15 +900,7 @@ class TransactionRepositoryImpl(
                                     }
                                 } else if (snapRes is Result.Error) {
                                     val err = snapRes.exception
-                                    if (isTransportOrServerError(err)) {
-                                        markTransportFailure(item, txn)
-                                        hasTransportFailure = true
-                                        break
-                                    } else {
-                                        syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                        transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                        continue
-                                    }
+                                    if (failItem(item, txn, err, st)) break else continue
                                 }
                             }
 
@@ -1005,15 +941,7 @@ class TransactionRepositoryImpl(
                             syncedCount++
                         } else {
                             val err = (applyRes as Result.Error).exception
-                            if (isTransportOrServerError(err)) {
-                                markTransportFailure(item, txn)
-                                hasTransportFailure = true
-                                break
-                            } else {
-                                syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                continue
-                            }
+                            if (failItem(item, txn, err, st)) break else continue
                         }
                     }
                     SyncQueueEntity.OP_UPDATE -> {
@@ -1048,15 +976,7 @@ class TransactionRepositoryImpl(
                             syncedCount++
                         } else {
                             val err = (updateResult as Result.Error).exception
-                            if (isTransportOrServerError(err)) {
-                                markTransportFailure(item, txn)
-                                hasTransportFailure = true
-                                break
-                            } else {
-                                syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                continue
-                            }
+                            if (failItem(item, txn, err, st)) break else continue
                         }
                     }
                     SyncQueueEntity.OP_VOID -> {
@@ -1115,21 +1035,15 @@ class TransactionRepositoryImpl(
                             syncedCount++
                         } else {
                             val err = (applyRes as Result.Error).exception
-                            if (isTransportOrServerError(err)) {
-                                markTransportFailure(item, txn)
-                                hasTransportFailure = true
-                                break
-                            } else {
-                                syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-                                continue
-                            }
+                            if (failItem(item, txn, err, st)) break else continue
                         }
                     }
                 }
             }
 
-            if (hasTransportFailure) {
+            if (st.authExpired) {
+                Result.Error(com.financeautomation.data.remote.AuthExpiredException("Sign-in expired; the queue is paused until you reconnect"))
+            } else if (st.transportFailure) {
                 Result.Error(com.financeautomation.data.remote.GoogleSheetsException("Transport failure occurred during synchronization; scheduled for exponential backoff retry"))
             } else {
                 reconcileWithSheet()
@@ -1355,8 +1269,8 @@ class TransactionRepositoryImpl(
                 if (append.table == TableType.DEBIT) debitRow = row
                 continue
             } else if (existingCheck is Result.Error) {
-                val err = existingCheck.exception
-                if (isTransportOrServerError(err)) return Result.Error(err)
+                // Never append when we could not tell whether the row already exists: that can duplicate it
+                return Result.Error(existingCheck.exception)
             }
 
             val appendRes = when (append.table) {
@@ -1390,6 +1304,48 @@ class TransactionRepositoryImpl(
         accountingSyncExecutor.applyPlanToLocalDatabase(plan)
 
         return Result.Success(debitRow ?: lastAppendedRow)
+    }
+
+    private class RunState {
+        var transportFailure = false
+        var authExpired = false
+        val failedIds = mutableSetOf<String>()
+    }
+
+    /**
+     * Records the outcome of one failed queue item and returns true when the whole run must stop.
+     *
+     * - Expired sign-in: nothing is damaged, the item stays as it was and is marked AUTH_EXPIRED so the reconnect
+     *   message can show; the run stops and resumes after sign-in.
+     * - Retryable (network, 5xx, 408, 429, rate-limit 403): one retry is counted; later items of the same
+     *   transaction wait, unrelated items still run unless the whole run should back off.
+     * - Anything else is permanent for this item.
+     */
+    private suspend fun failItem(item: SyncQueueEntity, txn: Transaction?, err: Throwable, st: RunState): Boolean {
+        val qDao = resolveSyncQueueDao()
+        if (err is com.financeautomation.data.remote.AuthExpiredException) {
+            st.authExpired = true
+            qDao.setStatusError(item.id, item.status, item.retryCount, SyncErrorKind.AUTH_EXPIRED.name, err.message)
+            return true
+        }
+        if (isTransportOrServerError(err)) {
+            st.transportFailure = true
+            st.failedIds.add(item.transactionId)
+            if (txn != null) markTransportFailure(item, txn, err) else handleItemTransportFailure(item, err)
+            return isRunWideFailure(err)
+        }
+        qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
+        if (txn != null) resolveTransactionDao().updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
+        return false
+    }
+
+    private fun isRunWideFailure(err: Throwable): Boolean = when (err) {
+        is java.net.SocketTimeoutException,
+        is java.net.UnknownHostException,
+        is java.net.ConnectException,
+        is java.net.NoRouteToHostException -> true
+        is com.financeautomation.data.remote.GoogleSheetsApiException -> err.isRunWideBackoff()
+        else -> false
     }
 
     private suspend fun handleItemTransportFailure(item: SyncQueueEntity, throwable: Throwable? = null) {
