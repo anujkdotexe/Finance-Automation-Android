@@ -567,7 +567,7 @@ fun QuickLogSheet(
         // 9. Error Message Display
         state.errorMessage?.let { errorMsg ->
             Text(
-                text = errorMsg,
+                text = errorMsg.asString(),
                 style = FinanceTheme.typography.bodySmall,
                 color = FinanceTheme.colors.error
             )
@@ -590,7 +590,7 @@ fun QuickLogSheet(
                 view.performHapticFeedback(hapticConstant)
                 onConfirmAndSave()
             },
-            filledEnabled = !state.isSaving && state.amount > 0.0,
+            filledEnabled = state.isSaveEnabled,
             isFilledLoading = state.isSaving
         )
 

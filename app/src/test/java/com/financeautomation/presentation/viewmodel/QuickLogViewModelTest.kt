@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.TransactionStatus
@@ -233,12 +234,13 @@ class QuickLogViewModelTest {
         vm.loadCapture("cap_save_test")
         advanceUntilIdle()
 
-        var savedMessage: String? = null
+        var savedMessage: UiText? = null
         vm.onConfirmAndSave { msg -> savedMessage = msg }
         advanceUntilIdle()
 
         assertNotNull(savedMessage)
-        assertTrue(savedMessage!!.contains("120.00"))
+        assertEquals(R.string.quicklog_msg_saved_will_sync, savedMessage?.resId)
+        assertEquals(listOf("120.00"), savedMessage?.args)
         assertEquals(1, tRepo.inserted.size)
         val insertedTxn = tRepo.inserted.first()
         assertEquals(120.0, insertedTxn.totalAmount, 0.001)
@@ -278,7 +280,7 @@ class QuickLogViewModelTest {
         advanceUntilIdle()
         assertTrue(!saved)
         assertEquals(0, tRepo.inserted.size)
-        assertEquals("That date is in the future.", vm.uiState.value.errorMessage)
+        assertEquals(R.string.quicklog_err_future_date, vm.uiState.value.errorMessage?.resId)
     }
 
     @Test
@@ -482,5 +484,42 @@ class QuickLogViewModelTest {
         assertEquals("150+50", vm.uiState.value.customShareText)
         assertEquals(200.0, vm.uiState.value.customShare!!, 0.001)
         assertEquals(300.0, vm.uiState.value.owedToMe, 0.001)
+    }
+
+    @Test
+    fun testCustomSplit_withOwedAmountAndNoCompanions_saveIsDisabled() = runTest {
+        val repo = FakeTransactionRepo()
+        val peopleRepo = FakePeopleRepo()
+        val vm = QuickLogViewModel(
+            transactionRepository = repo,
+            peopleRepository = peopleRepo,
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.onAmountChanged("500")
+        vm.onSplitModeChanged(SplitMode.CUSTOM)
+        vm.onCustomShareChanged("200") // Owed = 300, no companion selected
+
+        assertEquals(false, vm.uiState.value.isSaveEnabled)
+        vm.onConfirmAndSave { }
+        advanceUntilIdle()
+        assertTrue("No transaction should be saved when custom split owes money without companions", repo.inserted.isEmpty())
+
+        // Now select a companion -> Save becomes enabled
+        vm.onCompanionToggled("1")
+        advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.isSaveEnabled)
+
+        // Deselect companion, but set custom share equal to total amount (owed = 0) -> Save becomes enabled
+        vm.onCompanionToggled("1")
+        vm.onCustomShareChanged("500")
+        advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.isSaveEnabled)
     }
 }

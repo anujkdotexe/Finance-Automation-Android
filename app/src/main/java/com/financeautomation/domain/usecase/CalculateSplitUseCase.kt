@@ -92,7 +92,7 @@ class CalculateSplitUseCase {
         } else if (owedToMe <= Tolerances.MONEY_LEFT) {
             "Personal"
         } else {
-            "Friends"
+            ""
         }
 
         val status = resolveStatus(owed = owedToMe)

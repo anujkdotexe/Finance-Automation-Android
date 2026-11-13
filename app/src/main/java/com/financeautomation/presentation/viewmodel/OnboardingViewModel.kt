@@ -35,7 +35,7 @@ enum class StepState {
 
 data class OnboardingUiState(
     val step1State: StepState = StepState.NOT_STARTED,
-    val step1Error: String? = null,
+    val step1Error: UiText? = null,
     val step2State: StepState = StepState.NOT_STARTED,
     val step2Error: UiText? = null,
     val step3State: StepState = StepState.NOT_STARTED,
@@ -104,7 +104,7 @@ class OnboardingViewModel(
                     _uiState.update {
                         it.copy(
                             step1State = StepState.ERROR,
-                            step1Error = res.exception.message ?: "Authorization failed"
+                            step1Error = res.exception.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.onboarding_err_auth_failed)
                         )
                     }
                 }
@@ -117,7 +117,7 @@ class OnboardingViewModel(
             _uiState.update {
                 it.copy(
                     step1State = StepState.ERROR,
-                    step1Error = "Consent was not granted. Please grant Google Drive access to continue."
+                    step1Error = UiText.res(R.string.onboarding_err_consent_denied)
                 )
             }
             return
@@ -134,7 +134,7 @@ class OnboardingViewModel(
                     _uiState.update {
                         it.copy(
                             step1State = StepState.ERROR,
-                            step1Error = res.exception.message ?: "Authorization failed"
+                            step1Error = res.exception.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.onboarding_err_auth_failed)
                         )
                     }
                 }

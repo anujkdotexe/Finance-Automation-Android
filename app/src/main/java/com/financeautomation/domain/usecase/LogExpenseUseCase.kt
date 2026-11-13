@@ -10,6 +10,8 @@ import com.financeautomation.core.utils.TimeGuardConstants
 import com.financeautomation.core.utils.isFuture
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
+import com.financeautomation.domain.utils.AccountingUtils
+import com.financeautomation.domain.utils.Tolerances
 import java.util.UUID
 
 /**
@@ -53,6 +55,10 @@ class LogExpenseUseCase(
                     myShare = customShare ?: amount,
                     companions = companions
                 )
+            }
+
+            if (splitResult.owedToMe > Tolerances.MONEY_LEFT && AccountingUtils.tokens(splitResult.companionsText).isEmpty()) {
+                return Result.Error("At least one companion must be specified when an amount is owed to me")
             }
 
             val dateSerial = DateSerialUtils.toDateSerial(timestamp)

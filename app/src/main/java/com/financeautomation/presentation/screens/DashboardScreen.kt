@@ -80,11 +80,11 @@ fun DashboardScreen(
 
     LaunchedEffect(state.syncMessage, state.errorMessage) {
         state.syncMessage?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.asString(context))
             viewModel.clearMessages()
         }
         state.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.asString(context))
             viewModel.clearMessages()
         }
     }

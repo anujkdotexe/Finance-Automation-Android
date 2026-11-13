@@ -53,6 +53,14 @@ class CsvExportWriter(private val context: Context) {
 
     companion object {
         const val EXPORT_DIR = "exports"
+
+        /** Deletes export files older than the retention time. Call at app start. Returns how many were deleted. */
+        fun purgeStaleExports(cacheDir: File, clock: () -> Long = System::currentTimeMillis): Int {
+            val dir = File(cacheDir, EXPORT_DIR)
+            if (!dir.isDirectory) return 0
+            return ExportFileStore(dir, clock).purgeOld()
+        }
+
         fun authority(context: Context): String = "${context.packageName}.fileprovider"
     }
 }

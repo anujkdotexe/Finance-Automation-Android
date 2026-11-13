@@ -98,6 +98,12 @@ class NotificationProcessor(
             return NotificationProcessingOutcome.Ignored("Non-whitelisted package: $sourcePackage")
         }
 
+        // 3b. SMS from a personal number is rejected on the sender alone, before any text is examined
+        if (PackageWhitelist.isSmsPackage(sourcePackage) && com.financeautomation.core.utils.RegexPatterns.isPersonalSender(title)) {
+            PipelineTrail.recordDroppedNotWhitelisted()
+            return NotificationProcessingOutcome.Ignored("Personal sender SMS dropped")
+        }
+
         // 4. OTP and verification suppression check
         val fullContent = if (title.isNotBlank()) "$title. $text".trim() else text.trim()
         if (PackageWhitelist.isOtpOrAuth(fullContent)) {
@@ -162,7 +168,8 @@ class NotificationProcessor(
 
         return when (parseResult) {
             is NotificationParseResult.Dropped -> {
-                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
+                // Counted by reason only; the notification text is never recorded
+                PipelineTrail.record(PipelineStage.ALERT, pipelineCodeFor(parseResult.reason))
                 NotificationProcessingOutcome.Ignored("ParseUseCase dropped: ${parseResult.reason}")
             }
             is NotificationParseResult.FailureAlert -> {
@@ -312,7 +319,12 @@ class NotificationProcessor(
             val minTime = postTime - 90_000L
             val maxTime = postTime + 90_000L
             val similarCaptures = pendingCaptureDao.findSimilarByAmountAndTime(amount, minTime, maxTime)
-                .filter { it.sourcePackage != sourcePackage }
+                .filter {
+                    // Same amount alone is not enough: the payee must also be compatible, so two real payments
+                    // of the same amount to different payees within 90 seconds stay separate
+                    it.sourcePackage != sourcePackage &&
+                        com.financeautomation.core.utils.MerchantSimilarity.compatible(it.payee, payee)
+                }
 
             if (similarCaptures.isNotEmpty()) {
                 val mergeTarget = similarCaptures.firstOrNull {
@@ -382,6 +394,17 @@ class NotificationProcessor(
     }
 
     companion object {
+        /** Maps a drop reason to its diagnostics counter code. */
+        fun pipelineCodeFor(reason: com.financeautomation.domain.usecase.DropReason): PipelineCode = when (reason) {
+            com.financeautomation.domain.usecase.DropReason.OTP_MESSAGE -> PipelineCode.DROPPED_OTP
+            com.financeautomation.domain.usecase.DropReason.PROMOTIONAL -> PipelineCode.DROPPED_PROMO
+            com.financeautomation.domain.usecase.DropReason.NO_SUCCESS_WORDING -> PipelineCode.DROPPED_NO_SUCCESS_WORDING
+            com.financeautomation.domain.usecase.DropReason.UNKNOWN_DIRECTION -> PipelineCode.DROPPED_UNKNOWN_DIRECTION
+            com.financeautomation.domain.usecase.DropReason.NOT_WHITELISTED -> PipelineCode.DROPPED_NOT_WHITELISTED_COUNT
+            com.financeautomation.domain.usecase.DropReason.BLACKLISTED,
+            com.financeautomation.domain.usecase.DropReason.SELF_NOTIFICATION -> PipelineCode.DROPPED_BLACKLIST
+        }
+
         /**
          * Developer-mode entry point for simulating financial payment notifications (X5).
          * Runs through the real production NotificationProcessor pipeline.

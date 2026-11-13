@@ -74,14 +74,15 @@ fun ReviewInboxScreen(
     val state by reviewInboxViewModel.uiState.collectAsState()
     val subscriptionsDue by reviewInboxViewModel.subscriptionsDue.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(state.userMessage, state.errorMessage) {
         state.userMessage?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.asString(context))
             reviewInboxViewModel.clearMessages()
         }
         state.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(it.asString(context))
             reviewInboxViewModel.clearMessages()
         }
     }

@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.domain.model.Account
@@ -56,16 +57,18 @@ class SettingsCustomizationCoordinator(
                 payablesFlow
             ) { companions, transactions, pendingPayables ->
                 val receivablesByFriend = mutableMapOf<String, Double>()
+                val displayNamesByKey = mutableMapOf<String, String>()
                 val openItemsByFriend = mutableMapOf<String, Int>()
                 for (txn in transactions) {
                     if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
-                        val tokens = AccountingUtils.tokens(txn.companions)
-                        if (tokens.isNotEmpty() && !txn.companions.equals("Personal", ignoreCase = true)) {
-                            val sharePerPerson = txn.owedToMe / tokens.size
-                            for (friend in tokens) {
-                                val key = friend.trim().lowercase()
-                                receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + sharePerPerson
-                                openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
+                        val perPersonShares = AccountingUtils.calculateReceivablesForTransaction(txn)
+                        for (share in perPersonShares) {
+                            val key = share.key
+                            receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + share.amount
+                            openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
+                            val existing = displayNamesByKey[key]
+                            if (existing == null || (existing.none { it.isUpperCase() } && share.displayName.any { it.isUpperCase() })) {
+                                displayNamesByKey[key] = share.displayName
                             }
                         }
                     }
@@ -73,13 +76,13 @@ class SettingsCustomizationCoordinator(
 
                 val payablesByFriend = mutableMapOf<String, Double>()
                 for (payable in pendingPayables) {
-                    val key = payable.paidBy.trim().lowercase()
+                    val key = AccountingUtils.normalizePersonName(payable.paidBy)
                     payablesByFriend[key] = (payablesByFriend[key] ?: 0.0) + payable.amountIOwe
                     openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
                 }
 
                 val updatedCompanions = companions.map { comp ->
-                    val key = comp.name.trim().lowercase()
+                    val key = AccountingUtils.normalizePersonName(comp.name)
                     val rec = receivablesByFriend[key] ?: 0.0
                     val pay = payablesByFriend[key] ?: 0.0
                     val net = rec - pay
@@ -88,13 +91,14 @@ class SettingsCustomizationCoordinator(
 
                 val allKeys = receivablesByFriend.keys + payablesByFriend.keys
                 for (key in allKeys) {
-                    if (updatedCompanions.none { it.name.trim().lowercase() == key }) {
+                    if (updatedCompanions.none { AccountingUtils.normalizePersonName(it.name) == key }) {
                         val rec = receivablesByFriend[key] ?: 0.0
                         val pay = payablesByFriend[key] ?: 0.0
                         val net = rec - pay
                         if (kotlin.math.abs(net) > 0.001) {
-                            val originalName = pendingPayables.firstOrNull { it.paidBy.trim().lowercase() == key }?.paidBy?.trim()
-                                ?: key.replaceFirstChar { it.uppercase() }
+                            val originalName = pendingPayables.firstOrNull { AccountingUtils.normalizePersonName(it.paidBy) == key }?.paidBy?.trim()
+                                ?: displayNamesByKey[key]
+                                ?: key
                             updatedCompanions.add(
                                 Companion(
                                     id = "friend_$key",
@@ -144,14 +148,14 @@ class SettingsCustomizationCoordinator(
                     repo.setDefaultAccount(match.id)
                 }
             }
-            uiState.update { it.copy(defaultAccount = trimmed, userMessage = "Default account set to $trimmed") }
+            uiState.update { it.copy(defaultAccount = trimmed, userMessage = UiText.res(R.string.settings_msg_default_account_set, trimmed)) }
         }
     }
 
     fun onAddAccount(name: String, lastFourDigits: String? = null) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = "Account name cannot be blank") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_account_blank)) }
             return
         }
 
@@ -160,7 +164,7 @@ class SettingsCustomizationCoordinator(
             if (repo != null) {
                 val existing = repo.getAccountByName(trimmed)
                 if (existing != null) {
-                    uiState.update { it.copy(errorMessage = "Account '$trimmed' already exists") }
+                    uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_account_exists, trimmed)) }
                     return@launch
                 }
                 val newAcc = Account(
@@ -172,9 +176,9 @@ class SettingsCustomizationCoordinator(
                     displayOrder = uiState.value.accounts.size
                 )
                 repo.insertAccount(newAcc)
-                uiState.update { it.copy(userMessage = "Added account $trimmed") }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, trimmed)) }
             } else {
-                uiState.update { it.copy(userMessage = "Added account $trimmed") }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, trimmed)) }
             }
         }
     }
@@ -182,14 +186,14 @@ class SettingsCustomizationCoordinator(
     fun onArchiveAccount(accountId: String) {
         scope.launch(ioDispatcher) {
             accountRepository?.archiveAccount(accountId)
-            uiState.update { it.copy(userMessage = "Account archived") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_account_archived)) }
         }
     }
 
     fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = "Category name cannot be blank") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_category_blank)) }
             return
         }
 
@@ -198,7 +202,7 @@ class SettingsCustomizationCoordinator(
             if (repo != null) {
                 val existing = repo.getCategoryByName(trimmed)
                 if (existing != null) {
-                    uiState.update { it.copy(errorMessage = "Category '$trimmed' already exists") }
+                    uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_category_exists, trimmed)) }
                     return@launch
                 }
                 val newCat = Category(
@@ -210,9 +214,9 @@ class SettingsCustomizationCoordinator(
                     displayOrder = uiState.value.categories.size
                 )
                 repo.insertCategory(newCat)
-                uiState.update { it.copy(userMessage = "Added category $trimmed") }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, trimmed)) }
             } else {
-                uiState.update { it.copy(userMessage = "Added category $trimmed") }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, trimmed)) }
             }
         }
     }
@@ -220,15 +224,15 @@ class SettingsCustomizationCoordinator(
     fun onToggleCategoryLivingBurnExclusion(categoryId: String, isExcluded: Boolean) {
         scope.launch(ioDispatcher) {
             categoryRepository?.setExcludedFromLivingBurn(categoryId, isExcluded)
-            val msg = if (isExcluded) "Category excluded from living burn" else "Category included in living burn"
-            uiState.update { it.copy(userMessage = msg) }
+            val resId = if (isExcluded) R.string.settings_msg_category_excluded_living_burn else R.string.settings_msg_category_included_living_burn
+            uiState.update { it.copy(userMessage = UiText.res(resId)) }
         }
     }
 
     fun onArchiveCategory(categoryId: String) {
         scope.launch(ioDispatcher) {
             categoryRepository?.archiveCategory(categoryId)
-            uiState.update { it.copy(userMessage = "Category archived") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_category_archived)) }
         }
     }
 
@@ -252,13 +256,13 @@ class SettingsCustomizationCoordinator(
     fun onAddTripTag(name: String) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = "Trip tag cannot be blank") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_trip_tag_blank)) }
             return
         }
 
         scope.launch(ioDispatcher) {
             tripTagRepository?.insertTripTag(trimmed)
-            uiState.update { it.copy(userMessage = "Added trip tag $trimmed") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_trip_tag, trimmed)) }
         }
     }
 
@@ -269,11 +273,11 @@ class SettingsCustomizationCoordinator(
             if (tag.isActive) {
                 repo.setActiveTag(null)
                 preferencesRepository.setActiveTrip(null)
-                uiState.update { it.copy(activeTripTag = "", userMessage = "Deactivated trip tag") }
+                uiState.update { it.copy(activeTripTag = "", userMessage = UiText.res(R.string.settings_msg_deactivated_trip_tag)) }
             } else {
                 repo.setActiveTag(tagId)
                 preferencesRepository.setActiveTrip(tag.name)
-                uiState.update { it.copy(activeTripTag = tag.name, userMessage = "Activated trip tag '${tag.name}'") }
+                uiState.update { it.copy(activeTripTag = tag.name, userMessage = UiText.res(R.string.settings_msg_activated_trip_tag, tag.name)) }
             }
         }
     }
@@ -281,61 +285,61 @@ class SettingsCustomizationCoordinator(
     fun onAddCompanion(name: String) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = "Friend name cannot be blank") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_friend_blank)) }
             return
         }
 
         scope.launch(ioDispatcher) {
             val existing = peopleRepository.getCompanionByName(trimmed)
             if (existing != null) {
-                uiState.update { it.copy(errorMessage = "A companion with this name already exists") }
+                uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_companion_exists)) }
                 return@launch
             }
 
             val newId = "comp_${UUID.randomUUID().toString().take(8)}"
             peopleRepository.insertCompanion(Companion(id = newId, name = trimmed))
-            uiState.update { it.copy(userMessage = "Added companion $trimmed") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_companion, trimmed)) }
         }
     }
 
     fun onRenameCompanion(companionId: String, newName: String) {
         val trimmed = newName.trim()
         if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = "Companion name cannot be blank") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_companion_blank)) }
             return
         }
 
         scope.launch(ioDispatcher) {
             peopleRepository.updateCompanionName(companionId, trimmed)
-            uiState.update { it.copy(userMessage = "Renamed companion to $trimmed") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_companion, trimmed)) }
         }
     }
 
     fun onRenameAccount(accountId: String, newName: String, lastFourDigits: String? = null) {
         val trimmed = newName.trim()
         if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = "Account name cannot be blank") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_account_blank)) }
             return
         }
         scope.launch(ioDispatcher) {
             val repo = accountRepository ?: return@launch
             val acc = repo.getAccountById(accountId) ?: return@launch
             repo.updateAccount(acc.copy(name = trimmed, lastFourDigits = lastFourDigits?.trim()?.ifEmpty { null }))
-            uiState.update { it.copy(userMessage = "Renamed account to $trimmed") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_account, trimmed)) }
         }
     }
 
     fun onRenameCategory(categoryId: String, newName: String) {
         val trimmed = newName.trim()
         if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = "Category name cannot be blank") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_category_blank)) }
             return
         }
         scope.launch(ioDispatcher) {
             val repo = categoryRepository ?: return@launch
             val cat = repo.getCategoryById(categoryId) ?: return@launch
             repo.updateCategory(cat.copy(name = trimmed))
-            uiState.update { it.copy(userMessage = "Renamed category to $trimmed") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_category, trimmed)) }
         }
     }
 
@@ -345,13 +349,13 @@ class SettingsCustomizationCoordinator(
         val openCount = companion?.let { uiState.value.companionOpenItemCounts[it.name.trim().lowercase()] ?: 0 } ?: 0
         if (kotlin.math.abs(balance) > 0.001 || openCount > 0) {
             val friendName = companion?.name ?: "friend"
-            uiState.update { it.copy(errorMessage = "Cannot remove $friendName while they have an open balance.") }
+            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_cannot_remove_open_balance, friendName)) }
             return
         }
         scope.launch(ioDispatcher) {
             val targetId = companion?.id ?: companionId
             peopleRepository.deleteCompanionById(targetId)
-            uiState.update { it.copy(userMessage = "Companion removed") }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_companion_removed)) }
         }
     }
 }
