@@ -43,7 +43,38 @@ data class OnboardingUiState(
     val googleAccountEmail: String? = null,
     val workbookName: String = "",
     val spreadsheetId: String = ""
-)
+) {
+    /** Signed in and the workbook exists: the Continue button is enabled. */
+    val isReady: Boolean get() = step1State == StepState.COMPLETED && step2State == StepState.COMPLETED
+
+    /** The Sign in step is the one that needs the user. */
+    val needsSignIn: Boolean get() = step1State != StepState.COMPLETED
+
+    /** Signed in but the workbook is missing or failed. */
+    val needsWorkbook: Boolean get() = step1State == StepState.COMPLETED && step2State != StepState.COMPLETED
+}
+
+/**
+ * Brings the first two steps in line with what is saved: the Google account and this year's workbook. Called every
+ * time either changes, so signing out turns the page back to Sign in and signing in shows Continue, with no restart.
+ * A step that is running or has failed keeps that state until it finishes.
+ */
+fun OnboardingUiState.withPreferences(email: String?, sheetId: String?): OnboardingUiState {
+    val hasEmail = !email.isNullOrBlank()
+    val hasSheet = hasEmail && !sheetId.isNullOrBlank()
+    val busyOrFailed = { state: StepState -> state == StepState.IN_PROGRESS || state == StepState.ERROR }
+    val s1 = if (hasEmail) StepState.COMPLETED else if (busyOrFailed(step1State)) step1State else StepState.NOT_STARTED
+    val s2 = if (hasSheet) StepState.COMPLETED else if (hasEmail && busyOrFailed(step2State)) step2State else StepState.NOT_STARTED
+    return copy(
+        step1State = s1,
+        step1Error = if (s1 == StepState.COMPLETED) null else step1Error,
+        step2State = s2,
+        step2Error = if (s2 == StepState.COMPLETED) null else step2Error,
+        step4State = if (s1 == StepState.COMPLETED && s2 == StepState.COMPLETED && step3State == StepState.COMPLETED) StepState.COMPLETED else StepState.NOT_STARTED,
+        googleAccountEmail = if (hasEmail) email else null,
+        spreadsheetId = if (hasSheet) sheetId.orEmpty() else ""
+    )
+}
 
 class OnboardingViewModel(
     private val googleAuthTokenProvider: GoogleAuthTokenProvider,
@@ -67,26 +98,16 @@ class OnboardingViewModel(
         checkInitialState()
     }
 
+    /** Follows the saved Google account and workbook for as long as the screen model lives. */
     private fun checkInitialState() {
         viewModelScope.launch(ioDispatcher) {
-            val email = preferencesRepository.getGoogleAccountEmailSync()
-            val sheetId = preferencesRepository.getSpreadsheetIdForYearSync(currentYear)
-            if (!email.isNullOrBlank()) {
-                _uiState.update {
-                    it.copy(
-                        step1State = StepState.COMPLETED,
-                        googleAccountEmail = email
-                    )
+            kotlinx.coroutines.flow.combine(
+                preferencesRepository.getGoogleAccountEmail(),
+                preferencesRepository.getSpreadsheetIdForYear(currentYear)
+            ) { email, sheetId -> email to sheetId }
+                .collect { (email, sheetId) ->
+                    _uiState.update { it.withPreferences(email, sheetId) }
                 }
-                if (!sheetId.isNullOrBlank()) {
-                    _uiState.update {
-                        it.copy(
-                            step2State = StepState.COMPLETED,
-                            spreadsheetId = sheetId
-                        )
-                    }
-                }
-            }
         }
     }
 

@@ -242,6 +242,8 @@ class TransactionRepositoryImpl(
     }
 
     override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
+        // Wait for a running sync: it may be delivering this very row, and the edit must be queued after it
+        syncMutex.withLock {
         try {
             if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
@@ -268,6 +270,7 @@ class TransactionRepositoryImpl(
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
+        }
         }
     }
 
@@ -695,6 +698,7 @@ class TransactionRepositoryImpl(
 
             var syncedCount = 0
             val st = RunState()
+            val deliveredMonths = mutableSetOf<java.time.YearMonth>()
             val failedIds = st.failedIds
 
             for (item in pendingItems) {
@@ -829,6 +833,10 @@ class TransactionRepositoryImpl(
                     if (opResult is Result.Success) {
                         if (item.operationType == SyncQueueEntity.OP_LOG_CREDIT) {
                             rememberIfCreditSettledDebts(item.id, item.transactionId)
+                        }
+                        if (item.operationType == SyncQueueEntity.OP_LOG_PAYABLE) {
+                            val ts = AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson).timestamp
+                            deliveredMonths.add(java.time.YearMonth.from(Instant.ofEpochMilli(ts).atZone(sheetTimeZone)))
                         }
                         syncQueueDao.deleteById(item.id)
                         syncedCount++
@@ -1032,6 +1040,7 @@ class TransactionRepositoryImpl(
                             transactionDao.updateSyncState(txn.id, SyncState.SYNCED.name, rowIndex)
                             syncQueueDao.delete(item)
                             syncedCount++
+                            deliveredMonths.add(java.time.YearMonth.from(Instant.ofEpochMilli(txn.timestamp).atZone(sheetTimeZone)))
                         } else {
                             val err = (applyRes as Result.Error).exception
                             if (failItem(item, txn, err, st)) break else continue
@@ -1138,6 +1147,7 @@ class TransactionRepositoryImpl(
                 }
             }
 
+            enqueueCatchUpCarries(deliveredMonths)
             if (st.authExpired) {
                 Result.Error(com.financeautomation.data.remote.AuthExpiredException("Sign-in expired; the queue is paused until you reconnect"))
             } else if (st.transportFailure) {
@@ -1440,6 +1450,48 @@ class TransactionRepositoryImpl(
         } catch (e: Exception) {
             com.financeautomation.core.utils.Diagnostics.record("TransactionRepositoryImpl", "${e.javaClass.simpleName}: settled marker")
         }
+    }
+
+    /**
+     * A debt delivered to a month that is already over would stay there. Queue a carry for each month after it, up to
+     * the current one; carrying is idempotent per row, so repeating one is harmless.
+     */
+    private suspend fun enqueueCatchUpCarries(deliveredMonths: Set<java.time.YearMonth>) {
+        if (deliveredMonths.isEmpty()) return
+        val current = java.time.YearMonth.from(Instant.ofEpochMilli(clock()).atZone(sheetTimeZone))
+        val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
+        val wanted = linkedSetOf<Pair<String, String>>()
+        for (month in deliveredMonths.filter { it < current }) {
+            var source = month
+            var steps = 0
+            while (source < current && steps < 12) {
+                val target = source.plusMonths(1)
+                wanted.add(target.atDay(1).format(formatter) to source.atDay(1).format(formatter))
+                source = target
+                steps++
+            }
+        }
+        if (wanted.isEmpty()) return
+        val qDao = resolveSyncQueueDao()
+        val waiting = qDao.getAllQueueFlow().first()
+            .filter { it.operationType == SyncQueueEntity.OP_CARRY_FORWARD }
+            .map { AccountingRequestJsonAdapter.carryForwardRequestFromJson(it.payloadJson) }
+            .map { it.targetTab to it.sourceTab }
+            .toSet()
+        val accs = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
+        val cats = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
+        for ((target, source) in wanted) {
+            if ((target to source) in waiting) continue
+            val req = CarryForwardRequest(targetTab = target, sourceTab = source, accounts = accs, categories = cats)
+            qDao.insert(
+                SyncQueueEntity(
+                    transactionId = "cf_${UUID.randomUUID().toString().replace("-", "").take(12)}",
+                    operationType = SyncQueueEntity.OP_CARRY_FORWARD,
+                    payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(req)
+                )
+            )
+        }
+        requestSync()
     }
 
     private class RunState {

@@ -263,7 +263,7 @@ open class WorkbookResolver(
     }
 
     private suspend fun checkTabHasValidLayout(spreadsheetId: String, tabTitle: String): Boolean {
-        val range = "$tabTitle!A3:AE3"
+        val range = layoutRange(tabTitle)
         val res = googleSheetsClient.getRangeValues(spreadsheetId, range)
         if (res !is Result.Success) return false
         val rowValues = res.data.firstOrNull() ?: return false
@@ -311,5 +311,10 @@ open class WorkbookResolver(
             }
         }
         return Result.Success(Unit)
+    }
+
+    companion object {
+        /** The header row range of a month tab. The name is quoted because names like Nov26 look like cell references. */
+        fun layoutRange(tabTitle: String): String = "'${tabTitle.replace("'", "''")}'!A3:AE3"
     }
 }

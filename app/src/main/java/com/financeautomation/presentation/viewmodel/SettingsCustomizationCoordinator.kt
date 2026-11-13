@@ -343,6 +343,23 @@ class SettingsCustomizationCoordinator(
         }
     }
 
+    /** Removes an ended trip from the list; refused while it is the active trip. */
+    fun onRemoveTripTag(name: String) {
+        scope.launch(ioDispatcher) {
+            val repo = tripTagRepository ?: return@launch
+            when (val result = repo.removeTripTag(name)) {
+                is com.financeautomation.core.model.Result.Success ->
+                    uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_trip_removed)) }
+                is com.financeautomation.core.model.Result.Error ->
+                    uiState.update {
+                        it.copy(errorMessage = result.message?.let { m -> UiText.dynamic(m) }
+                            ?: UiText.res(R.string.settings_err_trip_remove_failed))
+                    }
+                else -> Unit
+            }
+        }
+    }
+
     fun onRemoveCompanion(companionId: String) {
         val companion = uiState.value.companions.find { it.id == companionId || it.name.equals(companionId, ignoreCase = true) }
         val balance = companion?.balance ?: 0.0

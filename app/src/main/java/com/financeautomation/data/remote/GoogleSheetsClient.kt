@@ -52,6 +52,8 @@ private val RATE_LIMIT_REASONS = setOf("ratelimitexceeded", "userratelimitexceed
  */
 fun GoogleSheetsApiException.isRetryable(): Boolean = when (statusCode) {
     in 500..599, 408, 429 -> true
+    // The grid was too small for the write; the next attempt expands it first
+    400 -> message?.contains("exceeds grid limits", ignoreCase = true) == true
     403 -> apiError?.reason?.lowercase() in RATE_LIMIT_REASONS
     else -> false
 }
@@ -333,7 +335,9 @@ open class GoogleSheetsClient(
             if (nextRowRes is Result.Error) return@withContext Result.Error(nextRowRes.exception)
             val nextRow = (nextRowRes as Result.Success).data
 
-            ensureGridCapacityBeforeAppend(spreadsheetId, tabName, threshold = 20, expandBy = 100, requiredRow = nextRow)
+            // If the grid cannot grow, say so now; writing past its end would fail with a misleading permanent 400
+            val capacity = ensureGridCapacityBeforeAppend(spreadsheetId, tabName, threshold = 20, expandBy = 100, requiredRow = nextRow)
+            if (capacity is Result.Error) return@withContext Result.Error(capacity.exception)
 
             val targetRange = "'$tabName'!$startCol$nextRow:$endCol$nextRow"
 

@@ -29,13 +29,24 @@ class TripSummaryUseCase {
 
     fun forTrip(name: String, transactions: List<Transaction>): TripSummary {
         val key = name.trim().lowercase()
-        val rows = transactions
+        val all = transactions
             .filter { it.status != TransactionStatus.VOID && it.tripTag.trim().lowercase() == key }
             .sortedByDescending { it.timestamp }
-        val pending = rows
-            .filter { it.status == TransactionStatus.PENDING || it.status == TransactionStatus.CARRIED_FWD }
-            .sumOf { it.owedToMe }
-        val returned = rows.filter { it.status == TransactionStatus.SETTLED }.sumOf { it.owedToMe }
+        // A carried forward copy is the same debt moved to a later month, not new spending
+        val copies = all.filter { isCarriedCopy(it) }
+        val rows = all - copies.toSet()
+
+        /** What others still owe on [row]; a carried forward original is judged by its copy. */
+        fun stillOwed(row: Transaction): Double = when (row.status) {
+            TransactionStatus.PENDING -> row.owedToMe
+            TransactionStatus.CARRIED_FWD ->
+                copies.firstOrNull { copyTextOf(it).equals(row.merchant.trim(), ignoreCase = true) }?.owedToMe ?: row.owedToMe
+            else -> 0.0
+        }
+
+        val pending = rows.sumOf { stillOwed(it) }
+        // Settled rows have owed 0, so what came back is what others owed in the first place minus what is still owed
+        val returned = rows.sumOf { maxOf(0.0, (it.totalAmount - it.myShare) - stillOwed(it)) }
         val friends = rows
             .flatMap { it.companions.split(",") }
             .map { it.trim() }
@@ -54,6 +65,10 @@ class TripSummaryUseCase {
         )
     }
 
+    private fun isCarriedCopy(t: Transaction): Boolean = t.merchant.trim().startsWith(CARRIED_PREFIX, ignoreCase = true)
+
+    private fun copyTextOf(t: Transaction): String = t.merchant.trim().substringAfter("]", t.merchant).trim()
+
     /** One summary per distinct trip name found on the rows, keyed by the lower case name. */
     fun byTrip(transactions: List<Transaction>): Map<String, TripSummary> {
         val names = transactions
@@ -62,5 +77,9 @@ class TripSummaryUseCase {
             .filter { it.isNotEmpty() }
             .distinctBy { it.lowercase() }
         return names.associate { it.lowercase() to forTrip(it, transactions) }
+    }
+
+    private companion object {
+        const val CARRIED_PREFIX = "[Carried from"
     }
 }

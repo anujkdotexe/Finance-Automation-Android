@@ -209,7 +209,12 @@ class MainActivity : FragmentActivity() {
             }
             val locked by app.appContainer.appLockManager.locked.collectAsState()
 
-            val needsOnboarding = forceOnboarding || googleEmail.isNullOrBlank() || spreadsheetId.isNullOrBlank()
+            val setupIncomplete = googleEmail.isNullOrBlank() || spreadsheetId.isNullOrBlank()
+            // Once the Setup page is shown it stays until Continue is pressed, so a finished sign in shows Continue
+            // instead of jumping away on its own.
+            var setupLatched by remember { mutableStateOf(false) }
+            LaunchedEffect(setupIncomplete) { if (setupIncomplete) setupLatched = true }
+            val needsOnboarding = forceOnboarding || setupLatched || setupIncomplete
 
             FinanceAutomationTheme(themeMode = themeMode) {
                 Surface(
@@ -223,7 +228,10 @@ class MainActivity : FragmentActivity() {
                     } else if (needsOnboarding) {
                         OnboardingScreen(
                             viewModel = onboardingViewModel,
-                            onOnboardingFinished = { forceOnboarding = false }
+                            onOnboardingFinished = {
+                                forceOnboarding = false
+                                setupLatched = false
+                            }
                         )
                     } else {
                         val navController = rememberNavController()
