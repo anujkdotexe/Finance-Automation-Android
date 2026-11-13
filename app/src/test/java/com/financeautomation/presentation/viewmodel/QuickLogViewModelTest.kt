@@ -429,4 +429,58 @@ class QuickLogViewModelTest {
         assertEquals("SBI", vm.uiState.value.selectedAccount)
         assertEquals("Food & Drink", vm.uiState.value.selectedCategory)
     }
+
+    @Test
+    fun testCalculatorAmounts_evaluatesExpressionInAmountField() = runTest {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.onAmountChanged("120+80")
+        assertEquals("120+80", vm.uiState.value.amountText)
+        assertEquals(200.0, vm.uiState.value.amount, 0.001)
+
+        vm.onAmountChanged("450/3")
+        assertEquals("450/3", vm.uiState.value.amountText)
+        assertEquals(150.0, vm.uiState.value.amount, 0.001)
+
+        vm.onAmountChanged("99.5*2")
+        assertEquals("99.5*2", vm.uiState.value.amountText)
+        assertEquals(199.0, vm.uiState.value.amount, 0.001)
+
+        vm.onAmountChanged("120+")
+        assertEquals("120+", vm.uiState.value.amountText)
+        assertEquals(0.0, vm.uiState.value.amount, 0.001)
+    }
+
+    @Test
+    fun testCalculatorAmounts_evaluatesExpressionInCustomShareField() = runTest {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.onAmountChanged("500")
+        vm.onSplitModeChanged(SplitMode.CUSTOM)
+        vm.onCustomShareChanged("150+50")
+
+        assertEquals("150+50", vm.uiState.value.customShareText)
+        assertEquals(200.0, vm.uiState.value.customShare!!, 0.001)
+        assertEquals(300.0, vm.uiState.value.owedToMe, 0.001)
+    }
 }

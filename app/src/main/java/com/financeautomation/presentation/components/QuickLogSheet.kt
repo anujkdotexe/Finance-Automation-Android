@@ -68,6 +68,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.utils.AmountInputSanitizer
+import com.financeautomation.core.utils.formatRupeesAuto
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -172,7 +174,7 @@ fun QuickLogSheet(
                 BasicTextField(
                     value = state.amountText,
                     onValueChange = { input ->
-                        if (input.isEmpty() || input.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
+                        if (AmountInputSanitizer.isValidExpressionInput(input)) {
                             onAmountChanged(input)
                         }
                     },
@@ -184,7 +186,7 @@ fun QuickLogSheet(
                     ),
                     cursorBrush = SolidColor(FinanceTheme.colors.primary),
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
+                        keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.Next
                     ),
                     modifier = Modifier
@@ -204,6 +206,16 @@ fun QuickLogSheet(
                             innerTextField()
                         }
                     }
+                )
+            }
+
+            if (state.amountText.any { it in "+-*/" } && state.amount > 0.0) {
+                Text(
+                    text = "= ${formatRupeesAuto(state.amount)}",
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = FinanceTheme.spacing.xxs)
                 )
             }
 
