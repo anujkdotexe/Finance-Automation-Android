@@ -111,4 +111,17 @@ class MonthTabStyleTest {
         assertFalse(requests.any { it.containsKey("addConditionalFormatRule") })
         assertTrue(requests.isNotEmpty())
     }
+
+    @Test
+    fun testCurrencyColumnsUseTheLiveRupeePatternWithoutQuotes() {
+        @Suppress("UNCHECKED_CAST")
+        val currencyColumns = requests.mapNotNull { it["repeatCell"] as? Map<String, Any?> }
+            .filter {
+                val fmt = ((it["cell"] as Map<*, *>)["userEnteredFormat"] as Map<*, *>)["numberFormat"] as? Map<*, *>
+                fmt?.get("type") == "CURRENCY" && fmt["pattern"] == "₹#,##0"
+            }
+            .map { (it["range"] as Map<*, *>)["startColumnIndex"] as Int }
+            .toSet()
+        assertEquals(setOf(6, 8, 9, 18, 25), currencyColumns)
+    }
 }

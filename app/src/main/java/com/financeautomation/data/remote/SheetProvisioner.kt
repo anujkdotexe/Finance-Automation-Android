@@ -9,7 +9,7 @@ import com.financeautomation.core.constants.SheetSchemaConstants
  * 1. Dashboard: Title banner, last updated formula, 6 KPI cards with living burn formulas,
  *    Monthly summary trend table, Category spend breakdown table, and Active Settlements query table.
  * 2. Month tabs (for example Nov26): 31-column schema, frozen headers, spacer columns,
- *    currency number formats ("₹"#,##0.00), date formats (dd/mm/yyyy), time formats (hh:mm am/pm),
+ *    currency number formats (₹#,##0), date formats (dd/mm/yyyy), time formats (hh:mm am/pm),
  *    dropdown data validations (Status, Repayment Status, Accounts, Categories),
  *    and conditional formatting (strikethrough on Void, italic on Carried).
  */
@@ -76,6 +76,9 @@ object SheetProvisioner {
         )
 
     private const val GOOGLE_SANS = "Google Sans"
+
+    /** Rupee pattern exactly as in the live iOS workbook (no quotes around the sign). */
+    const val CURRENCY_PATTERN: String = "₹#,##0"
 
     /** Text style (Google Sans, bold or italic as given, centered) for the blank cells of a title band row. */
     private fun bandStyleRequest(
@@ -383,6 +386,22 @@ object SheetProvisioner {
         requests.add(bandStyleRequest(dashboardSheetId, row = 1, startCol = 20, endCol = 29, fontSize = 10, color = hexToColorMap("536D79"), italic = true))
         requests.add(bandStyleRequest(dashboardSheetId, row = 2, startCol = 18, endCol = 29, fontSize = 11, color = whiteColor, italic = false))
 
+        requests.add(
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to dashboardSheetId,
+                        "startRowIndex" to 2,
+                        "endRowIndex" to 3,
+                        "startColumnIndex" to 18,
+                        "endColumnIndex" to 20
+                    ),
+                    "cell" to mapOf("userEnteredFormat" to mapOf("backgroundColor" to lightSlateBg)),
+                    "fields" to "userEnteredFormat.backgroundColor"
+                )
+            )
+        )
+
         // Thin box around each KPI card (rows 4 to 6)
         listOf(0, 3, 6, 9, 12, 15).forEach { startCol ->
             requests.add(outerBordersRequest(dashboardSheetId, startRow = 3, endRow = 6, startCol = startCol, endCol = startCol + 3))
@@ -409,11 +428,12 @@ object SheetProvisioner {
                         "backgroundColor" to if (isNavyBg) buttonNavyBg else whiteColor,
                         "horizontalAlignment" to "CENTER",
                         "verticalAlignment" to "MIDDLE",
-                        "textFormat" to mapOf(
-                            "foregroundColor" to if (isNavyBg) whiteColor else grayTextColor,
-                            "bold" to true,
-                            "fontSize" to 8
-                        )
+                        "textFormat" to buildMap {
+                            put("foregroundColor", if (isNavyBg) whiteColor else grayTextColor)
+                            put("bold", true)
+                            // The live workbook leaves the navy I OWE PEOPLE header at the default size
+                            if (!isNavyBg) put("fontSize", 8)
+                        }
                     )
                 )
             )
@@ -471,7 +491,7 @@ object SheetProvisioner {
                 15,
                 Triple(
                     """=IFERROR(A5 / DAY(TODAY()), 0)""",
-                    darkTextColor,
+                    hexToColorMap("1465BF"),
                     true
                 )
             )
@@ -496,7 +516,7 @@ object SheetProvisioner {
                         ),
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         )
                     )
                 )
@@ -595,7 +615,7 @@ object SheetProvisioner {
                         "verticalAlignment" to "MIDDLE",
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         ),
                         "textFormat" to mapOf("fontSize" to 10)
                     )
@@ -615,7 +635,7 @@ object SheetProvisioner {
                         "verticalAlignment" to "MIDDLE",
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         ),
                         "textFormat" to mapOf("fontSize" to 10)
                     )
@@ -711,7 +731,7 @@ object SheetProvisioner {
                         "verticalAlignment" to "MIDDLE",
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         ),
                         "textFormat" to mapOf("fontSize" to 10)
                     )
@@ -1233,7 +1253,7 @@ object SheetProvisioner {
                     startCol = colIdx,
                     endCol = colIdx + 1,
                     formatType = "CURRENCY",
-                    pattern = "\"₹\"#,##0",
+                    pattern = CURRENCY_PATTERN,
                     align = "RIGHT",
                     endRow = targetRowCount
                 )
