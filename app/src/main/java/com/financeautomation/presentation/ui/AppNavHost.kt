@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Subscriptions
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Badge
@@ -137,6 +138,7 @@ object AppRoutes {
     const val CATEGORIES = "categories"
     const val PEOPLE_TRIPS = "peopleTrips"
     const val SUBSCRIPTIONS = "subscriptions"
+    const val INSIGHTS = "insights"
     const val CAPTURE_PERMISSIONS = "capturePermissions"
     const val SYNC_BACKUP = "syncBackup"
     const val PREFERENCES = "preferences"
@@ -162,6 +164,7 @@ private val DRAWER_ITEMS = listOf(
     DrawerDestination(AppRoutes.CATEGORIES, "Categories", Icons.Rounded.Category),
     DrawerDestination(AppRoutes.PEOPLE_TRIPS, "People and trips", Icons.Rounded.FlightTakeoff),
     DrawerDestination(AppRoutes.SUBSCRIPTIONS, "Subscriptions", Icons.Rounded.Subscriptions),
+    DrawerDestination(AppRoutes.INSIGHTS, "Insights", Icons.Rounded.BarChart),
     DrawerDestination(AppRoutes.CAPTURE_PERMISSIONS, "Capture and permissions", Icons.Rounded.Security),
     DrawerDestination(AppRoutes.SYNC_BACKUP, "Sync and backup", Icons.Rounded.Sync),
     DrawerDestination(AppRoutes.PREFERENCES, "Preferences", Icons.Rounded.Tune),
@@ -364,6 +367,7 @@ fun AppNavHost(
                                         AppRoutes.CATEGORIES -> "Categories"
                                         AppRoutes.PEOPLE_TRIPS -> "People and trips"
                                         AppRoutes.SUBSCRIPTIONS -> "Subscriptions"
+                                        AppRoutes.INSIGHTS -> stringResource(R.string.insights_title)
                                         AppRoutes.CAPTURE_PERMISSIONS -> "Capture and permissions"
                                         AppRoutes.SYNC_BACKUP -> "Sync and backup"
                                         AppRoutes.PREFERENCES -> "Preferences"
@@ -669,6 +673,30 @@ fun AppNavHost(
                                 )
                             }
                         }
+                    }
+
+                    composable(AppRoutes.INSIGHTS) {
+                        val container = (context.applicationContext as com.financeautomation.FinanceApplication).appContainer
+                        val otherLabel = stringResource(R.string.insights_other)
+                        val insightsViewModel: com.financeautomation.presentation.viewmodel.InsightsViewModel =
+                            androidx.lifecycle.viewmodel.compose.viewModel(
+                                factory = com.financeautomation.presentation.viewmodel.InsightsViewModel.provideFactory(
+                                    transactionRepository = container.transactionRepository,
+                                    categoryRepository = container.categoryRepository,
+                                    otherLabel = otherLabel
+                                )
+                            )
+                        com.financeautomation.presentation.screens.InsightsScreen(
+                            viewModel = insightsViewModel,
+                            onOpenCategory = { month, category ->
+                                // Open Transactions on that month, filtered to the category
+                                transactionsViewModel.clearSearch()
+                                transactionsViewModel.currentMonth()
+                                repeat(insightsViewModel.monthsBeforeCurrent(month)) { transactionsViewModel.previousMonth() }
+                                transactionsViewModel.setFilter(category = category)
+                                navController.navigate(AppRoutes.TRANSACTIONS) { launchSingleTop = true }
+                            }
+                        )
                     }
 
                     composable(
