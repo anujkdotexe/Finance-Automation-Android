@@ -765,7 +765,10 @@ fun AppNavHost(
                         )
                     }
 
-                    composable(route = AppRoutes.CAPTURE_PERMISSIONS) {
+                    composable(
+                        route = AppRoutes.CAPTURE_PERMISSIONS,
+                        deepLinks = listOf(navDeepLink { uriPattern = "financeautomation://route/capturePermissions" })
+                    ) {
                         CapturePermissionsScreen(
                             state = settingsState,
                             setupHealthViewModel = setupHealthViewModel,
@@ -774,7 +777,10 @@ fun AppNavHost(
                         )
                     }
 
-                    composable(route = AppRoutes.SYNC_BACKUP) {
+                    composable(
+                        route = AppRoutes.SYNC_BACKUP,
+                        deepLinks = listOf(navDeepLink { uriPattern = "financeautomation://route/syncBackup" })
+                    ) {
                         SyncBackupScreen(
                             viewModel = settingsViewModel,
                             state = settingsState
