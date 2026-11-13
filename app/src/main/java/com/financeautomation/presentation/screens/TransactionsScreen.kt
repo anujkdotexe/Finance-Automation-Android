@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -283,7 +284,8 @@ fun TransactionsContent(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
+                contentPadding = PaddingValues(bottom = FinanceTheme.spacing.bottomFabClearance)
             ) {
                 state.groupedTransactions.forEach { group ->
                     item(key = group.dayTimestamp) {
