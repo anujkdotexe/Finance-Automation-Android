@@ -769,16 +769,16 @@ class DashboardViewModelTest {
             ioDispatcher = testDispatcher
         )
         advanceUntilIdle()
-        assertEquals(52500.0, vm.uiState.value.income, 0.001)
+        assertEquals("the refund is not income", 50000.0, vm.uiState.value.income, 0.001)
 
         inflowRepo.voidInflow("inf_a")
         advanceUntilIdle()
 
-        assertEquals(2500.0, vm.uiState.value.income, 0.001)
+        assertEquals(0.0, vm.uiState.value.income, 0.001)
     }
 
     @Test
-    fun testIncomeAggregation_countsIncomeAndRefund_excludesFriendSettlementTransferVoidAndOtherMonths() = runTest {
+    fun testIncomeAggregation_countsIncomeOnly_excludesRefundFriendSettlementTransferVoidAndOtherMonths() = runTest {
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply {
             timeInMillis = now
@@ -808,11 +808,11 @@ class DashboardViewModelTest {
         )
         advanceUntilIdle()
 
-        assertEquals(52500.0, vm.uiState.value.income, 0.001)
+        assertEquals(50000.0, vm.uiState.value.income, 0.001)
     }
 
     @Test
-    fun testRefundIsIncomeAndAlsoReducesLivingBurn() = runTest {
+    fun testRefundReducesLivingBurnAndIsNotIncome() = runTest {
         val now = System.currentTimeMillis()
         val tRepo = FakeTransactionRepo()
         val inflowRepo = FakeInflowRepo()
@@ -854,9 +854,13 @@ class DashboardViewModelTest {
         advanceUntilIdle()
 
         // Income reflects the refund
-        assertEquals(200.0, vm.uiState.value.income, 0.001)
-        // Owner rule: a refund also reduces the month's living burn (1000 spent, 200 refunded)
+        assertEquals("a refund lowers the burn, it is not income as well", 0.0, vm.uiState.value.income, 0.001)
+        // Owner rule: a refund reduces the month's living burn (1000 spent, 200 refunded)
         assertEquals(800.0, vm.uiState.value.currentBurn, 0.001)
+        assertEquals(200.0, vm.uiState.value.refunds, 0.001)
+        assertEquals(1000.0, vm.uiState.value.grossBurn, 0.001)
+        // Rows of Where it went add up to the gross total with the Refunds line, so percentages use the gross figure
+        assertEquals(1.0f, vm.uiState.value.allCategories.single().percentage, 0.001f)
     }
 
     @Test

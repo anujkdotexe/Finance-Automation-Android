@@ -88,6 +88,10 @@ data class DashboardUiState(
     val recentTransactions: List<Transaction> = emptyList(),
     val savings: Double = 0.0,
     val income: Double = 0.0,
+    /** Refunds of the month, already taken off [currentBurn]. */
+    val refunds: Double = 0.0,
+    /** Spending before refunds: the categories of Where it went add up to this. */
+    val grossBurn: Double = 0.0,
     val transactionCount: Int = 0,
     val syncQueueItems: List<SyncQueueEntity> = emptyList(),
     val isOffline: Boolean = false,
@@ -447,15 +451,15 @@ class DashboardViewModel(
             transactions, startOfPriorMonth until endOfPriorSameDay, excludedCategoryNames, inflows
         )
         val unconfirmed = LivingBurn.unconfirmed(transactions, excludedCategoryNames)
+        val refunds = LivingBurn.refundTotal(inflows, selectedWindow)
         var savings = 0.0
         var income = 0.0
         for (inflow in inflows) {
             if (inflow.timestamp in startOfMonth until endOfMonth && !inflow.status.equals("VOID", ignoreCase = true)) {
                 val type = inflow.inflowType.trim()
+                // Refunds are not income: they already lower the living burn (LivingBurn.refundTotal)
                 val isCounted = type.equals("Income / Salary", ignoreCase = true) ||
-                    type.equals("Refund / Return", ignoreCase = true) ||
-                    type.equals("Income", ignoreCase = true) ||
-                    type.equals("Refund", ignoreCase = true)
+                    type.equals("Income", ignoreCase = true)
                 val isExcluded = type.equals("Friend Settlement", ignoreCase = true) ||
                     type.equals("Self Transfer", ignoreCase = true) ||
                     type.equals("Transfer", ignoreCase = true)
@@ -525,9 +529,10 @@ class DashboardViewModel(
             emptyMap()
         }
 
+        val grossBurn = categorySums.values.sum()
         val allCategories = categorySums.entries
             .map { (cat, sum) ->
-                val pct = if (currentBurn > 0.0) (sum / currentBurn).toFloat().coerceIn(0f, 1f) else 0f
+                val pct = if (grossBurn > 0.0) (sum / grossBurn).toFloat().coerceIn(0f, 1f) else 0f
                 val progress = budgetProgressMap[cat.trim().lowercase()]
                 CategorySpend(
                     category = cat,
@@ -587,6 +592,8 @@ class DashboardViewModel(
             iOwePeople = totalIOwe,
             topIOwe = topIOwe,
             needsReviewCount = needsReviewCount,
+            refunds = refunds,
+            grossBurn = grossBurn,
             unconfirmedCount = unconfirmed.count,
             unconfirmedAmount = unconfirmed.amount,
             needsReviewTotal = needsReviewTotal,
