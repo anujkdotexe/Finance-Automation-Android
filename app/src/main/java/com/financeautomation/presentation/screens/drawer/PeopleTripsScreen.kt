@@ -66,6 +66,10 @@ fun PeopleTripsScreen(
 ) {
     val scrollState = rememberScrollState()
     var showAddFriendSheet by remember { mutableStateOf(false) }
+    var openTripName by remember { mutableStateOf<String?>(null) }
+    val tripUseCase = remember { com.financeautomation.domain.usecase.TripSummaryUseCase() }
+    fun summaryFor(name: String) =
+        state.tripSummaries[name.trim().lowercase()] ?: tripUseCase.forTrip(name, emptyList())
     var selectedCompanionForEdit by remember { mutableStateOf<FriendCompanion?>(null) }
 
     Column(
@@ -202,8 +206,9 @@ fun PeopleTripsScreen(
                             tripName = trip.name,
                             isActive = isActive,
                             statusText = if (isActive) stringResource(R.string.trip_active) else "Inactive",
-                            peopleCount = 4,
-                            totalSpend = "₹18,400.00",
+                            peopleCount = summaryFor(trip.name).peopleCount,
+                            totalSpend = formatRupees(summaryFor(trip.name).totalPaid),
+                            onOpen = { openTripName = trip.name },
                             onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
                             onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) }
                         )
@@ -214,8 +219,9 @@ fun PeopleTripsScreen(
                     tripName = state.activeTripTag,
                     isActive = true,
                     statusText = stringResource(R.string.trip_active),
-                    peopleCount = 4,
-                    totalSpend = "₹18,400.00",
+                    peopleCount = summaryFor(state.activeTripTag).peopleCount,
+                    totalSpend = formatRupees(summaryFor(state.activeTripTag).totalPaid),
+                    onOpen = { openTripName = state.activeTripTag },
                     onEndTrip = { viewModel.onActiveTripTagChanged("") },
                     onReactivateTrip = {}
                 )
@@ -268,6 +274,10 @@ fun PeopleTripsScreen(
                 }
             }
         }
+    }
+
+    openTripName?.let { name ->
+        TripDetailSheet(summary = summaryFor(name), onDismiss = { openTripName = null })
     }
 
     if (showAddFriendSheet) {
@@ -409,6 +419,7 @@ private fun TripCard(
     statusText: String,
     peopleCount: Int,
     totalSpend: String,
+    onOpen: () -> Unit = {},
     onEndTrip: () -> Unit = {},
     onReactivateTrip: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -417,7 +428,7 @@ private fun TripCard(
         color = FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
         shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().clickable(onClick = onOpen)
     ) {
         Column(
             modifier = Modifier
