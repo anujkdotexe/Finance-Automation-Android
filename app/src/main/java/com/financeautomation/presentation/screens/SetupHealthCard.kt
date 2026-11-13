@@ -46,6 +46,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +59,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.financeautomation.R
+import com.financeautomation.presentation.components.AttentionCard
+import com.financeautomation.presentation.health.AttentionState
+import com.financeautomation.presentation.health.attentionContent
+import com.financeautomation.presentation.health.issueFor
 import com.financeautomation.data.repository.CompatibilityReportCollector
 import com.financeautomation.presentation.health.OemHardeningHelper
 import com.financeautomation.presentation.overlay.OverlayController
@@ -113,6 +121,16 @@ fun SetupHealthCard(
     }
 
     val oemInfo = remember { OemHardeningHelper.getOemInfo() }
+
+    // Re-check when the user comes back from a system settings screen, so a fixed row turns done at once
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshChecks()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     SettingsCard(
         title = stringResource(R.string.health_setup_title),
@@ -316,6 +334,21 @@ private fun HealthCheckRow(
     oemFeedback: Boolean? = null,
     onOemFeedback: ((Boolean) -> Unit)? = null
 ) {
+    // Every requirement row uses the shared card; only the advice-only OEM row keeps its own layout
+    val issue = issueFor(item.id)
+    if (issue != null) {
+        val state = when (item.status) {
+            HealthStatus.OK -> AttentionState.OK
+            HealthStatus.MISSING -> AttentionState.NEEDS_ATTENTION
+            HealthStatus.UNKNOWN -> AttentionState.IN_PROGRESS
+        }
+        AttentionCard(
+            content = attentionContent(issue, state),
+            onAction = onFix,
+            detail = if (state == AttentionState.OK) item.detailText else null
+        )
+        return
+    }
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         shape = FinanceTheme.shapes.medium,
