@@ -340,108 +340,120 @@ fun AppNavHost(
         }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            val fullScreenFlowRoutes = remember {
+                setOf(
+                    AppRoutes.ONBOARDING,
+                    AppRoutes.NOTIFICATION_ACCESS,
+                    AppRoutes.ERROR_API_NOT_ENABLED,
+                    AppRoutes.ERROR_PERMISSION_NOT_GRANTED,
+                    AppRoutes.ERROR_RATE_LIMITED
+                )
+            }
+
             Scaffold(
                 topBar = {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = when (currentRoute) {
-                                    AppRoutes.DASHBOARD -> stringResource(R.string.nav_dashboard_title)
-                                    AppRoutes.NEEDS_REVIEW -> stringResource(R.string.nav_inbox_title)
-                                    AppRoutes.TRANSACTIONS -> "Transactions"
-                                    AppRoutes.ACCOUNTS -> "Accounts"
-                                    AppRoutes.CATEGORIES -> "Categories"
-                                    AppRoutes.PEOPLE_TRIPS -> "People and trips"
-                                    AppRoutes.SUBSCRIPTIONS -> "Subscriptions"
-                                    AppRoutes.CAPTURE_PERMISSIONS -> "Capture and permissions"
-                                    AppRoutes.SYNC_BACKUP -> "Sync and backup"
-                                    AppRoutes.PREFERENCES -> "Preferences"
-                                    AppRoutes.DIAGNOSTICS -> "Diagnostics"
-                                    AppRoutes.ABOUT -> "About"
-                                    else -> "Finance Automation"
-                                },
-                                style = FinanceTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        },
-                        navigationIcon = {
-                            if (isRootBottomBarRoute) {
-                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Menu,
-                                        contentDescription = "Open navigation menu",
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            } else {
-                                IconButton(onClick = {
-                                    if (!navController.popBackStack()) {
-                                        navController.navigate(AppRoutes.DASHBOARD)
+                    if (currentRoute !in fullScreenFlowRoutes) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = when (currentRoute) {
+                                        AppRoutes.DASHBOARD -> stringResource(R.string.nav_dashboard_title)
+                                        AppRoutes.NEEDS_REVIEW -> stringResource(R.string.nav_inbox_title)
+                                        AppRoutes.TRANSACTIONS -> "Transactions"
+                                        AppRoutes.ACCOUNTS -> "Accounts"
+                                        AppRoutes.CATEGORIES -> "Categories"
+                                        AppRoutes.PEOPLE_TRIPS -> "People and trips"
+                                        AppRoutes.SUBSCRIPTIONS -> "Subscriptions"
+                                        AppRoutes.CAPTURE_PERMISSIONS -> "Capture and permissions"
+                                        AppRoutes.SYNC_BACKUP -> "Sync and backup"
+                                        AppRoutes.PREFERENCES -> "Preferences"
+                                        AppRoutes.DIAGNOSTICS -> "Diagnostics"
+                                        AppRoutes.ABOUT -> "About"
+                                        else -> "Finance Automation"
+                                    },
+                                    style = FinanceTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            navigationIcon = {
+                                if (isRootBottomBarRoute) {
+                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Menu,
+                                            contentDescription = "Open navigation menu",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
                                     }
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = "Navigate back",
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
+                                } else {
+                                    IconButton(onClick = {
+                                        if (!navController.popBackStack()) {
+                                            navController.navigate(AppRoutes.DASHBOARD)
+                                        }
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                            contentDescription = "Navigate back",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
                                 }
-                            }
-                        },
-                        actions = {
-                            if (showAvatarMenu) {
-                                Box {
-                                    AccountAvatar(
-                                        email = settingsState.googleAccountEmail,
-                                        onClick = { accountMenuExpanded = true }
-                                    )
-                                    DropdownMenu(
-                                        expanded = accountMenuExpanded,
-                                        onDismissRequest = { accountMenuExpanded = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = {
-                                                Column {
-                                                    Text(
-                                                        text = "Google account",
-                                                        style = FinanceTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                    Text(
-                                                        text = settingsState.googleAccountEmail ?: "Local offline storage",
-                                                        style = FinanceTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.SemiBold
-                                                    )
+                            },
+                            actions = {
+                                if (showAvatarMenu) {
+                                    Box {
+                                        AccountAvatar(
+                                            email = settingsState.googleAccountEmail,
+                                            onClick = { accountMenuExpanded = true }
+                                        )
+                                        DropdownMenu(
+                                            expanded = accountMenuExpanded,
+                                            onDismissRequest = { accountMenuExpanded = false }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(
+                                                            text = "Google account",
+                                                            style = FinanceTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                        Text(
+                                                            text = settingsState.googleAccountEmail ?: "Local offline storage",
+                                                            style = FinanceTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.SemiBold
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {},
+                                                enabled = false
+                                            )
+                                            HorizontalDivider()
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.menu_sync_backup)) },
+                                                onClick = {
+                                                    accountMenuExpanded = false
+                                                    navController.navigate(AppRoutes.SYNC_BACKUP)
                                                 }
-                                            },
-                                            onClick = {},
-                                            enabled = false
-                                        )
-                                        HorizontalDivider()
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.menu_sync_backup)) },
-                                            onClick = {
-                                                accountMenuExpanded = false
-                                                navController.navigate(AppRoutes.SYNC_BACKUP)
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.action_sign_out), color = MaterialTheme.colorScheme.error) },
-                                            onClick = {
-                                                accountMenuExpanded = false
-                                                settingsViewModel.onGoogleSignOut()
-                                                onReRunSetup()
-                                            }
-                                        )
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.action_sign_out), color = MaterialTheme.colorScheme.error) },
+                                                onClick = {
+                                                    accountMenuExpanded = false
+                                                    settingsViewModel.onGoogleSignOut()
+                                                    onReRunSetup()
+                                                }
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            titleContentColor = MaterialTheme.colorScheme.onSurface
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                titleContentColor = MaterialTheme.colorScheme.onSurface
+                            )
                         )
-                    )
+                    }
                 },
                 bottomBar = {
                     if (isRootBottomBarRoute) {
