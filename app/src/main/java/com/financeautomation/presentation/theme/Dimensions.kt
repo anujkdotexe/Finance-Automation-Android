@@ -101,11 +101,6 @@ object FinanceAlphas {
     const val disabled: Float = 0.38f
 }
 
-object Motion {
-    const val DURATION_FAST = 150
-    const val DURATION_STANDARD = 250
-}
-
 val LocalSpacing = staticCompositionLocalOf { Spacing }
 val LocalShapes = staticCompositionLocalOf { FinanceShapes }
 val LocalSizes = staticCompositionLocalOf { FinanceSizes }

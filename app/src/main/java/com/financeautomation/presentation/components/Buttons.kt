@@ -268,20 +268,6 @@ fun SecondaryButton(
     )
 }
 
-@Composable
-fun TonalButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
-) {
-    FilledButton(
-        text = text,
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        enabled = enabled
-    )
-}
 
 @Composable
 fun TextAction(

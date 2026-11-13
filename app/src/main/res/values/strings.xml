@@ -4,21 +4,8 @@
     <string name="quick_add_tile_label">Add expense</string>
     <string name="notification_channel_heads_up_name">Expense Alerts</string>
     <string name="notification_channel_heads_up_desc">Interactive alerts for intercepted UPI expenses</string>
-    <string name="notification_channel_sync_name">Cloud Sync Status</string>
-    <string name="notification_channel_sync_desc">Background Google Sheets synchronization updates</string>
     <string name="notification_channel_auth_name">Authentication Alerts</string>
     <string name="notification_channel_auth_desc">Google authorization alerts and reconnect prompts</string>
-    <string name="action_split">Details / Split</string>
-    <string name="status_settled">Settled</string>
-    <string name="status_pending">Pending</string>
-    <string name="status_void">Void</string>
-    <string name="status_carried">Carried</string>
-    <string name="category_savings">Savings</string>
-    <string name="category_food">Food &amp; Drink</string>
-    <string name="category_groceries">Groceries</string>
-    <string name="category_travel">Travel</string>
-    <string name="category_shopping">Shopping</string>
-    <string name="category_uncategorized">Uncategorized</string>
     <string name="quick_log_widget_label">Add expense</string>
     <string name="quick_log_widget_desc">Tap to log an expense</string>
     <string name="home_screen_widget_card_title">Add expense widget</string>
@@ -40,16 +27,9 @@
     <string name="split_just_me">Just Me</string>
     <string name="split_equally">Split Equally</string>
     <string name="split_custom">Custom Split</string>
-    <string name="prompt_add_new_friend">+ Add New Friend</string>
-    <string name="prompt_enter_your_share">Enter your share ₹</string>
-    <string name="prompt_amount_received">Amount Received ₹</string>
     <string name="prompt_who_sent_this">Who sent this?</string>
     <string name="prompt_select_bill_to_settle">Select Bill to settle</string>
     <string name="prompt_reason_note">Reason / Note</string>
-    <string name="prompt_amount_i_owe">Amount I Owe ₹</string>
-    <string name="prompt_who_paid_for_you">Who paid for you?</string>
-    <string name="prompt_who_did_you_repay">Who did you repay?</string>
-    <string name="prompt_enter_trip_tag">Enter Trip Tag (e.g. Goa 2026):</string>
 
     <!-- General Actions -->
     <string name="action_clear">Clear</string>
@@ -65,133 +45,49 @@
     <string name="action_void">Void</string>
     <string name="action_edit">Edit</string>
     <string name="action_add">Add</string>
-    <string name="action_rename">Rename</string>
-    <string name="action_remove">Remove</string>
-    <string name="action_enable">Enable</string>
     <string name="action_close">Close</string>
     <string name="action_review">Review</string>
     <string name="action_see_all">See all</string>
     <string name="action_show_less">Show less</string>
-    <string name="action_re_run_setup">Re-run setup</string>
-    <string name="action_start_setup">Start setup</string>
     <string name="action_sign_out">Sign out</string>
-    <string name="action_sync_now">Sync now</string>
-    <string name="action_mirror_config">Mirror config</string>
-    <string name="action_restore_config">Restore config</string>
-    <string name="action_regenerate_dashboard">Regenerate dashboard formulas</string>
     <string name="action_repair_workbook">Repair workbook</string>
     <string name="action_create_fresh_workbook">Create a fresh workbook</string>
     <string name="create_fresh_workbook_confirm_title">Create a fresh workbook</string>
     <string name="create_fresh_workbook_confirm_body">This creates a new empty workbook and switches the app to it. Your old workbook stays in Google Drive.</string>
     <string name="action_create">Create</string>
-    <string name="action_repair_workbook_desc">Recreates missing tabs or 31-column layouts in the current year workbook.</string>
-    <string name="msg_repair_workbook_success">Successfully repaired %1$s master workbook</string>
     <string name="raw_http_errors_title">Raw Google API Errors</string>
     <string name="raw_http_errors_notice">Contains Google error text. Shared only if you choose.</string>
     <string name="raw_http_errors_empty">No raw Google API errors recorded.</string>
     <string name="onboarding_error_unknown_with_message">%1$s. Check Settings &gt; Advanced Diagnostics for details.</string>
     <string name="onboarding_error_unknown">Failed to resolve finance workspace. Check Settings &gt; Advanced Diagnostics for details.</string>
     <string name="report_include_google_errors">Include Google error details</string>
-    <string name="action_get_started">Get Started</string>
-    <string name="action_grant_permission">Grant Permission</string>
     <string name="action_retry_workspace">Retry Workspace Setup</string>
 
     <!-- Dashboard & Home Screen -->
     <string name="dashboard_hero_burn_title">Living burn</string>
-    <string name="dashboard_burn_subtitle">Daily avg %1$s · Last month %2$s</string>
     <string name="dashboard_owed_to_me">Owed to me</string>
     <string name="dashboard_i_owe">I owe</string>
-    <string name="dashboard_none_pending">None pending</string>
     <string name="dashboard_where_it_went">Where it went</string>
-    <string name="dashboard_recent">Recent</string>
     <string name="dashboard_savings">Savings</string>
-    <string name="dashboard_savings_caption">SIPs and investments</string>
     <string name="dashboard_income">Income</string>
-    <string name="dashboard_income_caption">Total inflows</string>
     <string name="dashboard_empty_message">Nothing logged yet. Pay with UPI and the prompt will appear, or tap Add expense.</string>
     <string name="dashboard_empty_action">Add expense</string>
-    <string name="dashboard_excludes_savings">Excludes Savings</string>
-    <string name="dashboard_on_track">On track</string>
-    <string name="dashboard_daily_average_prefix">Daily average: </string>
-    <string name="dashboard_daily_average_label">Daily average</string>
-    <string name="dashboard_same_day_last_month_label">Same day last month</string>
-    <string name="dashboard_no_data">No data</string>
-    <string name="dashboard_vs_same_day_prefix">vs same day last month </string>
-    <string name="dashboard_offline_banner_title">You are offline.</string>
-    <string name="dashboard_offline_banner_body">Your expenses are saved on this phone and will sync when you are back online.</string>
-    <string name="dashboard_waiting_to_sync">Waiting to sync</string>
-    <string name="dashboard_balances_clear">All other balances clear</string>
-    <string name="sync_status_synced_now">Synced just now</string>
-    <string name="sync_status_syncing">Syncing&#8230;</string>
-    <string name="sync_status_offline">Offline</string>
     <string name="cd_prev_month">Previous Month</string>
     <string name="cd_next_month">Next Month</string>
 
     <!-- Review Screen -->
-    <string name="review_title">Review</string>
-    <string name="review_empty_title">All Caught Up</string>
-    <string name="review_empty_desc">No pending transactions needing review. New UPI &amp; card alerts will appear here in real-time.</string>
     <string name="review_duplicate_warning">Possible duplicate detected. Please verify before confirming.</string>
-    <string name="review_unknown_merchant">Unknown Merchant</string>
-    <string name="split_with_companions">Split with %s</string>
-    <string name="review_awaiting_confirmation">%d transactions awaiting confirmation</string>
 
     <!-- Settings Screen -->
-    <string name="settings_account_title">Google account &amp; ledger</string>
-    <string name="settings_account_connected">Connected</string>
-    <string name="settings_account_disconnected_desc">Google Drive sync is not configured. Run the setup checklist to connect your account and workbook.</string>
-    <string name="settings_funding_accounts_title">Bank and payment accounts</string>
-    <string name="settings_funding_accounts_desc">Select an account to set default. Add custom accounts anytime.</string>
-    <string name="account_default_format">%s (Default)</string>
-    <string name="account_default_label">Default</string>
-    <string name="settings_friends_title">Friends and companions</string>
-    <string name="settings_friends_desc">Tap a friend chip to rename or delete. Used for 1-tap bill splitting.</string>
-    <string name="settings_new_account_label">New account name</string>
-    <string name="settings_new_friend_label">New friend name</string>
-    <string name="settings_friend_name_label">Friend name</string>
-    <string name="settings_manage_friend_title">Manage friend</string>
-    <string name="settings_sync_title">Google Sheets and sync</string>
-    <string name="settings_sync_desc">Master Ledger integration and automated cloud sync</string>
     <string name="settings_spreadsheet_id_label">Google Spreadsheet ID</string>
     <string name="settings_spreadsheet_id_placeholder">Paste spreadsheet ID from URL</string>
     <string name="settings_save_id">Save ID</string>
-    <string name="settings_settle_buffer_title">Background settle buffer</string>
-    <string name="settings_settle_buffer_desc_format">Wait window before dispatching cloud sync: %ds (30s to 300s)</string>
-    <string name="settings_capture_title">Display over other apps</string>
-    <string name="settings_capture_desc">Automatic expense sheet popup after UPI payment completes</string>
-    <string name="settings_overlay_active">Overlay popup active</string>
-    <string name="settings_overlay_missing">Overlay permission missing</string>
-    <string name="settings_overlay_active_desc">Bottom sheet pops up automatically after payment</string>
-    <string name="settings_overlay_missing_desc">Falls back to high-priority notification</string>
-    <string name="settings_categories_title">Expense categories and living burn</string>
-    <string name="settings_categories_desc">Excluded categories are omitted from Monthly Living Burn KPIs (e.g. Savings, Transfers).</string>
-    <string name="settings_new_category_label">New category name</string>
-    <string name="settings_exclude_burn_label">Exclude from Living Burn</string>
-    <string name="settings_included_burn_label">Included in Living Burn</string>
-    <string name="settings_trip_tags_title">Trip and event tags</string>
-    <string name="settings_no_trip_active">No trip tag active.</string>
-    <string name="settings_active_trip_format">Active tag: %s</string>
-    <string name="settings_new_trip_tag_label">New trip tag (e.g. Goa 2026)</string>
 
     <!-- Onboarding Screen -->
-    <string name="onboarding_welcome_title">Welcome to Finance Automation</string>
-    <string name="onboarding_welcome_desc">Complete the checklist below to set up your personal Google Drive workspace and automated notification interception.</string>
-    <string name="onboarding_step1_title">Sign in with Google</string>
-    <string name="onboarding_step1_completed">Signed in and authorized for Google Drive sync</string>
-    <string name="onboarding_step1_progress">Authorizing through Google Identity&#8230;</string>
-    <string name="onboarding_step1_not_started">Authorizes drive.file scope to manage your master workbook</string>
-    <string name="onboarding_step2_title">Creating your finance workspace</string>
-    <string name="onboarding_step2_progress">Locating or provisioning master workbook&#8230;</string>
     <string name="onboarding_error_api_disabled">Google Sheets or Drive API is not enabled for your Google Cloud project. Please enable them in Google Cloud Console.</string>
     <string name="onboarding_error_insufficient_scope">Required Google Drive or Sheets permissions were not granted. Please sign out and sign in granting all requested scopes.</string>
     <string name="onboarding_error_rate_limited">Google API rate limit reached. Please wait a moment and tap Retry.</string>
     <string name="onboarding_error_generic">Workspace setup failed (%1$s HTTP %2$d %3$s%4$s). Tap retry, or check Settings &gt; Advanced Diagnostics for details.</string>
-    <string name="onboarding_step3_title">Notification listener permission</string>
-    <string name="onboarding_step3_completed">Notification listener enabled</string>
-    <string name="onboarding_step3_desc">Required to intercept UPI and banking debit alerts in real time</string>
-    <string name="onboarding_step4_title">Ready</string>
-    <string name="onboarding_step4_completed">Your workspace is ready. You can now track and review expenses.</string>
-    <string name="onboarding_step4_pending">Complete all steps above to finish setup</string>
 
     <!-- Phase 7: Setup Health Checks & Warnings -->
     <string name="health_setup_title">Setup health</string>
@@ -212,8 +108,6 @@
     <string name="health_google_desc">Connect Google Drive and verify Master Ledger workbook for the current year</string>
 
     <string name="health_status_ok">OK</string>
-    <string name="health_status_missing">Missing</string>
-    <string name="health_status_unknown">Manual check</string>
     <string name="health_fix_button">Fix</string>
     <string name="health_listener_connected">Connected</string>
     <string name="health_listener_disconnected">Disconnected</string>
@@ -225,7 +119,6 @@
     <string name="health_self_test_success">Self-test passed: Expense sheet rendered successfully</string>
     <string name="health_self_test_failed">Self-test failed: Overlay permission missing or window failed to attach</string>
     <string name="self_test_completed_pill">Self-test completed (not saved)</string>
-    <string name="self_test_sample_payee">Coffee House (Self-Test)</string>
     <string name="health_channel_name">Health &amp; Setup Alerts</string>
     <string name="health_channel_desc">Alerts regarding required background permissions and listener status</string>
     <string name="health_advanced_title">Advanced Diagnostics</string>
@@ -277,76 +170,24 @@
     <string name="prompt_receiving_account">Receiving account</string>
     <string name="prompt_who_settled">Who Settled (Friend)</string>
     <string name="prompt_sender_source">Sender / Source</string>
-    <string name="prompt_settle_open_debt">Settle Open Debt (Optional)</string>
     <string name="prompt_auto_settle">Auto-Settle (All / Oldest First)</string>
-    <string name="btn_record_inflow">Record Inflow</string>
     <string name="btn_record_debt">Record debt</string>
     <string name="btn_record_repayment">Save</string>
     <string name="prompt_date_repaid">Date repaid</string>
-    <string name="trip_active_badge">Trip Mode Active</string>
-    <string name="trip_active_desc">All new transactions will be tagged with this event until stopped.</string>
-    <string name="btn_start_trip">Start Trip Mode</string>
-    <string name="btn_end_trip">End Trip Mode</string>
-    <string name="prompt_active_trip_tag">Active Trip Tag</string>
-    <string name="prompt_new_trip_tag">New Trip Tag</string>
-    <string name="trip_tag_placeholder">e.g. Goa 2026</string>
 
     <!-- Component & Card Labels -->
     <string name="cd_add_friend">Add Friend</string>
-    <string name="label_friend">Friend</string>
     <string name="hint_friends_name">Friend\'s Name</string>
     <string name="label_personal_share">Your Personal Share ₹</string>
-    <string name="format_my_share">My share: %s</string>
-    <string name="format_owed_to_me">Owed to me: %s</string>
     <string name="format_trip_tag">Trip: %s</string>
-    <string name="format_since_date">Since %s</string>
     <string name="action_end_trip">End Trip</string>
-    <string name="badge_payment_intercepted">Payment Intercepted</string>
-    <string name="badge_quick_expense">Quick Expense</string>
     <string name="btn_save_expense">Save expense</string>
     <string name="label_details">Details</string>
-    <string name="label_raw_alert">Raw alert: %s</string>
-    <string name="action_quick_save">Quick Save</string>
-    <string name="format_net_burn">Living Burn: %s</string>
-    <string name="format_daily_average">%s / day</string>
-    <string name="format_last_month">vs %s last month</string>
     <string name="label_today">Today</string>
     <string name="label_yesterday">Yesterday</string>
-    <string name="label_this_month">This month</string>
     <string name="label_amount">Amount</string>
-    <string name="label_paid_to">Paid to</string>
-    <string name="label_merchant_purpose">Merchant or purpose</string>
-    <string name="label_category">Category</string>
-    <string name="label_split">Split</string>
-    <string name="label_friends">Friends</string>
-    <string name="label_friend_name">Friend name</string>
-    <string name="label_my_share_rs">My share (₹)</string>
 
     <!-- Settings Subsections -->
-    <string name="settings_account_subtitle">Primary Google Identity used for Master Ledger sync</string>
-    <string name="settings_backup_account">Backup Account</string>
-    <string name="settings_add_account">Add Account</string>
-    <string name="settings_no_accounts">No funding accounts configured</string>
-    <string name="settings_add_companion">Add Friend</string>
-    <string name="settings_no_companions">No friends added yet</string>
-    <string name="dialog_rename_friend">Rename Friend</string>
-    <string name="dialog_delete_friend">Delete Friend</string>
-    <string name="dialog_delete_friend_confirm">Are you sure you want to delete %s?</string>
-    <string name="action_delete">Delete</string>
-    <string name="settings_capture_overlay_perm">Overlay Permission</string>
-    <string name="settings_capture_notif_perm">Notification Access</string>
-    <string name="settings_capture_usage_perm">Usage Stats Permission</string>
-    <string name="settings_capture_battery_perm">Battery Optimization</string>
-    <string name="settings_capture_oem_perm">OEM Autostart</string>
-    <string name="settings_quick_actions_title">Add expense shortcuts</string>
-    <string name="settings_quick_actions_desc">Access expense logging instantly from anywhere</string>
-    <string name="settings_sync_status_title">Sync engine status</string>
-    <string name="settings_sync_interval_title">Sync interval</string>
-    <string name="settings_sync_manual">Manual sync only</string>
-    <string name="settings_sync_wifi_only">Sync over Wi-Fi only</string>
-    <string name="settings_sync_metered">Allow metered / cellular sync</string>
-    <string name="settings_pending_queue_title">Pending offline transactions</string>
-    <string name="settings_sync_debug_logs">Export sync debug logs</string>
 
     <!-- Preview & Fallback Strings -->
     <string name="preview_sample_merchant">Sample Merchant</string>
@@ -362,20 +203,11 @@
 
     <!-- Navigation & Main Screen Titles -->
     <string name="nav_inbox_title">Needs Review</string>
-    <string name="nav_inbox_subtitle">Automated UPI &amp; Card Interceptions</string>
     <string name="nav_dashboard_title">Dashboard</string>
-    <string name="nav_dashboard_subtitle">Live Monthly KPIs &amp; Sync Status</string>
-    <string name="nav_settings_title">Settings &amp; Sync</string>
-    <string name="nav_settings_subtitle">Google Sheets &amp; Split Configuration</string>
 
     <!-- Sheet Fallback / Expense Sheet Strings -->
     <string name="expense_duplicate_warning">Possible duplicate from recent alert. Confirm details before saving.</string>
-    <string name="expense_merchant_placeholder">Merchant or purpose</string>
-    <string name="expense_my_share_format">My share: %s</string>
-    <string name="expense_owed_to_me_format">Owed to me: %s</string>
     <string name="action_add_friend">Add friend</string>
-    <string name="placeholder_friend_name">Friend name</string>
-    <string name="placeholder_amount_zero">0.00</string>
 
     <!-- Background Notifications & Channels -->
     <string name="notif_auth_reconnect_title">Reconnect Google Drive sync</string>
@@ -398,7 +230,6 @@
     <string name="action_retry">Retry</string>
     <string name="action_discard">Discard</string>
     <string name="action_not_yet">Not yet</string>
-    <string name="action_skip">Skip</string>
     <string name="action_skip_this_time">Skip</string>
     <string name="action_confirm_all">Confirm all</string>
     <string name="action_clear_search">Clear search</string>
@@ -418,18 +249,12 @@
     <string name="transactions_no_matches_title">No matches found</string>
     <string name="transactions_no_matches_subtitle">No transactions found matching \"%1$s\" in %2$s.</string>
     <string name="transactions_empty_month_title">No transactions in %1$s</string>
-    <string name="sync_failed_card_title">Failed to sync</string>
     <string name="dashboard_offline_banner_text">You are offline. New expenses are saved on this phone and will sync when you reconnect.</string>
     <string name="report_capture_health_title">Capture Health &amp; Trail</string>
     <string name="report_capture_health_subtitle">Inspect daily capture funnel and pipeline trail events</string>
     <string name="capture_health_daily_pipeline_funnel">Daily Pipeline Funnel</string>
     <string name="capture_health_no_events_today">No events recorded today</string>
     <string name="capture_health_recent_events_count">Recent Trail Events (%1$d)</string>
-    <string name="crashlytics_card_title">Reliability &amp; Diagnostics</string>
-    <string name="crashlytics_card_desc">Anonymous technical telemetry to fix crashes and background freezes</string>
-    <string name="crashlytics_opt_in_title">Help improve reliability</string>
-    <string name="crashlytics_opt_in_desc">Sends crash and freeze reports (app version, phone model, Android version, error location). Never amounts, names or messages.</string>
-    <string name="btn_test_crash">Test Crash (Debug/Beta)</string>
     <string name="sheet_title_add_expense">Add expense</string>
     <string name="sheet_title_log_payment">Log this payment</string>
     <string name="sheet_caption_from_app">From %1$s</string>
@@ -461,32 +286,19 @@
 
     <!-- Round 4 UI Redesign Strings -->
     <!-- Navigation Drawer -->
-    <string name="nav_item_transactions">Transactions</string>
-    <string name="nav_item_accounts">Accounts</string>
-    <string name="nav_item_categories">Categories</string>
-    <string name="nav_item_people_trips">People and trips</string>
-    <string name="nav_item_subscriptions">Subscriptions</string>
-    <string name="nav_item_capture_permissions">Capture and permissions</string>
-    <string name="nav_item_sync_backup">Sync and backup</string>
-    <string name="nav_item_preferences">Preferences</string>
-    <string name="nav_item_diagnostics">Diagnostics</string>
-    <string name="nav_item_about">About</string>
 
     <!-- Accounts Screen -->
-    <string name="accounts_title">Accounts</string>
     <string name="accounts_action_add">Add</string>
     <string name="accounts_section_title">All accounts</string>
     <string name="accounts_section_subtitle">Connected accounts for automatic expense tracking</string>
     <string name="accounts_badge_default">Default</string>
     <string name="accounts_tx_count">%1$d transactions this month</string>
     <string name="accounts_empty_title">No connected accounts</string>
-    <string name="accounts_empty_subtitle">Add your bank or payment accounts to track expenses automatically.</string>
     <string name="dialog_add_account_title">Add account</string>
     <string name="dialog_add_account_name">Account name</string>
     <string name="dialog_add_account_last4">Last 4 digits (optional)</string>
 
     <!-- Categories Screen -->
-    <string name="categories_title">Categories</string>
     <string name="categories_action_add">Add category</string>
     <string name="categories_section_title">Spending categories</string>
     <string name="categories_section_subtitle">Count toward your monthly living burn</string>
@@ -497,7 +309,6 @@
     <string name="categories_add_sheet_color_label">Colour</string>
 
     <!-- Capture and Permissions Screen -->
-    <string name="capture_title">Capture and permissions</string>
     <string name="capture_notification_title">Notification access</string>
     <string name="capture_notification_desc">Reads payment notifications</string>
     <string name="capture_battery_title">Battery optimisation</string>
@@ -515,7 +326,6 @@
     <string name="status_restricted">Restricted</string>
 
     <!-- Sync and Backup Screen -->
-    <string name="sync_title">Sync and backup</string>
     <string name="sync_cloud_storage">Cloud storage</string>
     <string name="sync_google_account">Google account</string>
     <string name="sync_workbook">Workbook</string>
@@ -525,7 +335,6 @@
     <string name="sync_btn_backup_now">Back up now</string>
 
     <!-- Preferences Screen -->
-    <string name="pref_title">Preferences</string>
     <string name="pref_section_title">App settings</string>
     <string name="pref_section_subtitle">Customise behavior and schedules</string>
     <string name="pref_theme_title">Theme</string>
@@ -538,7 +347,6 @@
     <string name="pref_reminder_time_desc">Daily tracking prompt</string>
 
     <!-- Diagnostics Screen -->
-    <string name="diag_title">Diagnostics</string>
     <string name="diag_section_title">Developer actions</string>
     <string name="diag_section_subtitle">Low-level sync and diagnostic utilities</string>
     <string name="diag_run_sync_now">Run sync now</string>
@@ -560,7 +368,6 @@
     <string name="sub_active_title">Active subscriptions</string>
     <string name="sub_next_due">Next due %1$s</string>
     <string name="sub_next_due_formatted">Next due %1$s, %2$s</string>
-    <string name="sub_next_due_today">Next due today</string>
     <string name="sub_paused_title">Paused subscriptions</string>
     <string name="sub_empty_title">No active subscriptions</string>
     <string name="sub_empty_subtitle">Tap Add to track a recurring payment</string>
@@ -580,31 +387,24 @@
     <string name="sub_add_remind_label">Remind me before due date</string>
 
     <!-- People and Trips Screen (U11) -->
-    <string name="people_trips_title">People and trips</string>
     <string name="people_add_friend">Add friend</string>
     <string name="people_section_friends">Friends</string>
     <string name="people_friends_desc">Net balances from split expenses</string>
     <string name="people_section_trips">Trips</string>
     <string name="people_trips_desc">Shared travel ledgers</string>
-    <string name="people_owed_to_you">Owed to you</string>
-    <string name="people_i_owe">I owe</string>
     <string name="people_owes_you">Owes you</string>
     <string name="people_you_owe">You owe</string>
     <string name="people_settled">Settled</string>
     <string name="people_all_caught_up">All caught up</string>
     <string name="people_empty_title">No friends added</string>
-    <string name="people_empty_subtitle">Add friends to split group expenses and track shared debts.</string>
     <string name="friend_add_title">Add friend</string>
     <string name="friend_add_name_label">Friend\'s name</string>
     <string name="friend_add_name_placeholder">e.g. Karan Malhotra</string>
     <string name="friend_add_name_helper">Used for splitting bills and tracking shared balances.</string>
     <string name="trip_active">Active</string>
-    <string name="trip_settled_tag">Settled</string>
     <string name="trip_total_spend_label">Total spend</string>
-    <string name="trip_people_count">%1$d people</string>
 
     <!-- About Screen (U12) -->
-    <string name="about_title">About</string>
     <string name="about_app_name">Finance Automation</string>
     <string name="about_version_label">Version %1$s (Build %2$d)</string>
     <string name="about_engine_active">On-device engine active</string>
@@ -628,11 +428,9 @@
     <string name="error_53_action_retry">Retry</string>
     <string name="error_54_title">Permission not granted</string>
     <string name="error_54_desc">Notification access is needed to detect payment alerts and log expenses automatically.</string>
-    <string name="error_54_action_grant">Grant permission</string>
     <string name="error_54_action_manual">Continue</string>
     <string name="error_54_action_settings">Settings</string>
     <string name="error_55_top_bar">Sync paused</string>
-    <string name="error_55_title">Google API rate limited</string>
     <string name="error_55_desc">Google Sheets temporarily limited sync requests. Your entries are saved on this phone and will sync shortly.</string>
     <string name="error_55_badge">Temporary pause</string>
     <string name="error_55_headline">Sync rate limited</string>
@@ -655,7 +453,6 @@
     <string name="onboarding_checklist_step2_active">Active</string>
     <string name="onboarding_checklist_step3_title">Default account</string>
     <string name="onboarding_checklist_step3_desc">Choose primary card or bank</string>
-    <string name="onboarding_checklist_step3_set">Set</string>
     <string name="onboarding_checklist_step3_configured">Configured</string>
     <string name="onboarding_checklist_continue">Continue</string>
     <string name="onboarding_checklist_trouble">Having trouble?</string>
@@ -672,7 +469,6 @@
     <string name="onboarding_notif_card2_desc">Personal messages and codes are never accessed or stored.</string>
     <string name="onboarding_notif_card3_title">Stays on your device</string>
     <string name="onboarding_notif_card3_desc">All parsing happens offline on your phone. Nothing is shared.</string>
-    <string name="onboarding_notif_action_grant">Grant in Android settings</string>
     <string name="onboarding_notif_action_skip">Skip</string>
 
     <!-- Outside-the-App Surfaces (U13) -->
