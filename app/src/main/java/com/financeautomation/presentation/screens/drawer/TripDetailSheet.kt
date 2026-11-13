@@ -158,7 +158,7 @@ private fun TripTransactionRow(transaction: Transaction, dateFormat: SimpleDateF
                 )
 
                 if (isVoid) {
-                    StatusChip(status = "Voided")
+                    StatusChip(status = "VOID")
                 }
             }
             Text(
