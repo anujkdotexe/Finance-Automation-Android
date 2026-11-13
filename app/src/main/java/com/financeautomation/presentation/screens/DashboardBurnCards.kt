@@ -67,18 +67,25 @@ fun KpiRow(
     onIncomeClick: () -> Unit = {},
     onIncomeLongClick: () -> Unit = {}
 ) {
+    val keyFiguresCd = stringResource(R.string.dashboard_key_figures_cd)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .semantics { contentDescription = "Key figures" },
+            .semantics { contentDescription = keyFiguresCd },
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap)
     ) {
         // Row 1: Full-width Living burn card
         val paceText = paceDeltaPercent?.let { delta ->
             val absDelta = abs(delta).toInt()
-            if (delta <= 0.0) "Down $absDelta% vs last month" else "Up $absDelta% vs last month"
+            if (delta <= 0.0) {
+                stringResource(R.string.kpi_pace_down, absDelta)
+            } else {
+                stringResource(R.string.kpi_pace_up, absDelta)
+            }
         }
-        val dailyText = if (dailyAverage > 0.0) "${formatRupeesAuto(dailyAverage)} / day" else null
+        val dailyText = if (dailyAverage > 0.0) {
+            stringResource(R.string.kpi_daily_average, formatRupeesAuto(dailyAverage))
+        } else null
 
         KpiCard(
             label = stringResource(R.string.dashboard_hero_burn_title),
@@ -95,7 +102,7 @@ fun KpiRow(
         // Row 2: Two equal-width cards: Savings and Income
         val savingsPercentText = if (income > 0.0) {
             val pct = ((savings / income) * 100).toInt()
-            "$pct% of income"
+            stringResource(R.string.kpi_savings_pct_income, pct)
         } else null
 
         Row(
@@ -163,7 +170,7 @@ fun NeedsReviewBanner(
                     modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                 )
                 Text(
-                    text = "$count to review",
+                    text = stringResource(R.string.review_count_to_review, count),
                     style = FinanceTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )

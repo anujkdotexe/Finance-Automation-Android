@@ -174,7 +174,7 @@ fun AddSubscriptionSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "INR (₹)",
+                                text = stringResource(R.string.currency_inr),
                                 style = FinanceTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.secondary
                             )
@@ -352,7 +352,7 @@ fun AddSubscriptionSheet(
                                 shape = FinanceShapes.small
                             ) {
                                 Text(
-                                    text = "In 4 days",
+                                    text = stringResource(R.string.subscription_remind_in_4_days),
                                     style = FinanceTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.secondary,
                                     modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
@@ -437,7 +437,7 @@ fun AddSubscriptionSheet(
                                 )
                             }
                             Text(
-                                text = "Subscriptions",
+                                text = stringResource(R.string.nav_subscriptions_title),
                                 style = FinanceTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface

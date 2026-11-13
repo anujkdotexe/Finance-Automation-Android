@@ -133,6 +133,7 @@ fun ReviewInboxContent(
     modifier: Modifier = Modifier
 ) {
     val totalPendingCount = state.items.size + subscriptionsDue.size
+    val todayLabel = stringResource(R.string.subscription_due_today)
 
     Column(
         modifier = modifier.fillMaxSize()
@@ -141,7 +142,7 @@ fun ReviewInboxContent(
         SyncStatusLine(
             waitingCount = 0,
             failedCount = state.failedQueueItems.size,
-            lastSyncedText = "Synced 2m ago",
+            lastSyncedText = stringResource(R.string.sync_synced_recent),
             modifier = Modifier.padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.s)
         )
 
@@ -209,7 +210,7 @@ fun ReviewInboxContent(
                         SubscriptionDueCard(
                             subscriptionName = sub.subscription.name,
                             amount = sub.subscription.amount,
-                            dueFormatted = formatDueEpochDay(sub.cycle.dueEpochDay),
+                            dueFormatted = formatDueEpochDay(sub.cycle.dueEpochDay, todayLabel),
                             onYes = { onSubscriptionYes(sub.cycle.id) },
                             onNotYet = { onSubscriptionNotYet(sub.cycle.id) },
                             onSkipThisTime = { onSubscriptionSkip(sub.cycle.id) }
@@ -263,15 +264,15 @@ fun FailedQueueItemCard(
             verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             val opTitle = when (item.operationType) {
-                SyncQueueEntity.OP_LOG_CREDIT -> "Friend Settlement"
-                SyncQueueEntity.OP_LOG_PAYABLE -> "Friend Payable"
-                SyncQueueEntity.OP_LOG_REPAYMENT -> "Repayment"
-                SyncQueueEntity.OP_CARRY_FORWARD -> "Monthly Rollover"
-                SyncQueueEntity.OP_YEAR_CLOSE -> "Year-End Close"
-                SyncQueueEntity.OP_INSERT -> "Expense Insert"
-                SyncQueueEntity.OP_UPDATE -> "Expense Update"
-                SyncQueueEntity.OP_VOID -> "Expense Void"
-                SyncQueueEntity.OP_VOID_INFLOW -> "Income Void"
+                SyncQueueEntity.OP_LOG_CREDIT -> stringResource(R.string.queue_op_friend_settlement)
+                SyncQueueEntity.OP_LOG_PAYABLE -> stringResource(R.string.queue_op_friend_payable)
+                SyncQueueEntity.OP_LOG_REPAYMENT -> stringResource(R.string.queue_op_repayment)
+                SyncQueueEntity.OP_CARRY_FORWARD -> stringResource(R.string.queue_op_monthly_rollover)
+                SyncQueueEntity.OP_YEAR_CLOSE -> stringResource(R.string.queue_op_year_end_close)
+                SyncQueueEntity.OP_INSERT -> stringResource(R.string.queue_op_expense_insert)
+                SyncQueueEntity.OP_UPDATE -> stringResource(R.string.queue_op_expense_update)
+                SyncQueueEntity.OP_VOID -> stringResource(R.string.queue_op_expense_void)
+                SyncQueueEntity.OP_VOID_INFLOW -> stringResource(R.string.queue_op_income_void)
                 else -> item.operationType
             }
             Text(
@@ -281,7 +282,7 @@ fun FailedQueueItemCard(
                 color = MaterialTheme.colorScheme.error
             )
             Text(
-                text = "Failed after ${item.retryCount} attempts. ID: ${item.transactionId}",
+                text = stringResource(R.string.review_failed_queue_desc, item.retryCount, item.transactionId),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -334,10 +335,10 @@ fun EmptyInboxState(
     }
 }
 
-private fun formatDueEpochDay(epochDay: Long): String {
+private fun formatDueEpochDay(epochDay: Long, todayLabel: String): String {
     val todayEpochDay = System.currentTimeMillis() / (24 * 60 * 60 * 1000L)
     return if (epochDay == todayEpochDay) {
-        "today"
+        todayLabel
     } else {
         val millis = epochDay * 24 * 60 * 60 * 1000L
         SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(millis))

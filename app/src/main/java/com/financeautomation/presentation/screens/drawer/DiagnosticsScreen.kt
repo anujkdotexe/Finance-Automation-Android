@@ -186,7 +186,7 @@ fun DiagnosticsScreen(
                                 putExtra(Intent.EXTRA_TEXT, "Finance Automation Diagnostics Dump\nAccount: ${state.googleAccountEmail}\nSpreadsheet: ${state.spreadsheetId}")
                                 type = "text/plain"
                             }
-                            context.startActivity(Intent.createChooser(sendIntent, "Share Diagnostics Log").apply {
+                            context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.diag_share_chooser_title)).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             })
                         }
@@ -198,13 +198,13 @@ fun DiagnosticsScreen(
             if (com.financeautomation.BuildConfig.ENABLE_SIMULATOR && state.developerMode) {
                 Column {
                     Text(
-                        text = "Simulate payment notification",
+                        text = stringResource(R.string.diag_sim_card_title),
                         style = FinanceTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Inject test financial notification into local pipeline",
+                        text = stringResource(R.string.diag_sim_card_subtitle),
                         style = FinanceTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -238,7 +238,7 @@ fun DiagnosticsScreen(
                                         )
                                         Toast.makeText(
                                             context,
-                                            "Simulated ${preset.name}: ${outcome.javaClass.simpleName}",
+                                            context.getString(R.string.diag_sim_toast, preset.name, outcome.javaClass.simpleName),
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }

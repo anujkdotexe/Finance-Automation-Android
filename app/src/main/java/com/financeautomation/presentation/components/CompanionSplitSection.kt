@@ -137,7 +137,7 @@ fun CompanionSplitSection(
 
             if (state.splitMode == SplitMode.SPLIT_EQUALLY && state.selectedCompanionIds.isNotEmpty()) {
                 Text(
-                    text = "${state.selectedCompanionIds.size + 1} People",
+                    text = stringResource(R.string.companion_split_people_count, state.selectedCompanionIds.size + 1),
                     style = FinanceTheme.typography.numericMicro,
                     color = FinanceTheme.colors.primary
                 )

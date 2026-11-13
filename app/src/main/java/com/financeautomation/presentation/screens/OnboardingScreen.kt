@@ -154,7 +154,7 @@ fun OnboardingScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Setup",
+                        text = stringResource(R.string.onboarding_setup_title),
                         style = FinanceTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )

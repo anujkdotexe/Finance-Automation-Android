@@ -392,7 +392,7 @@ private fun SubscriptionItemCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "per month",
+                    text = stringResource(R.string.subscriptions_per_month),
                     style = FinanceTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

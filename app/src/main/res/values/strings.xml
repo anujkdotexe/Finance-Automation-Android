@@ -615,4 +615,74 @@
     <string name="trip_detail_people_and_count">%1$d people, %2$d transactions</string>
     <string name="trip_detail_row_meta">%1$s, %2$s</string>
     <string name="trip_detail_your_share">Your share %1$s</string>
+    <!-- Screen text literals moved from code -->
+    <!-- Diagnostics -->
+    <string name="diag_share_chooser_title">Share Diagnostics Log</string>
+    <string name="diag_sim_card_title">Simulate payment notification</string>
+    <string name="diag_sim_card_subtitle">Inject test financial notification into local pipeline</string>
+    <string name="diag_sim_toast">Simulated %1$s: %2$s</string>
+
+    <!-- Quick log sheet -->
+    <string name="quick_log_date_label">DATE</string>
+    <string name="quick_log_today">Today</string>
+    <string name="quick_log_yesterday">Yesterday</string>
+    <string name="quick_log_pick_date">Pick date</string>
+
+    <!-- KPI card & Dashboard burn cards -->
+    <string name="dashboard_key_figures_cd">Key figures</string>
+    <string name="kpi_pace_down">Down %1$d%% vs last month</string>
+    <string name="kpi_pace_up">Up %1$d%% vs last month</string>
+    <string name="kpi_daily_average">%1$s / day</string>
+    <string name="kpi_savings_pct_income">%1$d%% of income</string>
+    <string name="dashboard_exact_amount">%1$s: ₹%2$s</string>
+
+    <!-- Review inbox -->
+    <string name="sync_synced_recent">Synced recently</string>
+    <string name="queue_op_friend_settlement">Friend Settlement</string>
+    <string name="queue_op_friend_payable">Friend Payable</string>
+    <string name="queue_op_repayment">Repayment</string>
+    <string name="queue_op_monthly_rollover">Monthly Rollover</string>
+    <string name="queue_op_year_end_close">Year-End Close</string>
+    <string name="queue_op_expense_insert">Expense Insert</string>
+    <string name="queue_op_expense_update">Expense Update</string>
+    <string name="queue_op_expense_void">Expense Void</string>
+    <string name="queue_op_income_void">Income Void</string>
+    <string name="review_failed_queue_desc">Failed after %1$d attempts. ID: %2$s</string>
+    <string name="subscription_due_today">today</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_setup_title">Setup</string>
+
+    <!-- Subscriptions -->
+    <string name="subscriptions_per_month">per month</string>
+    <string name="currency_inr">INR (₹)</string>
+    <string name="subscription_remind_in_4_days">In 4 days</string>
+
+    <!-- Transactions -->
+    <string name="txns_voided_msg">Transaction voided</string>
+    <string name="txns_entry_voided_msg">Entry voided</string>
+    <string name="txns_total_paid">Total paid: %1$s</string>
+    <string name="txns_filter_living_burn_dismiss">Living burn ✕</string>
+    <string name="txns_sheet_row">Sheet row: %1$s</string>
+    <string name="txns_unassigned">Unassigned</string>
+    <string name="txns_id_label">ID: %1$s</string>
+
+    <!-- Navigation & Common Content Descriptions -->
+    <string name="nav_transactions_title">Transactions</string>
+    <string name="nav_accounts_title">Accounts</string>
+    <string name="nav_categories_title">Categories</string>
+    <string name="nav_people_trips_title">People and trips</string>
+    <string name="nav_subscriptions_title">Subscriptions</string>
+    <string name="nav_capture_permissions_title">Capture and permissions</string>
+    <string name="nav_sync_backup_title">Sync and backup</string>
+    <string name="nav_preferences_title">Preferences</string>
+    <string name="nav_diagnostics_title">Diagnostics</string>
+    <string name="nav_about_title">About</string>
+    <string name="cd_open_drawer">Open navigation menu</string>
+    <string name="cd_profile_avatar">Profile avatar</string>
+    <string name="cd_income">Income</string>
+
+    <!-- Companion split & sync status -->
+    <string name="companion_split_people_count">%1$d People</string>
+    <string name="sync_status_failed_tap_to_fix">%1$d failed, tap to fix</string>
 </resources>

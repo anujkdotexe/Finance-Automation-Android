@@ -71,7 +71,9 @@ fun DashboardScreen(
     fun showExactSnackbar(label: String, amount: Double) {
         if (amount >= 100_000.0) {
             coroutineScope.launch {
-                snackbarHostState.showSnackbar("$label: ₹${formatRupees(amount, includeDecimals = true)}")
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.dashboard_exact_amount, label, formatRupees(amount, includeDecimals = true))
+                )
             }
         }
     }
@@ -198,6 +200,10 @@ fun DashboardContent(
         } else {
             // 3. KPI row (3 equal-width cards: Living burn, Savings, Income)
             item {
+                val heroBurnLabel = stringResource(R.string.dashboard_hero_burn_title)
+                val savingsLabel = stringResource(R.string.dashboard_savings)
+                val incomeLabel = stringResource(R.string.dashboard_income)
+
                 KpiRow(
                     livingBurn = state.currentBurn,
                     dailyAverage = state.dailyAverage,
@@ -208,19 +214,19 @@ fun DashboardContent(
                         onNavigateToTransactions(state.monthOffset, null, "living_burn")
                     },
                     onLivingBurnLongClick = {
-                        onShowExact("Living burn", state.currentBurn)
+                        onShowExact(heroBurnLabel, state.currentBurn)
                     },
                     onSavingsClick = {
                         onNavigateToTransactions(state.monthOffset, CategoryConstants.CATEGORY_SAVINGS, null)
                     },
                     onSavingsLongClick = {
-                        onShowExact("Savings", state.savings)
+                        onShowExact(savingsLabel, state.savings)
                     },
                     onIncomeClick = {
                         onNavigateToTransactions(state.monthOffset, null, "income")
                     },
                     onIncomeLongClick = {
-                        onShowExact("Income", state.income)
+                        onShowExact(incomeLabel, state.income)
                     }
                 )
             }
