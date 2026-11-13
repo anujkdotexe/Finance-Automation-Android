@@ -405,6 +405,11 @@ class TransactionRepositoryImpl(
     }
 
     override suspend fun voidTransaction(id: String): Result<Unit> = withContext(ioDispatcher) {
+        // A running sync may be delivering this very row; wait for it so the decision below sees the final queue
+        syncMutex.withLock { voidTransactionLocked(id) }
+    }
+
+    private suspend fun voidTransactionLocked(id: String): Result<Unit> {
         try {
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
@@ -413,12 +418,9 @@ class TransactionRepositoryImpl(
                 val iDao = resolveInflowDao()
                 val existingInflow = iDao?.getById(id)
                 if (existingInflow != null) {
-                    runInDbTransaction {
-                        iDao.updateStatus(id, "VOID")
-                    }
-                    return@withContext Result.Success(Unit)
+                    return voidInflowLocked(id, iDao)
                 }
-                return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+                return Result.Error(IllegalArgumentException("Transaction not found: $id"))
             }
 
             val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
@@ -438,49 +440,97 @@ class TransactionRepositoryImpl(
                 qDao.insert(queueItem)
             }
             requestSync()
-            Result.Success(Unit)
+            return Result.Success(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Result.Error(e)
+            return Result.Error(e)
         }
     }
 
+    /**
+     * Voids an income entry. Caller holds the sync lock.
+     * - Credit still in the queue: it never reached the sheet, so it is simply dropped.
+     * - Credit already delivered: a void is queued so the sheet row is corrected too.
+     */
+    private suspend fun voidInflowLocked(id: String, iDao: InflowDao): Result<Unit> {
+        val qDao = resolveSyncQueueDao()
+        val inflow = iDao.getById(id) ?: return Result.Error(IllegalArgumentException("Transaction not found: $id"))
+        val queued = qDao.getAllQueueFlow().first().filter { it.transactionId == id }
+        if (queued.any { it.operationType == SyncQueueEntity.OP_LOG_CREDIT }) {
+            runInDbTransaction {
+                qDao.deleteByTransactionId(id)
+                iDao.updateStatus(id, "VOID")
+            }
+            return Result.Success(Unit)
+        }
+        if (queued.any { it.operationType == SyncQueueEntity.OP_VOID_INFLOW }) {
+            iDao.updateStatus(id, "VOID")
+            return Result.Success(Unit)
+        }
+        val request = com.financeautomation.domain.model.VoidInflowRequest(inflowId = id, timestamp = inflow.timestamp)
+        runInDbTransaction {
+            iDao.updateStatus(id, "VOID")
+            qDao.insert(
+                SyncQueueEntity(
+                    transactionId = id,
+                    operationType = SyncQueueEntity.OP_VOID_INFLOW,
+                    payloadJson = AccountingRequestJsonAdapter.voidInflowRequestToJson(request)
+                )
+            )
+        }
+        requestSync()
+        return Result.Success(Unit)
+    }
+
     override suspend fun undoRecentSave(id: String): Result<Unit> = withContext(ioDispatcher) {
-        try {
-            val tDao = resolveTransactionDao()
-            val qDao = resolveSyncQueueDao()
-            val existing = tDao.getById(id)
-            if (existing == null) {
-                val iDao = resolveInflowDao()
-                val existingInflow = iDao?.getById(id)
-                if (existingInflow != null) {
+        syncMutex.withLock {
+            try {
+                val tDao = resolveTransactionDao()
+                val qDao = resolveSyncQueueDao()
+                val existing = tDao.getById(id)
+                if (existing == null) {
+                    val iDao = resolveInflowDao()
+                    if (iDao?.getById(id) != null) {
+                        return@withLock voidInflowLocked(id, iDao)
+                    }
+                    // Payables and repayments have no local row: they exist only as a queue item until delivered
+                    val queued = qDao.getAllQueueFlow().first().filter { it.transactionId == id }
+                    val isLoggedEntry = id.startsWith("pay_") || id.startsWith("rep_")
+                    if (isLoggedEntry && queued.isNotEmpty()) {
+                        qDao.deleteByTransactionId(id)
+                        return@withLock Result.Success(Unit)
+                    }
+                    if (isLoggedEntry) {
+                        return@withLock Result.Error(
+                            IllegalStateException("This entry is already recorded on the sheet, so it can no longer be undone here")
+                        )
+                    }
+                    return@withLock Result.Error(IllegalArgumentException("Transaction not found: $id"))
+                }
+
+                val pendingInsert = qDao.getAllPending().any {
+                    it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT
+                }
+                if (pendingInsert && existing.sheetRowIndex == null) {
+                    val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
+                        existing.merchant
+                    } else {
+                        "[Void] ${existing.merchant}"
+                    }
                     runInDbTransaction {
                         qDao.deleteByTransactionId(id)
-                        iDao.updateStatus(id, "VOID")
+                        tDao.voidTransaction(id, voidTitle)
                     }
-                    return@withContext Result.Success(Unit)
-                }
-                return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
-            }
-
-            val pendingInsert = qDao.getAllPending().any {
-                it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT
-            }
-            if (pendingInsert && existing.sheetRowIndex == null) {
-                val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
-                    existing.merchant
+                    Result.Success(Unit)
                 } else {
-                    "[Void] ${existing.merchant}"
+                    voidTransactionLocked(id)
                 }
-                runInDbTransaction {
-                    qDao.deleteByTransactionId(id)
-                    tDao.voidTransaction(id, voidTitle)
-                }
-                Result.Success(Unit)
-            } else {
-                voidTransaction(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.Error(e)
             }
-        } catch (e: Exception) {
-            Result.Error(e)
         }
     }
 

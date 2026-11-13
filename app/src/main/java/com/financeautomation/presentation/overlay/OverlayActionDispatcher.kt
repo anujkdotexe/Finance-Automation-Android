@@ -88,17 +88,8 @@ class OverlayActionDispatcher(
                         if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
                     } else "Failed to record payable"
                     val txnId = (res as? Result.Success)?.data
-                    resultPill.show(
-                        message = message,
-                        transactionId = txnId,
-                        onUndo = if (txnId != null) {
-                            { id ->
-                                mainScope.launch(ioDispatcher) {
-                                    transactionRepository.undoRecentSave(id)
-                                }
-                            }
-                        } else null
-                    )
+                    // No undo: once delivered, a payable or repayment cannot be reversed from here
+                    resultPill.show(message = message)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -127,17 +118,8 @@ class OverlayActionDispatcher(
                         if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
                     } else "Failed to record repayment"
                     val txnId = (res as? Result.Success)?.data
-                    resultPill.show(
-                        message = message,
-                        transactionId = txnId,
-                        onUndo = if (txnId != null) {
-                            { id ->
-                                mainScope.launch(ioDispatcher) {
-                                    transactionRepository.undoRecentSave(id)
-                                }
-                            }
-                        } else null
-                    )
+                    // No undo: once delivered, a payable or repayment cannot be reversed from here
+                    resultPill.show(message = message)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
