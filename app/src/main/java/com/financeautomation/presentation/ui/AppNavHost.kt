@@ -101,6 +101,9 @@ import com.financeautomation.presentation.components.AccountAvatar
 import com.financeautomation.presentation.overlay.FlowAuthGate
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.screens.DashboardScreen
+import com.financeautomation.presentation.screens.ErrorApiNotEnabledScreen
+import com.financeautomation.presentation.screens.ErrorPermissionNotGrantedScreen
+import com.financeautomation.presentation.screens.ErrorRateLimitedScreen
 import com.financeautomation.presentation.screens.OnboardingScreen
 import com.financeautomation.presentation.screens.ReviewInboxScreen
 import com.financeautomation.presentation.screens.TransactionsScreen
@@ -113,6 +116,7 @@ import com.financeautomation.presentation.screens.drawer.PeopleTripsScreen
 import com.financeautomation.presentation.screens.drawer.PreferencesScreen
 import com.financeautomation.presentation.screens.drawer.SubscriptionsScreen
 import com.financeautomation.presentation.screens.drawer.SyncBackupScreen
+import com.financeautomation.presentation.screens.onboarding.NotificationAccessScreen
 import com.financeautomation.presentation.theme.FinanceAlphas
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -139,6 +143,10 @@ object AppRoutes {
     const val DIAGNOSTICS = "diagnostics"
     const val ABOUT = "about"
     const val ONBOARDING = "onboarding"
+    const val NOTIFICATION_ACCESS = "notificationAccess"
+    const val ERROR_API_NOT_ENABLED = "errorApiNotEnabled"
+    const val ERROR_PERMISSION_NOT_GRANTED = "errorPermissionNotGranted"
+    const val ERROR_RATE_LIMITED = "errorRateLimited"
 }
 
 private data class DrawerDestination(
@@ -695,6 +703,34 @@ fun AppNavHost(
                         OnboardingScreen(
                             viewModel = onboardingViewModel,
                             onOnboardingFinished = { navController.navigate(AppRoutes.DASHBOARD) }
+                        )
+                    }
+
+                    composable(AppRoutes.NOTIFICATION_ACCESS) {
+                        NotificationAccessScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onSkip = { navController.navigate(AppRoutes.DASHBOARD) }
+                        )
+                    }
+
+                    composable(AppRoutes.ERROR_API_NOT_ENABLED) {
+                        ErrorApiNotEnabledScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onRetry = { navController.navigate(AppRoutes.DASHBOARD) }
+                        )
+                    }
+
+                    composable(AppRoutes.ERROR_PERMISSION_NOT_GRANTED) {
+                        ErrorPermissionNotGrantedScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onContinueManually = { navController.navigate(AppRoutes.DASHBOARD) }
+                        )
+                    }
+
+                    composable(AppRoutes.ERROR_RATE_LIMITED) {
+                        ErrorRateLimitedScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onRetry = { navController.navigate(AppRoutes.DASHBOARD) }
                         )
                     }
                 }

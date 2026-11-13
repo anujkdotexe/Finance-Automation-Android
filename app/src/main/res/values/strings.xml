@@ -615,15 +615,59 @@
     <string name="about_footer">Built for local-first Android finance automation with Google Sheets.</string>
 
     <!-- Error Screens (U12) -->
+    <string name="error_53_top_bar">Sync Failure</string>
     <string name="error_53_title">Google Sheets API not enabled</string>
     <string name="error_53_desc">Enable the Google Sheets API in your Google Cloud console to sync transactions.</string>
     <string name="error_53_action_open_console">Open Google Cloud</string>
     <string name="error_53_action_retry">Retry</string>
     <string name="error_54_title">Permission not granted</string>
-    <string name="error_54_desc">Google Drive permission is required to create and update your spreadsheet.</string>
+    <string name="error_54_desc">Notification access is needed to detect payment alerts and log expenses automatically.</string>
     <string name="error_54_action_grant">Grant permission</string>
+    <string name="error_54_action_manual">Continue manually</string>
+    <string name="error_54_action_settings">Open settings</string>
+    <string name="error_55_top_bar">Sync Paused</string>
     <string name="error_55_title">Google API rate limited</string>
-    <string name="error_55_desc">Too many requests to Google Sheets API. Waiting before next sync attempt.</string>
+    <string name="error_55_desc">Google Sheets temporarily limited sync requests. Your entries are saved on this phone and will sync shortly.</string>
+    <string name="error_55_badge">Temporary Pause</string>
+    <string name="error_55_headline">Sync rate limited</string>
+    <string name="error_55_safe_title">Offline Safe</string>
+    <string name="error_55_safe_badge">2 items saved</string>
+    <string name="error_55_safe_desc">All changes are preserved safely on your device and will upload as soon as connectivity resumes.</string>
+    <string name="error_55_action_dashboard">Go to Dashboard</string>
+    <string name="error_55_action_retry">Retry now</string>
+
+    <!-- Onboarding Checklist (U12) -->
+    <string name="onboarding_checklist_title">Setup checklist</string>
+    <string name="onboarding_checklist_desc">Complete these quick steps to start logging expenses automatically.</string>
+    <string name="onboarding_checklist_step1_title">Connect Google Sheet</string>
+    <string name="onboarding_checklist_step1_default_sheet">Finance 2026</string>
+    <string name="onboarding_checklist_step1_connected">Connected</string>
+    <string name="onboarding_checklist_step1_connect">Connect</string>
+    <string name="onboarding_checklist_step2_title">Notification access</string>
+    <string name="onboarding_checklist_step2_desc">Detect bank notifications</string>
+    <string name="onboarding_checklist_step2_grant">Grant</string>
+    <string name="onboarding_checklist_step2_active">Active</string>
+    <string name="onboarding_checklist_step3_title">Default account</string>
+    <string name="onboarding_checklist_step3_desc">Choose primary card or bank</string>
+    <string name="onboarding_checklist_step3_set">Set</string>
+    <string name="onboarding_checklist_step3_configured">Configured</string>
+    <string name="onboarding_checklist_continue">Continue</string>
+    <string name="onboarding_checklist_trouble">Having trouble?</string>
+
+    <!-- Notification Access Screen (U12 / 51) -->
+    <string name="onboarding_notif_top_title">Permissions Verification</string>
+    <string name="onboarding_notif_step_badge">Step 3 of 3</string>
+    <string name="onboarding_notif_ready_badge">Ready</string>
+    <string name="onboarding_notif_hero_title">Enable notification access</string>
+    <string name="onboarding_notif_hero_desc">Allow access so your spending can be recorded automatically whenever you make a payment.</string>
+    <string name="onboarding_notif_card1_title">Transaction alerts only</string>
+    <string name="onboarding_notif_card1_desc">Reads amounts, merchant details, and payment notes from bank alerts.</string>
+    <string name="onboarding_notif_card2_title">Private and secure</string>
+    <string name="onboarding_notif_card2_desc">Personal messages and codes are never accessed or stored.</string>
+    <string name="onboarding_notif_card3_title">Stays on your device</string>
+    <string name="onboarding_notif_card3_desc">All parsing happens offline on your phone. Nothing is shared.</string>
+    <string name="onboarding_notif_action_grant">Grant in Android Settings</string>
+    <string name="onboarding_notif_action_skip">Skip this time</string>
 
     <!-- Outside-the-App Surfaces (U13) -->
     <string name="notification_action_yes">Yes</string>
