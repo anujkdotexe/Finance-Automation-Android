@@ -18,26 +18,43 @@ class DashboardFormulaParityTest {
     private val iosMonthlyRow6 =
         """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
 
+    /**
+     * Owner decision: living burn subtracts the refunds of the month. The iOS SUMIFS is kept exactly as the first
+     * term; the refund terms and the MAX(0, ...) clamp are the only difference from the iOS template.
+     */
+    private fun withRefunds(ios: String, tabInner: String): String {
+        val core = ios.removePrefix("=IFERROR(").removeSuffix(", 0)")
+        fun range(cols: String) = """INDIRECT("'" & $tabInner & "'!$cols")"""
+        val refunds = listOf("Refund / Return", "Refund").joinToString("") {
+            " - SUMIFS(${range("S4:S")}, ${range("P4:P")}, \"$it\")"
+        }
+        return "=IFERROR(MAX(0, $core$refunds), 0)"
+    }
+
+    private val currentTab = """TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2)"""
+    private val prevTab = """TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2)"""
+    private val row6Tab = """${'$'}U6 & RIGHT(YEAR(TODAY()), 2)"""
+
     @Test
     fun testCurrentBurnExcludesSavingsAndTransferLikeIos() {
-        assertEquals(iosCurrentBurn, DashboardFormulaBuilder.buildCurrentBurnFormula(listOf("Savings")))
-        assertEquals(iosCurrentBurn, DashboardFormulaBuilder.buildCurrentBurnFormula(emptyList()))
+        assertEquals(withRefunds(iosCurrentBurn, currentTab), DashboardFormulaBuilder.buildCurrentBurnFormula(listOf("Savings")))
+        assertEquals(withRefunds(iosCurrentBurn, currentTab), DashboardFormulaBuilder.buildCurrentBurnFormula(emptyList()))
     }
 
     @Test
     fun testPrevMonthBurnExcludesSavingsAndTransferLikeIos() {
-        assertEquals(iosPrevBurn, DashboardFormulaBuilder.buildPrevMonthBurnFormula(listOf("Savings")))
+        assertEquals(withRefunds(iosPrevBurn, prevTab), DashboardFormulaBuilder.buildPrevMonthBurnFormula(listOf("Savings")))
     }
 
     @Test
     fun testMonthlySummaryBurnExcludesSavingsAndTransferLikeIos() {
-        assertEquals(iosMonthlyRow6, DashboardFormulaBuilder.buildMonthlySummaryBurnFormula(6, listOf("Savings")))
+        assertEquals(withRefunds(iosMonthlyRow6, row6Tab), DashboardFormulaBuilder.buildMonthlySummaryBurnFormula(6, listOf("Savings")))
     }
 
     @Test
     fun testUserExcludedCategoriesAreAddedAfterTheDefaults() {
         val formula = DashboardFormulaBuilder.buildCurrentBurnFormula(listOf("savings", "Dining Out", "transfer"))
-        assertTrue(formula.endsWith(""""<>Transfer", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Dining Out"), 0)"""))
+        assertTrue(formula.contains(""""<>Transfer", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Dining Out")"""))
         assertEquals(1, Regex("<>Savings").findAll(formula, 0).count())
         assertEquals(1, Regex("<>Transfer").findAll(formula, 0).count())
     }
@@ -46,9 +63,9 @@ class DashboardFormulaParityTest {
     fun testProvisionerFormulasMatchIosForTheBurnCells() {
         val requests = SheetProvisioner.buildDashboardRequests(dashboardSheetId = 4)
         val formulas = requests.flatMap { collectFormulas(it) }
-        assertTrue(formulas.contains(iosCurrentBurn))
-        assertTrue(formulas.contains(iosPrevBurn))
-        assertTrue(formulas.contains(iosMonthlyRow6))
+        assertTrue(formulas.contains(withRefunds(iosCurrentBurn, currentTab)))
+        assertTrue(formulas.contains(withRefunds(iosPrevBurn, prevTab)))
+        assertTrue(formulas.contains(withRefunds(iosMonthlyRow6, row6Tab)))
     }
 
     private fun collectFormulas(node: Any?): List<String> = when (node) {

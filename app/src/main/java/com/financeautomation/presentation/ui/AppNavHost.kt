@@ -749,6 +749,7 @@ fun AppNavHost(
                                 factory = com.financeautomation.presentation.viewmodel.InsightsViewModel.provideFactory(
                                     transactionRepository = container.transactionRepository,
                                     categoryRepository = container.categoryRepository,
+                                    inflowRepository = container.inflowRepository,
                                     otherLabel = otherLabel
                                 )
                             )

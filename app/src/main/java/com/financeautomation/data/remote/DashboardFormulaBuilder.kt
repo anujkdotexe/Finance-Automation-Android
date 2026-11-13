@@ -28,38 +28,47 @@ object DashboardFormulaBuilder {
         return result
     }
 
-    /**
-     * Builds the SUMIFS formula for current month living burn KPI (cell A5 / range A5:C5).
-     */
-    fun buildCurrentBurnFormula(excludedCategoryNames: List<String>): String {
-        val activeExcluded = livingBurnExclusions(excludedCategoryNames)
-        val exclusions = activeExcluded.joinToString("") { name ->
-            """, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>$name""""
-        }
-        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")$exclusions), 0)"""
-    }
+    /** INDIRECT reference to [columns] (for example "I4:I") of the month tab named by [tabName]. */
+    private fun tabRange(tabName: String, columns: String): String =
+        """INDIRECT("'" & $tabName & "'!$columns")"""
 
     /**
-     * Builds the SUMIFS formula for previous month living burn KPI (cell D5 / range D5:F5).
+     * The living burn formula for one month tab: My share (column I) leaving out the excluded categories (column F),
+     * minus the refunds of the month (Table 2: amount in column S where the type in column P is a refund), never
+     * below zero. Voided income rows have amount 0, so they drop out on their own, and rows still in review are not
+     * on the sheet at all. Matches [com.financeautomation.domain.usecase.LivingBurn].
      */
-    fun buildPrevMonthBurnFormula(excludedCategoryNames: List<String>): String {
-        val activeExcluded = livingBurnExclusions(excludedCategoryNames)
-        val exclusions = activeExcluded.joinToString("") { name ->
-            """, INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!F4:F"), "<>$name""""
+    private fun burnFormula(tabName: String, excludedCategoryNames: List<String>): String {
+        val exclusions = livingBurnExclusions(excludedCategoryNames).joinToString("") { name ->
+            ", ${tabRange(tabName, "F4:F")}, \"<>$name\""
         }
-        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!I4:I")$exclusions), 0)"""
+        val spent = "SUMIFS(${tabRange(tabName, "I4:I")}$exclusions)"
+        val refunds = REFUND_TYPES.joinToString("") { type ->
+            " - SUMIFS(${tabRange(tabName, "S4:S")}, ${tabRange(tabName, "P4:P")}, \"$type\")"
+        }
+        return "=IFERROR(MAX(0, $spent$refunds), 0)"
     }
 
+    /** Inflow types counted as refunds, written exactly as the app stores them. */
+    val REFUND_TYPES: List<String> = listOf("Refund / Return", "Refund")
+
     /**
-     * Builds the SUMIFS formula for monthly summary row [rowNumber] (cells V6 to V17, referencing U{rowNumber}).
+     * Builds the formula for current month living burn KPI (cell A5 / range A5:C5).
      */
-    fun buildMonthlySummaryBurnFormula(rowNumber: Int, excludedCategoryNames: List<String>): String {
-        val activeExcluded = livingBurnExclusions(excludedCategoryNames)
-        val exclusions = activeExcluded.joinToString("") { name ->
-            """, INDIRECT("'" & ${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>$name""""
-        }
-        return """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")$exclusions), 0)"""
-    }
+    fun buildCurrentBurnFormula(excludedCategoryNames: List<String>): String =
+        burnFormula("""TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2)""", excludedCategoryNames)
+
+    /**
+     * Builds the formula for previous month living burn KPI (cell D5 / range D5:F5).
+     */
+    fun buildPrevMonthBurnFormula(excludedCategoryNames: List<String>): String =
+        burnFormula("""TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2)""", excludedCategoryNames)
+
+    /**
+     * Builds the formula for monthly summary row [rowNumber] (cells V6 to V17, referencing U{rowNumber}).
+     */
+    fun buildMonthlySummaryBurnFormula(rowNumber: Int, excludedCategoryNames: List<String>): String =
+        burnFormula("""${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2)""", excludedCategoryNames)
 
     /**
      * Builds the SUMIFS formula for monthly summary gross outflow row [rowNumber] (cells W6 to W17, referencing U{rowNumber}).

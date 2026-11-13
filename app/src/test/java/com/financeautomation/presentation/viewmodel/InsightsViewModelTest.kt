@@ -50,7 +50,8 @@ class InsightsViewModelTest {
     ) = Transaction(
         id = "t${category}$share${month}", timestamp = at(month), dateSerial = 0, timeSerial = 0.0, account = "SBI",
         merchant = "m", category = category, totalAmount = share, myShare = share, owedToMe = 0.0, status = status
-    )
+    ,
+        reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
     private fun txnRepo(list: List<Transaction>): TransactionRepository = Proxy.newProxyInstance(
         TransactionRepository::class.java.classLoader, arrayOf(TransactionRepository::class.java)
