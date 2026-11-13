@@ -46,8 +46,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Transaction
@@ -180,7 +178,7 @@ fun TransactionsContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Month total",
+                text = stringResource(R.string.transactions_month_total),
                 style = FinanceTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -200,7 +198,7 @@ fun TransactionsContent(
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
                 Text(
-                    text = "Search transactions",
+                    text = stringResource(R.string.transactions_search_placeholder),
                     style = FinanceTheme.typography.bodyMedium
                 )
             },
@@ -312,12 +310,16 @@ fun TransactionsContent(
                         modifier = Modifier.size(FinanceTheme.sizes.icon48)
                     )
                     Text(
-                        text = "No matches found",
+                        text = stringResource(R.string.transactions_no_matches_title),
                         style = FinanceTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "No transactions found matching \"${state.searchQuery}\" in ${state.selectedMonthLabel}.",
+                        text = stringResource(
+                            R.string.transactions_no_matches_subtitle,
+                            state.searchQuery,
+                            state.selectedMonthLabel
+                        ),
                         style = FinanceTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -328,12 +330,12 @@ fun TransactionsContent(
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                     ) {
                         OutlinedButton(
-                            text = "Clear search",
+                            text = stringResource(R.string.action_clear_search),
                             onClick = { onSearchQueryChange("") },
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedButton(
-                            text = "Search all months",
+                            text = stringResource(R.string.action_search_all_months),
                             onClick = { onSearchScopeChange(SearchScope.ALL_MONTHS) },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -356,7 +358,7 @@ fun TransactionsContent(
                         modifier = Modifier.size(FinanceTheme.sizes.icon48)
                     )
                     Text(
-                        text = "No transactions in ${state.selectedMonthLabel}",
+                        text = stringResource(R.string.transactions_empty_month_title, state.selectedMonthLabel),
                         style = FinanceTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -367,12 +369,12 @@ fun TransactionsContent(
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                     ) {
                         FilledButton(
-                            text = "Add expense",
+                            text = stringResource(R.string.action_add_expense),
                             onClick = onAddExpense,
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedButton(
-                            text = "Go to current month",
+                            text = stringResource(R.string.action_go_to_current_month),
                             onClick = onCurrentMonth,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -517,9 +519,9 @@ fun TransactionDetailSheet(
 
             // Action Buttons: Void on left, Edit on right (equal width, 48dp height)
             ButtonPair(
-                outlinedText = "Void",
+                outlinedText = stringResource(R.string.action_void),
                 onOutlinedClick = onVoid,
-                filledText = "Edit",
+                filledText = stringResource(R.string.action_edit),
                 onFilledClick = onEdit
             )
 
@@ -529,7 +531,7 @@ fun TransactionDetailSheet(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 LinkButton(
-                    text = if (showDetails) "Hide details" else "Details",
+                    text = if (showDetails) stringResource(R.string.action_hide_details) else stringResource(R.string.action_details),
                     onClick = { showDetails = !showDetails }
                 )
 

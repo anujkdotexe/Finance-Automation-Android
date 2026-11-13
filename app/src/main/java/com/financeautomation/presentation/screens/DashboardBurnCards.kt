@@ -34,8 +34,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.components.AmountText
@@ -143,7 +141,7 @@ fun NeedsReviewBanner(
             }
 
             HeaderActionButton(
-                text = "Review",
+                text = stringResource(R.string.action_review),
                 onClick = onClick
             )
         }
@@ -260,7 +258,7 @@ fun OfflineBanner(
                 modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
             )
             Text(
-                text = "You are offline. New expenses are saved on this phone and will sync when you reconnect.",
+                text = stringResource(R.string.dashboard_offline_banner_text),
                 style = FinanceTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface
             )

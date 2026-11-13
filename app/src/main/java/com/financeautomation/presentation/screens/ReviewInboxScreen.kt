@@ -30,10 +30,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.financeautomation.R
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.SubscriptionCycleWithSubscription
 import com.financeautomation.domain.model.Transaction
@@ -180,14 +180,14 @@ fun ReviewInboxContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "$totalPendingCount to review",
+                                text = stringResource(R.string.review_count_to_review, totalPendingCount),
                                 style = FinanceTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
                             if (state.items.isNotEmpty()) {
                                 HeaderActionButton(
-                                    text = "Confirm all",
+                                    text = stringResource(R.string.action_confirm_all),
                                     onClick = onConfirmAll
                                 )
                             }
@@ -278,9 +278,9 @@ fun FailedQueueItemCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             ButtonPair(
-                outlinedText = "Discard",
+                outlinedText = stringResource(R.string.action_discard),
                 onOutlinedClick = onDiscard,
-                filledText = "Retry",
+                filledText = stringResource(R.string.action_retry),
                 onFilledClick = onRetry
             )
         }
@@ -306,12 +306,12 @@ fun EmptyInboxState(
             modifier = Modifier.size(FinanceTheme.sizes.icon56)
         )
         Text(
-            text = "All caught up",
+            text = stringResource(R.string.review_all_caught_up),
             style = FinanceTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
         OutlinedButton(
-            text = "Go to Dashboard",
+            text = stringResource(R.string.action_go_to_dashboard),
             onClick = onNavigateToDashboard
         )
     }
