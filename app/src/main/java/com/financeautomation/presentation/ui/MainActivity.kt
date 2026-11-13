@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
             payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
             pendingCaptureDaoProvider = { app.appContainer.awaitDatabase().pendingCaptureDao() },
             categoryRepository = app.appContainer.categoryRepository,
+            inflowRepository = app.appContainer.inflowRepository,
             onlineState = app.appContainer.connectivityObserver.isOnline,
             ioDispatcher = app.appContainer.ioDispatcher
         )

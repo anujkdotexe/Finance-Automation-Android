@@ -17,6 +17,7 @@ import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.data.repository.AccountRepositoryImpl
 import com.financeautomation.data.repository.CategoryRepositoryImpl
 import com.financeautomation.data.repository.ConfigRepositoryImpl
+import com.financeautomation.data.repository.InflowRepositoryImpl
 import com.financeautomation.data.repository.PeopleListRebuilder
 import com.financeautomation.data.repository.PeopleRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
@@ -33,6 +34,7 @@ import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.ConfigRepository
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
+import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.SubscriptionRepository
@@ -113,6 +115,7 @@ interface AppContainer {
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
     val subscriptionRepository: SubscriptionRepository
+    val inflowRepository: InflowRepository
     val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
     val subscriptionMatcher: SubscriptionMatcher
     val subscriptionActionUseCase: SubscriptionActionUseCase
@@ -264,6 +267,7 @@ class DefaultAppContainer(
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             payableDaoProvider = { awaitDatabase().payableDao() },
             lineageDaoProvider = { awaitDatabase().lineageDao() },
+            inflowDaoProvider = { awaitDatabase().inflowDao() },
             databaseProvider = { awaitDatabase() },
             googleSheetsClient = googleSheetsClient,
             preferencesRepository = preferencesRepository,
@@ -283,6 +287,13 @@ class DefaultAppContainer(
                 }
             }
         }
+    }
+
+    override val inflowRepository: InflowRepository by lazy {
+        InflowRepositoryImpl(
+            inflowDaoProvider = { awaitDatabase().inflowDao() },
+            ioDispatcher = ioDispatcher
+        )
     }
 
     override val subscriptionRepository: SubscriptionRepository by lazy {

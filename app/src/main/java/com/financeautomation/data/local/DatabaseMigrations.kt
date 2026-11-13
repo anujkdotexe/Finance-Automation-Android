@@ -168,6 +168,31 @@ object DatabaseMigrations {
         }
     }
 
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `inflows` (
+                    `id` TEXT NOT NULL,
+                    `timestamp` INTEGER NOT NULL,
+                    `amount` REAL NOT NULL,
+                    `account` TEXT NOT NULL,
+                    `inflowType` TEXT NOT NULL,
+                    `source` TEXT NOT NULL,
+                    `note` TEXT NOT NULL,
+                    `createdAt` INTEGER NOT NULL,
+                    `status` TEXT NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_inflows_timestamp` ON `inflows` (`timestamp`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_inflows_inflowType` ON `inflows` (`inflowType`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_inflows_account` ON `inflows` (`account`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_inflows_status` ON `inflows` (`status`)")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_2_3,
         MIGRATION_3_4,
@@ -178,7 +203,8 @@ object DatabaseMigrations {
         MIGRATION_8_9,
         MIGRATION_9_10,
         MIGRATION_10_11,
-        MIGRATION_11_12
+        MIGRATION_11_12,
+        MIGRATION_12_13
     )
 }
 

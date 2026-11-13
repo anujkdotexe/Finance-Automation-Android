@@ -8,6 +8,7 @@ import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.core.utils.SyncErrorKind
+import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
@@ -15,6 +16,7 @@ import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.dao.getByTabAndSheetRowIndex
 import com.financeautomation.data.local.FinanceDatabase
 import androidx.room.withTransaction
+import com.financeautomation.data.local.entity.InflowEntity
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
@@ -77,6 +79,8 @@ class TransactionRepositoryImpl(
     private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val lineageDao: LineageDao? = null,
     private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
+    private val inflowDao: InflowDao? = null,
+    private val inflowDaoProvider: (suspend () -> InflowDao)? = null,
     private val databaseProvider: (suspend () -> FinanceDatabase)? = null,
     private val googleSheetsClient: GoogleSheetsClient? = null,
     private val preferencesRepository: PreferencesRepository? = null,
@@ -97,6 +101,7 @@ class TransactionRepositoryImpl(
         syncQueueDao: SyncQueueDao,
         payableDao: PayableDao? = null,
         lineageDao: LineageDao? = null,
+        inflowDao: InflowDao? = null,
         googleSheetsClient: GoogleSheetsClient? = null,
         preferencesRepository: PreferencesRepository? = null,
         workbookResolver: WorkbookResolver? = null,
@@ -118,6 +123,8 @@ class TransactionRepositoryImpl(
         payableDaoProvider = null,
         lineageDao = lineageDao,
         lineageDaoProvider = null,
+        inflowDao = inflowDao,
+        inflowDaoProvider = null,
         databaseProvider = null,
         googleSheetsClient = googleSheetsClient,
         preferencesRepository = preferencesRepository,
@@ -157,6 +164,9 @@ class TransactionRepositoryImpl(
 
     private suspend fun resolveLineageDao(): LineageDao? =
         lineageDao ?: lineageDaoProvider?.invoke() ?: databaseProvider?.invoke()?.lineageDao()
+
+    private suspend fun resolveInflowDao(): InflowDao? =
+        inflowDao ?: inflowDaoProvider?.invoke() ?: databaseProvider?.invoke()?.inflowDao()
 
     private fun resolveExecutor(): AccountingSyncExecutor {
         accountingSyncExecutor?.let { return it }
@@ -270,7 +280,21 @@ class TransactionRepositoryImpl(
                 operationType = SyncQueueEntity.OP_LOG_CREDIT,
                 payloadJson = AccountingRequestJsonAdapter.creditRequestToJson(req)
             )
-            resolveSyncQueueDao().insert(queueItem)
+            val inflow = InflowEntity(
+                id = reqId,
+                timestamp = timestamp,
+                amount = amount,
+                account = account,
+                inflowType = inflowType,
+                source = settler,
+                note = reason,
+                createdAt = System.currentTimeMillis(),
+                status = "CONFIRMED"
+            )
+            runInDbTransaction {
+                resolveInflowDao()?.insert(inflow)
+                resolveSyncQueueDao().insert(queueItem)
+            }
             onTriggerSync?.invoke()
             Result.Success(reqId)
         } catch (e: Exception) {
@@ -385,7 +409,17 @@ class TransactionRepositoryImpl(
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val existing = tDao.getById(id)
-                ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            if (existing == null) {
+                val iDao = resolveInflowDao()
+                val existingInflow = iDao?.getById(id)
+                if (existingInflow != null) {
+                    runInDbTransaction {
+                        iDao.updateStatus(id, "VOID")
+                    }
+                    return@withContext Result.Success(Unit)
+                }
+                return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            }
 
             val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
                 existing.merchant
@@ -414,7 +448,18 @@ class TransactionRepositoryImpl(
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val existing = tDao.getById(id)
-                ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            if (existing == null) {
+                val iDao = resolveInflowDao()
+                val existingInflow = iDao?.getById(id)
+                if (existingInflow != null) {
+                    runInDbTransaction {
+                        qDao.deleteByTransactionId(id)
+                        iDao.updateStatus(id, "VOID")
+                    }
+                    return@withContext Result.Success(Unit)
+                }
+                return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            }
 
             val pendingInsert = qDao.getAllPending().any {
                 it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT
@@ -442,7 +487,21 @@ class TransactionRepositoryImpl(
         try {
             val tDao = resolveTransactionDao()
             val existing = tDao.getById(id)
-                ?: return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            if (existing == null) {
+                val iDao = resolveInflowDao()
+                val existingInflow = iDao?.getById(id)
+                if (existingInflow != null) {
+                    val qDao = resolveSyncQueueDao()
+                    runInDbTransaction {
+                        if (voidIt) {
+                            iDao.updateStatus(id, "VOID")
+                        }
+                        qDao.deleteByTransactionId(id)
+                    }
+                    return@withContext Result.Success(Unit)
+                }
+                return@withContext Result.Error(IllegalArgumentException("Transaction not found: $id"))
+            }
             val updated = if (voidIt) {
                 val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
                     existing.merchant
