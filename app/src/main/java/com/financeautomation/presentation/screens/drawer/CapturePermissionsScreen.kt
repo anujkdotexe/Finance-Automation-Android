@@ -286,6 +286,16 @@ fun CapturePermissionsScreen(
             modifier = Modifier.padding(horizontal = FinanceTheme.spacing.xs)
         )
 
+        // Setup Health & OEM Checklist
+        if (setupHealthViewModel != null) {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+            com.financeautomation.presentation.screens.SetupHealthCard(
+                viewModel = setupHealthViewModel,
+                overlayControllerProvider = overlayControllerProvider,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         // Developer Health Diagnostics (Only visible in Developer mode)
         if (state.developerMode) {
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))

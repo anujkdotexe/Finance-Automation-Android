@@ -60,6 +60,7 @@ import com.financeautomation.presentation.viewmodel.SettingsViewModel
 fun SyncBackupScreen(
     viewModel: SettingsViewModel,
     state: SettingsUiState,
+    onReRunSetup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -84,6 +85,7 @@ fun SyncBackupScreen(
     val showNameAndEmail = !accountDisplayName.isNullOrBlank() && !accountEmail.isNullOrBlank()
 
     var showCreateFreshDialog by remember { mutableStateOf(false) }
+    var showSignOutDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.userMessage) {
         if (!state.userMessage.isNullOrBlank()) {
@@ -94,6 +96,42 @@ fun SyncBackupScreen(
         if (!state.errorMessage.isNullOrBlank()) {
             Toast.makeText(context, state.errorMessage, Toast.LENGTH_LONG).show()
         }
+    }
+
+    if (showSignOutDialog) {
+        AlertDialog(
+            onDismissRequest = { showSignOutDialog = false },
+            title = {
+                Text(
+                    text = "Disconnect Google account?",
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = "Disconnect your Google account? Items waiting to sync stay on this phone.",
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSignOutDialog = false
+                        viewModel.onGoogleSignOut(context)
+                    }
+                ) {
+                    Text("Disconnect")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showSignOutDialog = false }
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 
     if (showCreateFreshDialog) {
@@ -217,6 +255,25 @@ fun SyncBackupScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        }
+                    }
+
+                    val isConnected = !accountEmail.isNullOrBlank() || !state.googleAccountEmail.isNullOrBlank()
+                    if (isConnected) {
+                        OutlinedButton(
+                            onClick = { showSignOutDialog = true },
+                            shape = FinanceTheme.shapes.small,
+                            modifier = Modifier.padding(start = FinanceTheme.spacing.xs)
+                        ) {
+                            Text(stringResource(R.string.action_sign_out), style = FinanceTheme.typography.labelMedium)
+                        }
+                    } else {
+                        Button(
+                            onClick = onReRunSetup,
+                            shape = FinanceTheme.shapes.small,
+                            modifier = Modifier.padding(start = FinanceTheme.spacing.xs)
+                        ) {
+                            Text("Sign in", style = FinanceTheme.typography.labelMedium)
                         }
                     }
                 }

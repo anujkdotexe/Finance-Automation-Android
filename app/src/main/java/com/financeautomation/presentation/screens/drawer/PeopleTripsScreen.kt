@@ -21,10 +21,17 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.FlightTakeoff
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.domain.model.Companion as FriendCompanion
+import com.financeautomation.domain.model.TripTag
 import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.components.HeaderActionButton
 import com.financeautomation.presentation.theme.FinanceShapes
@@ -46,6 +54,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PeopleTripsScreen(
     viewModel: SettingsViewModel,
@@ -55,6 +64,7 @@ fun PeopleTripsScreen(
 ) {
     val scrollState = rememberScrollState()
     var showAddFriendSheet by remember { mutableStateOf(false) }
+    var selectedCompanionForEdit by remember { mutableStateOf<FriendCompanion?>(null) }
 
     Column(
         modifier = modifier
@@ -127,7 +137,11 @@ fun PeopleTripsScreen(
                 ) {
                     state.companions.forEach { companion ->
                         val openCount = state.companionOpenItemCounts[companion.name.trim().lowercase()] ?: 0
-                        FriendItemRow(companion = companion, openItemCount = openCount)
+                        FriendItemRow(
+                            companion = companion,
+                            openItemCount = openCount,
+                            onClick = { selectedCompanionForEdit = companion }
+                        )
                     }
                 }
             }
@@ -175,57 +189,79 @@ fun PeopleTripsScreen(
             }
 
             // Trip Cards
-            if (state.activeTripTag.isNotBlank()) {
+            if (state.tripTags.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    state.tripTags.forEach { trip ->
+                        val isActive = trip.isActive || trip.name.equals(state.activeTripTag, ignoreCase = true)
+                        TripCard(
+                            tripName = trip.name,
+                            isActive = isActive,
+                            statusText = if (isActive) stringResource(R.string.trip_active) else "Inactive",
+                            peopleCount = 4,
+                            totalSpend = "₹18,400.00",
+                            onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
+                            onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) }
+                        )
+                    }
+                }
+            } else if (state.activeTripTag.isNotBlank()) {
                 TripCard(
                     tripName = state.activeTripTag,
+                    isActive = true,
                     statusText = stringResource(R.string.trip_active),
                     peopleCount = 4,
-                    totalSpend = "₹18,400.00"
+                    totalSpend = "₹18,400.00",
+                    onEndTrip = { viewModel.onActiveTripTagChanged("") },
+                    onReactivateTrip = {}
                 )
-            } else {
-                Surface(
-                    color = FinanceTheme.colors.surfaceContainerLowest,
-                    shape = FinanceShapes.large,
-                    shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+            }
+
+            // Start new trip button
+            Surface(
+                color = FinanceTheme.colors.surfaceContainerLowest,
+                shape = FinanceShapes.large,
+                shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(FinanceShapes.large)
+                    .clickable(onClick = onStartTrip)
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(FinanceShapes.large)
-                        .clickable(onClick = onStartTrip)
+                        .padding(FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(FinanceTheme.spacing.m),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(FinanceTheme.spacing.s),
+                        modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
                     ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(FinanceTheme.spacing.s),
-                            modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Rounded.FlightTakeoff,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-                                )
-                            }
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.btn_start_new_trip),
-                                style = FinanceTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Isolate living burn with a dedicated trip ledger",
-                                style = FinanceTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.FlightTakeoff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                             )
                         }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.btn_start_new_trip),
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Isolate living burn with a dedicated trip ledger",
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -241,12 +277,30 @@ fun PeopleTripsScreen(
             }
         )
     }
+
+    selectedCompanionForEdit?.let { comp ->
+        val openCount = state.companionOpenItemCounts[comp.name.trim().lowercase()] ?: 0
+        FriendDetailSheet(
+            companion = comp,
+            openItemCount = openCount,
+            onDismiss = { selectedCompanionForEdit = null },
+            onRename = { newName ->
+                viewModel.onRenameCompanion(comp.id, newName)
+                selectedCompanionForEdit = null
+            },
+            onRemove = {
+                viewModel.onRemoveCompanion(comp.id)
+                selectedCompanionForEdit = null
+            }
+        )
+    }
 }
 
 @Composable
 private fun FriendItemRow(
     companion: FriendCompanion,
     openItemCount: Int = 0,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val initial = companion.name.firstOrNull()?.uppercase() ?: "F"
@@ -279,7 +333,10 @@ private fun FriendItemRow(
         color = FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
         shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(FinanceShapes.large)
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -346,9 +403,12 @@ private fun FriendItemRow(
 @Composable
 private fun TripCard(
     tripName: String,
+    isActive: Boolean = true,
     statusText: String,
     peopleCount: Int,
     totalSpend: String,
+    onEndTrip: () -> Unit = {},
+    onReactivateTrip: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -394,7 +454,7 @@ private fun TripCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Active travel ledger",
+                            text = if (isActive) "Active travel ledger" else "Past travel ledger",
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -402,7 +462,7 @@ private fun TripCard(
                 }
 
                 Surface(
-                    color = FinanceTheme.colors.surfaceContainerHigh,
+                    color = if (isActive) MaterialTheme.colorScheme.primaryContainer else FinanceTheme.colors.surfaceContainerHigh,
                     shape = FinanceShapes.pill
                 ) {
                     Row(
@@ -410,16 +470,18 @@ private fun TripCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                        )
+                        if (isActive) {
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                            )
+                        }
                         Text(
                             text = statusText,
                             style = FinanceTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -430,21 +492,20 @@ private fun TripCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Group,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
-                    )
-                    Text(
-                        text = stringResource(R.string.trip_people_count, peopleCount),
-                        style = FinanceTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (isActive) {
+                    OutlinedButton(
+                        onClick = onEndTrip,
+                        shape = FinanceTheme.shapes.small
+                    ) {
+                        Text("End trip", style = FinanceTheme.typography.labelMedium)
+                    }
+                } else {
+                    Button(
+                        onClick = onReactivateTrip,
+                        shape = FinanceTheme.shapes.small
+                    ) {
+                        Text("Reactivate", style = FinanceTheme.typography.labelMedium)
+                    }
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
@@ -461,6 +522,144 @@ private fun TripCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FriendDetailSheet(
+    companion: FriendCompanion,
+    openItemCount: Int,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var renameInput by remember { mutableStateOf(companion.name) }
+    var showRemoveConfirm by remember { mutableStateOf(false) }
+
+    val hasOpenBalance = kotlin.math.abs(companion.balance) > 0.001 || openItemCount > 0
+
+    if (showRemoveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRemoveConfirm = false },
+            title = {
+                Text(
+                    text = "Remove ${companion.name}?",
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove ${companion.name} from friends? Their past transactions will remain in your ledger.",
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRemoveConfirm = false
+                        onRemove()
+                    }
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showRemoveConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            Text(
+                text = "Friend details",
+                style = FinanceTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            // Current balance info
+            val balanceStr = formatRupees(kotlin.math.abs(companion.balance), includeDecimals = true)
+            val balanceText = when {
+                companion.balance > 0.001 -> "Owes you $balanceStr"
+                companion.balance < -0.001 -> "You owe $balanceStr"
+                else -> "Settled up (₹0.00)"
+            }
+            Text(
+                text = balanceText,
+                style = FinanceTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // Rename section
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                Text(
+                    text = "Name",
+                    style = FinanceTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = renameInput,
+                    onValueChange = { renameInput = it },
+                    singleLine = true,
+                    shape = FinanceShapes.card,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Button(
+                onClick = {
+                    if (renameInput.isNotBlank()) {
+                        onRename(renameInput.trim())
+                    }
+                },
+                enabled = renameInput.isNotBlank() && renameInput.trim() != companion.name,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Save name")
+            }
+
+            androidx.compose.material3.HorizontalDivider()
+
+            // Remove section
+            if (hasOpenBalance) {
+                Text(
+                    text = "Cannot remove ${companion.name} while they have an open balance ($balanceText). Settle all balances first.",
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                OutlinedButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Remove friend")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { showRemoveConfirm = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Remove friend", color = MaterialTheme.colorScheme.error)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
         }
     }
 }

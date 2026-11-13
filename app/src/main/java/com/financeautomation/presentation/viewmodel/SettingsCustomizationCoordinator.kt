@@ -311,9 +311,46 @@ class SettingsCustomizationCoordinator(
         }
     }
 
-    fun onRemoveCompanion(companionId: String) {
+    fun onRenameAccount(accountId: String, newName: String, lastFourDigits: String? = null) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) {
+            uiState.update { it.copy(errorMessage = "Account name cannot be blank") }
+            return
+        }
         scope.launch(ioDispatcher) {
-            peopleRepository.deleteCompanionById(companionId)
+            val repo = accountRepository ?: return@launch
+            val acc = repo.getAccountById(accountId) ?: return@launch
+            repo.updateAccount(acc.copy(name = trimmed, lastFourDigits = lastFourDigits?.trim()?.ifEmpty { null }))
+            uiState.update { it.copy(userMessage = "Renamed account to $trimmed") }
+        }
+    }
+
+    fun onRenameCategory(categoryId: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) {
+            uiState.update { it.copy(errorMessage = "Category name cannot be blank") }
+            return
+        }
+        scope.launch(ioDispatcher) {
+            val repo = categoryRepository ?: return@launch
+            val cat = repo.getCategoryById(categoryId) ?: return@launch
+            repo.updateCategory(cat.copy(name = trimmed))
+            uiState.update { it.copy(userMessage = "Renamed category to $trimmed") }
+        }
+    }
+
+    fun onRemoveCompanion(companionId: String) {
+        val companion = uiState.value.companions.find { it.id == companionId || it.name.equals(companionId, ignoreCase = true) }
+        val balance = companion?.balance ?: 0.0
+        val openCount = companion?.let { uiState.value.companionOpenItemCounts[it.name.trim().lowercase()] ?: 0 } ?: 0
+        if (kotlin.math.abs(balance) > 0.001 || openCount > 0) {
+            val friendName = companion?.name ?: "friend"
+            uiState.update { it.copy(errorMessage = "Cannot remove $friendName while they have an open balance.") }
+            return
+        }
+        scope.launch(ioDispatcher) {
+            val targetId = companion?.id ?: companionId
+            peopleRepository.deleteCompanionById(targetId)
             uiState.update { it.copy(userMessage = "Companion removed") }
         }
     }

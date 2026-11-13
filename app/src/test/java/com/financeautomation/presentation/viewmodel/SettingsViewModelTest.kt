@@ -14,9 +14,11 @@ import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.model.TripTag
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TransactionRepository
+import com.financeautomation.domain.repository.TripTagRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -286,17 +288,26 @@ class SettingsViewModelTest {
     }
 
     private class FakePeopleRepo(
-        private val list: List<Companion> = emptyList()
+        private var list: List<Companion> = emptyList()
     ) : PeopleRepository {
+        var deletedId: String? = null
+        var updatedName: Pair<String, String>? = null
+
         override fun getCompanions(): Flow<List<Companion>> = flowOf(list)
         override suspend fun getAllCompanions(): List<Companion> = list
         override suspend fun getCompanionById(id: String): Companion? = list.find { it.id == id }
         override suspend fun getCompanionByName(name: String): Companion? = list.find { it.name.equals(name, ignoreCase = true) }
-        override suspend fun insertCompanion(companion: Companion) {}
+        override suspend fun insertCompanion(companion: Companion) { list = list + companion }
         override suspend fun updateCompanion(companion: Companion) {}
-        override suspend fun updateCompanionName(id: String, newName: String) {}
+        override suspend fun updateCompanionName(id: String, newName: String) {
+            updatedName = Pair(id, newName)
+            list = list.map { if (it.id == id) it.copy(name = newName) else it }
+        }
         override suspend fun deleteCompanion(companion: Companion) {}
-        override suspend fun deleteCompanionById(id: String) {}
+        override suspend fun deleteCompanionById(id: String) {
+            deletedId = id
+            list = list.filter { it.id != id }
+        }
     }
 
     private class FakePayableDao(
@@ -598,5 +609,131 @@ class SettingsViewModelTest {
         assertEquals("sheet_123", prefs.activeSpreadsheetId)
         assertEquals("sheet_123", state.value.spreadsheetId)
         assertEquals(SettingsSyncCoordinator.SPREADSHEET_ID_REJECTED_MESSAGE, state.value.errorMessage)
+    }
+
+    private class FakeTripTagRepo(
+        private var tags: List<TripTag> = emptyList()
+    ) : TripTagRepository {
+        var activeTagId: String? = null
+        override fun getTripTags(includeArchived: Boolean): Flow<List<TripTag>> = flowOf(tags)
+        override suspend fun getAllTripTags(includeArchived: Boolean): List<TripTag> = tags
+        override suspend fun getActiveTripTags(): List<TripTag> = tags.filter { it.isActive }
+        override fun getActiveTag(): Flow<TripTag?> = flowOf(tags.find { it.isActive })
+        override suspend fun getActiveTagSync(): TripTag? = tags.find { it.isActive }
+        override suspend fun getTagById(id: String): TripTag? = tags.find { it.id == id }
+        override suspend fun getTagByName(name: String): TripTag? = tags.find { it.name.equals(name, ignoreCase = true) }
+        override suspend fun insertTripTag(name: String): TripTag {
+            val tag = TripTag(id = "tag_new", name = name, isActive = false)
+            tags = tags + tag
+            return tag
+        }
+        override suspend fun updateTripTag(tripTag: TripTag) {
+            tags = tags.map { if (it.id == tripTag.id) tripTag else it }
+        }
+        override suspend fun setActiveTag(id: String?) {
+            activeTagId = id
+            tags = tags.map { it.copy(isActive = it.id == id) }
+        }
+        override suspend fun archiveTripTag(id: String) {}
+        override suspend fun unarchiveTripTag(id: String) {}
+        override suspend fun deleteTripTag(id: String) {
+            tags = tags.filter { it.id != id }
+        }
+    }
+
+    @Test
+    fun testSignOut_clearsStoredAccount() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        prefs.email = "owner@gmail.com"
+        val state = MutableStateFlow(SettingsUiState(googleAccountEmail = "owner@gmail.com"))
+
+        freshCoordinator(this, prefs, fail = false, state = state).onGoogleSignOut(null)
+
+        assertEquals(null, prefs.email)
+        assertEquals(null, state.value.googleAccountEmail)
+        assertEquals("Signed out of Google account", state.value.userMessage)
+    }
+
+    @Test
+    fun testRemoveFriend_blockedWithOpenBalance() = runBlocking<Unit> {
+        val friendWithBalance = Companion(id = "comp_bob", name = "Bob", balance = 500.0)
+        val peopleRepo = FakePeopleRepo(listOf(friendWithBalance))
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState(companions = listOf(friendWithBalance)))
+
+        val coordinator = SettingsCustomizationCoordinator(
+            preferencesRepository = prefs,
+            peopleRepository = peopleRepo,
+            transactionRepository = null,
+            payableDao = null,
+            payableDaoProvider = null,
+            accountRepository = null,
+            categoryRepository = null,
+            tripTagRepository = null,
+            scope = this,
+            uiState = state,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRemoveCompanion("comp_bob")
+
+        assertEquals(null, peopleRepo.deletedId)
+        assertTrue(state.value.errorMessage?.contains("Cannot remove Bob while they have an open balance") == true)
+    }
+
+    @Test
+    fun testRenameFriend_updatesCompanionName() = runBlocking<Unit> {
+        val friend = Companion(id = "comp_charlie", name = "Charlie", balance = 0.0)
+        val peopleRepo = FakePeopleRepo(listOf(friend))
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState(companions = listOf(friend)))
+
+        val coordinator = SettingsCustomizationCoordinator(
+            preferencesRepository = prefs,
+            peopleRepository = peopleRepo,
+            transactionRepository = null,
+            payableDao = null,
+            payableDaoProvider = null,
+            accountRepository = null,
+            categoryRepository = null,
+            tripTagRepository = null,
+            scope = this,
+            uiState = state,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRenameCompanion("comp_charlie", "Charles")
+
+        assertEquals("comp_charlie" to "Charles", peopleRepo.updatedName)
+        assertEquals("Renamed companion to Charles", state.value.userMessage)
+    }
+
+    @Test
+    fun testEndTrip_deactivatesTripTag() = runBlocking<Unit> {
+        val activeTrip = TripTag(id = "trip_goa", name = "Goa 2026", isActive = true)
+        val tripRepo = FakeTripTagRepo(listOf(activeTrip))
+        val prefs = FakePreferencesRepository()
+        prefs.setActiveTrip("Goa 2026")
+        val state = MutableStateFlow(SettingsUiState(activeTripTag = "Goa 2026", tripTags = listOf(activeTrip)))
+
+        val coordinator = SettingsCustomizationCoordinator(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = null,
+            payableDao = null,
+            payableDaoProvider = null,
+            accountRepository = null,
+            categoryRepository = null,
+            tripTagRepository = tripRepo,
+            scope = this,
+            uiState = state,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onToggleTripTagActive("trip_goa")
+
+        assertEquals(null, tripRepo.activeTagId)
+        assertEquals("", state.value.activeTripTag)
+        assertEquals("Deactivated trip tag", state.value.userMessage)
     }
 }
