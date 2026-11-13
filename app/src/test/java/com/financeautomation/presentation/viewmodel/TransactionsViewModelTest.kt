@@ -768,34 +768,40 @@ class TransactionsViewModelTest {
         val txnGroceries = Transaction(
             id = "t_groc",
             timestamp = ts,
+            dateSerial = 46330,
+            timeSerial = 0.4,
             totalAmount = 500.0,
             myShare = 500.0,
             owedToMe = 0.0,
             category = "Groceries",
             account = "UPI",
-            description = "Store",
+            merchant = "Store",
             status = TransactionStatus.SETTLED
         )
         val txnSavings = Transaction(
             id = "t_sav",
             timestamp = ts + 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.4,
             totalAmount = 2000.0,
             myShare = 2000.0,
             owedToMe = 0.0,
             category = "Savings",
             account = "Bank",
-            description = "SIP",
+            merchant = "SIP",
             status = TransactionStatus.SETTLED
         )
         val txnTransfer = Transaction(
             id = "t_trans",
             timestamp = ts + 2000L,
+            dateSerial = 46330,
+            timeSerial = 0.4,
             totalAmount = 1000.0,
             myShare = 1000.0,
             owedToMe = 0.0,
             category = "Transfer",
             account = "Bank",
-            description = "Self",
+            merchant = "Self",
             status = TransactionStatus.SETTLED
         )
 
@@ -853,12 +859,14 @@ class TransactionsViewModelTest {
         val txn = Transaction(
             id = "t_expense",
             timestamp = ts,
+            dateSerial = 46330,
+            timeSerial = 0.4,
             totalAmount = 300.0,
             myShare = 300.0,
             owedToMe = 0.0,
             category = "Food & Drink",
             account = "UPI",
-            description = "Cafe",
+            merchant = "Cafe",
             status = TransactionStatus.SETTLED
         )
         val inf = Inflow(
@@ -868,6 +876,7 @@ class TransactionsViewModelTest {
             account = "HDFC",
             inflowType = "Income",
             source = "Employer",
+            note = "",
             status = "CONFIRMED"
         )
 

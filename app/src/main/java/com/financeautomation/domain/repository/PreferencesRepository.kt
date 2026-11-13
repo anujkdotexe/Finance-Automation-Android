@@ -95,6 +95,21 @@ interface PreferencesRepository {
     suspend fun setGoogleAccountDisplayName(name: String?) {}
 
     /**
+     * Observes the authenticated Google account photo URL.
+     */
+    fun getGoogleAccountPhotoUrl(): Flow<String?> = kotlinx.coroutines.flow.flowOf(null)
+
+    /**
+     * Retrieves the authenticated Google account photo URL synchronously.
+     */
+    suspend fun getGoogleAccountPhotoUrlSync(): String? = null
+
+    /**
+     * Updates the authenticated Google account photo URL.
+     */
+    suspend fun setGoogleAccountPhotoUrl(url: String?) {}
+
+    /**
      * Observes the configurable settle delay in seconds (30s to 300s, default 120s).
      */
     fun getSettleDelaySeconds(): Flow<Int>

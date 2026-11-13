@@ -3,6 +3,8 @@ package com.financeautomation.presentation.screens.drawer
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
+import com.financeautomation.presentation.components.AccountAvatar
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
@@ -86,6 +89,30 @@ fun SyncBackupScreen(
 
     var showCreateFreshDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
+
+    val gso = remember {
+        com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+            com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+        ).requestEmail().build()
+    }
+    val googleSignInClient = remember(context) {
+        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+    }
+    val signInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            if (account != null) {
+                viewModel.onGoogleSignInSuccess(
+                    account.email ?: "",
+                    account.displayName,
+                    account.photoUrl?.toString()
+                )
+            }
+        } catch (_: Exception) {}
+    }
 
     LaunchedEffect(state.userMessage) {
         if (!state.userMessage.isNullOrBlank()) {
@@ -201,20 +228,9 @@ fun SyncBackupScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(FinanceTheme.sizes.buttonHeightMedium)
-                            .clip(CircleShape)
-                            .background(FinanceTheme.colors.surfaceContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.AccountCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-                        )
-                    }
+                    AccountAvatar(
+                        email = accountEmail ?: state.googleAccountEmail
+                    )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.sync_google_account).uppercase(),
@@ -269,7 +285,9 @@ fun SyncBackupScreen(
                         }
                     } else {
                         Button(
-                            onClick = onReRunSetup,
+                            onClick = {
+                                signInLauncher.launch(googleSignInClient.signInIntent)
+                            },
                             shape = FinanceTheme.shapes.small,
                             modifier = Modifier.padding(start = FinanceTheme.spacing.xs)
                         ) {

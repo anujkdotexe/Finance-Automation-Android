@@ -53,6 +53,7 @@ class PreferencesRepositoryImpl(
     private val memActiveTrip = MutableStateFlow<String?>(null)
     private val memGoogleEmail = MutableStateFlow<String?>(null)
     private val memGoogleDisplayName = MutableStateFlow<String?>(null)
+    private val memGooglePhotoUrl = MutableStateFlow<String?>(null)
     private val memSettleDelay = MutableStateFlow(DEFAULT_SETTLE_DELAY_SECONDS)
     private val memDeviceId = MutableStateFlow<String?>(null)
     private val memDeveloperMode = MutableStateFlow(false)
@@ -227,6 +228,34 @@ class PreferencesRepositoryImpl(
         }
     }
 
+    override fun getGoogleAccountPhotoUrl(): Flow<String?> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memGooglePhotoUrl.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_GOOGLE_PHOTO_URL))
+        }
+    }.flowOn(ioDispatcher)
+
+    override suspend fun getGoogleAccountPhotoUrlSync(): String? = withContext(ioDispatcher) {
+        val dao = resolveDao() ?: return@withContext memGooglePhotoUrl.value
+        dao.getPreference(KEY_GOOGLE_PHOTO_URL)
+    }
+
+    override suspend fun setGoogleAccountPhotoUrl(url: String?): Unit = withContext(ioDispatcher) {
+        val trimmed = url?.trim()?.ifEmpty { null }
+        val dao = resolveDao()
+        if (dao != null) {
+            if (trimmed != null) {
+                dao.setPreference(PreferenceEntity(KEY_GOOGLE_PHOTO_URL, trimmed, updatedAt = System.currentTimeMillis(), dirty = 0))
+            } else {
+                dao.deletePreference(KEY_GOOGLE_PHOTO_URL)
+            }
+        } else {
+            memGooglePhotoUrl.value = trimmed
+        }
+    }
+
     override fun getSettleDelaySeconds(): Flow<Int> = flow {
         val dao = resolveDao()
         if (dao == null) {
@@ -392,6 +421,7 @@ class PreferencesRepositoryImpl(
         const val KEY_ACTIVE_TRIP: String = "key_active_trip"
         const val KEY_GOOGLE_EMAIL: String = "key_google_email"
         const val KEY_GOOGLE_DISPLAY_NAME: String = "key_google_display_name"
+        const val KEY_GOOGLE_PHOTO_URL: String = "key_google_photo_url"
         const val KEY_SETTLE_DELAY_SECONDS: String = "key_settle_delay_seconds"
         const val KEY_DEVICE_ID: String = "device_id"
         const val KEY_DEVELOPER_MODE: String = "key_developer_mode"

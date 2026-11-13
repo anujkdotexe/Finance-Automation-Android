@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
             googleSheetsClient = app.appContainer.googleSheetsClient,
             googleAuthTokenProvider = app.appContainer.googleAuthTokenProvider,
             workbookResolver = app.appContainer.workbookResolver,
+            profileAvatarManager = app.appContainer.profileAvatarManager,
             payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
             ioDispatcher = app.appContainer.ioDispatcher
         )
@@ -105,6 +106,7 @@ class MainActivity : ComponentActivity() {
             googleAuthTokenProvider = app.appContainer.googleAuthTokenProvider,
             workbookResolver = app.appContainer.workbookResolver,
             preferencesRepository = app.appContainer.preferencesRepository,
+            profileAvatarManager = app.appContainer.profileAvatarManager,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -141,6 +143,11 @@ class MainActivity : ComponentActivity() {
                 lifecycleScope.launch(Dispatchers.IO) {
                     gAccount.email?.let { app.appContainer.preferencesRepository.setGoogleAccountEmail(it) }
                     gAccount.displayName?.let { app.appContainer.preferencesRepository.setGoogleAccountDisplayName(it) }
+                    val photoUrl = gAccount.photoUrl?.toString()
+                    if (!photoUrl.isNullOrBlank()) {
+                        app.appContainer.preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
+                        app.appContainer.profileAvatarManager.downloadAndSaveAvatar(photoUrl)
+                    }
                 }
             }
         } catch (_: Exception) {}

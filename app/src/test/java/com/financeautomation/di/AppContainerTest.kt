@@ -33,11 +33,12 @@ class AppContainerTest {
         override fun refreshAccessToken(): String? = "test_token"
     }
 
-    private val all32LazyProperties: List<Pair<String, (AppContainer) -> Any?>> = listOf(
+    private val all33LazyProperties: List<Pair<String, (AppContainer) -> Any?>> = listOf(
         "okHttpClient" to { it.okHttpClient },
         "googleDriveClient" to { it.googleDriveClient },
         "googleSheetsClient" to { it.googleSheetsClient },
         "workbookResolver" to { it.workbookResolver },
+        "profileAvatarManager" to { it.profileAvatarManager },
         "transactionRepository" to { it.transactionRepository },
         "preferencesRepository" to { it.preferencesRepository },
         "peopleRepository" to { it.peopleRepository },
@@ -69,16 +70,16 @@ class AppContainerTest {
     )
 
     @Test
-    fun appContainer_touchesAll32LazyProperties_withoutCircularDependencyOrStackOverflow() {
+    fun appContainer_touchesAll33LazyProperties_withoutCircularDependencyOrStackOverflow() {
         val container: AppContainer = DefaultAppContainer(
             applicationContext = createFakeContext(),
             providedTokenProvider = fakeTokenProvider,
             providedDatabaseReady = CompletableDeferred()
         )
 
-        assertEquals("Expected exactly 32 lazy properties in test suite", 32, all32LazyProperties.size)
+        assertEquals("Expected exactly 33 lazy properties in test suite", 33, all33LazyProperties.size)
 
-        for ((name, getter) in all32LazyProperties) {
+        for ((name, getter) in all33LazyProperties) {
             val instance = getter(container)
             assertNotNull("Property $name resolved to null", instance)
         }

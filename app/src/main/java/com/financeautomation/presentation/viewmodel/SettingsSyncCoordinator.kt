@@ -5,6 +5,7 @@ import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsApiException
 import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.ProfileAvatarManager
 import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
@@ -36,6 +37,7 @@ class SettingsSyncCoordinator(
     private val workbookResolver: WorkbookResolver?,
     private val accountRepository: AccountRepository?,
     private val categoryRepository: CategoryRepository?,
+    private val profileAvatarManager: ProfileAvatarManager? = null,
     private val scope: CoroutineScope,
     private val uiState: MutableStateFlow<SettingsUiState>,
     private val ioDispatcher: CoroutineDispatcher
@@ -43,13 +45,21 @@ class SettingsSyncCoordinator(
 
     fun getGoogleAuthTokenProvider(): GoogleAuthTokenProvider? = googleAuthTokenProvider
 
-    fun onGoogleSignInSuccess(email: String) {
+    fun onGoogleSignInSuccess(email: String, displayName: String? = null, photoUrl: String? = null) {
         if (email.isBlank()) return
         scope.launch(ioDispatcher) {
             preferencesRepository.setGoogleAccountEmail(email)
+            if (!displayName.isNullOrBlank()) {
+                preferencesRepository.setGoogleAccountDisplayName(displayName)
+            }
+            if (!photoUrl.isNullOrBlank()) {
+                preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
+                profileAvatarManager?.downloadAndSaveAvatar(photoUrl)
+            }
             uiState.update {
                 it.copy(
                     googleAccountEmail = email,
+                    googleAccountDisplayName = displayName ?: it.googleAccountDisplayName,
                     userMessage = "Signed in as $email"
                 )
             }
@@ -63,6 +73,8 @@ class SettingsSyncCoordinator(
             googleAuthTokenProvider?.clearCache()
             preferencesRepository.setGoogleAccountEmail(null)
             preferencesRepository.setGoogleAccountDisplayName(null)
+            preferencesRepository.setGoogleAccountPhotoUrl(null)
+            profileAvatarManager?.deleteAvatar()
             context?.let { ctx ->
                 try {
                     val avatarFile = java.io.File(ctx.filesDir, "google_avatar.png")
