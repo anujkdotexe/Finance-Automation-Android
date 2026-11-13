@@ -3,7 +3,9 @@ package com.financeautomation.presentation.screens
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -77,6 +79,7 @@ fun DashboardScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier
     ) { innerPadding ->
         PullToRefreshBox(
@@ -118,17 +121,16 @@ fun DashboardContent(
 
     LazyColumn(
         modifier = modifier.padding(horizontal = FinanceTheme.spacing.l),
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
+        contentPadding = PaddingValues(top = FinanceTheme.spacing.s)
     ) {
         item {
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-            // Single-line sync status indicator
+            // Single-line sync status indicator starts 8dp below the top bar
             SyncStatusLine(
                 waitingCount = state.waitingCount,
                 failedCount = state.failedCount,
                 isSyncing = state.isSyncing,
-                isOffline = state.isOffline,
-                modifier = Modifier.padding(vertical = 2.dp)
+                isOffline = state.isOffline
             )
         }
 
