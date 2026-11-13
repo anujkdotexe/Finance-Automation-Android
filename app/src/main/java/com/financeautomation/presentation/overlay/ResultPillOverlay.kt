@@ -22,8 +22,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -141,7 +143,7 @@ class ResultPillOverlay(
                                     if (session != null) {
                                         Spacer(modifier = Modifier.width(FinanceTheme.spacing.m))
                                         Text(
-                                            text = "Undo",
+                                            text = stringResource(R.string.action_undo),
                                             style = FinanceTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary,

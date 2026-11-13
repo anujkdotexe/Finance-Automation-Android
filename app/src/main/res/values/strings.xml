@@ -673,6 +673,9 @@
     <string name="notification_action_yes">Yes</string>
     <string name="notification_action_not_yet">Not yet</string>
     <string name="notification_action_skip">Skip this time</string>
+    <string name="subscription_notification_title">Did you pay %1$s?</string>
+    <string name="subscription_notification_due_today">%1$s due today</string>
+    <string name="action_undo">Undo</string>
 
     <!-- Plurals -->
     <plurals name="review_pending_count">
