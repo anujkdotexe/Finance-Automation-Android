@@ -133,6 +133,7 @@ class QuickLogViewModel(
     }
 
     private fun refreshPredictedCategories(payee: String) {
+        if (_uiState.value.transactionId != null) return
         viewModelScope.launch(ioDispatcher) {
             try {
                 val current = _uiState.value

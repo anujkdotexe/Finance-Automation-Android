@@ -83,14 +83,15 @@ fun OverlayContentHost(
     val quickLogState by quickLogViewModel.uiState.collectAsState()
 
     val isExpense = currentScreen == OverlayFlowScreen.EXPENSE
+    val isEdit = isExpense && !quickLogState.transactionId.isNullOrBlank()
     val isCaptured = isExpense && quickLogState.captureId != null
 
     val sheetTitle = when (currentScreen) {
         OverlayFlowScreen.MENU -> stringResource(R.string.prompt_choose_action)
-        OverlayFlowScreen.EXPENSE -> if (isCaptured) {
-            stringResource(R.string.sheet_title_log_payment)
-        } else {
-            stringResource(R.string.sheet_title_add_expense)
+        OverlayFlowScreen.EXPENSE -> when {
+            isEdit -> "Edit expense"
+            isCaptured -> stringResource(R.string.sheet_title_log_payment)
+            else -> stringResource(R.string.sheet_title_add_expense)
         }
         OverlayFlowScreen.INCOME_RETURN -> stringResource(R.string.action_menu_income_title)
         OverlayFlowScreen.FRIEND_PAID -> stringResource(R.string.action_menu_friend_paid_title)

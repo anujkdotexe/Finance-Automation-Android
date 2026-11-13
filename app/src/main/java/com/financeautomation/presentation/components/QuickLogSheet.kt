@@ -351,19 +351,32 @@ fun QuickLogSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
+            val baseAccountNames = if (state.availableAccounts.isNotEmpty()) {
+                state.availableAccounts.map { it.name }
+            } else {
+                listOf("UPI", "Card", "Cash", "Bank", "Other")
+            }
+            val accountNames = if (state.selectedAccount.isNotBlank() &&
+                baseAccountNames.none { it.equals(state.selectedAccount, ignoreCase = true) }
+            ) {
+                baseAccountNames + state.selectedAccount
+            } else {
+                baseAccountNames
+            }
+
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
-                state.availableAccounts.forEach { account ->
-                    val isSelected = account.name.equals(state.selectedAccount, ignoreCase = true)
+                accountNames.forEach { accountName ->
+                    val isSelected = accountName.equals(state.selectedAccount, ignoreCase = true)
                     AppChip(
-                        text = account.name,
+                        text = accountName,
                         selected = isSelected,
                         onClick = {
                             focusManager.clearFocus()
-                            onAccountSelected(account.name)
+                            onAccountSelected(accountName)
                         }
                     )
                 }

@@ -1,6 +1,8 @@
 package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.model.SplitMode
+import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
@@ -298,5 +300,63 @@ class QuickLogViewModelTest {
         assertEquals(null, state.captureId)
         assertEquals("manual", state.sourcePackage)
         assertEquals(false, state.isNeedsAmount)
+    }
+
+    @Test
+    fun testEditExpense_restoresAllFields_preselectsCategoryAndAccount() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val peopleRepo = FakePeopleRepo()
+        val catRepo = FakeCategoryRepo()
+        val accRepo = FakeAccountRepo()
+        val pDao = FakePendingCaptureDao()
+        val qDao = FakeTestSyncQueueDao()
+
+        val companion = Companion(id = "comp_alice", name = "Alice")
+        peopleRepo.insertCompanion(companion)
+
+        val existingTimestamp = 1731000000000L
+        val txn = Transaction(
+            id = "txn_edit_test",
+            timestamp = existingTimestamp,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Starbucks",
+            category = "Food & Drink",
+            totalAmount = 900.0,
+            companions = "Alice",
+            myShare = 450.0,
+            owedToMe = 450.0,
+            status = TransactionStatus.PENDING
+        )
+        tRepo.insertTransaction(txn)
+
+        val vm = QuickLogViewModel(
+            transactionRepository = tRepo,
+            peopleRepository = peopleRepo,
+            categoryRepository = catRepo,
+            accountRepository = accRepo,
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { pDao },
+            syncQueueDaoProvider = { qDao },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.loadTransaction("txn_edit_test")
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals("txn_edit_test", state.transactionId)
+        assertEquals("Starbucks", state.payee)
+        assertEquals(900.0, state.amount, 0.001)
+        assertEquals("900", state.amountText)
+        assertEquals("Food & Drink", state.selectedCategory)
+        assertEquals("UPI", state.selectedAccount)
+        assertEquals(existingTimestamp, state.captureTimestamp)
+        assertEquals(SplitMode.SPLIT_EQUALLY, state.splitMode)
+        assertEquals(450.0, state.myShare, 0.001)
+        assertEquals(450.0, state.owedToMe, 0.001)
+        assertEquals(setOf("1"), state.selectedCompanionIds)
     }
 }
