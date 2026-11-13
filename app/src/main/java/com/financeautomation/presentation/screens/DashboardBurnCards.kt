@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -45,7 +47,10 @@ import com.financeautomation.presentation.theme.FinanceTheme
 import kotlin.math.abs
 
 /**
- * Row with 3 equal-width KPI cards: Living burn, Savings, Income.
+ * Stacked KPI layout (Y1 final):
+ * - Row 1: Full-width Living burn card with large amount style and per-day line.
+ * - Row 2: Two equal-width cards: Savings (amount + N% of income) and Income (amount).
+ * Accessibility description: "Key figures".
  */
 @Composable
 fun KpiRow(
@@ -56,11 +61,13 @@ fun KpiRow(
     income: Double,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "Key figures" },
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap)
     ) {
-        // 1. Living burn card
+        // Row 1: Full-width Living burn card
         val paceText = paceDeltaPercent?.let { delta ->
             val absDelta = abs(delta).toInt()
             if (delta <= 0.0) "Down $absDelta% vs last month" else "Up $absDelta% vs last month"
@@ -70,31 +77,44 @@ fun KpiRow(
         KpiCard(
             label = stringResource(R.string.dashboard_hero_burn_title),
             amount = livingBurn,
+            isLargeAmount = true,
             line1Text = paceText,
             line1IsPrimary = (paceDeltaPercent ?: 0.0) <= 0.0,
             line2Text = dailyText,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.fillMaxWidth()
         )
 
-        // 2. Savings card
+        // Row 2: Two equal-width cards: Savings and Income
         val savingsPercentText = if (income > 0.0) {
             val pct = ((savings / income) * 100).toInt()
             "$pct% of income"
         } else null
 
-        KpiCard(
-            label = stringResource(R.string.dashboard_savings),
-            amount = savings,
-            line1Text = savingsPercentText,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap)
+        ) {
+            KpiCard(
+                label = stringResource(R.string.dashboard_savings),
+                amount = savings,
+                isLargeAmount = false,
+                line1Text = savingsPercentText,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            )
 
-        // 3. Income card
-        KpiCard(
-            label = stringResource(R.string.dashboard_income),
-            amount = income,
-            modifier = Modifier.weight(1f)
-        )
+            KpiCard(
+                label = stringResource(R.string.dashboard_income),
+                amount = income,
+                isLargeAmount = false,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            )
+        }
     }
 }
 
