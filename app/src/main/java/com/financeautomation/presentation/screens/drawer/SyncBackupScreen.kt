@@ -60,11 +60,23 @@ fun SyncBackupScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    val accountEmail = state.googleAccountEmail
-    val accountDisplayName = state.googleAccountDisplayName?.takeIf { it.isNotBlank() }
-    val showNameAndEmail = !accountDisplayName.isNullOrBlank() &&
-        !accountEmail.isNullOrBlank() &&
-        accountDisplayName != accountEmail
+    val signedInAccount = remember {
+        try {
+            com.google.android.gms.auth.api.signin.GoogleSignIn.getLastSignedInAccount(context)
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val rawEmail = signedInAccount?.email ?: state.googleAccountEmail
+    val isRealEmail = !rawEmail.isNullOrBlank() && rawEmail.contains("@")
+    val accountEmail = if (isRealEmail) rawEmail else null
+
+    val rawDisplayName = signedInAccount?.displayName?.takeIf { it.isNotBlank() }
+        ?: state.googleAccountDisplayName?.takeIf { it.isNotBlank() }
+        ?: if (!isRealEmail && !rawEmail.isNullOrBlank()) rawEmail else null
+    val accountDisplayName = rawDisplayName?.takeIf { it != accountEmail }
+
+    val showNameAndEmail = !accountDisplayName.isNullOrBlank() && !accountEmail.isNullOrBlank()
 
     Column(
         modifier = modifier
@@ -133,9 +145,18 @@ fun SyncBackupScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        } else if (!accountEmail.isNullOrBlank()) {
+                            Text(
+                                text = accountEmail,
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         } else {
                             Text(
-                                text = accountEmail?.ifBlank { null } ?: "Local offline storage",
+                                text = accountDisplayName ?: "Local offline storage",
                                 style = FinanceTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,

@@ -52,6 +52,7 @@ class PreferencesRepositoryImpl(
     private val memDefaultAccount = MutableStateFlow(CategoryConstants.ACCOUNT_OTHER)
     private val memActiveTrip = MutableStateFlow<String?>(null)
     private val memGoogleEmail = MutableStateFlow<String?>(null)
+    private val memGoogleDisplayName = MutableStateFlow<String?>(null)
     private val memSettleDelay = MutableStateFlow(DEFAULT_SETTLE_DELAY_SECONDS)
     private val memDeviceId = MutableStateFlow<String?>(null)
     private val memDeveloperMode = MutableStateFlow(false)
@@ -195,6 +196,34 @@ class PreferencesRepositoryImpl(
             }
         } else {
             memGoogleEmail.value = trimmed
+        }
+    }
+
+    override fun getGoogleAccountDisplayName(): Flow<String?> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memGoogleDisplayName.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_GOOGLE_DISPLAY_NAME))
+        }
+    }.flowOn(ioDispatcher)
+
+    override suspend fun getGoogleAccountDisplayNameSync(): String? = withContext(ioDispatcher) {
+        val dao = resolveDao() ?: return@withContext memGoogleDisplayName.value
+        dao.getPreference(KEY_GOOGLE_DISPLAY_NAME)
+    }
+
+    override suspend fun setGoogleAccountDisplayName(name: String?): Unit = withContext(ioDispatcher) {
+        val trimmed = name?.trim()?.ifEmpty { null }
+        val dao = resolveDao()
+        if (dao != null) {
+            if (trimmed != null) {
+                dao.setPreference(PreferenceEntity(KEY_GOOGLE_DISPLAY_NAME, trimmed, updatedAt = System.currentTimeMillis(), dirty = 0))
+            } else {
+                dao.deletePreference(KEY_GOOGLE_DISPLAY_NAME)
+            }
+        } else {
+            memGoogleDisplayName.value = trimmed
         }
     }
 
@@ -362,6 +391,7 @@ class PreferencesRepositoryImpl(
         const val KEY_DEFAULT_ACCOUNT: String = "key_default_account"
         const val KEY_ACTIVE_TRIP: String = "key_active_trip"
         const val KEY_GOOGLE_EMAIL: String = "key_google_email"
+        const val KEY_GOOGLE_DISPLAY_NAME: String = "key_google_display_name"
         const val KEY_SETTLE_DELAY_SECONDS: String = "key_settle_delay_seconds"
         const val KEY_DEVICE_ID: String = "device_id"
         const val KEY_DEVELOPER_MODE: String = "key_developer_mode"

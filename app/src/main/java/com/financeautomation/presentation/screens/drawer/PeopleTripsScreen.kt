@@ -126,7 +126,8 @@ fun PeopleTripsScreen(
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                 ) {
                     state.companions.forEach { companion ->
-                        FriendItemRow(companion = companion)
+                        val openCount = state.companionOpenItemCounts[companion.name.trim().lowercase()] ?: 0
+                        FriendItemRow(companion = companion, openItemCount = openCount)
                     }
                 }
             }
@@ -245,6 +246,7 @@ fun PeopleTripsScreen(
 @Composable
 private fun FriendItemRow(
     companion: FriendCompanion,
+    openItemCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val initial = companion.name.firstOrNull()?.uppercase() ?: "F"
@@ -264,8 +266,7 @@ private fun FriendItemRow(
         else -> stringResource(R.string.people_settled)
     }
     val subtitleText = when {
-        isPositive -> stringResource(R.string.people_owes_you)
-        isNegative -> stringResource(R.string.people_you_owe)
+        openItemCount > 0 -> "$openItemCount ${if (openItemCount == 1) "open item" else "open items"}"
         else -> stringResource(R.string.people_all_caught_up)
     }
     val textColor = when {

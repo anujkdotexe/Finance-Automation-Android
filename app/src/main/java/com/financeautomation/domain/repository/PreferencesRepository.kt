@@ -80,6 +80,21 @@ interface PreferencesRepository {
     suspend fun setGoogleAccountEmail(email: String?)
 
     /**
+     * Observes the authenticated Google account display name.
+     */
+    fun getGoogleAccountDisplayName(): Flow<String?> = kotlinx.coroutines.flow.flowOf(null)
+
+    /**
+     * Retrieves the authenticated Google account display name synchronously.
+     */
+    suspend fun getGoogleAccountDisplayNameSync(): String? = null
+
+    /**
+     * Updates the authenticated Google account display name.
+     */
+    suspend fun setGoogleAccountDisplayName(name: String?) {}
+
+    /**
      * Observes the configurable settle delay in seconds (30s to 300s, default 120s).
      */
     fun getSettleDelaySeconds(): Flow<Int>

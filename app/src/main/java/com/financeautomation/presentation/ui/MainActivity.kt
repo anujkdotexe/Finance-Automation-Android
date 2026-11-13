@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.financeautomation.FinanceApplication
 import com.financeautomation.domain.model.ThemeMode
@@ -28,6 +29,8 @@ import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModelFactory
 import com.financeautomation.presentation.viewmodel.SubscriptionsViewModel
 import com.financeautomation.presentation.viewmodel.TransactionsViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
@@ -129,6 +132,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         extractRouteFromIntent(intent)
+
+        try {
+            val gAccount = com.google.android.gms.auth.api.signin.GoogleSignIn.getLastSignedInAccount(this)
+            if (gAccount != null) {
+                val app = application as FinanceApplication
+                lifecycleScope.launch(Dispatchers.IO) {
+                    gAccount.email?.let { app.appContainer.preferencesRepository.setGoogleAccountEmail(it) }
+                    gAccount.displayName?.let { app.appContainer.preferencesRepository.setGoogleAccountDisplayName(it) }
+                }
+            }
+        } catch (_: Exception) {}
 
         setContent {
             val app = application as FinanceApplication
