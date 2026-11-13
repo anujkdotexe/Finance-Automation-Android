@@ -263,6 +263,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
             if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "cred_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogCreditRequest(
@@ -309,6 +310,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
             if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "pay_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogPayableRequest(
@@ -338,6 +340,7 @@ class TransactionRepositoryImpl(
         timestamp: Long
     ): Result<String> = withContext(ioDispatcher) {
         try {
+            if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
             if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "rep_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogRepaymentRequest(
@@ -1406,5 +1409,6 @@ class TransactionRepositoryImpl(
 
     companion object {
         const val MAX_SYNC_RETRIES: Int = 8
+        const val AMOUNT_MESSAGE: String = "Enter an amount greater than zero"
     }
 }
