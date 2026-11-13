@@ -154,8 +154,8 @@ fun TransactionsContent(
 
                 Box(
                     modifier = Modifier
-                        .height(32.dp)
-                        .width(1.dp)
+                        .height(FinanceTheme.sizes.icon32)
+                        .width(FinanceTheme.sizes.strokeThin)
                         .background(MaterialTheme.colorScheme.outlineVariant)
                 )
 
@@ -235,7 +235,7 @@ fun TransactionsContent(
                         Icon(
                             imageVector = Icons.Rounded.Clear,
                             contentDescription = "Clear filter",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(FinanceTheme.sizes.icon16)
                         )
                     }
                 )

@@ -254,7 +254,7 @@ fun FailedQueueItemCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+        border = BorderStroke(FinanceTheme.sizes.strokeThin, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -293,14 +293,14 @@ fun FailedQueueItemCard(
             ) {
                 OutlinedButton(
                     onClick = onDiscard,
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.height(FinanceTheme.sizes.buttonHeight36)
                 ) {
                     Text("Discard", style = MaterialTheme.typography.labelMedium)
                 }
                 Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                 Button(
                     onClick = onRetry,
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.height(FinanceTheme.sizes.buttonHeight36)
                 ) {
                     Text("Retry", style = MaterialTheme.typography.labelMedium)
                 }

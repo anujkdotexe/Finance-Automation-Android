@@ -73,10 +73,7 @@ fun HeroBurnCard(
         ) {
             Text(
                 text = stringResource(R.string.dashboard_hero_burn_title).uppercase(),
-                style = FinanceTheme.typography.labelSmall.copy(
-                    letterSpacing = 1.sp,
-                    fontWeight = FontWeight.Medium
-                ),
+                style = FinanceTheme.typography.labelUppercase,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
@@ -85,22 +82,19 @@ fun HeroBurnCard(
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                        .padding(horizontal = FinanceTheme.spacing.compact, vertical = FinanceTheme.spacing.xxs),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.CheckCircle,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.icon13)
                     )
                     Text(
                         text = stringResource(R.string.dashboard_on_track).uppercase(),
-                        style = FinanceTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 10.sp
-                        ),
+                        style = FinanceTheme.typography.labelMicro,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -129,7 +123,7 @@ fun HeroBurnCard(
         // Comparisons & Run Rates: Rebuilt as two equal-weight columns separated by 12dp
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
             verticalAlignment = Alignment.Top
         ) {
             // Left column: Daily average
@@ -188,20 +182,17 @@ fun HeroBurnCard(
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)
                         ) {
                             Icon(
                                 imageVector = deltaIcon,
                                 contentDescription = null,
                                 tint = deltaColor,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(FinanceTheme.sizes.icon12)
                             )
                             Text(
                                 text = deltaText,
-                                style = FinanceTheme.typography.numeric.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 11.sp
-                                ),
+                                style = FinanceTheme.typography.numericMicro,
                                 color = deltaColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -212,22 +203,19 @@ fun HeroBurnCard(
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.secondaryContainer)
-                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                                .padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.CheckCircle,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(11.dp)
+                                modifier = Modifier.size(FinanceTheme.sizes.icon11)
                             )
                             Text(
                                 text = stringResource(R.string.dashboard_on_track).uppercase(),
-                                style = FinanceTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 9.sp
-                                ),
+                                style = FinanceTheme.typography.labelNano,
                                 color = MaterialTheme.colorScheme.primary,
                                 maxLines = 1
                             )
@@ -264,14 +252,14 @@ fun OwedSummarySection(
             ) {
                 Text(
                     text = stringResource(R.string.dashboard_owed_to_me).uppercase(),
-                    style = FinanceTheme.typography.labelSmall.copy(letterSpacing = 1.sp, fontWeight = FontWeight.Medium),
+                    style = FinanceTheme.typography.labelUppercase,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.CallReceived,
                     contentDescription = null,
                     tint = if (owedToMe > 0.0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                 )
             }
 
@@ -286,7 +274,7 @@ fun OwedSummarySection(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
             if (topOwedToMe.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.sm)) {
                     topOwedToMe.take(3).forEach { friend ->
                         PersonDebtRow(
                             name = friend.name,
@@ -323,14 +311,14 @@ fun OwedSummarySection(
             ) {
                 Text(
                     text = stringResource(R.string.dashboard_i_owe).uppercase(),
-                    style = FinanceTheme.typography.labelSmall.copy(letterSpacing = 1.sp, fontWeight = FontWeight.Medium),
+                    style = FinanceTheme.typography.labelUppercase,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.CallMade,
                     contentDescription = null,
                     tint = if (iOwePeople > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                 )
             }
 
@@ -345,7 +333,7 @@ fun OwedSummarySection(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
             if (topIOwe.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.sm)) {
                     topIOwe.take(3).forEach { friend ->
                         PersonDebtRow(
                             name = friend.name,
@@ -405,7 +393,7 @@ fun NeedsReviewBanner(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(FinanceTheme.sizes.buttonHeightMedium)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
@@ -414,7 +402,7 @@ fun NeedsReviewBanner(
                         imageVector = Icons.Rounded.Rule,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                     )
                 }
                 Column {
@@ -438,8 +426,8 @@ fun NeedsReviewBanner(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                modifier = Modifier.defaultMinSize(minHeight = 40.dp)
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.none),
+                modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.buttonHeightMedium)
             ) {
                 Text(
                     text = stringResource(R.string.action_review),
@@ -466,7 +454,7 @@ fun SavingsAndIncomeSection(
         TonalCard(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.dashboard_savings).uppercase(),
-                style = FinanceTheme.typography.labelSmall.copy(letterSpacing = 1.sp, fontWeight = FontWeight.Medium),
+                style = FinanceTheme.typography.labelUppercase,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
@@ -478,7 +466,7 @@ fun SavingsAndIncomeSection(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
             Text(
                 text = stringResource(R.string.dashboard_savings_caption),
-                style = FinanceTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                style = FinanceTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -486,7 +474,7 @@ fun SavingsAndIncomeSection(
         TonalCard(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.dashboard_income).uppercase(),
-                style = FinanceTheme.typography.labelSmall.copy(letterSpacing = 1.sp, fontWeight = FontWeight.Medium),
+                style = FinanceTheme.typography.labelUppercase,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
@@ -498,7 +486,7 @@ fun SavingsAndIncomeSection(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
             Text(
                 text = stringResource(R.string.dashboard_income_caption),
-                style = FinanceTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                style = FinanceTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -531,7 +519,7 @@ fun OfflineSection(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(FinanceTheme.sizes.buttonHeightMedium)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surface),
                     contentAlignment = Alignment.Center
@@ -540,7 +528,7 @@ fun OfflineSection(
                         imageVector = Icons.Rounded.CloudOff,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                     )
                 }
                 Column(modifier = Modifier.weight(1f)) {
@@ -566,12 +554,12 @@ fun OfflineSection(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 TonalCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
                         queuedItems.forEach { item ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .defaultMinSize(minHeight = 40.dp),
+                                    .defaultMinSize(minHeight = FinanceTheme.sizes.buttonHeightMedium),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {

@@ -227,7 +227,7 @@ fun DashboardContent(
                         onActionClick = onNavigateToTransactions
                     )
                     TonalCard {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
                             state.recentTransactions.take(3).forEach { txn ->
                                 val dateStr = SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
                                     .format(Date(txn.timestamp))
@@ -248,10 +248,6 @@ fun DashboardContent(
                     }
                 }
             }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }

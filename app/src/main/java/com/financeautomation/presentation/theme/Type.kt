@@ -127,6 +127,25 @@ data class FinanceTypography(
     val kpiLarge: TextStyle,
     val kpiMedium: TextStyle,
     val numeric: TextStyle,
+    val numericMicro: TextStyle = TextStyle(
+        fontFamily = JetBrainsMonoFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 11.sp,
+        lineHeight = 14.sp,
+        fontFeatureSettings = "tnum, zero"
+    ),
+    val labelMicro: TextStyle = TextStyle(
+        fontFamily = InterFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 10.sp,
+        lineHeight = 12.sp
+    ),
+    val labelNano: TextStyle = TextStyle(
+        fontFamily = InterFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 9.sp,
+        lineHeight = 12.sp
+    ),
     val amountHero: TextStyle = kpiLarge,
     val amountLarge: TextStyle = kpiMedium,
     val titleMedium: TextStyle = Typography.titleMedium,
@@ -137,6 +156,10 @@ data class FinanceTypography(
     val titleSmall: TextStyle = Typography.titleSmall,
     val bodySmall: TextStyle = Typography.bodySmall,
     val labelSmall: TextStyle = Typography.labelSmall,
+    val labelUppercase: TextStyle = Typography.labelSmall.copy(
+        letterSpacing = 1.sp,
+        fontWeight = FontWeight.Medium
+    ),
     val titleLarge: TextStyle = Typography.titleLarge
 )
 

@@ -112,6 +112,7 @@ import com.financeautomation.presentation.screens.drawer.DiagnosticsScreen
 import com.financeautomation.presentation.screens.drawer.PeopleTripsScreen
 import com.financeautomation.presentation.screens.drawer.PreferencesScreen
 import com.financeautomation.presentation.screens.drawer.SyncBackupScreen
+import com.financeautomation.presentation.theme.FinanceAlphas
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
@@ -540,13 +541,13 @@ fun AppNavHost(
                             shape = CircleShape,
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(56.dp)
+                            modifier = Modifier.size(FinanceTheme.sizes.fabSize)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Add,
                                 contentDescription = if (isSpeedDialOpen) "Close add menu" else "Add",
                                 modifier = Modifier
-                                    .size(28.dp)
+                                    .size(FinanceTheme.sizes.icon28)
                                     .rotate(speedDialRotation)
                             )
                         }
@@ -697,7 +698,7 @@ fun AppNavHost(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.32f))
+                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = FinanceAlphas.scrim))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -709,26 +710,26 @@ fun AppNavHost(
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 88.dp),
+                        .padding(end = FinanceTheme.spacing.l, bottom = FinanceTheme.spacing.bottomFabClearance),
                     horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
                     speedDialActions.forEach { item ->
                         Surface(
                             shape = FinanceShapes.pill,
                             color = FinanceTheme.colors.surfaceContainerLowest,
-                            shadowElevation = 4.dp,
+                            shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
                             modifier = Modifier
-                                .defaultMinSize(minHeight = 48.dp)
+                                .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                                 .clickable {
                                     isSpeedDialOpen = false
                                     launchFlow(item.flow, item.preselectedFriend)
                                 }
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.s),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.compact)
                             ) {
                                 Text(
                                     text = item.label,
@@ -737,7 +738,7 @@ fun AppNavHost(
                                 )
                                 Box(
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(FinanceTheme.sizes.icon32)
                                         .clip(CircleShape)
                                         .background(FinanceTheme.colors.surfaceContainerHigh),
                                     contentAlignment = Alignment.Center
@@ -746,7 +747,7 @@ fun AppNavHost(
                                         imageVector = item.icon,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
                                     )
                                 }
                             }
