@@ -319,7 +319,12 @@ class NotificationProcessor(
             val minTime = postTime - 90_000L
             val maxTime = postTime + 90_000L
             val similarCaptures = pendingCaptureDao.findSimilarByAmountAndTime(amount, minTime, maxTime)
-                .filter { it.sourcePackage != sourcePackage }
+                .filter {
+                    // Same amount alone is not enough: the payee must also be compatible, so two real payments
+                    // of the same amount to different payees within 90 seconds stay separate
+                    it.sourcePackage != sourcePackage &&
+                        com.financeautomation.core.utils.MerchantSimilarity.compatible(it.payee, payee)
+                }
 
             if (similarCaptures.isNotEmpty()) {
                 val mergeTarget = similarCaptures.firstOrNull {
