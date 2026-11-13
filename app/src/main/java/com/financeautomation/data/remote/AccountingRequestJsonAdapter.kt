@@ -3,6 +3,7 @@ package com.financeautomation.data.remote
 import com.financeautomation.domain.model.CarryForwardRequest
 import com.financeautomation.domain.model.LogCreditRequest
 import com.financeautomation.domain.model.LogPayableRequest
+import com.financeautomation.domain.model.VoidInflowRequest
 import com.financeautomation.domain.model.LogRepaymentRequest
 import com.financeautomation.domain.model.YearCloseRequest
 import kotlinx.serialization.json.Json
@@ -51,6 +52,21 @@ object AccountingRequestJsonAdapter {
             account = obj["account"]?.jsonPrimitive?.content.orEmpty(),
             inflowType = obj["inflowType"]?.jsonPrimitive?.content.orEmpty(),
             reason = obj["reason"]?.jsonPrimitive?.content.orEmpty(),
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+        )
+    }
+
+    fun voidInflowRequestToJson(req: VoidInflowRequest): String {
+        return buildJsonObject {
+            put("inflowId", JsonPrimitive(req.inflowId))
+            put("timestamp", JsonPrimitive(req.timestamp))
+        }.toString()
+    }
+
+    fun voidInflowRequestFromJson(jsonStr: String): VoidInflowRequest {
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
+        return VoidInflowRequest(
+            inflowId = obj["inflowId"]?.jsonPrimitive?.content.orEmpty(),
             timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
         )
     }

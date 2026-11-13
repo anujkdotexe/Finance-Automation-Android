@@ -1,6 +1,7 @@
 package com.financeautomation.di
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.financeautomation.data.local.ConfigSyncLocalGatewayImpl
 import com.financeautomation.data.local.FinanceDatabase
 import com.financeautomation.data.remote.AccountingSyncExecutor
@@ -292,8 +293,16 @@ class DefaultAppContainer(
     override val inflowRepository: InflowRepository by lazy {
         InflowRepositoryImpl(
             inflowDaoProvider = { awaitDatabase().inflowDao() },
-            ioDispatcher = ioDispatcher
-        )
+            ioDispatcher = ioDispatcher,
+            syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            transactionRunner = { block -> awaitDatabase().withTransaction { block() } }
+        ).also { impl ->
+            impl.onTriggerSync = {
+                CoroutineScope(ioDispatcher).launch {
+                    syncTransactionsUseCase.invoke()
+                }
+            }
+        }
     }
 
     override val subscriptionRepository: SubscriptionRepository by lazy {
