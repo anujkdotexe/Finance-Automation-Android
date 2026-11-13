@@ -131,7 +131,7 @@ fun KpiCard(
                 .fillMaxWidth()
                 .fillMaxHeight()
                 .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.Top
         ) {
             Text(
                 text = label,
@@ -145,30 +145,43 @@ fun KpiCard(
                 amount = amount,
                 isLargeAmount = isLargeAmount,
                 showExact = showExact,
-                modifier = Modifier.padding(vertical = FinanceTheme.spacing.xs)
+                modifier = Modifier.padding(top = FinanceTheme.spacing.xs, bottom = FinanceTheme.spacing.xs)
             )
 
-            if (!line1Text.isNullOrBlank() || !line2Text.isNullOrBlank()) {
-                Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
-                    if (!line1Text.isNullOrBlank()) {
-                        Text(
-                            text = line1Text,
-                            style = FinanceTheme.typography.labelSmall,
-                            color = if (line1IsPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (!line2Text.isNullOrBlank()) {
-                        Text(
-                            text = line2Text,
-                            style = FinanceTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+            if (isLargeAmount) {
+                if (!line1Text.isNullOrBlank() || !line2Text.isNullOrBlank()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
+                        if (!line1Text.isNullOrBlank()) {
+                            Text(
+                                text = line1Text,
+                                style = FinanceTheme.typography.labelSmall,
+                                color = if (line1IsPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (!line2Text.isNullOrBlank()) {
+                            Text(
+                                text = line2Text,
+                                style = FinanceTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
+            } else {
+                // Half-width cards: sub-line directly below amount.
+                // Renders line1Text if provided (e.g. "0% of income" for Savings), or an empty line for Income,
+                // ensuring both cards have identical structure, amount position, and height.
+                Text(
+                    text = line1Text ?: " ",
+                    style = FinanceTheme.typography.labelSmall,
+                    color = if (line1IsPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
