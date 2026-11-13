@@ -19,7 +19,7 @@ object RegexPatterns {
 
     // Merchant / Payee regex extracting business names or VPAs
     val MERCHANT_REGEX: Regex = Regex(
-        """(?:paid\s+to|sent\s+to|transferred\s+to|trf\s+to|to|at|vpa)\s+([A-Za-z0-9\s&._\-@]+?)(?:,\s*|\s+on\b|\.(?!\d)|$|\s+ref\b|\s+using\b|\s+via\b|\s+through\b|\s+utr\b|\s+a/c\b|\s+avl\b|\s+bal\b|\b\d{12}\b)""",
+        """(?:paid\s+to|sent\s+to|transferred\s+to|trf\s+to|towards|to|at|vpa)\s+([A-Za-z0-9\s&._\-@]+?)(?:,\s*|\s+on\b|\.(?!\d)|$|\s+ref\b|\s+using\b|\s+via\b|\s+through\b|\s+utr\b|\s+a/c\b|\s+avl\b|\s+bal\b|\b\d{12}\b)""",
         RegexOption.IGNORE_CASE
     )
 

@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.screens.drawer
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Card
@@ -34,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,12 +47,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
+import com.financeautomation.domain.model.NotificationSimulatorPresets
 import com.financeautomation.presentation.screens.AdvancedDiagnosticsCard
 import com.financeautomation.presentation.screens.settings.CaptureHealthCard
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
+import com.financeautomation.service.NotificationProcessor
 import com.financeautomation.service.worker.SubscriptionReminderWorker
+import kotlinx.coroutines.launch
 
 @Composable
 fun DiagnosticsScreen(
@@ -57,6 +63,7 @@ fun DiagnosticsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     var showSyncLog by remember { mutableStateOf(false) }
 
@@ -184,6 +191,59 @@ fun DiagnosticsScreen(
                             })
                         }
                     )
+                }
+            }
+
+            // Simulate Payment Notification Card
+            Column {
+                Text(
+                    text = "Simulate payment notification",
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Inject test financial notification into local pipeline",
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Surface(
+                color = FinanceTheme.colors.surfaceContainerLowest,
+                shape = FinanceShapes.large,
+                shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    NotificationSimulatorPresets.PRESETS.forEachIndexed { index, preset ->
+                        if (index > 0) {
+                            HorizontalDivider(
+                                color = FinanceTheme.colors.surfaceContainerLow,
+                                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                            )
+                        }
+                        DiagnosticActionRow(
+                            icon = Icons.Rounded.Notifications,
+                            title = preset.name,
+                            subtitle = preset.text,
+                            onClick = {
+                                coroutineScope.launch {
+                                    val outcome = NotificationProcessor.simulate(
+                                        context = context,
+                                        sourcePackage = preset.sourcePackage,
+                                        title = preset.title,
+                                        text = preset.text
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        "Simulated ${preset.name}: ${outcome.javaClass.simpleName}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        )
+                    }
                 }
             }
 
