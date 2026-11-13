@@ -9,7 +9,7 @@ import com.financeautomation.core.constants.SheetSchemaConstants
  * 1. Dashboard: Title banner, last updated formula, 6 KPI cards with living burn formulas,
  *    Monthly summary trend table, Category spend breakdown table, and Active Settlements query table.
  * 2. Month tabs (for example Nov26): 31-column schema, frozen headers, spacer columns,
- *    currency number formats ("₹"#,##0.00), date formats (dd/mm/yyyy), time formats (hh:mm am/pm),
+ *    currency number formats (₹#,##0), date formats (dd/mm/yyyy), time formats (hh:mm am/pm),
  *    dropdown data validations (Status, Repayment Status, Accounts, Categories),
  *    and conditional formatting (strikethrough on Void, italic on Carried).
  */
@@ -31,20 +31,58 @@ object SheetProvisioner {
     /** Sheets API pixelSize is in pixels; the iOS reference gives row heights in points (1 pixel = 0.75 point). */
     fun pointsToPixels(points: Double): Int = Math.round(points / 0.75).toInt()
 
-    /** Dashboard row heights from the iOS reference: start row, end row (exclusive), 0-based, and points. */
+    /**
+     * Dashboard row heights from the live iOS workbook: start row, end row (exclusive), 0-based, and points.
+     * Row 3 and rows after 36 have no custom height and stay unset.
+     */
     val DASHBOARD_ROW_HEIGHT_POINTS: List<Triple<Int, Int, Double>> = listOf(
-        Triple(0, 1, 24.0), Triple(1, 2, 13.5), Triple(2, 3, 14.0), Triple(3, 4, 10.5),
+        Triple(0, 1, 24.0), Triple(1, 2, 13.5), Triple(3, 4, 14.25),
         Triple(4, 5, 21.0), Triple(5, 6, 16.5), Triple(6, 7, 12.75), Triple(7, 23, 13.5),
-        Triple(23, 24, 18.0), Triple(24, 25, 16.5), Triple(25, 26, 21.0), Triple(26, 36, 15.0),
-        Triple(36, 37, 12.5)
+        Triple(23, 24, 18.0), Triple(24, 25, 16.5), Triple(25, 26, 21.0), Triple(26, 36, 15.0)
     )
 
-    /** Month tab row heights from the iOS reference (rows 4 to 1000 are 12.5 points). */
+    /** Month tab row heights from the live iOS workbook; rows 4 and below have no custom height (default 15.75 points). */
     val MONTH_TAB_ROW_HEIGHT_POINTS: List<Triple<Int, Int, Double>> = listOf(
-        Triple(0, 1, 27.0), Triple(1, 2, 18.0), Triple(2, 3, 21.0), Triple(3, 1000, 12.5)
+        Triple(0, 1, 30.0), Triple(1, 2, 18.0), Triple(2, 3, 21.0)
     )
+
+    /** "Nov26" becomes "EXPENSE LEDGER — NOVEMBER 2026"; a tab name that is not a month tab is upper-cased as is. */
+    fun monthTabBannerTitle(tabTitle: String): String {
+        val month = try {
+            java.time.YearMonth.parse(tabTitle, java.time.format.DateTimeFormatter.ofPattern("MMMyy", java.util.Locale.US))
+                .format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.US))
+                .uppercase()
+        } catch (e: java.time.format.DateTimeParseException) {
+            tabTitle.uppercase()
+        }
+        return "EXPENSE LEDGER — $month"
+    }
 
     private const val ROW3_LAST_BORDERED_COL = 24 // column Y
+
+    /** Row 2 border sides per column index, from the live workbook. */
+    val ROW2_BORDER_SIDES: Map<Int, Set<String>> = mapOf(
+        0 to setOf("top", "bottom", "left"),
+        11 to setOf("top", "bottom", "left"),
+        12 to setOf("bottom"),
+        20 to setOf("top", "bottom"),
+        21 to setOf("top", "bottom")
+    )
+
+    /** Thin borders on the named sides of a single cell. */
+    private fun cellBordersRequest(sheetId: Int, row: Int, col: Int, sides: Set<String>): Map<String, Any?> {
+        val request = mutableMapOf<String, Any?>(
+            "range" to mapOf(
+                "sheetId" to sheetId,
+                "startRowIndex" to row,
+                "endRowIndex" to row + 1,
+                "startColumnIndex" to col,
+                "endColumnIndex" to col + 1
+            )
+        )
+        sides.forEach { request[it] = thinBorder() }
+        return mapOf("updateBorders" to request)
+    }
 
     /** Debit table columns C, D, E, F, H, K (0-based) that are plain text in the iOS reference. */
     val DEBIT_TEXT_COLUMNS: List<Int> = listOf(2, 3, 4, 5, 7, 10)
@@ -74,6 +112,9 @@ object SheetProvisioner {
         )
 
     private const val GOOGLE_SANS = "Google Sans"
+
+    /** Rupee pattern exactly as in the live iOS workbook (no quotes around the sign). */
+    const val CURRENCY_PATTERN: String = "₹#,##0"
 
     /** Text style (Google Sans, bold or italic as given, centered) for the blank cells of a title band row. */
     private fun bandStyleRequest(
@@ -157,11 +198,12 @@ object SheetProvisioner {
     private val blueSectionColor = hexToColorMap("3D85C6")
     private val lightSlateBg = hexToColorMap("EBEEF1")
     private val darkNavyBg = hexToColorMap("19227E")
+    private val ledgerBannerBg = hexToColorMap("1A237E")
     private val accentNavyBg = hexToColorMap("273492")
     private val buttonNavyBg = hexToColorMap("283593")
     private val headerSlateBg = hexToColorMap("37474F")
     private val settlementsBannerBg = hexToColorMap("37464E")
-    private val settlementsHeaderBg = hexToColorMap("455964")
+    private val settlementsHeaderBg = hexToColorMap("1A237E")
     private val amberBg = hexToColorMap("F47F17")
     private val owePeopleHeaderBg = hexToColorMap("F57F17")
     private val debitsHeaderBg = hexToColorMap("C62828")
@@ -280,7 +322,7 @@ object SheetProvisioner {
                 sheetId = dashboardSheetId,
                 rowIndex = 0,
                 colIndex = 0,
-                value = mapOf("stringValue" to "PERSONAL FINANCE DASHBOARD — 2026"),
+                value = mapOf("stringValue" to "PERSONAL FINANCE DASHBOARD - 2026"),
                 format = mapOf(
                     "backgroundColor" to darkNavyBg,
                     "horizontalAlignment" to "CENTER",
@@ -381,6 +423,22 @@ object SheetProvisioner {
         requests.add(bandStyleRequest(dashboardSheetId, row = 1, startCol = 20, endCol = 29, fontSize = 10, color = hexToColorMap("536D79"), italic = true))
         requests.add(bandStyleRequest(dashboardSheetId, row = 2, startCol = 18, endCol = 29, fontSize = 11, color = whiteColor, italic = false))
 
+        requests.add(
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to dashboardSheetId,
+                        "startRowIndex" to 2,
+                        "endRowIndex" to 3,
+                        "startColumnIndex" to 18,
+                        "endColumnIndex" to 20
+                    ),
+                    "cell" to mapOf("userEnteredFormat" to mapOf("backgroundColor" to lightSlateBg)),
+                    "fields" to "userEnteredFormat.backgroundColor"
+                )
+            )
+        )
+
         // Thin box around each KPI card (rows 4 to 6)
         listOf(0, 3, 6, 9, 12, 15).forEach { startCol ->
             requests.add(outerBordersRequest(dashboardSheetId, startRow = 3, endRow = 6, startCol = startCol, endCol = startCol + 3))
@@ -407,11 +465,12 @@ object SheetProvisioner {
                         "backgroundColor" to if (isNavyBg) buttonNavyBg else whiteColor,
                         "horizontalAlignment" to "CENTER",
                         "verticalAlignment" to "MIDDLE",
-                        "textFormat" to mapOf(
-                            "foregroundColor" to if (isNavyBg) whiteColor else grayTextColor,
-                            "bold" to true,
-                            "fontSize" to 8
-                        )
+                        "textFormat" to buildMap {
+                            put("foregroundColor", if (isNavyBg) whiteColor else grayTextColor)
+                            put("bold", true)
+                            // The live workbook leaves the navy I OWE PEOPLE header at the default size
+                            if (!isNavyBg) put("fontSize", 8)
+                        }
                     )
                 )
             )
@@ -469,7 +528,7 @@ object SheetProvisioner {
                 15,
                 Triple(
                     """=IFERROR(A5 / DAY(TODAY()), 0)""",
-                    darkTextColor,
+                    hexToColorMap("1465BF"),
                     true
                 )
             )
@@ -494,7 +553,7 @@ object SheetProvisioner {
                         ),
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         )
                     )
                 )
@@ -593,7 +652,7 @@ object SheetProvisioner {
                         "verticalAlignment" to "MIDDLE",
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         ),
                         "textFormat" to mapOf("fontSize" to 10)
                     )
@@ -613,7 +672,7 @@ object SheetProvisioner {
                         "verticalAlignment" to "MIDDLE",
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         ),
                         "textFormat" to mapOf("fontSize" to 10)
                     )
@@ -696,7 +755,7 @@ object SheetProvisioner {
                 )
             )
             // Category Spend Formula (Col Z)
-            val spendFormula = """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!F4:F"), Y$rowNum, INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!I4:I")), 0)"""
+            val spendFormula = DashboardFormulaBuilder.buildCategorySpendFormula(rowNum)
             requests.add(
                 createCellRequest(
                     sheetId = dashboardSheetId,
@@ -709,7 +768,7 @@ object SheetProvisioner {
                         "verticalAlignment" to "MIDDLE",
                         "numberFormat" to mapOf(
                             "type" to "CURRENCY",
-                            "pattern" to "\"₹\"#,##0"
+                            "pattern" to CURRENCY_PATTERN
                         ),
                         "textFormat" to mapOf("fontSize" to 10)
                     )
@@ -789,6 +848,7 @@ object SheetProvisioner {
                         "backgroundColor" to settlementsHeaderBg,
                         "horizontalAlignment" to "CENTER",
                         "verticalAlignment" to "MIDDLE",
+                        "wrapStrategy" to "WRAP",
                         "textFormat" to mapOf(
                             "foregroundColor" to whiteColor,
                             "bold" to true,
@@ -799,7 +859,7 @@ object SheetProvisioner {
             )
         }
 
-        val iOwePeopleHeaders = listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date")
+        val iOwePeopleHeaders = listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date", "Status")
         iOwePeopleHeaders.forEachIndexed { cIdx, h ->
             requests.add(
                 createCellRequest(
@@ -811,6 +871,7 @@ object SheetProvisioner {
                         "backgroundColor" to settlementsHeaderBg,
                         "horizontalAlignment" to "CENTER",
                         "verticalAlignment" to "MIDDLE",
+                        "wrapStrategy" to "WRAP",
                         "textFormat" to mapOf(
                             "foregroundColor" to whiteColor,
                             "bold" to true,
@@ -820,6 +881,30 @@ object SheetProvisioner {
                 )
             )
         }
+
+        // Thin borders as in the live workbook: banners, the header row (A26:L26, no right edge on L26) and the query cells
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 23, endRow = 24, startCol = 0, endCol = 12))
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 24, endRow = 25, startCol = 0, endCol = 6))
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 24, endRow = 25, startCol = 7, endCol = 12))
+        requests.add(
+            mapOf(
+                "updateBorders" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to dashboardSheetId,
+                        "startRowIndex" to 25,
+                        "endRowIndex" to 26,
+                        "startColumnIndex" to 0,
+                        "endColumnIndex" to 12
+                    ),
+                    "top" to thinBorder(),
+                    "bottom" to thinBorder(),
+                    "left" to thinBorder(),
+                    "innerVertical" to thinBorder()
+                )
+            )
+        )
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 26, endRow = 27, startCol = 0, endCol = 1))
+        requests.add(outerBordersRequest(dashboardSheetId, startRow = 26, endRow = 27, startCol = 7, endCol = 8))
 
         // Row 27: Dynamic Two-Stage QUERY Formulas
         val theyOweMeQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:K"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
@@ -863,7 +948,7 @@ object SheetProvisioner {
 
         // 12. Dashboard Column Widths (matching iOS master reference)
         val dashboardColWidths = listOf(
-            0 to 68, 1 to 68, 2 to 68, 3 to 68, 4 to 93, 5 to 68, 6 to 10, 7 to 104, 8 to 59,
+            0 to 383, 1 to 68, 2 to 68, 3 to 68, 4 to 93, 5 to 68, 6 to 10, 7 to 104, 8 to 59,
             9 to 71, 10 to 84, 11 to 68, 12 to 68, 13 to 68, 14 to 68, 15 to 68, 16 to 68, 17 to 68,
             18 to 85, 19 to 20, 20 to 85, 21 to 98, 22 to 144, 23 to 96, 24 to 104, 25 to 85,
             26 to 85, 27 to 85, 28 to 85
@@ -1028,7 +1113,7 @@ object SheetProvisioner {
         )
 
         // 4. Populate Row 1 Title Banner
-        val bannerTitle = "EXPENSE LEDGER — ${tabTitle.uppercase()}"
+        val bannerTitle = monthTabBannerTitle(tabTitle)
         requests.add(
             mapOf(
                 "repeatCell" to mapOf(
@@ -1042,13 +1127,13 @@ object SheetProvisioner {
                     "cell" to mapOf(
                         "userEnteredValue" to mapOf("stringValue" to bannerTitle),
                         "userEnteredFormat" to mapOf(
-                            "backgroundColor" to darkNavyBg,
+                            "backgroundColor" to ledgerBannerBg,
                             "horizontalAlignment" to "CENTER",
                             "verticalAlignment" to "MIDDLE",
                             "textFormat" to mapOf(
                                 "foregroundColor" to whiteColor,
                                 "bold" to true,
-                                "fontSize" to 16
+                                "fontSize" to 14
                             )
                         )
                     ),
@@ -1084,11 +1169,12 @@ object SheetProvisioner {
                                 "backgroundColor" to color,
                                 "horizontalAlignment" to "CENTER",
                                 "verticalAlignment" to "MIDDLE",
-                                "textFormat" to mapOf(
-                                    "foregroundColor" to whiteColor,
-                                    "bold" to true,
-                                    "fontSize" to 10
-                                )
+                                "textFormat" to buildMap {
+                                    put("foregroundColor", whiteColor)
+                                    put("bold", true)
+                                    // Live: the group titles inherit the default size, the blank spacer cells are size 11
+                                    if (title.isEmpty()) put("fontSize", 11)
+                                }
                             )
                         ),
                         "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
@@ -1097,11 +1183,10 @@ object SheetProvisioner {
             )
         }
 
-        // Thin borders around each row 2 block (A2:K2, L2, M2:T2, U2, V2:AB2), as in the iOS reference
-        sectionDefs.forEach { (startCol, endCol, _) ->
-            requests.add(
-                outerBordersRequest(sheetId, startRow = 1, endRow = 2, startCol = startCol, endCol = endCol)
-            )
+        // Row 2 borders exactly as in the live workbook: A2 and L2 top, bottom and left; M2 bottom only;
+        // U2 and V2 top and bottom. (The merged blocks carry their borders on the first cell.)
+        ROW2_BORDER_SIDES.forEach { (col, sides) ->
+            requests.add(cellBordersRequest(sheetId, row = 1, col = col, sides = sides))
         }
 
         // Fill Spacer columns L and U with #ECEFF1 across all rows (0 to 1000)
@@ -1147,8 +1232,8 @@ object SheetProvisioner {
 
         // Exact Column Widths matching iOS master template
         val colWidths = listOf(
-            0 to 90, 1 to 75, 2 to 80, 3 to 140, 4 to 100, 5 to 110, 6 to 100, 7 to 120, 8 to 90,
-            9 to 90, 10 to 80, 11 to 10, 12 to 90, 13 to 112, 14 to 90, 15 to 112, 16 to 120,
+            0 to 90, 1 to 129, 2 to 80, 3 to 160, 4 to 100, 5 to 110, 6 to 100, 7 to 120, 8 to 90,
+            9 to 90, 10 to 80, 11 to 10, 12 to 90, 13 to 75, 14 to 90, 15 to 100, 16 to 120,
             17 to 125, 18 to 115, 19 to 115, 20 to 10, 21 to 95, 22 to 75, 23 to 95, 24 to 120,
             25 to 110, 26 to 95, 27 to 115
         )
@@ -1194,9 +1279,9 @@ object SheetProvisioner {
                     "fontSize" to 9
                 )
             )
-            // The iOS reference has a vertical alignment and thin borders on A3:Y3 only; Z3:AB3 are plain
+            format["verticalAlignment"] = "MIDDLE"
+            // Thin borders on A3:Y3 only, as in the live workbook
             if (colIdx <= ROW3_LAST_BORDERED_COL) {
-                format["verticalAlignment"] = "MIDDLE"
                 format["borders"] = thinBorders()
             }
             mapOf(
@@ -1222,6 +1307,26 @@ object SheetProvisioner {
             )
         )
 
+        // Reaffirm the A3:Y3 grid through one range request so the shared edges (for example K3 and S3) are written
+        requests.add(
+            mapOf(
+                "updateBorders" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "startRowIndex" to 2,
+                        "endRowIndex" to 3,
+                        "startColumnIndex" to 0,
+                        "endColumnIndex" to ROW3_LAST_BORDERED_COL + 1
+                    ),
+                    "top" to thinBorder(),
+                    "bottom" to thinBorder(),
+                    "left" to thinBorder(),
+                    "right" to thinBorder(),
+                    "innerVertical" to thinBorder()
+                )
+            )
+        )
+
         // 7. Column Number Formatting on Data Rows (Rows 4 to targetRowCount)
         // Currency Columns: Total Amount (6), My Share (8), Owed To Me (9), Inflow Amount (18), Payable Amount (25)
         listOf(6, 8, 9, 18, 25).forEach { colIdx ->
@@ -1231,7 +1336,7 @@ object SheetProvisioner {
                     startCol = colIdx,
                     endCol = colIdx + 1,
                     formatType = "CURRENCY",
-                    pattern = "\"₹\"#,##0",
+                    pattern = CURRENCY_PATTERN,
                     align = "RIGHT",
                     endRow = targetRowCount
                 )
@@ -1355,7 +1460,7 @@ object SheetProvisioner {
                         )
                     )
                 ),
-                "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,numberFormat)"
+                "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,numberFormat,wrapStrategy)"
             )
         )
     }
