@@ -97,7 +97,7 @@
     <string name="action_retry_workspace">Retry Workspace Setup</string>
 
     <!-- Dashboard & Home Screen -->
-    <string name="dashboard_hero_burn_title">Living burn this month</string>
+    <string name="dashboard_hero_burn_title">Living burn</string>
     <string name="dashboard_burn_subtitle">Daily avg %1$s · Last month %2$s</string>
     <string name="dashboard_owed_to_me">Owed to me</string>
     <string name="dashboard_i_owe">I owe</string>
