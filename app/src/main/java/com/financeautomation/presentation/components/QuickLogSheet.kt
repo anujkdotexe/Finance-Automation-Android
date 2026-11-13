@@ -522,3 +522,32 @@ private fun CategoryChipIcon(
         modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
     )
 }
+
+@androidx.compose.ui.tooling.preview.Preview(name = "QuickLogSheet Font 1.3 - 360dp", widthDp = 360, fontScale = 1.3f, showBackground = true)
+@Composable
+private fun QuickLogSheetPreviewLarge() {
+    com.financeautomation.presentation.theme.FinanceAutomationTheme {
+        androidx.compose.material3.Surface {
+            QuickLogSheet(
+                state = QuickLogUiState(
+                    amountText = "450.00",
+                    amount = 450.0,
+                    payee = "Swiggy Bangalore",
+                    selectedCategory = "Food & Drink",
+                    selectedAccount = "HDFC"
+                ),
+                onAmountChanged = {},
+                onPayeeChanged = {},
+                onAccountSelected = {},
+                onCategorySelected = {},
+                onSplitModeChanged = {},
+                onCompanionToggled = {},
+                onAddCompanion = {},
+                onCustomShareChanged = {},
+                onEndTrip = {},
+                onConfirmAndSave = {},
+                onDismiss = {}
+            )
+        }
+    }
+}

@@ -304,18 +304,24 @@ fun SyncBackupScreen(
             ) {
                 if (state.developerMode) {
                     var spreadsheetInput by remember(state.spreadsheetId) { mutableStateOf(state.spreadsheetId) }
-                    OutlinedTextField(
-                        value = spreadsheetInput,
-                        onValueChange = { spreadsheetInput = it },
-                        label = { Text(stringResource(R.string.settings_spreadsheet_id_label)) },
-                        placeholder = { Text(stringResource(R.string.settings_spreadsheet_id_placeholder)) },
-                        singleLine = true,
-                        shape = FinanceTheme.shapes.medium,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = stringResource(R.string.settings_spreadsheet_id_label),
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = spreadsheetInput,
+                            onValueChange = { spreadsheetInput = it },
+                            placeholder = { Text(stringResource(R.string.settings_spreadsheet_id_placeholder), style = FinanceTheme.typography.bodyMedium) },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     OutlinedButton(
                         onClick = { viewModel.onSpreadsheetIdChanged(spreadsheetInput) },
-                        shape = FinanceTheme.shapes.medium,
+                        shape = FinanceShapes.pill,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(

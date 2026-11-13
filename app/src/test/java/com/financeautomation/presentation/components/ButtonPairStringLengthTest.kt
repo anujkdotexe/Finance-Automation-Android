@@ -48,7 +48,15 @@ class ButtonPairStringLengthTest {
             "action_retry",
             "action_edit",
             "action_confirm",
-            "action_void"
+            "action_void",
+            "error_53_action_open_console",
+            "error_54_action_manual",
+            "error_54_action_settings",
+            "error_55_action_dashboard",
+            "error_55_action_retry",
+            "onboarding_notif_action_skip",
+            "action_skip",
+            "action_skip_this_time"
         )
 
         for (i in 0 until stringNodes.length) {

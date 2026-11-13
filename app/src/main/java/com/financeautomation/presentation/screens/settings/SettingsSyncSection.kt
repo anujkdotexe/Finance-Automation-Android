@@ -92,15 +92,21 @@ fun SettingsSyncSection(
             subtitle = stringResource(R.string.settings_sync_desc),
             icon = Icons.Rounded.CloudSync
         ) {
-            OutlinedTextField(
-                value = spreadsheetInput,
-                onValueChange = { spreadsheetInput = it },
-                label = { Text(stringResource(R.string.settings_spreadsheet_id_label)) },
-                placeholder = { Text(stringResource(R.string.settings_spreadsheet_id_placeholder)) },
-                singleLine = true,
-                shape = FinanceTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                Text(
+                    text = stringResource(R.string.settings_spreadsheet_id_label),
+                    style = FinanceTheme.typography.labelMedium,
+                    color = FinanceTheme.colors.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = spreadsheetInput,
+                    onValueChange = { spreadsheetInput = it },
+                    placeholder = { Text(stringResource(R.string.settings_spreadsheet_id_placeholder), style = FinanceTheme.typography.bodyMedium) },
+                    singleLine = true,
+                    shape = FinanceTheme.shapes.card,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

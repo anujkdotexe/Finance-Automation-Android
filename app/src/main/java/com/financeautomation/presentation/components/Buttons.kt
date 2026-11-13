@@ -49,7 +49,6 @@ fun FilledButton(
     enabled: Boolean = true,
     isLoading: Boolean = false
 ) {
-    val displayLabel = if (text.length > 20) text.take(20) else text
     Button(
         onClick = onClick,
         enabled = enabled && !isLoading,
@@ -60,7 +59,7 @@ fun FilledButton(
             disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         ),
-        contentPadding = PaddingValues(horizontal = FinanceTheme.spacing.l),
+        contentPadding = PaddingValues(horizontal = FinanceTheme.spacing.m),
         modifier = modifier
             .height(FinanceTheme.sizes.buttonHeight)
             .defaultMinSize(minHeight = FinanceTheme.sizes.buttonHeight)
@@ -73,9 +72,10 @@ fun FilledButton(
             )
         } else {
             Text(
-                text = displayLabel,
+                text = text,
                 style = FinanceTheme.typography.titleSmall,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -94,7 +94,6 @@ fun OutlinedButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    val displayLabel = if (text.length > 20) text.take(20) else text
     val borderColor = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     val textColor = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
@@ -109,15 +108,16 @@ fun OutlinedButton(
             disabledContainerColor = Color.Transparent,
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         ),
-        contentPadding = PaddingValues(horizontal = FinanceTheme.spacing.l),
+        contentPadding = PaddingValues(horizontal = FinanceTheme.spacing.m),
         modifier = modifier
             .height(FinanceTheme.sizes.buttonHeight)
             .defaultMinSize(minHeight = FinanceTheme.sizes.buttonHeight)
     ) {
         Text(
-            text = displayLabel,
+            text = text,
             style = FinanceTheme.typography.titleSmall,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis
         )
     }

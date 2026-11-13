@@ -143,20 +143,36 @@ fun AccountsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
-                    OutlinedTextField(
-                        value = newAccountName,
-                        onValueChange = { newAccountName = it },
-                        label = { Text(stringResource(R.string.dialog_add_account_name)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = newAccountDigits,
-                        onValueChange = { if (it.length <= 4) newAccountDigits = it },
-                        label = { Text(stringResource(R.string.dialog_add_account_last4)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = stringResource(R.string.dialog_add_account_name),
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = newAccountName,
+                            onValueChange = { newAccountName = it },
+                            placeholder = { Text("e.g. HDFC Salary", style = FinanceTheme.typography.bodyMedium) },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = stringResource(R.string.dialog_add_account_last4),
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = newAccountDigits,
+                            onValueChange = { if (it.length <= 4) newAccountDigits = it },
+                            placeholder = { Text("e.g. 1234", style = FinanceTheme.typography.bodyMedium) },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             },
             confirmButton = {
