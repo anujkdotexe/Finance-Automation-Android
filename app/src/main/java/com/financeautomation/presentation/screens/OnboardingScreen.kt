@@ -67,7 +67,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.financeautomation.R
+import com.financeautomation.presentation.components.AttentionCard
 import com.financeautomation.presentation.components.FilledButton
+import com.financeautomation.presentation.health.AttentionIssue
+import com.financeautomation.presentation.health.AttentionState
+import com.financeautomation.presentation.health.attentionContent
+import com.financeautomation.presentation.health.attentionState
 import com.financeautomation.presentation.components.LinkButton
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -262,52 +267,38 @@ fun OnboardingScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
             ) {
-                // Step 1: Connect Google Sheet
-                ChecklistCard(
-                    isCompleted = isStep1Done && isStep2Done,
-                    isLoading = state.step1State == StepState.IN_PROGRESS || state.step2State == StepState.IN_PROGRESS,
-                    defaultIcon = Icons.Rounded.TableChart,
-                    title = stringResource(R.string.onboarding_checklist_step1_title),
-                    subtitle = if (isStep2Done) {
-                        state.workbookName.ifBlank { stringResource(R.string.onboarding_checklist_step1_default_sheet) }
-                    } else if (isStep1Done) {
-                        state.googleAccountEmail ?: stringResource(R.string.onboarding_checklist_step1_default_sheet)
-                    } else {
-                        stringResource(R.string.onboarding_checklist_step1_default_sheet)
-                    },
-                    statusText = if (isStep1Done && isStep2Done) stringResource(R.string.onboarding_checklist_step1_connected) else null,
-                    needsAttention = !(isStep1Done && isStep2Done) &&
-                        state.step1State != StepState.IN_PROGRESS && state.step2State != StepState.IN_PROGRESS,
-                    actionButtonText = when {
-                        state.step1State == StepState.IN_PROGRESS || state.step2State == StepState.IN_PROGRESS -> null
-                        !isStep1Done -> stringResource(R.string.onboarding_sign_in)
-                        state.step2State == StepState.ERROR -> stringResource(R.string.action_retry_workspace)
-                        !isStep2Done -> stringResource(R.string.onboarding_set_up_workbook)
-                        else -> null
-                    },
-                    onActionClick = {
-                        if (!isStep1Done) {
+                // Step 1: sign in, then the workbook. One shared card per problem, with the one button that fixes it.
+                val signInWorking = state.step1State == StepState.IN_PROGRESS
+                val workbookWorking = state.step2State == StepState.IN_PROGRESS
+                if (!isStep1Done) {
+                    AttentionCard(
+                        content = attentionContent(AttentionIssue.SIGN_IN, attentionState(ok = false, working = signInWorking)),
+                        detail = state.step1Error?.asString(context),
+                        onAction = {
                             try {
                                 googleSignInLauncher.launch(googleSignInClient.signInIntent)
                             } catch (_: Exception) {
                                 viewModel.startSignIn()
                             }
-                        } else {
-                            viewModel.startWorkspaceProvisioning(forceValidateTabs = state.step2State == StepState.ERROR)
                         }
-                    }
-                )
+                    )
+                } else {
+                    AttentionCard(
+                        content = attentionContent(AttentionIssue.SIGN_IN, AttentionState.OK),
+                        detail = state.googleAccountEmail,
+                        onAction = {}
+                    )
+                    AttentionCard(
+                        content = attentionContent(AttentionIssue.WORKBOOK, attentionState(ok = isStep2Done, working = workbookWorking)),
+                        detail = if (isStep2Done) state.workbookName.ifBlank { null } else state.step2Error?.asString(context),
+                        onAction = { viewModel.startWorkspaceProvisioning(forceValidateTabs = state.step2State == StepState.ERROR) }
+                    )
+                }
 
-                // Step 2: Notification access
-                ChecklistCard(
-                    isCompleted = isStep3Done,
-                    isLoading = false,
-                    defaultIcon = Icons.Rounded.Notifications,
-                    title = stringResource(R.string.onboarding_checklist_step2_title),
-                    subtitle = stringResource(R.string.onboarding_checklist_step2_desc),
-                    statusText = if (isStep3Done) stringResource(R.string.onboarding_checklist_step2_active) else null,
-                    actionButtonText = if (!isStep3Done) stringResource(R.string.onboarding_checklist_step2_grant) else null,
-                    onActionClick = {
+                // Step 2: notification access
+                AttentionCard(
+                    content = attentionContent(AttentionIssue.NOTIFICATION_ACCESS, attentionState(ok = isStep3Done)),
+                    onAction = {
                         val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         }
@@ -317,142 +308,13 @@ fun OnboardingScreen(
                     }
                 )
 
-                // Step 3: Default account
-                ChecklistCard(
-                    isCompleted = true,
-                    isLoading = false,
-                    defaultIcon = Icons.Rounded.CreditCard,
-                    title = stringResource(R.string.onboarding_checklist_step3_title),
-                    subtitle = stringResource(R.string.onboarding_checklist_step3_desc),
-                    statusText = stringResource(R.string.onboarding_checklist_step3_configured),
-                    actionButtonText = null,
-                    onActionClick = null
+                // Step 3: accounts (a default account is created with the workbook)
+                AttentionCard(
+                    content = attentionContent(AttentionIssue.ACCOUNTS, AttentionState.OK),
+                    onAction = {}
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun ChecklistCard(
-    isCompleted: Boolean,
-    isLoading: Boolean,
-    defaultIcon: ImageVector,
-    title: String,
-    subtitle: String,
-    statusText: String?,
-    actionButtonText: String?,
-    onActionClick: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-    needsAttention: Boolean = false
-) {
-    Surface(
-        color = FinanceTheme.colors.surfaceContainerLowest,
-        shape = FinanceShapes.large,
-        shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-        modifier = modifier
-            .fillMaxWidth()
-            .border(
-                width = if (needsAttention) FinanceTheme.sizes.strokeThick else FinanceTheme.sizes.strokeThin,
-                color = if (needsAttention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                shape = FinanceShapes.large
-            )
-    ) {
-      Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(FinanceTheme.spacing.m),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(FinanceTheme.sizes.icon32)
-                        .clip(CircleShape)
-                        .background(
-                            if (isCompleted) MaterialTheme.colorScheme.primaryContainer
-                            else FinanceTheme.colors.surfaceContainer
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(FinanceTheme.sizes.icon18),
-                            strokeWidth = FinanceTheme.sizes.strokeThin,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else if (isCompleted) {
-                        Icon(
-                            imageVector = Icons.Rounded.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(FinanceTheme.sizes.icon18)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = defaultIcon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(FinanceTheme.sizes.icon18)
-                        )
-                    }
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = FinanceTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = subtitle,
-                        style = FinanceTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
-
-            if (statusText != null) {
-                Text(
-                    text = statusText,
-                    style = FinanceTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs)
-                )
-            } else if (needsAttention) {
-                Text(
-                    text = stringResource(R.string.onboarding_needs_attention),
-                    style = FinanceTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs)
-                )
-            }
-        }
-        if (actionButtonText != null && onActionClick != null) {
-            FilledButton(
-                text = actionButtonText,
-                onClick = onActionClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = FinanceTheme.spacing.m, end = FinanceTheme.spacing.m, bottom = FinanceTheme.spacing.m)
-            )
-        }
-      }
     }
 }
 

@@ -93,11 +93,11 @@ class OnboardingStateTest {
     }
 
     @Test
-    fun theSignInStepIsHighlightedAndHasAPrimaryButton() {
-        assertTrue(screen.contains("R.string.onboarding_needs_attention"))
-        assertTrue(screen.contains("MaterialTheme.colorScheme.error"))
-        assertTrue(screen.contains("FilledButton("))
-        assertTrue(screen.contains("R.string.onboarding_sign_in"))
+    fun theSignInStepUsesTheSharedAttentionCard() {
+        assertTrue(screen.contains("AttentionCard("))
+        assertTrue(screen.contains("AttentionIssue.SIGN_IN"))
+        assertTrue(screen.contains("AttentionIssue.WORKBOOK"))
+        assertFalse("no private card style is left", screen.contains("private fun ChecklistCard"))
     }
 
     @Test
