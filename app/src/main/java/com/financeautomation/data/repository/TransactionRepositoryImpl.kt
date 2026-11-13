@@ -91,7 +91,7 @@ class TransactionRepositoryImpl(
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val nettingUseCase: NettingUseCase = NettingUseCase(),
     private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
-    var accountingSyncExecutor: AccountingSyncExecutor? = null,
+    val accountingSyncExecutor: AccountingSyncExecutor,
     var onTriggerSync: (() -> Unit)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TransactionRepository {
@@ -111,7 +111,7 @@ class TransactionRepositoryImpl(
         calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
         nettingUseCase: NettingUseCase = NettingUseCase(),
         voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
-        accountingSyncExecutor: AccountingSyncExecutor? = null,
+        accountingSyncExecutor: AccountingSyncExecutor,
         onTriggerSync: (() -> Unit)? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
@@ -167,24 +167,6 @@ class TransactionRepositoryImpl(
 
     private suspend fun resolveInflowDao(): InflowDao? =
         inflowDao ?: inflowDaoProvider?.invoke() ?: databaseProvider?.invoke()?.inflowDao()
-
-    private fun resolveExecutor(): AccountingSyncExecutor {
-        accountingSyncExecutor?.let { return it }
-        val dummyTokenProvider = object : com.financeautomation.data.remote.TokenProvider {
-            override fun getAccessToken(): String? = null
-            override fun refreshAccessToken(): String? = null
-        }
-        val sheets = googleSheetsClient ?: GoogleSheetsClient(okhttp3.OkHttpClient(), dummyTokenProvider)
-        val drive = com.financeautomation.data.remote.GoogleDriveClient(okhttp3.OkHttpClient(), dummyTokenProvider)
-        return AccountingSyncExecutor(
-            googleSheetsClient = sheets,
-            googleDriveClient = drive,
-            syncQueueDao = syncQueueDao,
-            transactionDao = transactionDao,
-            syncQueueDaoProvider = syncQueueDaoProvider,
-            transactionDaoProvider = transactionDaoProvider
-        )
-    }
 
     override fun getTransactions(): Flow<List<Transaction>> = flow {
         val dao = resolveTransactionDao()
@@ -733,14 +715,14 @@ class TransactionRepositoryImpl(
 
                     val executor = accountingSyncExecutor
                     val opResult = when (item.operationType) {
-                        SyncQueueEntity.OP_LOG_CREDIT -> executor?.executeLogCredit(item, spreadsheetId, opTabName)
-                        SyncQueueEntity.OP_VOID_INFLOW -> executor?.executeVoidInflow(item, spreadsheetId, opTabName)
-                        SyncQueueEntity.OP_LOG_PAYABLE -> executor?.executeLogPayable(item, spreadsheetId, opTabName)
-                        SyncQueueEntity.OP_LOG_REPAYMENT -> executor?.executeLogRepayment(item, spreadsheetId, opTabName)
-                        SyncQueueEntity.OP_CARRY_FORWARD -> executor?.executeCarryForward(item, spreadsheetId)
-                        SyncQueueEntity.OP_YEAR_CLOSE -> executor?.executeYearClose(item, spreadsheetId)
+                        SyncQueueEntity.OP_LOG_CREDIT -> executor.executeLogCredit(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_VOID_INFLOW -> executor.executeVoidInflow(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_LOG_PAYABLE -> executor.executeLogPayable(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_LOG_REPAYMENT -> executor.executeLogRepayment(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_CARRY_FORWARD -> executor.executeCarryForward(item, spreadsheetId)
+                        SyncQueueEntity.OP_YEAR_CLOSE -> executor.executeYearClose(item, spreadsheetId)
                         else -> Result.Success(Unit)
-                    } ?: Result.Success(Unit)
+                    }
 
                     if (opResult is Result.Success) {
                         syncQueueDao.deleteById(item.id)
@@ -861,7 +843,7 @@ class TransactionRepositoryImpl(
                             payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(cfReq)
                         )
                         syncQueueDao.insert(cfQueueItem)
-                        val cfRes = accountingSyncExecutor?.executeCarryForward(cfQueueItem, spreadsheetId)
+                        val cfRes = accountingSyncExecutor.executeCarryForward(cfQueueItem, spreadsheetId)
                         if (cfRes is Result.Success) {
                             syncQueueDao.deleteById(cfQueueItem.id)
                         }
@@ -1388,7 +1370,7 @@ class TransactionRepositoryImpl(
         }
 
         // Step 3: Apply plan edits and settled references locally to Room database via executor
-        resolveExecutor().applyPlanToLocalDatabase(plan)
+        accountingSyncExecutor.applyPlanToLocalDatabase(plan)
 
         return Result.Success(debitRow ?: lastAppendedRow)
     }

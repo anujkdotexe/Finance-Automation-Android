@@ -196,7 +196,8 @@ class TripModeLeakTest {
         val txnRepo = TransactionRepositoryImpl(
             transactionDao = tDao,
             syncQueueDao = qDao,
-            preferencesRepository = prefsRepo
+            preferencesRepository = prefsRepo,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor()
         )
 
         val logExpenseUseCase = LogExpenseUseCase(txnRepo)

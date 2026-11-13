@@ -76,6 +76,7 @@ class TransactionRepositoryInflowTest {
             transactionDao = transactionDao,
             syncQueueDao = syncQueueDao,
             inflowDao = inflowDao,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(syncQueueDao = syncQueueDao, transactionDao = transactionDao),
             ioDispatcher = Dispatchers.Unconfined
         )
 
@@ -122,6 +123,7 @@ class TransactionRepositoryInflowTest {
             transactionDao = transactionDao,
             syncQueueDao = syncQueueDao,
             inflowDao = inflowDao,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(syncQueueDao = syncQueueDao, transactionDao = transactionDao),
             ioDispatcher = Dispatchers.Unconfined
         )
 
@@ -156,6 +158,7 @@ class TransactionRepositoryInflowTest {
             transactionDao = transactionDao,
             syncQueueDao = syncQueueDao,
             inflowDao = inflowDao,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(syncQueueDao = syncQueueDao, transactionDao = transactionDao),
             ioDispatcher = Dispatchers.Unconfined
         )
 
