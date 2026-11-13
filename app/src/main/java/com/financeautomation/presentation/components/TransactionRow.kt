@@ -102,7 +102,7 @@ fun TransactionRow(
                 )
 
                 if (isVoid) {
-                    StatusChip(status = "Voided")
+                    StatusChip(status = "VOID")
                 }
             }
 
@@ -274,7 +274,7 @@ fun InflowRow(
                     )
 
                     if (isVoid) {
-                        StatusChip(status = "Voided")
+                        StatusChip(status = "VOID")
                     }
                 }
 

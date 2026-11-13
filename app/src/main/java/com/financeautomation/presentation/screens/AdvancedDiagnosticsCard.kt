@@ -53,7 +53,6 @@ fun AdvancedDiagnosticsCard(
     var rawErrors by remember { mutableStateOf<List<RawHttpErrorEntry>>(emptyList()) }
     var expandedIndex by remember { mutableStateOf<Int?>(-1) }
     val scope = rememberCoroutineScope()
-    val dateFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -130,7 +129,7 @@ fun AdvancedDiagnosticsCard(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = dateFormat.format(Date(record.timestamp)),
+                                    text = com.financeautomation.core.utils.DisplayDateTime.clock24(record.timestamp),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant

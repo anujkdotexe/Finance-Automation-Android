@@ -19,6 +19,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.financeautomation.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,7 +111,7 @@ fun StatusChip(
             )
         }
         Text(
-            text = if (upper == "VOID" || upper == "VOIDED") "Voided" else normalized,
+            text = if (upper == "VOID" || upper == "VOIDED") stringResource(R.string.status_voided) else normalized,
             style = FinanceTheme.typography.numericMicro,
             color = textColor,
             maxLines = 1,

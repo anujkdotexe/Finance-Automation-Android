@@ -18,3 +18,10 @@ fun stripVoidPrefix(text: String?): String {
         trimmed
     }
 }
+
+/**
+ * True when [text] contains [query] (already lower case and trimmed), looking at the description without the
+ * "[Void] " prefix, so a search for "void" does not match every voided row.
+ */
+fun matchesSearch(text: String?, query: String): Boolean =
+    stripVoidPrefix(text).lowercase().contains(query)

@@ -337,12 +337,10 @@ fun EmptyInboxState(
 }
 
 private fun formatDueEpochDay(epochDay: Long, todayLabel: String): String {
-    val todayEpochDay = System.currentTimeMillis() / (24 * 60 * 60 * 1000L)
-    return if (epochDay == todayEpochDay) {
+    return if (epochDay == com.financeautomation.core.utils.DisplayDateTime.todayEpochDay()) {
         todayLabel
     } else {
-        val millis = epochDay * 24 * 60 * 60 * 1000L
-        SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(millis))
+        com.financeautomation.core.utils.DisplayDateTime.epochDay(epochDay)
     }
 }
 

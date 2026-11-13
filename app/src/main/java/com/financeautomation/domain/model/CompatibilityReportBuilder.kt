@@ -152,7 +152,7 @@ object CompatibilityReportBuilder {
         // 6. Daily Pipeline Funnel & Heartbeat
         sb.appendLine("## 6. Daily Pipeline Funnel & Heartbeat")
         val heartbeatStr = if (data.lastHeartbeatTime > 0L) {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(data.lastHeartbeatTime))
+            com.financeautomation.core.utils.DisplayDateTime.dateTimeIso(data.lastHeartbeatTime)
         } else {
             "Never"
         }
