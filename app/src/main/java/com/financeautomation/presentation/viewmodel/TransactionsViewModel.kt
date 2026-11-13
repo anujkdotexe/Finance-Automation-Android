@@ -395,7 +395,7 @@ class TransactionsViewModel(
 
             if (query.isNotBlank()) {
                 val q = query.trim().lowercase()
-                val matchMerchant = txn.merchant.lowercase().contains(q)
+                val matchMerchant = com.financeautomation.core.utils.matchesSearch(txn.merchant, q)
                 val matchCompanions = txn.companions.lowercase().contains(q)
                 val matchCategory = txn.category.lowercase().contains(q)
                 if (!matchMerchant && !matchCompanions && !matchCategory) {
@@ -475,9 +475,9 @@ class TransactionsViewModel(
 
             if (query.isNotBlank()) {
                 val q = query.trim().lowercase()
-                val matchSource = inf.source.lowercase().contains(q)
+                val matchSource = com.financeautomation.core.utils.matchesSearch(inf.source, q)
                 val matchType = inf.inflowType.lowercase().contains(q)
-                val matchNote = inf.note.lowercase().contains(q)
+                val matchNote = com.financeautomation.core.utils.matchesSearch(inf.note, q)
                 val matchAccount = inf.account.lowercase().contains(q)
                 if (!matchSource && !matchType && !matchNote && !matchAccount) {
                     return@filter false

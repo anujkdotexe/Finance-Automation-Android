@@ -15,7 +15,7 @@ object NotificationPreFilter {
 
     fun shouldReadFullText(sourcePackage: String, title: String, textPrefix: String): Boolean {
         if (!PackageWhitelist.isSmsPackage(sourcePackage)) return true
-        if (RegexPatterns.isPersonalSender(title)) return false
+        if (!RegexPatterns.isBankSenderId(title)) return false
         val head = "$title. ${textPrefix.take(PREFIX_LENGTH)}"
         return RegexPatterns.hasFinancialKeywords(head)
     }

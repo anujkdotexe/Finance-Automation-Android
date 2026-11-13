@@ -12,6 +12,8 @@ import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.usecase.MonthBurnSummary
 import com.financeautomation.domain.usecase.MonthBurnSummaryUseCase
+import com.financeautomation.domain.usecase.LivingBurn
+import com.financeautomation.domain.usecase.WidgetSyncState
 import com.financeautomation.presentation.ui.AppRoutes
 import com.financeautomation.presentation.ui.MainActivity
 import com.financeautomation.service.worker.MonthBurnWidgetWorker
@@ -78,8 +80,20 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, MonthBurnWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            val summary = loadSummary(context)
-            val content = MonthBurnWidgetFormatter.format(summary, labels(context))
+            val container = (context.applicationContext as FinanceApplication).appContainer
+            container.ensureAppLockStarted()
+            val appLockOn = container.appLockManager.isEnabled
+            // With the app lock on no figure is read or shown; only the month name and the unlock hint
+            val summary = if (appLockOn) {
+                val today = java.time.LocalDate.now(LivingBurn.KOLKATA)
+                MonthBurnSummary(
+                    year = today.year, month = today.monthValue, livingBurn = 0.0, perDayAverage = 0.0,
+                    daysElapsed = today.dayOfMonth, syncState = WidgetSyncState.UpToDate
+                )
+            } else {
+                loadSummary(context)
+            }
+            val content = MonthBurnWidgetFormatter.format(summary, labels(context), appLockOn = appLockOn)
             for (id in ids) {
                 manager.updateAppWidget(id, buildViews(context, content, id))
             }
@@ -102,7 +116,8 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
             perDayTemplate = context.getString(R.string.widget_month_burn_per_day),
             upToDate = context.getString(R.string.widget_month_burn_up_to_date),
             waitingTemplate = context.getString(R.string.widget_month_burn_waiting),
-            descriptionTemplate = context.getString(R.string.widget_month_burn_description)
+            descriptionTemplate = context.getString(R.string.widget_month_burn_description),
+            unlockToView = context.getString(R.string.widget_month_burn_unlock)
         )
 
         private fun buildViews(context: Context, content: MonthBurnWidgetContent, appWidgetId: Int): RemoteViews {

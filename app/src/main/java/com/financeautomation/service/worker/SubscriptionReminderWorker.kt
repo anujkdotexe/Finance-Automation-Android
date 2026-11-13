@@ -51,7 +51,7 @@ class SubscriptionReminderWorker(
             runCheck(
                 repository = container.subscriptionRepository,
                 scheduleUseCase = SubscriptionScheduleUseCase(),
-                notifier = SubscriptionNotifier(applicationContext),
+                notifier = SubscriptionNotifier(applicationContext, appLockOn = com.financeautomation.service.NotificationPrivacy.isAppLockOn(applicationContext)),
                 todayEpochDay = today
             )
             Result.success()
@@ -101,18 +101,40 @@ class SubscriptionReminderWorker(
             return Duration.between(now, next)
         }
 
-        /** Schedules the daily worker at [reminderTime]; calling again with a new time reschedules it. */
+        private const val TIME_TAG_PREFIX = "reminder_time:"
+
+        fun timeTag(time: String): String = TIME_TAG_PREFIX + time
+
+        fun timeFromTags(tags: Set<String>): String? =
+            tags.firstOrNull { it.startsWith(TIME_TAG_PREFIX) }?.removePrefix(TIME_TAG_PREFIX)
+
+        /**
+         * KEEP while the pending run was scheduled for the same time, so opening the app never cancels a run that is
+         * about to fire; otherwise (new time, or nothing pending) replace it.
+         */
+        fun policyFor(existingTags: Set<String>?, newTime: String): ExistingPeriodicWorkPolicy =
+            if (existingTags != null && timeFromTags(existingTags) == newTime) {
+                ExistingPeriodicWorkPolicy.KEEP
+            } else {
+                ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE
+            }
+
+        /** Schedules the daily worker at [reminderTime]. Call from a background thread. A changed time reschedules it. */
         fun schedule(context: Context, reminderTime: String) {
+            val manager = WorkManager.getInstance(context)
+            val pendingTags = try {
+                manager.getWorkInfosForUniqueWork(WORK_NAME).get()
+                    .firstOrNull { !it.state.isFinished }?.tags
+            } catch (e: Exception) {
+                null
+            }
             val request = PeriodicWorkRequestBuilder<SubscriptionReminderWorker>(
                 24, TimeUnit.HOURS, FLEX_MINUTES, TimeUnit.MINUTES
             )
                 .setInitialDelay(initialDelay(reminderTime).toMillis(), TimeUnit.MILLISECONDS)
+                .addTag(timeTag(reminderTime))
                 .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME,
-                ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
-                request
-            )
+            manager.enqueueUniquePeriodicWork(WORK_NAME, policyFor(pendingTags, reminderTime), request)
         }
 
         /** Developer mode: runs the check once, immediately. */

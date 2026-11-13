@@ -382,7 +382,7 @@ class DashboardViewModel(
             .sortedBy { it.createdAt }
             .mapNotNull { item ->
                 val txn = byId[item.transactionId] ?: return@mapNotNull null
-                QueuedItem(name = txn.merchant, amount = txn.totalAmount, createdAt = item.createdAt)
+                QueuedItem(name = com.financeautomation.core.utils.stripVoidPrefix(txn.merchant), amount = txn.totalAmount, createdAt = item.createdAt)
             }
     }
 

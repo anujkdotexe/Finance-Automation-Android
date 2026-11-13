@@ -295,8 +295,10 @@ class DefaultAppContainer(
     override suspend fun ensureAppLockStarted() {
         if (appLockManager.isStarted) return
         val prefs = preferencesRepository
+        val lockOn = prefs.getAppLockEnabled()
         privacySettings.set(prefs.getHideRecentsPreview())
-        appLockManager.onColdStart(prefs.getAppLockEnabled())
+        privacySettings.setAppLockOn(lockOn)
+        appLockManager.onColdStart(lockOn)
     }
 
     override val budgetRepository: BudgetRepository by lazy {
@@ -541,7 +543,7 @@ class DefaultAppContainer(
                 ensureAppLockStarted()
                 appLockManager.isLockedNow()
             },
-            hidePreview = { privacySettings.hideRecentsPreview.value },
+            hidePreview = { privacySettings.secure.value },
             subscriptionRepository = subscriptionRepository
         )
     }

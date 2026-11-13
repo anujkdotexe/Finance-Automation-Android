@@ -19,7 +19,7 @@ object RegexPatterns {
 
     // Merchant / Payee regex extracting business names or VPAs
     val MERCHANT_REGEX: Regex = Regex(
-        """(?:paid\s+to|sent\s+to|transferred\s+to|trf\s+to|towards|to|at|vpa)\s+([A-Za-z0-9\s&._\-@]+?)(?:,\s*|\s+on\b|\.(?!\d)|$|\s+ref\b|\s+using\b|\s+via\b|\s+through\b|\s+utr\b|\s+a/c\b|\s+avl\b|\s+bal\b|\b\d{12}\b)""",
+        """\b(?:paid\s+to|sent\s+to|transferred\s+to|trf\s+to|towards|to|at|vpa)\s+([A-Za-z0-9\s&._\-@]+?)(?:,\s*|\s+on\b|\.(?!\d)|$|\s+ref\b|\s+using\b|\s+via\b|\s+through\b|\s+utr\b|\s+a/c\b|\s+avl\b|\s+bal\b|\b\d{12}\b)""",
         RegexOption.IGNORE_CASE
     )
 
@@ -34,8 +34,17 @@ object RegexPatterns {
 
     // UPI Virtual Payment Address (VPA) regex
     val VPA_REGEX: Regex = Regex(
-        """\b([a-zA-Z0-9.\-_]+@[a-zA-Z0-9]+)\b"""
+        """\b([a-zA-Z0-9.\-_]+@[a-zA-Z0-9]+)\b(?!\.[a-zA-Z])"""
     )
+
+    // The amount tied to a debit or credit verb: "debited Rs 450", "spent INR 349", "Rs 200 paid"
+    private val AMOUNT_NEXT_TO_VERB_REGEX: Regex = Regex(
+        """(?i)\b(?:debit(?:ed)?|spent|paid|withdrawn|sent|deducted|purchase|credited|received|refunded)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""" +
+            """|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|credited|received|refunded)\b"""
+    )
+
+    // Words that mark an amount as a balance or limit, not the payment
+    private val BALANCE_CONTEXT_REGEX: Regex = Regex("""(?i)(bal(?:ance)?|avl|avail(?:able)?|limit|outstanding|minimum|due)\W{0,12}$""")
 
     // Debit direction flag keywords
     val DEBIT_FLAG_REGEX: Regex = Regex(
@@ -105,7 +114,17 @@ object RegexPatterns {
      * Extracts parsed currency amount from arbitrary notification text.
      */
     fun extractAmount(text: String): Double? {
-        val match = AMOUNT_REGEX.find(text) ?: BANK_SMS_AMOUNT_REGEX.find(text)
+        // 1. The amount next to a debit or credit verb is the payment; a balance or limit mentioned first must not win
+        val near = AMOUNT_NEXT_TO_VERB_REGEX.find(text)
+        val nearRaw = near?.let { it.groupValues[1].ifEmpty { it.groupValues[2] } }
+        nearRaw?.replace(",", "")?.toDoubleOrNull()?.let { return it }
+        // 2. Otherwise the first amount that is not labelled as a balance or limit
+        val all = AMOUNT_REGEX.findAll(text).toList()
+        val preferred = all.firstOrNull { m ->
+            val before = text.substring((m.range.first - 25).coerceAtLeast(0), m.range.first)
+            !BALANCE_CONTEXT_REGEX.containsMatchIn(before)
+        }
+        val match = preferred ?: all.firstOrNull() ?: BANK_SMS_AMOUNT_REGEX.find(text)
         return match?.groupValues?.get(1)?.let { raw ->
             val clean = raw.replace(",", "")
             clean.toDoubleOrNull()
@@ -138,6 +157,18 @@ object RegexPatterns {
     fun isPersonalSender(sender: String): Boolean {
         val cleaned = sender.replace(" ", "").replace("-", "")
         return cleaned.startsWith("+") || (cleaned.length >= 7 && cleaned.all { it.isDigit() })
+    }
+
+    /**
+     * True for sender ids that look like a bank or payment header: letters and digits in capitals with dashes and no
+     * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK), or a 4 to 9 digit short code (56161, 5676766). Contact names such as
+     * "Rahul" or "Ravi Kumar", mixed or lower case words and personal phone numbers are not bank senders.
+     */
+    fun isBankSenderId(sender: String): Boolean {
+        val s = sender.trim()
+        if (s.isEmpty() || s.any { it.isWhitespace() } || s.startsWith("+")) return false
+        if (s.all { it.isDigit() }) return s.length in 4..9
+        return Regex("""[A-Z0-9][A-Z0-9-]{2,19}""").matches(s) && s.any { it.isLetter() }
     }
 
     /**

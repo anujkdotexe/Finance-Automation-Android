@@ -99,7 +99,7 @@ class NotificationProcessor(
         }
 
         // 3b. SMS from a personal number is rejected on the sender alone, before any text is examined
-        if (PackageWhitelist.isSmsPackage(sourcePackage) && com.financeautomation.core.utils.RegexPatterns.isPersonalSender(title)) {
+        if (PackageWhitelist.isSmsPackage(sourcePackage) && !com.financeautomation.core.utils.RegexPatterns.isBankSenderId(title)) {
             PipelineTrail.recordDroppedNotWhitelisted()
             return NotificationProcessingOutcome.Ignored("Personal sender SMS dropped")
         }
