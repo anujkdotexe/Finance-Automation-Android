@@ -504,6 +504,8 @@
     <string name="capture_battery_desc">Unrestricted background execution</string>
     <string name="capture_overlay_title">Overlay</string>
     <string name="capture_overlay_desc">Displays instant capture prompt</string>
+    <string name="capture_usage_access_title">Usage access</string>
+    <string name="capture_usage_access_desc">Used to know when a payment app was just used so you can categorize your expense.</string>
     <string name="capture_apps_title">Apps we read</string>
     <string name="capture_apps_desc">Google Pay, BHIM, Supermoney, PhonePe, Paytm, Bank SMS</string>
     <string name="capture_privacy_note">We never read WhatsApp, Telegram or OTP messages.</string>
