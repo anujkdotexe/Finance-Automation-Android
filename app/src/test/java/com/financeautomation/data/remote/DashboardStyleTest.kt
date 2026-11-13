@@ -147,4 +147,14 @@ class DashboardStyleTest {
         assertEquals(true, header.containsKey("innerVertical"))
         assertEquals(false, header.containsKey("right"))
     }
+
+    @Test
+    fun testTitleUsesAPlainHyphen() {
+        @Suppress("UNCHECKED_CAST")
+        val cell = requests.mapNotNull { it["updateCells"] as? Map<String, Any?> }
+            .first { (it["range"] as Map<*, *>).let { r -> r["startRowIndex"] == 0 && r["startColumnIndex"] == 0 } }
+        @Suppress("UNCHECKED_CAST")
+        val value = ((cell["rows"] as List<Map<String, Any?>>).first()["values"] as List<Map<String, Any?>>).first()
+        assertEquals("PERSONAL FINANCE DASHBOARD - 2026", (value["userEnteredValue"] as Map<*, *>)["stringValue"])
+    }
 }

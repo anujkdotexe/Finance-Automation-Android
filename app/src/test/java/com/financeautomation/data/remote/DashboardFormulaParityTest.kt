@@ -58,4 +58,10 @@ class DashboardFormulaParityTest {
         is List<*> -> node.flatMap { collectFormulas(it) }
         else -> emptyList()
     }
+
+    @Test
+    fun testCategorySpendFormulaUsesTheLiveSpacing() {
+        val expected = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y6, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
+        assertEquals(expected, DashboardFormulaBuilder.buildCategorySpendFormula(6))
+    }
 }

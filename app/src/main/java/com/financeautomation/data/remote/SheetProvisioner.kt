@@ -285,7 +285,7 @@ object SheetProvisioner {
                 sheetId = dashboardSheetId,
                 rowIndex = 0,
                 colIndex = 0,
-                value = mapOf("stringValue" to "PERSONAL FINANCE DASHBOARD — 2026"),
+                value = mapOf("stringValue" to "PERSONAL FINANCE DASHBOARD - 2026"),
                 format = mapOf(
                     "backgroundColor" to darkNavyBg,
                     "horizontalAlignment" to "CENTER",
