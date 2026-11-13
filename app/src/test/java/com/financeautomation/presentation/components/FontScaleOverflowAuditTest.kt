@@ -84,5 +84,25 @@ class FontScaleOverflowAuditTest {
             )
         }
     }
+
+    @Test
+    fun testKpiCardAmountFormatNeverExceedsSixCharactersUnderFontScale1_3() {
+        val boundaryAmounts = listOf(
+            9999.0,
+            10000.0,
+            50003.0,
+            99999.0,
+            100000.0,
+            1234567.0,
+            12345678.0
+        )
+        boundaryAmounts.forEach { amount ->
+            val formatted = com.financeautomation.core.utils.formatRupeesCompact(amount)
+            assertTrue(
+                "Formatted amount '$formatted' for $amount must not exceed 6 characters to prevent ellipsis on 360dp at font scale 1.3",
+                formatted.length <= 6
+            )
+        }
+    }
 }
 

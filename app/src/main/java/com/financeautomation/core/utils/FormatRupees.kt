@@ -78,3 +78,37 @@ fun formatAmountInput(amount: Double): String {
         String.format(Locale.US, "%.2f", amount)
     }
 }
+
+/**
+ * Compact monetary formatter for one-third-width KPI cards (Round 6b Y1).
+ *
+ * - Amounts under 10,000 use standard rupee formatting (e.g. ₹9,999).
+ * - Amounts of 10,000 or more use compact suffixes (K for thousands, L for lakhs, Cr for crores).
+ * - One decimal place is shown when non-zero remainder exists (e.g. ₹50.0K, ₹12.3L, ₹1.2Cr).
+ * - Whole multiples display integer style without trailing zeros (e.g. ₹10K, ₹1L).
+ */
+fun formatRupeesCompact(amount: Double): String {
+    val absAmount = abs(amount)
+    if (absAmount < 10000.0) {
+        return formatRupeesAuto(amount)
+    }
+
+    val isNegative = amount < 0.0
+    val (divisor, suffix) = when {
+        absAmount >= 10000000.0 -> 10000000.0 to "Cr"
+        absAmount >= 100000.0 -> 100000.0 to "L"
+        else -> 1000.0 to "K"
+    }
+
+    val rawVal = absAmount / divisor
+    val hasRemainder = (absAmount % divisor) != 0.0
+    val formattedNum = if (!hasRemainder) {
+        String.format(Locale.US, "%.0f", rawVal)
+    } else {
+        val truncated = kotlin.math.floor(rawVal * 10.0) / 10.0
+        String.format(Locale.US, "%.1f", truncated)
+    }
+
+    val prefix = if (isNegative) "-₹" else "₹"
+    return "$prefix$formattedNum$suffix"
+}

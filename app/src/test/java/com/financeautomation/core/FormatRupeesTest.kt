@@ -3,6 +3,7 @@ package com.financeautomation.core
 import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.core.utils.formatRupeesCompact
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -66,5 +67,16 @@ class FormatRupeesTest {
         assertEquals("150", formatAmountInput(150.0))
         assertEquals("150.50", formatAmountInput(150.50))
         assertEquals("1234.56", formatAmountInput(1234.56))
+    }
+
+    @Test
+    fun formatRupeesCompact_boundaries() {
+        assertEquals("₹9,999", formatRupeesCompact(9999.0))
+        assertEquals("₹10K", formatRupeesCompact(10000.0))
+        assertEquals("₹50.0K", formatRupeesCompact(50003.0))
+        assertEquals("₹99.9K", formatRupeesCompact(99999.0))
+        assertEquals("₹1L", formatRupeesCompact(100000.0))
+        assertEquals("₹12.3L", formatRupeesCompact(1234567.0))
+        assertEquals("₹1.2Cr", formatRupeesCompact(12345678.0))
     }
 }
