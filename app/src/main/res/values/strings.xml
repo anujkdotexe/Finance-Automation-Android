@@ -219,6 +219,9 @@
     <string name="notif_auth_reconnect_title">Reconnect Google Drive sync</string>
     <string name="notif_auth_reconnect_text">Tap to authorize Google Drive sync and resume queued operations</string>
     <string name="notif_payment_detected_title">Payment Detected</string>
+    <string name="notif_public_payment_title">Payment detected</string>
+    <string name="notif_public_subscription_title">Subscription due</string>
+    <string name="notif_public_open_to_view">Open the app to view</string>
     <string name="notif_expense_tracking_disabled_title">Expense Tracking Disabled</string>
     <string name="notif_expense_tracking_disabled_text">Notification access was turned off. Tap to re-enable automated capture.</string>
 
