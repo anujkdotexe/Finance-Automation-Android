@@ -5,14 +5,15 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,29 +22,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.TableChart
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,12 +54,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.financeautomation.R
+import com.financeautomation.presentation.components.FilledButton
+import com.financeautomation.presentation.components.LinkButton
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.OnboardingUiState
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
@@ -110,253 +111,279 @@ fun OnboardingScreen(
         }
     }
 
+    val isStep1Done = state.step1State == StepState.COMPLETED
+    val isStep2Done = state.step2State == StepState.COMPLETED
+    val isStep3Done = state.step3State == StepState.COMPLETED
+    val isReady = isStep1Done && isStep2Done
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+            ) {
+                FilledButton(
+                    text = stringResource(R.string.onboarding_checklist_continue),
+                    onClick = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            onOnboardingFinished()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = isReady
+                )
+
+                LinkButton(
+                    text = stringResource(R.string.onboarding_checklist_trouble),
+                    onClick = {
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("https://financeautomation.app/help")
+                        ).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    }
+                )
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = FinanceTheme.spacing.xl)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.Start
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xl)
         ) {
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xl))
+            // Header Section
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(FinanceTheme.sizes.buttonHeight)
+                        .clip(FinanceShapes.card)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Checklist,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(FinanceTheme.sizes.icon28)
+                    )
+                }
 
-            Text(
-                text = stringResource(R.string.onboarding_welcome_title),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+                Text(
+                    text = stringResource(R.string.onboarding_checklist_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
+                Text(
+                    text = stringResource(R.string.onboarding_checklist_desc),
+                    style = FinanceTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-            Text(
-                text = stringResource(R.string.onboarding_welcome_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxl))
-
-            // Step 1: Sign In
-            OnboardingStepItem(
-                stepNumber = 1,
-                title = stringResource(R.string.onboarding_step1_title),
-                subtitle = when (state.step1State) {
-                    StepState.COMPLETED -> stringResource(R.string.onboarding_step1_completed)
-                    StepState.IN_PROGRESS -> stringResource(R.string.onboarding_step1_progress)
-                    StepState.ERROR -> state.step1Error ?: stringResource(R.string.onboarding_step1_not_started)
-                    StepState.NOT_STARTED -> stringResource(R.string.onboarding_step1_not_started)
-                },
-                icon = Icons.Default.Lock,
-                state = state.step1State,
-                action = {
-                    if (state.step1State == StepState.NOT_STARTED || state.step1State == StepState.ERROR) {
-                        Button(
-                            onClick = viewModel::startSignIn,
-                            shape = FinanceTheme.shapes.small
-                        ) {
-                            Text(stringResource(R.string.onboarding_step1_title))
+            // Checklist Steps
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+            ) {
+                // Step 1: Connect Google Sheet
+                ChecklistCard(
+                    isCompleted = isStep1Done && isStep2Done,
+                    isLoading = state.step1State == StepState.IN_PROGRESS || state.step2State == StepState.IN_PROGRESS,
+                    defaultIcon = Icons.Rounded.TableChart,
+                    title = stringResource(R.string.onboarding_checklist_step1_title),
+                    subtitle = if (isStep2Done) {
+                        state.workbookName.ifBlank { stringResource(R.string.onboarding_checklist_step1_default_sheet) }
+                    } else if (isStep1Done) {
+                        state.googleAccountEmail ?: stringResource(R.string.onboarding_checklist_step1_default_sheet)
+                    } else {
+                        stringResource(R.string.onboarding_checklist_step1_default_sheet)
+                    },
+                    statusText = if (isStep1Done && isStep2Done) stringResource(R.string.onboarding_checklist_step1_connected) else null,
+                    actionButtonText = if (!isStep1Done) stringResource(R.string.onboarding_checklist_step1_connect) else if (state.step2State == StepState.ERROR) stringResource(R.string.action_retry_workspace) else null,
+                    onActionClick = {
+                        if (!isStep1Done) {
+                            viewModel.startSignIn()
+                        } else if (state.step2State == StepState.ERROR) {
+                            viewModel.startWorkspaceProvisioning(forceValidateTabs = true)
                         }
                     }
-                }
-            )
+                )
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
-
-            // Step 2: Creating Finance Workspace
-            OnboardingStepItem(
-                stepNumber = 2,
-                title = stringResource(R.string.onboarding_step2_title),
-                subtitle = when (state.step2State) {
-                    StepState.COMPLETED -> state.workbookName
-                    StepState.IN_PROGRESS -> stringResource(R.string.onboarding_step2_progress)
-                    StepState.ERROR -> state.step2Error?.let { stringResource(it.resId, *it.args.toTypedArray()) } ?: ""
-                    StepState.NOT_STARTED -> ""
-                },
-                icon = Icons.Default.TableChart,
-                state = state.step2State,
-                action = {
-                    if (state.step2State == StepState.ERROR) {
-                        OutlinedButton(
-                            onClick = { viewModel.startWorkspaceProvisioning(forceValidateTabs = true) },
-                            shape = FinanceTheme.shapes.small
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
-                            Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
-                            Text(stringResource(R.string.action_retry_workspace))
+                // Step 2: Notification access
+                ChecklistCard(
+                    isCompleted = isStep3Done,
+                    isLoading = false,
+                    defaultIcon = Icons.Rounded.Notifications,
+                    title = stringResource(R.string.onboarding_checklist_step2_title),
+                    subtitle = stringResource(R.string.onboarding_checklist_step2_desc),
+                    statusText = if (isStep3Done) stringResource(R.string.onboarding_checklist_step2_active) else null,
+                    actionButtonText = if (!isStep3Done) stringResource(R.string.onboarding_checklist_step2_grant) else null,
+                    onActionClick = {
+                        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         }
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
                     }
-                }
-            )
+                )
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
-
-            // Step 3: Permissions
-            OnboardingStepItem(
-                stepNumber = 3,
-                title = stringResource(R.string.onboarding_step3_title),
-                subtitle = when (state.step3State) {
-                    StepState.COMPLETED -> stringResource(R.string.onboarding_step3_completed)
-                    else -> stringResource(R.string.onboarding_step3_desc)
-                },
-                icon = Icons.Default.Notifications,
-                state = state.step3State,
-                action = {
-                    if (state.step3State != StepState.COMPLETED) {
-                        Button(
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                context.startActivity(intent)
-                            },
-                            shape = FinanceTheme.shapes.small
-                        ) {
-                            Text(stringResource(R.string.action_grant_permission))
-                        }
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
-
-            // Step 4: Ready
-            OnboardingStepItem(
-                stepNumber = 4,
-                title = stringResource(R.string.onboarding_step4_title),
-                subtitle = if (state.step4State == StepState.COMPLETED) {
-                    stringResource(R.string.onboarding_step4_completed)
-                } else {
-                    stringResource(R.string.onboarding_step4_pending)
-                },
-                icon = Icons.Default.Check,
-                state = state.step4State,
-                action = {
-                    AnimatedVisibility(visible = state.step4State == StepState.COMPLETED) {
-                        Button(
-                            onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                                    postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    onOnboardingFinished()
-                                }
-                            },
-                            shape = FinanceTheme.shapes.small,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Text(stringResource(R.string.action_get_started))
-                        }
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxl))
+                // Step 3: Default account
+                ChecklistCard(
+                    isCompleted = true,
+                    isLoading = false,
+                    defaultIcon = Icons.Rounded.CreditCard,
+                    title = stringResource(R.string.onboarding_checklist_step3_title),
+                    subtitle = stringResource(R.string.onboarding_checklist_step3_desc),
+                    statusText = stringResource(R.string.onboarding_checklist_step3_configured),
+                    actionButtonText = null,
+                    onActionClick = null
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun OnboardingStepItem(
-    stepNumber: Int,
+private fun ChecklistCard(
+    isCompleted: Boolean,
+    isLoading: Boolean,
+    defaultIcon: ImageVector,
     title: String,
     subtitle: String,
-    icon: ImageVector,
-    state: StepState,
-    action: @Composable () -> Unit,
+    statusText: String?,
+    actionButtonText: String?,
+    onActionClick: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = FinanceTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+    Surface(
+        color = FinanceTheme.colors.surfaceContainerLowest,
+        shape = FinanceShapes.large,
+        shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+        modifier = modifier
+            .fillMaxWidth()
+            .border(
+                width = FinanceTheme.sizes.strokeThin,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                shape = FinanceShapes.large
+            )
     ) {
-        Column(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(FinanceTheme.spacing.m),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(FinanceTheme.sizes.avatarSmall)
+                        .size(FinanceTheme.sizes.icon32)
                         .clip(CircleShape)
                         .background(
-                            when (state) {
-                                StepState.COMPLETED -> MaterialTheme.colorScheme.primary
-                                StepState.ERROR -> MaterialTheme.colorScheme.error
-                                StepState.IN_PROGRESS -> MaterialTheme.colorScheme.secondary
-                                StepState.NOT_STARTED -> MaterialTheme.colorScheme.outlineVariant
-                            }
+                            if (isCompleted) MaterialTheme.colorScheme.primaryContainer
+                            else FinanceTheme.colors.surfaceContainer
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    when (state) {
-                        StepState.COMPLETED -> Icon(
-                            Icons.Default.Check,
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(FinanceTheme.sizes.icon18),
+                            strokeWidth = FinanceTheme.sizes.strokeThin,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (isCompleted) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(FinanceTheme.sizes.icon18)
                         )
-                        StepState.IN_PROGRESS -> CircularProgressIndicator(
-                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium),
-                            color = MaterialTheme.colorScheme.onSecondary,
-                            strokeWidth = FinanceTheme.sizes.strokeThick
-                        )
-                        StepState.ERROR -> Icon(
-                            Icons.Default.ErrorOutline,
+                    } else {
+                        Icon(
+                            imageVector = defaultIcon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onError,
-                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-                        )
-                        StepState.NOT_STARTED -> Text(
-                            text = stepNumber.toString(),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(FinanceTheme.sizes.icon18)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(FinanceTheme.spacing.l))
-
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = FinanceTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (state == StepState.ERROR) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+            Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
 
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                action()
+            if (statusText != null) {
+                Text(
+                    text = statusText,
+                    style = FinanceTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs)
+                )
+            } else if (actionButtonText != null && onActionClick != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = FinanceShapes.pill,
+                    modifier = Modifier.clickable(onClick = onActionClick)
+                ) {
+                    Text(
+                        text = actionButtonText,
+                        style = FinanceTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs)
+                    )
+                }
             }
         }
     }
 }
 
 private fun isNotificationListenerEnabled(context: Context): Boolean {
-    val packages = NotificationManagerCompat.getEnabledListenerPackages(context)
-    return packages.contains(context.packageName)
+    val packageNames = NotificationManagerCompat.getEnabledListenerPackages(context)
+    return packageNames.contains(context.packageName)
 }
-
