@@ -135,7 +135,8 @@ data class TransactionsUiState(
     val groupedTransactions: List<DayTransactionGroup> = emptyList(),
     val rowStatuses: Map<String, RowStatus> = emptyMap(),
     val isLoading: Boolean = false,
-    val isSyncing: Boolean = false
+    val isSyncing: Boolean = false,
+    val monthOffset: Int = 0
 )
 
 /**
@@ -540,7 +541,8 @@ class TransactionsViewModel(
             groupedTransactions = grouped,
             rowStatuses = filteredTransactions.associate { it.id to computeRowStatus(it, queueIds) },
             isLoading = false,
-            isSyncing = isSyncing
+            isSyncing = isSyncing,
+            monthOffset = monthOffset
         )
     }
 

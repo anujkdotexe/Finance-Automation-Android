@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -34,6 +35,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +57,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
 import com.financeautomation.presentation.components.AccountAvatar
 import com.financeautomation.presentation.components.AppCard
+import com.financeautomation.presentation.util.MonthCsvExporter
+import kotlinx.coroutines.launch
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -124,6 +130,9 @@ fun SyncBackupScreen(
             Toast.makeText(context, state.errorMessage, Toast.LENGTH_LONG).show()
         }
     }
+
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     if (showSignOutDialog) {
         AlertDialog(
@@ -197,13 +206,14 @@ fun SyncBackupScreen(
         )
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
+        ) {
         Text(
             text = stringResource(R.string.sync_cloud_storage),
             style = FinanceTheme.typography.titleMedium,
@@ -548,6 +558,32 @@ fun SyncBackupScreen(
                     )
                 }
 
+                OutlinedButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            MonthCsvExporter.exportMonth(context, 0)
+                                .onFailure { e ->
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.export_failed, e.message ?: "Unknown error")
+                                    )
+                                }
+                        }
+                    },
+                    shape = FinanceTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                    )
+                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                    Text(
+                        text = stringResource(R.string.action_export_this_month),
+                        maxLines = 1
+                    )
+                }
+
                 if (state.isProvisioning) {
                     Row(
                         modifier = Modifier
@@ -570,5 +606,11 @@ fun SyncBackupScreen(
                 }
             }
         }
+    }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
