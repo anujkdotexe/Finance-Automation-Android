@@ -90,14 +90,14 @@ fun KpiRow(
         } else null
 
         KpiCard(
-            label = "Savings",
+            label = stringResource(R.string.dashboard_savings),
             amount = savings,
             line1Text = savingsPercentText
         )
 
         // 3. Income card
         KpiCard(
-            label = "Income",
+            label = stringResource(R.string.dashboard_income),
             amount = income
         )
     }
