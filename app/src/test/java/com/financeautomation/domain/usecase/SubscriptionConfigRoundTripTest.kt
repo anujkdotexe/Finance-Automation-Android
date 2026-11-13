@@ -10,6 +10,7 @@ import com.financeautomation.domain.repository.ConfigRepository
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.DirtyConfigSnapshot
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,8 +56,15 @@ class SubscriptionConfigRoundTripTest {
 
     private class FakeConfigRepository : ConfigRepository {
         val rows = mutableListOf<ConfigRow>()
+        val running = java.util.concurrent.atomic.AtomicInteger(0)
+        val maxRunning = java.util.concurrent.atomic.AtomicInteger(0)
+        var upsertDelayMs = 0L
         override suspend fun readAll(spreadsheetId: String): Result<List<ConfigRow>> = Result.Success(rows.toList())
         override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Unit> {
+            val now = running.incrementAndGet()
+            maxRunning.accumulateAndGet(now) { a, b -> maxOf(a, b) }
+            if (upsertDelayMs > 0) kotlinx.coroutines.delay(upsertDelayMs)
+            running.decrementAndGet()
             for (r in rows) {
                 this.rows.removeAll { it.compositeKey == r.compositeKey }
                 this.rows.add(r)
@@ -134,6 +142,17 @@ class SubscriptionConfigRoundTripTest {
         val sheet = FakeConfigRepository()
         useCase(device, sheet).push("sheet_1")
         assertEquals(listOf("sub_gym"), sheet.rows.filter { it.type == ConfigConstants.TYPE_SUBSCRIPTION }.map { it.key })
+    }
+
+    @Test
+    fun concurrentPushesAreSerializedSoConfigRowsAreNotDuplicated() = runBlocking {
+        val device = FakeGateway().apply { subscriptions[netflix.id] = netflix; subscriptions[gym.id] = gym; dirty.addAll(listOf(netflix.id, gym.id)) }
+        val sheet = FakeConfigRepository().apply { upsertDelayMs = 50 }
+        val useCase = useCase(device, sheet)
+        val a = async(Dispatchers.Default) { useCase.push("sheet_1") }
+        val b = async(Dispatchers.Default) { useCase.push("sheet_1") }
+        a.await(); b.await()
+        assertEquals("two pushes must never run at the same time", 1, sheet.maxRunning.get())
     }
 
     @Test
