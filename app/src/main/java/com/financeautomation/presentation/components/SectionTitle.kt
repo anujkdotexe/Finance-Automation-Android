@@ -31,7 +31,7 @@ fun SectionTitle(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
             .padding(vertical = FinanceTheme.spacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

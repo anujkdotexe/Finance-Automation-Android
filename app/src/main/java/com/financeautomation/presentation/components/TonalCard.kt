@@ -34,7 +34,7 @@ fun AppCard(
         modifier = modifier.fillMaxWidth(),
         shape = FinanceShapes.appCard,
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = FinanceTheme.spacing.none),
         border = null
     ) {
         Column(
@@ -65,8 +65,8 @@ fun TonalCard(
 private fun AppCardPreviewNormalLight() {
     FinanceAutomationTheme(darkTheme = false) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             AppCard {
                 Text(text = "Card Title", style = MaterialTheme.typography.titleMedium)
@@ -81,8 +81,8 @@ private fun AppCardPreviewNormalLight() {
 private fun AppCardPreviewLargeFontLight() {
     FinanceAutomationTheme(darkTheme = false) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             AppCard {
                 Text(text = "Card Title", style = MaterialTheme.typography.titleMedium)
@@ -97,8 +97,8 @@ private fun AppCardPreviewLargeFontLight() {
 private fun AppCardPreviewNormalDark() {
     FinanceAutomationTheme(darkTheme = true) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             AppCard {
                 Text(text = "Card Title", style = MaterialTheme.typography.titleMedium)
@@ -113,8 +113,8 @@ private fun AppCardPreviewNormalDark() {
 private fun AppCardPreviewLargeFontDark() {
     FinanceAutomationTheme(darkTheme = true) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             AppCard {
                 Text(text = "Card Title", style = MaterialTheme.typography.titleMedium)

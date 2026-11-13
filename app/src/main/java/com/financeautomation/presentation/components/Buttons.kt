@@ -74,10 +74,7 @@ fun FilledButton(
         } else {
             Text(
                 text = displayLabel,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                ),
+                style = FinanceTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -119,10 +116,7 @@ fun OutlinedButton(
     ) {
         Text(
             text = displayLabel,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            ),
+            style = FinanceTheme.typography.titleSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -161,10 +155,7 @@ fun HeaderActionButton(
         ) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                ),
+                style = FinanceTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = textColor
@@ -187,10 +178,7 @@ fun LinkButton(
     val textColor = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium.copy(
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
-        ),
+        style = FinanceTheme.typography.titleSmall,
         color = textColor,
         modifier = modifier
             .clickable(
@@ -308,8 +296,8 @@ fun TextAction(
 private fun ButtonsPreviewNormalLight() {
     FinanceAutomationTheme(darkTheme = false) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             FilledButton(text = "Confirm", onClick = {})
             OutlinedButton(text = "Edit", onClick = {})
@@ -330,8 +318,8 @@ private fun ButtonsPreviewNormalLight() {
 private fun ButtonsPreviewLargeFontLight() {
     FinanceAutomationTheme(darkTheme = false) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             FilledButton(text = "Confirm", onClick = {})
             OutlinedButton(text = "Edit", onClick = {})
@@ -352,8 +340,8 @@ private fun ButtonsPreviewLargeFontLight() {
 private fun ButtonsPreviewNormalDark() {
     FinanceAutomationTheme(darkTheme = true) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             FilledButton(text = "Confirm", onClick = {})
             OutlinedButton(text = "Edit", onClick = {})
@@ -374,8 +362,8 @@ private fun ButtonsPreviewNormalDark() {
 private fun ButtonsPreviewLargeFontDark() {
     FinanceAutomationTheme(darkTheme = true) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
             FilledButton(text = "Confirm", onClick = {})
             OutlinedButton(text = "Edit", onClick = {})

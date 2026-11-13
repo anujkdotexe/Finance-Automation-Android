@@ -42,11 +42,11 @@ fun KpiCard(
     Card(
         shape = FinanceShapes.appCard,
         colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surfaceContainerLow),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = FinanceTheme.spacing.none),
         border = null,
         modifier = modifier
-            .width(140.dp)
-            .defaultMinSize(minHeight = 110.dp)
+            .width(FinanceTheme.sizes.kpiCardWidth)
+            .defaultMinSize(minHeight = FinanceTheme.sizes.kpiCardMinHeight)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(role = Role.Button, onClick = onClick)
@@ -61,10 +61,7 @@ fun KpiCard(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                ),
+                style = FinanceTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -72,24 +69,18 @@ fun KpiCard(
 
             Text(
                 text = formatRupeesAuto(amount),
-                style = FinanceTheme.typography.numeric.copy(
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
+                style = FinanceTheme.typography.amountMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(vertical = FinanceTheme.spacing.xs)
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
                 if (!line1Text.isNullOrBlank()) {
                     Text(
                         text = line1Text,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        ),
+                        style = FinanceTheme.typography.labelSmall,
                         color = if (line1IsPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -98,10 +89,7 @@ fun KpiCard(
                 if (!line2Text.isNullOrBlank()) {
                     Text(
                         text = line2Text,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Normal
-                        ),
+                        style = FinanceTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis

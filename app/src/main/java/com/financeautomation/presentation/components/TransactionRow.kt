@@ -52,7 +52,7 @@ fun TransactionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minRowHeight)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(role = Role.Button, onClick = onClick)
@@ -70,10 +70,7 @@ fun TransactionRow(
         ) {
             Text(
                 text = merchant,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                ),
+                style = FinanceTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -94,7 +91,7 @@ fun TransactionRow(
                 if (metaText.isNotBlank()) {
                     Text(
                         text = metaText,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        style = FinanceTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -110,7 +107,6 @@ fun TransactionRow(
             Text(
                 text = formatRupeesAuto(amount),
                 style = FinanceTheme.typography.numeric.copy(
-                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
                 color = MaterialTheme.colorScheme.onSurface
@@ -119,10 +115,7 @@ fun TransactionRow(
             if (!splitText.isNullOrBlank()) {
                 Text(
                     text = splitText,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
+                    style = FinanceTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -138,7 +131,7 @@ fun TransactionRow(
 @Composable
 private fun TransactionRowPreviewNormalLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
             TransactionRow(
                 merchant = "Swiggy",
                 amount = 600.0,
@@ -156,7 +149,7 @@ private fun TransactionRowPreviewNormalLight() {
 @Composable
 private fun TransactionRowPreviewLargeFontLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
             TransactionRow(
                 merchant = "Swiggy",
                 amount = 600.0,
@@ -174,7 +167,7 @@ private fun TransactionRowPreviewLargeFontLight() {
 @Composable
 private fun TransactionRowPreviewNormalDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
             TransactionRow(
                 merchant = "Blue Tokai Coffee",
                 amount = 340.0,

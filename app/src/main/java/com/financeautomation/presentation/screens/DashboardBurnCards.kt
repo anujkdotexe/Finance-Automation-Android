@@ -137,10 +137,7 @@ fun NeedsReviewBanner(
                 )
                 Text(
                     text = "$count to review",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
+                    style = FinanceTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
@@ -188,10 +185,7 @@ fun BalancesCard(
             ) {
                 Text(
                     text = stringResource(R.string.dashboard_owed_to_me),
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
+                    style = FinanceTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -227,10 +221,7 @@ fun BalancesCard(
             ) {
                 Text(
                     text = stringResource(R.string.dashboard_i_owe),
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
+                    style = FinanceTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -270,10 +261,7 @@ fun OfflineBanner(
             )
             Text(
                 text = "You are offline. New expenses are saved on this phone and will sync when you reconnect.",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Normal
-                ),
+                style = FinanceTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }

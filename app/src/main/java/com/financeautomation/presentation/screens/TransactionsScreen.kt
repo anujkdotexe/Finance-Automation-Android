@@ -181,15 +181,12 @@ fun TransactionsContent(
         ) {
             Text(
                 text = "Month total",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                style = FinanceTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = formatRupeesAuto(state.totalOut),
-                style = FinanceTheme.typography.numeric.copy(
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
+                style = FinanceTheme.typography.numeric.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
@@ -204,7 +201,7 @@ fun TransactionsContent(
             placeholder = {
                 Text(
                     text = "Search transactions",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp)
+                    style = FinanceTheme.typography.bodyMedium
                 )
             },
             leadingIcon = {
@@ -312,19 +309,16 @@ fun TransactionsContent(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.icon48)
                     )
                     Text(
                         text = "No matches found",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
+                        style = FinanceTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "No transactions found matching \"${state.searchQuery}\" in ${state.selectedMonthLabel}.",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                        style = FinanceTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Column(
@@ -359,14 +353,11 @@ fun TransactionsContent(
                         imageVector = Icons.Rounded.CalendarToday,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(FinanceTheme.sizes.icon48)
                     )
                     Text(
                         text = "No transactions in ${state.selectedMonthLabel}",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
+                        style = FinanceTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Column(
@@ -406,18 +397,12 @@ fun TransactionsContent(
                             ) {
                                 Text(
                                     text = group.dateLabel,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
+                                    style = FinanceTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = formatRupeesAuto(group.dayTotalOut),
-                                    style = FinanceTheme.typography.numeric.copy(
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    ),
+                                    style = FinanceTheme.typography.numericMicro,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -498,10 +483,7 @@ fun TransactionDetailSheet(
             ) {
                 Text(
                     text = transaction.merchant.ifBlank { transaction.category },
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = FinanceTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 StatusChip(status = transaction.status.value)
@@ -510,10 +492,7 @@ fun TransactionDetailSheet(
             // Big Mono Amount
             Text(
                 text = formatRupeesAuto(transaction.totalAmount),
-                style = FinanceTheme.typography.numeric.copy(
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
+                style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
@@ -563,12 +542,12 @@ fun TransactionDetailSheet(
                     ) {
                         Text(
                             text = "Sheet row: ${transaction.sheetRowIndex ?: "Unassigned"}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "ID: ${transaction.id}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -587,15 +566,12 @@ private fun DetailRow(label: String, value: String) {
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+            style = FinanceTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            ),
+            style = FinanceTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
             color = MaterialTheme.colorScheme.onSurface
         )
     }
