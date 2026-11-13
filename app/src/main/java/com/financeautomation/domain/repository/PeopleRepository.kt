@@ -53,4 +53,12 @@ interface PeopleRepository {
      * Deletes a companion by unique identifier.
      */
     suspend fun deleteCompanionById(id: String)
+
+    /**
+     * Removes a person from the people list. Their transactions keep the name as text; only the list entry goes, and
+     * it stays gone (the people rebuild skips it) until a new transaction names them again.
+     * Refuses with a clear reason while the person has an open balance.
+     */
+    suspend fun removePerson(name: String): com.financeautomation.core.model.Result<Unit> =
+        com.financeautomation.core.model.Result.Error(UnsupportedOperationException("removePerson is not supported"))
 }

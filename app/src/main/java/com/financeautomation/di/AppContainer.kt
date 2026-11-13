@@ -67,6 +67,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -231,7 +232,15 @@ class DefaultAppContainer(
         PeopleRepositoryImpl(
             companionDaoProvider = { awaitDatabase().companionDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
-            ioDispatcher = ioDispatcher
+            ioDispatcher = ioDispatcher,
+            openBalanceChecker = { name ->
+                val db = awaitDatabase()
+                val transactions = db.transactionDao().getTransactionsFlow().first().map { it.toDomain() }
+                val payables = db.payableDao().getPending().map {
+                    com.financeautomation.domain.usecase.PersonBalance.OpenPayable(it.paidBy, it.amountIOwe)
+                }
+                com.financeautomation.domain.usecase.PersonBalance.hasOpenBalance(name, transactions, payables)
+            }
         )
     }
 
