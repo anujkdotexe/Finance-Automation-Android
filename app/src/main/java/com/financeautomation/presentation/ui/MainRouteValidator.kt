@@ -15,6 +15,7 @@ object MainRouteValidator {
         AppRoutes.CATEGORIES,
         AppRoutes.PEOPLE_TRIPS,
         AppRoutes.SUBSCRIPTIONS,
+        AppRoutes.INSIGHTS,
         AppRoutes.CAPTURE_PERMISSIONS,
         AppRoutes.SYNC_BACKUP,
         AppRoutes.PREFERENCES,

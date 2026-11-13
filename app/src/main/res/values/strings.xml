@@ -716,4 +716,18 @@
     <string name="budget_row_edit_cd">Set the monthly budget for %1$s</string>
     <string name="budget_bar_cd_used">%1$s: %2$d percent of the monthly budget used</string>
     <string name="budget_bar_cd_over">%1$s: over the monthly budget, %2$d percent used</string>
+
+    <!-- Insights -->
+    <string name="insights_title">Insights</string>
+    <string name="insights_by_category_title">Spending by category</string>
+    <string name="insights_last_months_title">Living burn, last 6 months</string>
+    <string name="insights_empty">Nothing to chart yet. Insights appear once you have logged some spending.</string>
+    <string name="insights_no_spend_month">No spending in this month.</string>
+    <string name="insights_other">Other</string>
+    <string name="insights_percent">%1$d%%</string>
+    <string name="insights_donut_center_label">Total</string>
+    <string name="insights_donut_cd">Spending by category, %1$s in total across %2$d groups</string>
+    <string name="insights_legend_row_cd">%1$s, %2$s, %3$d percent. Opens the transactions.</string>
+    <string name="insights_legend_other_cd">Other categories, %1$s, %2$d percent</string>
+    <string name="insights_bars_cd">Living burn by month: %1$s</string>
 </resources>
