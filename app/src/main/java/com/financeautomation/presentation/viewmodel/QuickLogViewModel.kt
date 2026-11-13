@@ -325,6 +325,12 @@ class QuickLogViewModel(
             _uiState.update { it.copy(errorMessage = UiText.res(R.string.quicklog_err_amount_zero)) }
             return
         }
+        if (!state.isSaveEnabled) {
+            _uiState.update {
+                it.copy(errorMessage = UiText.dynamic("At least one companion must be specified when an amount is owed to me"))
+            }
+            return
+        }
         val captureTs = state.captureTimestamp
         if (captureTs != null && com.financeautomation.core.utils.isFuture(captureTs)) {
             _uiState.update {

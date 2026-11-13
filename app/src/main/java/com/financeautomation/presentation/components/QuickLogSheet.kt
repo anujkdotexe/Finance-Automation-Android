@@ -590,7 +590,7 @@ fun QuickLogSheet(
                 view.performHapticFeedback(hapticConstant)
                 onConfirmAndSave()
             },
-            filledEnabled = !state.isSaving && state.amount > 0.0,
+            filledEnabled = state.isSaveEnabled,
             isFilledLoading = state.isSaving
         )
 
