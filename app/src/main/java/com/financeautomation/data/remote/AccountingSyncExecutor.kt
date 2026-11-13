@@ -314,10 +314,11 @@ class AccountingSyncExecutor(
             targetDebits = targetDebits,
             targetPayables = targetPayables,
             sourceDebits = sourceDebits,
-            sourcePayables = sourcePayables
+            sourcePayables = sourcePayables,
+            existingLineage = resolveLineageDao().getAll().map { it.toDomain() }
         )
 
-        if (rolloverResult.skippedAlreadyCarried) {
+        if (rolloverResult.plan.appends.isEmpty() && rolloverResult.plan.edits.isEmpty()) {
             return Result.Success(Unit)
         }
 
