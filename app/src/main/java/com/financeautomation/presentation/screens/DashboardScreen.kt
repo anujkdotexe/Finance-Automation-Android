@@ -39,7 +39,7 @@ import com.financeautomation.presentation.viewmodel.DashboardViewModel
  * Order:
  * 1. Single-line quiet sync status line
  * 2. Month switcher
- * 3. KPI row (3 horizontally scrolling 140dp cards: Living burn, Savings, Income)
+ * 3. KPI row (3 equal-width cards: Living burn, Savings, Income)
  * 4. Needs Review banner (only when count > 0)
  * 5. Balances card (one card, two columns "Owed to me" and "I owe", mono amounts)
  * 6. "Where it went" top 3 categories with thin bars and "See all"
@@ -159,7 +159,7 @@ fun DashboardContent(
                 )
             }
         } else {
-            // 3. Horizontally scrolling KPI row (3 cards: Living burn, Savings, Income)
+            // 3. KPI row (3 equal-width cards: Living burn, Savings, Income)
             item {
                 KpiRow(
                     livingBurn = state.currentBurn,

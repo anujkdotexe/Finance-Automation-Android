@@ -2,7 +2,6 @@ package com.financeautomation.presentation.screens
 
 import android.content.res.Configuration
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Rule
 import androidx.compose.material.icons.rounded.CloudOff
@@ -47,7 +45,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 import kotlin.math.abs
 
 /**
- * Horizontally scrolling KPI row with 3 cards: Living burn, Savings, Income (each 140dp wide).
+ * Row with 3 equal-width KPI cards: Living burn, Savings, Income.
  */
 @Composable
 fun KpiRow(
@@ -58,12 +56,8 @@ fun KpiRow(
     income: Double,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
-
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(scrollState),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap)
     ) {
         // 1. Living burn card
@@ -78,7 +72,8 @@ fun KpiRow(
             amount = livingBurn,
             line1Text = paceText,
             line1IsPrimary = (paceDeltaPercent ?: 0.0) <= 0.0,
-            line2Text = dailyText
+            line2Text = dailyText,
+            modifier = Modifier.weight(1f)
         )
 
         // 2. Savings card
@@ -90,13 +85,15 @@ fun KpiRow(
         KpiCard(
             label = stringResource(R.string.dashboard_savings),
             amount = savings,
-            line1Text = savingsPercentText
+            line1Text = savingsPercentText,
+            modifier = Modifier.weight(1f)
         )
 
         // 3. Income card
         KpiCard(
             label = stringResource(R.string.dashboard_income),
-            amount = income
+            amount = income,
+            modifier = Modifier.weight(1f)
         )
     }
 }
