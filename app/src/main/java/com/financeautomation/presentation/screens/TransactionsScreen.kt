@@ -125,6 +125,7 @@ fun TransactionsScreen(
                 onPreviousMonth = viewModel::previousMonth,
                 onNextMonth = viewModel::nextMonth,
                 onCurrentMonth = viewModel::currentMonth,
+                onSelectMonthOffset = viewModel::setMonthOffset,
                 onSearchQueryChange = viewModel::setSearchQuery,
                 onSearchScopeChange = viewModel::setSearchScope,
                 onFilterChange = viewModel::setFilter,
@@ -193,6 +194,7 @@ fun TransactionsContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onCurrentMonth: () -> Unit,
+    onSelectMonthOffset: (Int) -> Unit = {},
     onSearchQueryChange: (String) -> Unit,
     onSearchScopeChange: (SearchScope) -> Unit,
     onFilterChange: (TransactionFilter) -> Unit,
@@ -223,7 +225,8 @@ fun TransactionsContent(
         MonthSwitcher(
             monthLabel = state.selectedMonthLabel,
             onPreviousMonth = onPreviousMonth,
-            onNextMonth = onNextMonth
+            onNextMonth = onNextMonth,
+            onSelectMonthOffset = onSelectMonthOffset
         )
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
