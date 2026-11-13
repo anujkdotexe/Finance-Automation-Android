@@ -47,10 +47,13 @@ object ForegroundHeadsUpHelper {
         val notificationId = capture.id.hashCode()
 
         // Details button opens EntryActivity
-        val detailsIntent = Intent(context, EntryActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EntryActivity.EXTRA_CAPTURE_ID, capture.id)
-        }
+        val detailsIntent = com.financeautomation.presentation.ui.InternalIntentAuth.attach(
+            context,
+            Intent(context, EntryActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EntryActivity.EXTRA_CAPTURE_ID, capture.id)
+            }
+        )
         val pendingDetails = PendingIntent.getActivity(
             context,
             notificationId,

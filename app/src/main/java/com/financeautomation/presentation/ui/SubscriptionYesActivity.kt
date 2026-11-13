@@ -43,9 +43,12 @@ class SubscriptionYesActivity : Activity() {
             withContext(Dispatchers.Main) {
                 if (outcome is SubscriptionYesOutcome.NeedsAmount) {
                     startActivity(
-                        Intent(this@SubscriptionYesActivity, EntryActivity::class.java).apply {
-                            putExtra(EntryActivity.EXTRA_CAPTURE_ID, outcome.captureId)
-                        }
+                        InternalIntentAuth.attach(
+                            this@SubscriptionYesActivity,
+                            Intent(this@SubscriptionYesActivity, EntryActivity::class.java).apply {
+                                putExtra(EntryActivity.EXTRA_CAPTURE_ID, outcome.captureId)
+                            }
+                        )
                     )
                 }
                 finish()
