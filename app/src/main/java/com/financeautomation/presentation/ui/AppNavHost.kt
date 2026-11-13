@@ -73,6 +73,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,9 +93,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.financeautomation.R
 import com.financeautomation.presentation.components.AccountAvatar
@@ -196,14 +199,15 @@ fun AppNavHost(
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: AppRoutes.DASHBOARD
+    val baseRoute = currentRoute.substringBefore('?')
 
     val settingsState by settingsViewModel.uiState.collectAsState()
     val dashboardState by dashboardViewModel.uiState.collectAsState()
 
-    val isRootBottomBarRoute = currentRoute == AppRoutes.DASHBOARD || currentRoute == AppRoutes.NEEDS_REVIEW
-    val showAvatarMenu = currentRoute == AppRoutes.DASHBOARD ||
-        currentRoute == AppRoutes.NEEDS_REVIEW ||
-        currentRoute == AppRoutes.TRANSACTIONS
+    val isRootBottomBarRoute = baseRoute == AppRoutes.DASHBOARD || baseRoute == AppRoutes.NEEDS_REVIEW
+    val showAvatarMenu = baseRoute == AppRoutes.DASHBOARD ||
+        baseRoute == AppRoutes.NEEDS_REVIEW ||
+        baseRoute == AppRoutes.TRANSACTIONS
 
     var accountMenuExpanded by remember { mutableStateOf(false) }
     var isSpeedDialOpen by remember { mutableStateOf(false) }
@@ -306,7 +310,7 @@ fun AppNavHost(
 
                     DRAWER_ITEMS.forEach { item ->
                         if (!item.requiresDeveloperMode || settingsState.developerMode) {
-                            val isSelected = currentRoute == item.route
+                            val isSelected = baseRoute == item.route
                             NavigationDrawerItem(
                                 label = {
                                     Text(
@@ -318,7 +322,7 @@ fun AppNavHost(
                                 selected = isSelected,
                                 onClick = {
                                     scope.launch { drawerState.close() }
-                                    if (currentRoute != item.route) {
+                                    if (baseRoute != item.route) {
                                         navController.navigate(item.route) {
                                             popUpTo(AppRoutes.DASHBOARD) { saveState = true }
                                             launchSingleTop = true
@@ -352,11 +356,11 @@ fun AppNavHost(
 
             Scaffold(
                 topBar = {
-                    if (currentRoute !in fullScreenFlowRoutes) {
+                    if (baseRoute !in fullScreenFlowRoutes) {
                         TopAppBar(
                             title = {
                                 Text(
-                                    text = when (currentRoute) {
+                                    text = when (baseRoute) {
                                         AppRoutes.DASHBOARD -> stringResource(R.string.nav_dashboard_title)
                                         AppRoutes.NEEDS_REVIEW -> stringResource(R.string.nav_inbox_title)
                                         AppRoutes.TRANSACTIONS -> "Transactions"
@@ -461,7 +465,7 @@ fun AppNavHost(
                             containerColor = MaterialTheme.colorScheme.surface,
                             tonalElevation = FinanceTheme.spacing.xs
                         ) {
-                            val isDashboardSelected = currentRoute == AppRoutes.DASHBOARD
+                            val isDashboardSelected = baseRoute == AppRoutes.DASHBOARD
                             NavigationBarItem(
                                 selected = isDashboardSelected,
                                 onClick = {
@@ -495,7 +499,7 @@ fun AppNavHost(
                                 )
                             )
 
-                            val isInboxSelected = currentRoute == AppRoutes.NEEDS_REVIEW
+                            val isInboxSelected = baseRoute == AppRoutes.NEEDS_REVIEW
                             NavigationBarItem(
                                 selected = isInboxSelected,
                                 onClick = {
@@ -575,10 +579,25 @@ fun AppNavHost(
                         DashboardScreen(
                             viewModel = dashboardViewModel,
                             onNavigateToReview = { navController.navigate(AppRoutes.NEEDS_REVIEW) },
-                            onNavigateToTransactions = { navController.navigate(AppRoutes.TRANSACTIONS) },
+                            onNavigateToTransactions = { monthOffset, category, type ->
+                                val route = buildString {
+                                    append(AppRoutes.TRANSACTIONS)
+                                    append("?monthOffset=").append(monthOffset)
+                                    if (!category.isNullOrBlank()) {
+                                        append("&category=").append(category)
+                                    }
+                                    if (!type.isNullOrBlank()) {
+                                        append("&type=").append(type)
+                                    }
+                                }
+                                navController.navigate(route)
+                            },
                             onNavigateToSettlements = { personName, owedToMe ->
                                 val extras = FlowAuthGate.mapSettlementToExtras(personName, owedToMe)
                                 launchFlow(extras.flow, extras.preselectedFriend)
+                            },
+                            onNavigateToBalances = {
+                                navController.navigate(AppRoutes.PEOPLE_TRIPS)
                             },
                             onAddExpense = { launchFlow("EXPENSE") }
                         )
@@ -609,7 +628,40 @@ fun AppNavHost(
                         )
                     }
 
-                    composable(AppRoutes.TRANSACTIONS) {
+                    composable(
+                        route = "${AppRoutes.TRANSACTIONS}?monthOffset={monthOffset}&category={category}&type={type}",
+                        arguments = listOf(
+                            navArgument("monthOffset") {
+                                type = NavType.IntType
+                                defaultValue = 0
+                            },
+                            navArgument("category") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument("type") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val monthOffset = backStackEntry.arguments?.getInt("monthOffset") ?: 0
+                        val category = backStackEntry.arguments?.getString("category")
+                        val type = backStackEntry.arguments?.getString("type")
+
+                        LaunchedEffect(backStackEntry.id) {
+                            transactionsViewModel.setMonthOffset(monthOffset)
+                            if (!category.isNullOrBlank()) {
+                                transactionsViewModel.setCategoryFilter(category)
+                            } else if (!type.isNullOrBlank()) {
+                                transactionsViewModel.setTypeFilter(type)
+                            } else {
+                                transactionsViewModel.clearFilter()
+                            }
+                        }
+
                         TransactionsScreen(
                             viewModel = transactionsViewModel,
                             onTransactionClick = { txn ->

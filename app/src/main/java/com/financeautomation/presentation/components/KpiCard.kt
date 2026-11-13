@@ -1,7 +1,9 @@
 package com.financeautomation.presentation.components
 
 import android.content.res.Configuration
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.defaultMinSize
@@ -19,8 +21,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -95,6 +100,7 @@ fun ShrinkToFitAmount(
  * Design: 16dp radius, surfaceContainerLow fill, no border.
  * Supports full-width hero card (large amount style) and half-width compact cards.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun KpiCard(
     label: String,
@@ -104,9 +110,11 @@ fun KpiCard(
     line1Text: String? = null,
     line1IsPrimary: Boolean = false,
     line2Text: String? = null,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null
 ) {
-    var showExact by remember { mutableStateOf(false) }
+    val exactRupees = formatRupeesAuto(amount)
+    val cd = "$label, rupees $exactRupees, opens transactions"
 
     Card(
         shape = FinanceShapes.appCard,
@@ -115,15 +123,12 @@ fun KpiCard(
         border = null,
         modifier = modifier
             .defaultMinSize(minHeight = FinanceTheme.sizes.kpiCardMinHeight)
-            .clickable(
+            .semantics { contentDescription = cd }
+            .clip(FinanceShapes.appCard)
+            .combinedClickable(
                 role = Role.Button,
-                onClick = {
-                    if (onClick != null) {
-                        onClick()
-                    } else {
-                        showExact = !showExact
-                    }
-                }
+                onClick = { onClick?.invoke() },
+                onLongClick = onLongClick
             )
     ) {
         Column(
@@ -144,7 +149,7 @@ fun KpiCard(
             ShrinkToFitAmount(
                 amount = amount,
                 isLargeAmount = isLargeAmount,
-                showExact = showExact,
+                showExact = false,
                 modifier = Modifier.padding(top = FinanceTheme.spacing.xs, bottom = FinanceTheme.spacing.xs)
             )
 

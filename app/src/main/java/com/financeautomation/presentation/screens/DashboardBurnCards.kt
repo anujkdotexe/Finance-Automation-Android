@@ -59,7 +59,13 @@ fun KpiRow(
     paceDeltaPercent: Double?,
     savings: Double,
     income: Double,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLivingBurnClick: () -> Unit = {},
+    onLivingBurnLongClick: () -> Unit = {},
+    onSavingsClick: () -> Unit = {},
+    onSavingsLongClick: () -> Unit = {},
+    onIncomeClick: () -> Unit = {},
+    onIncomeLongClick: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -81,6 +87,8 @@ fun KpiRow(
             line1Text = paceText,
             line1IsPrimary = (paceDeltaPercent ?: 0.0) <= 0.0,
             line2Text = dailyText,
+            onClick = onLivingBurnClick,
+            onLongClick = onLivingBurnLongClick,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -101,6 +109,8 @@ fun KpiRow(
                 amount = savings,
                 isLargeAmount = false,
                 line1Text = savingsPercentText,
+                onClick = onSavingsClick,
+                onLongClick = onSavingsLongClick,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -110,6 +120,8 @@ fun KpiRow(
                 label = stringResource(R.string.dashboard_income),
                 amount = income,
                 isLargeAmount = false,
+                onClick = onIncomeClick,
+                onLongClick = onIncomeLongClick,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()

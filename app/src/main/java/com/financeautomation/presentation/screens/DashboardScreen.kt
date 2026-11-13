@@ -19,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -26,6 +27,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.components.SyncStatusLine
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
@@ -33,6 +36,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.CategorySpend
 import com.financeautomation.presentation.viewmodel.DashboardUiState
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Frozen Dashboard screen conforming to UI Round 2 specifications.
@@ -51,13 +55,23 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     modifier: Modifier = Modifier,
     onNavigateToReview: () -> Unit = {},
-    onNavigateToTransactions: () -> Unit = onNavigateToReview,
-    onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit,
+    onNavigateToTransactions: (monthOffset: Int, category: String?, type: String?) -> Unit = { _, _, _ -> },
+    onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit = { _, _ -> },
+    onNavigateToBalances: () -> Unit = { onNavigateToSettlements("", true) },
     onAddExpense: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun showExactSnackbar(label: String, amount: Double) {
+        if (amount >= 100_000.0) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("$label: ₹${formatRupees(amount, includeDecimals = true)}")
+            }
+        }
+    }
 
     LaunchedEffect(state.syncMessage, state.errorMessage) {
         state.syncMessage?.let {
@@ -89,7 +103,8 @@ fun DashboardScreen(
                 onNextMonth = viewModel::nextMonth,
                 onNavigateToReview = onNavigateToReview,
                 onNavigateToTransactions = onNavigateToTransactions,
-                onNavigateToSettlements = onNavigateToSettlements,
+                onNavigateToBalances = onNavigateToBalances,
+                onShowExact = ::showExactSnackbar,
                 onAddExpense = onAddExpense,
                 modifier = Modifier.fillMaxSize()
             )
@@ -106,8 +121,9 @@ fun DashboardContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onNavigateToReview: () -> Unit,
-    onNavigateToTransactions: () -> Unit,
-    onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit,
+    onNavigateToTransactions: (monthOffset: Int, category: String?, type: String?) -> Unit,
+    onNavigateToBalances: () -> Unit,
+    onShowExact: (String, Double) -> Unit,
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -166,7 +182,25 @@ fun DashboardContent(
                     dailyAverage = state.dailyAverage,
                     paceDeltaPercent = state.paceDeltaPercent,
                     savings = state.savings,
-                    income = state.income
+                    income = state.income,
+                    onLivingBurnClick = {
+                        onNavigateToTransactions(state.monthOffset, null, "living_burn")
+                    },
+                    onLivingBurnLongClick = {
+                        onShowExact("Living burn", state.currentBurn)
+                    },
+                    onSavingsClick = {
+                        onNavigateToTransactions(state.monthOffset, CategoryConstants.CATEGORY_SAVINGS, null)
+                    },
+                    onSavingsLongClick = {
+                        onShowExact("Savings", state.savings)
+                    },
+                    onIncomeClick = {
+                        onNavigateToTransactions(state.monthOffset, null, "income")
+                    },
+                    onIncomeLongClick = {
+                        onShowExact("Income", state.income)
+                    }
                 )
             }
 
@@ -186,7 +220,7 @@ fun DashboardContent(
                 BalancesCard(
                     owedToMe = state.owedToMe,
                     iOwe = state.iOwePeople,
-                    onClick = { onNavigateToSettlements("", true) }
+                    onClick = onNavigateToBalances
                 )
             }
 
@@ -198,7 +232,13 @@ fun DashboardContent(
                         categories = baseCategories,
                         hasMore = state.allCategories.size > 3,
                         isExpanded = showAllCategories,
-                        onToggleExpand = { showAllCategories = !showAllCategories }
+                        onToggleExpand = { showAllCategories = !showAllCategories },
+                        onCategoryClick = { categoryName ->
+                            onNavigateToTransactions(state.monthOffset, categoryName, null)
+                        },
+                        onSeeAllClick = {
+                            onNavigateToTransactions(state.monthOffset, null, null)
+                        }
                     )
                 }
             }
@@ -234,8 +274,9 @@ private fun DashboardPreviewLight() {
             onPreviousMonth = {},
             onNextMonth = {},
             onNavigateToReview = {},
-            onNavigateToTransactions = {},
-            onNavigateToSettlements = { _, _ -> },
+            onNavigateToTransactions = { _, _, _ -> },
+            onNavigateToBalances = {},
+            onShowExact = { _, _ -> },
             onAddExpense = {}
         )
     }
@@ -269,8 +310,9 @@ private fun DashboardPreviewLargeFont() {
             onPreviousMonth = {},
             onNextMonth = {},
             onNavigateToReview = {},
-            onNavigateToTransactions = {},
-            onNavigateToSettlements = { _, _ -> },
+            onNavigateToTransactions = { _, _, _ -> },
+            onNavigateToBalances = {},
+            onShowExact = { _, _ -> },
             onAddExpense = {}
         )
     }
@@ -304,8 +346,9 @@ private fun DashboardPreviewDark() {
             onPreviousMonth = {},
             onNextMonth = {},
             onNavigateToReview = {},
-            onNavigateToTransactions = {},
-            onNavigateToSettlements = { _, _ -> },
+            onNavigateToTransactions = { _, _, _ -> },
+            onNavigateToBalances = {},
+            onShowExact = { _, _ -> },
             onAddExpense = {}
         )
     }

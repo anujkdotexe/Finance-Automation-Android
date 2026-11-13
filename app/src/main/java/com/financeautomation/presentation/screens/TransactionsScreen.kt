@@ -265,10 +265,12 @@ fun TransactionsContent(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
-        // 5. One Chip Filter Row: All, UPI, Card, Cash, Needs Review
+        // 5. One Chip Filter Row: All, UPI, Card, Cash, Needs Review, Income (+ active Category / Living burn chip)
         val currentAccount = state.activeFilter.account
         val currentStatus = state.activeFilter.status
-        val isAllSelected = currentAccount == null && currentStatus == null
+        val currentCategory = state.activeFilter.category
+        val isLivingBurn = state.activeFilter.excludeSavingsAndIgnored
+        val isAllSelected = currentAccount == null && currentStatus == null && currentCategory == null && !isLivingBurn
         val scrollState = rememberScrollState()
 
         Row(
@@ -278,6 +280,20 @@ fun TransactionsContent(
             horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (!currentCategory.isNullOrBlank()) {
+                AppChip(
+                    text = "$currentCategory ✕",
+                    selected = true,
+                    onClick = onClearFilter
+                )
+            }
+            if (isLivingBurn) {
+                AppChip(
+                    text = "Living burn ✕",
+                    selected = true,
+                    onClick = onClearFilter
+                )
+            }
             AppChip(
                 text = "All",
                 selected = isAllSelected,
@@ -313,6 +329,14 @@ fun TransactionsContent(
                 onClick = {
                     if (currentStatus.equals("review", ignoreCase = true)) onClearFilter()
                     else onFilterChange(TransactionFilter(status = "review"))
+                }
+            )
+            AppChip(
+                text = "Income",
+                selected = currentStatus.equals("income", ignoreCase = true),
+                onClick = {
+                    if (currentStatus.equals("income", ignoreCase = true)) onClearFilter()
+                    else onFilterChange(TransactionFilter(status = "income"))
                 }
             )
         }
