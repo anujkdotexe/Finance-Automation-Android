@@ -32,8 +32,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -137,8 +139,19 @@ fun TransactionsScreen(
                     onTransactionClick(txn)
                 },
                 onVoid = {
-                    viewModel.voidTransaction(txn.id)
+                    val targetTxn = txn
+                    viewModel.voidTransaction(targetTxn)
                     selectedTransaction = null
+                    coroutineScope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Transaction voided",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.undoVoid()
+                        }
+                    }
                 }
             )
         }
