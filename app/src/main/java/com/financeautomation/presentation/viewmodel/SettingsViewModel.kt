@@ -252,6 +252,7 @@ class SettingsViewModel(
     fun onRenameCompanion(companionId: String, newName: String) = customizationCoordinator.onRenameCompanion(companionId, newName)
 
     fun onRemoveCompanion(companionId: String) = customizationCoordinator.onRemoveCompanion(companionId)
+    fun onRemoveTripTag(name: String) = customizationCoordinator.onRemoveTripTag(name)
 
     // --- Background & Settle Delay ---
 

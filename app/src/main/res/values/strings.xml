@@ -786,4 +786,15 @@
     <!-- OnboardingViewModel -->
     <string name="onboarding_err_consent_denied">Consent was not granted. Please grant Google Drive access to continue.</string>
     <string name="onboarding_err_auth_failed">Authorization failed</string>
+
+    <!-- Remove a person or a trip -->
+    <string name="people_remove_action">Remove</string>
+    <string name="people_remove_cd">More options for %1$s</string>
+    <string name="people_remove_title">Remove %1$s?</string>
+    <string name="people_remove_message">%1$s leaves your people list. Past transactions keep the name.</string>
+    <string name="trips_remove_title">Remove %1$s?</string>
+    <string name="trips_remove_message">The trip leaves your list. Past transactions keep the trip name.</string>
+    <string name="trips_remove_cd">Remove trip %1$s</string>
+    <string name="settings_msg_trip_removed">Trip removed</string>
+    <string name="settings_err_trip_remove_failed">The trip could not be removed</string>
 </resources>
