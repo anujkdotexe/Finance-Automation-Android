@@ -1,11 +1,12 @@
 package com.financeautomation.presentation.flows
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,6 +75,7 @@ data class OpenDebtItem(
  * - Friend settlement companion chips and open debt picker.
  * - ButtonPair: OutlinedButton "Cancel", FilledButton "Save income".
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun IncomeReturnFlowSheet(
     accounts: List<Account>,
@@ -132,11 +134,16 @@ fun IncomeReturnFlowSheet(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusManager.clearFocus() }
-            .verticalScroll(scrollState),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
-        // 1. Amount Field
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            // 1. Amount Field
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -198,7 +205,7 @@ fun IncomeReturnFlowSheet(
             }
         }
 
-        // 2. Inflow Type Chips
+        // 2. Inflow Type Chips in wrapping FlowRow
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.prompt_inflow_type),
@@ -208,13 +215,10 @@ fun IncomeReturnFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val inflowScroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(inflowScroll),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 inflowTypes.forEach { type ->
                     val isSelected = selectedInflowType == type
@@ -230,7 +234,7 @@ fun IncomeReturnFlowSheet(
             }
         }
 
-        // 3. Account Credited Chips (user-defined accounts, no balances)
+        // 3. Account Credited Chips (user-defined accounts, no balances) in wrapping FlowRow
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.prompt_receiving_account),
@@ -240,13 +244,10 @@ fun IncomeReturnFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val accountScroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(accountScroll),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 accounts.forEach { account ->
                     val isSelected = selectedAccount == account.name
@@ -276,15 +277,12 @@ fun IncomeReturnFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            // Friend Chips if Friend settlement is active
+            // Friend Chips if Friend settlement is active in wrapping FlowRow
             if (selectedInflowType == friendSettlementType && companions.isNotEmpty()) {
-                val friendScroll = rememberScrollState()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(friendScroll),
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
                     companions.forEach { companion ->
                         val isSelected = settlerName.equals(companion.name, ignoreCase = true)
@@ -376,10 +374,11 @@ fun IncomeReturnFlowSheet(
                     .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
             )
         }
+        }
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
-        // 7. Action Buttons: ButtonPair with OutlinedButton "Cancel" and FilledButton "Save income"
+        // 7. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Save income" outside scrollable area
         val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
         val isValid = parsedAmount > 0.0 && (selectedInflowType != friendSettlementType || settlerName.isNotBlank())
 

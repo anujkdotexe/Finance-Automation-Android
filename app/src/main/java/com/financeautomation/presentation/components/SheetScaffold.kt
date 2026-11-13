@@ -121,7 +121,11 @@ fun SheetScaffold(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
             // Body content slot
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+            ) {
                 content()
             }
 

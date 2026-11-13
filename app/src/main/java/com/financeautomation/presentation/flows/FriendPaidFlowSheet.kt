@@ -1,11 +1,12 @@
 package com.financeautomation.presentation.flows
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -72,7 +73,7 @@ private val SHEET_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
  * - Date picker (no future dates).
  * - ButtonPair: OutlinedButton "Cancel", FilledButton "Record debt".
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun FriendPaidFlowSheet(
     companions: List<Companion>,
@@ -111,11 +112,16 @@ fun FriendPaidFlowSheet(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusManager.clearFocus() }
-            .verticalScroll(scrollState),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
-        // 1. Amount Field
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            // 1. Amount Field
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -193,13 +199,10 @@ fun FriendPaidFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val friendScroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(friendScroll),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 companions.forEach { companion ->
                     val isSelected = creditorName.equals(companion.name, ignoreCase = true)
@@ -213,7 +216,7 @@ fun FriendPaidFlowSheet(
                     )
                 }
 
-                // + Add Friend Chip
+                // Add Friend Chip
                 AppChip(
                     text = stringResource(R.string.action_add_friend),
                     selected = false,
@@ -324,7 +327,7 @@ fun FriendPaidFlowSheet(
             )
         }
 
-        // 4. Category Chips
+        // 4. Category Chips in wrapping FlowRow
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.prompt_category),
@@ -334,13 +337,10 @@ fun FriendPaidFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val catScroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(catScroll),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 CategoryConstants.DEFAULT_CATEGORIES.forEach { category ->
                     val isSelected = selectedCategory.equals(category, ignoreCase = true)
@@ -420,10 +420,11 @@ fun FriendPaidFlowSheet(
                 DatePicker(state = datePickerState)
             }
         }
+        }
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
-        // 6. Action Buttons: ButtonPair with OutlinedButton "Cancel" and FilledButton "Record debt"
+        // 6. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Record debt" outside scrollable area
         val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
         val isValid = parsedAmount > 0.0 && creditorName.isNotBlank() && whatForText.isNotBlank()
 

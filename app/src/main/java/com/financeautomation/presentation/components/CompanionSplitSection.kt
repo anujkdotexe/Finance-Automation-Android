@@ -3,10 +3,11 @@ package com.financeautomation.presentation.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.draw.clip
 import com.financeautomation.R
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.utils.formatRupees
@@ -51,6 +53,7 @@ import com.financeautomation.presentation.viewmodel.QuickLogUiState
  * Split panel displaying friend chips, inline friend addition, custom share input,
  * and live "My share" / "Owed to me" calculation cards.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CompanionSplitSection(
     state: QuickLogUiState,
@@ -130,13 +133,10 @@ fun CompanionSplitSection(
             }
         }
 
-        val companionsScroll = rememberScrollState()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(companionsScroll),
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             // Friend chips
             state.availableCompanions.forEach { friend ->
@@ -150,10 +150,12 @@ fun CompanionSplitSection(
                         FinanceTheme.sizes.strokeThin,
                         if (isSelected) MaterialTheme.colorScheme.secondary else FinanceTheme.colors.outlineVariant
                     ),
-                    modifier = Modifier.clickable {
-                        focusManager.clearFocus()
-                        onCompanionToggled(friend.id)
-                    }
+                    modifier = Modifier
+                        .clip(FinanceShapes.pill)
+                        .clickable {
+                            focusManager.clearFocus()
+                            onCompanionToggled(friend.id)
+                        }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs),
@@ -194,15 +196,17 @@ fun CompanionSplitSection(
                 }
             }
 
-            // + Add Friend Chip
+            // Add Friend Chip
             Surface(
                 shape = FinanceShapes.pill,
                 color = FinanceTheme.colors.surfaceContainerHigh,
                 border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outlineVariant),
-                modifier = Modifier.clickable {
-                    focusManager.clearFocus()
-                    showAddFriendInput = !showAddFriendInput
-                }
+                modifier = Modifier
+                    .clip(FinanceShapes.pill)
+                    .clickable {
+                        focusManager.clearFocus()
+                        showAddFriendInput = !showAddFriendInput
+                    }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs),

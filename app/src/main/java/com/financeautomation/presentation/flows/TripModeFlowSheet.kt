@@ -1,10 +1,11 @@
 package com.financeautomation.presentation.flows
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -55,6 +56,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
  * - ButtonPair: OutlinedButton "End trip" (or "Cancel"), FilledButton "Start new trip".
  * - No map, no "Active trip" or "Live sync" labels.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TripModeFlowSheet(
     activeTag: TripTag?,
@@ -86,11 +88,16 @@ fun TripModeFlowSheet(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusManager.clearFocus() }
-            .verticalScroll(scrollState),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
-        if (activeTag != null) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            if (activeTag != null) {
             // Active Trip Display Card
             Surface(
                 shape = FinanceShapes.card,
@@ -290,13 +297,10 @@ fun TripModeFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val peopleScroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(peopleScroll),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 // "You" chip
                 AppChip(
@@ -322,10 +326,11 @@ fun TripModeFlowSheet(
                 }
             }
         }
+        }
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
-        // Action Buttons
+        // Pinned Action Buttons outside scrollable area
         if (activeTag != null) {
             ButtonPair(
                 outlinedText = stringResource(R.string.action_end_trip),
