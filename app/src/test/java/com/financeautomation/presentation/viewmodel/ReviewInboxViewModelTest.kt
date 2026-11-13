@@ -922,7 +922,7 @@ class ReviewInboxViewModelTest {
     @Test
     fun testFirstRunHint_dismissAndPersist() = runTest {
         val tRepo = FakeTransactionRepo()
-        val prefs = PreferencesRepositoryImpl(isTestHeadless = true)
+        val prefs = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
         val vm = ReviewInboxViewModel(
             transactionRepository = tRepo,
             directSyncQueueDao = FakeSyncQueueDao(),

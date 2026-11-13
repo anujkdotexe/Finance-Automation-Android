@@ -34,12 +34,18 @@ class PreferencesRepositoryImpl(
 
     /**
      * Explicit test/headless constructor utilizing in-memory preferences fallback.
+     * Defaults to [Dispatchers.Unconfined] for headless in-memory tests so that reads
+     * and writes execute synchronously without non-deterministic context switching to
+     * [Dispatchers.IO] worker threads.
      */
-    constructor(isTestHeadless: Boolean = true) : this(
+    constructor(
+        isTestHeadless: Boolean = true,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.Unconfined
+    ) : this(
         preferenceDao = null,
         preferenceDaoProvider = null,
         configSyncCoordinatorProvider = null,
-        ioDispatcher = Dispatchers.IO
+        ioDispatcher = ioDispatcher
     )
 
     private suspend fun resolveDao(): PreferenceDao? {
