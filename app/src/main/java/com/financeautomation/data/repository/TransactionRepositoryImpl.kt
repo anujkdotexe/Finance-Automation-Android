@@ -1079,14 +1079,32 @@ class TransactionRepositoryImpl(
             var reconciledCount = 0
 
             val remotePayables = mutableListOf<PayableEntity>()
+            val queuedIds = resolveSyncQueueDao().getAllQueueFlow().first().map { it.transactionId }.toSet()
 
             runInDbTransaction {
                 for (month in snapshot.monthTabs) {
                     for (sheetDebit in month.debits) {
                         val uuid = sheetDebit.uuid
-                        val localTxn = (if (!uuid.isNullOrBlank()) {
+                        // Row number matching is only safe for a sheet row without a uuid. A row that carries a uuid
+                        // we do not know belongs to another transaction, even when its row number is cached locally.
+                        val localTxn = if (!uuid.isNullOrBlank()) {
                             tDao.getById(uuid)
-                        } else null) ?: tDao.getByTabAndSheetRowIndex(month.tabName, sheetDebit.rowNumber)
+                        } else {
+                            tDao.getByTabAndSheetRowIndex(month.tabName, sheetDebit.rowNumber)
+                        }
+
+                        // A change this device has not delivered yet is newer than the sheet: never overwrite it
+                        if (localTxn != null) {
+                            val valuesDiffer = localTxn.totalAmount != sheetDebit.totalAmount ||
+                                localTxn.merchant != sheetDebit.description ||
+                                localTxn.category != sheetDebit.category ||
+                                localTxn.myShare != sheetDebit.myShare ||
+                                localTxn.owedToMe != sheetDebit.owedToMe ||
+                                localTxn.status != sheetDebit.status ||
+                                localTxn.companions != sheetDebit.companions
+                            val unsyncedEdit = localTxn.syncState == SyncState.PENDING.name && valuesDiffer
+                            if (localTxn.id in queuedIds || unsyncedEdit) continue
+                        }
 
                         if (localTxn != null) {
                             val newTotal = sheetDebit.totalAmount
@@ -1098,37 +1116,7 @@ class TransactionRepositoryImpl(
                             val newCompanions = sheetDebit.companions
                             val newRow = sheetDebit.rowNumber
 
-                            // Align local ID with non-blank sheet UUID if matched by tab/row to avoid orphan divergence
-                            if (!uuid.isNullOrBlank() && localTxn.id != uuid) {
-                                val oldId = localTxn.id
-                                val qDao = resolveSyncQueueDao()
-                                val aligned = localTxn.copy(
-                                    id = uuid,
-                                    totalAmount = newTotal,
-                                    merchant = newMerchant,
-                                    category = newCategory,
-                                    myShare = newMyShare,
-                                    owedToMe = newOwed,
-                                    status = newStatus,
-                                    companions = newCompanions,
-                                    sheetRowIndex = newRow,
-                                    syncState = SyncState.SYNCED.name
-                                )
-                                tDao.insert(aligned)
-                                qDao.updateTransactionId(oldId, uuid)
-                                qDao.updatePayloadJsonId(oldId, uuid)
-                                qDao.updatePlanJsonId(oldId, uuid)
-
-                                val lDao = resolveLineageDao()
-                                lDao?.let {
-                                    it.updateUuid(oldId, uuid)
-                                    it.updateCarriedFromUuid(oldId, uuid)
-                                    it.updateRootUuid(oldId, uuid)
-                                }
-
-                                tDao.deleteById(oldId)
-                                reconciledCount++
-                            } else if (localTxn.totalAmount != newTotal ||
+                            if (localTxn.totalAmount != newTotal ||
                                 localTxn.merchant != newMerchant ||
                                 localTxn.category != newCategory ||
                                 localTxn.myShare != newMyShare ||
