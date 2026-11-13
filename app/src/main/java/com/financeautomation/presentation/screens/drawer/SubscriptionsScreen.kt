@@ -36,13 +36,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.presentation.components.EmptyState
-import com.financeautomation.presentation.components.FilledButton
 import com.financeautomation.presentation.components.HeaderActionButton
+import java.time.LocalDate
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SubscriptionsViewModel
@@ -143,28 +144,22 @@ fun SubscriptionsScreen(
                                 modifier = Modifier.padding(bottom = FinanceTheme.spacing.xxs)
                             )
                         }
-                        Text(
-                            text = stringResource(R.string.sub_next_due_today),
-                            style = FinanceTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                        if (state.activeSubscriptions.isNotEmpty()) {
+                            val nextDue = state.nextDueSubscription
+                            val nextDueText = if (nextDue != null) {
+                                val anchorDate = LocalDate.ofEpochDay(nextDue.anchorEpochDay)
+                                val monthStr = anchorDate.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+                                stringResource(R.string.sub_next_due_formatted, nextDue.name, "${anchorDate.dayOfMonth} $monthStr")
+                            } else null
 
-                    // Proportion bar
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(FinanceTheme.sizes.proportionBarHeight)
-                            .clip(CircleShape)
-                            .background(FinanceTheme.colors.surfaceContainerHigh)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.75f)
-                                .height(FinanceTheme.sizes.proportionBarHeight)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
+                            if (nextDueText != null) {
+                                Text(
+                                    text = nextDueText,
+                                    style = FinanceTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -196,9 +191,34 @@ fun SubscriptionsScreen(
             }
 
             if (state.activeSubscriptions.isEmpty()) {
-                EmptyState(
-                    message = stringResource(R.string.sub_empty_title)
-                )
+                Surface(
+                    color = FinanceTheme.colors.surfaceContainerLowest,
+                    shape = FinanceShapes.large,
+                    shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(FinanceTheme.spacing.xl),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.sub_empty_title),
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = stringResource(R.string.sub_empty_subtitle),
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             } else {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -243,21 +263,6 @@ fun SubscriptionsScreen(
                     }
                 }
             }
-        }
-
-        // Pinned Bottom Button
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
-                .padding(FinanceTheme.spacing.l)
-        ) {
-            FilledButton(
-                text = stringResource(R.string.sub_add_title),
-                onClick = { showAddSubscriptionSheet = true },
-                modifier = Modifier.fillMaxWidth()
-            )
         }
     }
 
