@@ -287,7 +287,10 @@ private fun CategoryItemCard(
                         style = FinanceTheme.typography.bodySmall,
                         color = if (budgetAmount != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                            .defaultMinSize(
+                                minWidth = FinanceTheme.sizes.minTouchTarget,
+                                minHeight = FinanceTheme.sizes.minTouchTarget
+                            )
                             .clickable(onClickLabel = editDescription, onClick = onOpenBudget)
                     )
                 }
