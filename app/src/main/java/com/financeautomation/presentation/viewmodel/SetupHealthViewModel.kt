@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.ZoneId
@@ -100,6 +101,15 @@ class SetupHealthViewModel(
 
     init {
         refreshChecks()
+        // The Google line must follow a sign in or sign out without the screen being reopened
+        viewModelScope.launch(ioDispatcher) {
+            kotlinx.coroutines.flow.combine(
+                preferencesRepository.getGoogleAccountEmail(),
+                preferencesRepository.getSpreadsheetIdForYear(ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year)
+            ) { email, sheetId -> email to sheetId }
+                .drop(1)
+                .collect { refreshChecks() }
+        }
     }
 
     private fun updateCaptureStatus() {

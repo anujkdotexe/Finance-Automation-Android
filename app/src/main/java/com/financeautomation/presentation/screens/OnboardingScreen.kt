@@ -276,7 +276,15 @@ fun OnboardingScreen(
                         stringResource(R.string.onboarding_checklist_step1_default_sheet)
                     },
                     statusText = if (isStep1Done && isStep2Done) stringResource(R.string.onboarding_checklist_step1_connected) else null,
-                    actionButtonText = if (!isStep1Done) stringResource(R.string.onboarding_checklist_step1_connect) else if (state.step2State == StepState.ERROR) stringResource(R.string.action_retry_workspace) else null,
+                    needsAttention = !(isStep1Done && isStep2Done) &&
+                        state.step1State != StepState.IN_PROGRESS && state.step2State != StepState.IN_PROGRESS,
+                    actionButtonText = when {
+                        state.step1State == StepState.IN_PROGRESS || state.step2State == StepState.IN_PROGRESS -> null
+                        !isStep1Done -> stringResource(R.string.onboarding_sign_in)
+                        state.step2State == StepState.ERROR -> stringResource(R.string.action_retry_workspace)
+                        !isStep2Done -> stringResource(R.string.onboarding_set_up_workbook)
+                        else -> null
+                    },
                     onActionClick = {
                         if (!isStep1Done) {
                             try {
@@ -284,8 +292,8 @@ fun OnboardingScreen(
                             } catch (_: Exception) {
                                 viewModel.startSignIn()
                             }
-                        } else if (state.step2State == StepState.ERROR) {
-                            viewModel.startWorkspaceProvisioning(forceValidateTabs = true)
+                        } else {
+                            viewModel.startWorkspaceProvisioning(forceValidateTabs = state.step2State == StepState.ERROR)
                         }
                     }
                 )
@@ -335,7 +343,8 @@ private fun ChecklistCard(
     statusText: String?,
     actionButtonText: String?,
     onActionClick: (() -> Unit)?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    needsAttention: Boolean = false
 ) {
     Surface(
         color = FinanceTheme.colors.surfaceContainerLowest,
@@ -344,11 +353,12 @@ private fun ChecklistCard(
         modifier = modifier
             .fillMaxWidth()
             .border(
-                width = FinanceTheme.sizes.strokeThin,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                width = if (needsAttention) FinanceTheme.sizes.strokeThick else FinanceTheme.sizes.strokeThin,
+                color = if (needsAttention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                 shape = FinanceShapes.large
             )
     ) {
+      Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -423,22 +433,26 @@ private fun ChecklistCard(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs)
                 )
-            } else if (actionButtonText != null && onActionClick != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = FinanceShapes.pill,
-                    modifier = Modifier.clickable(onClick = onActionClick)
-                ) {
-                    Text(
-                        text = actionButtonText,
-                        style = FinanceTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs)
-                    )
-                }
+            } else if (needsAttention) {
+                Text(
+                    text = stringResource(R.string.onboarding_needs_attention),
+                    style = FinanceTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs)
+                )
             }
         }
+        if (actionButtonText != null && onActionClick != null) {
+            FilledButton(
+                text = actionButtonText,
+                onClick = onActionClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = FinanceTheme.spacing.m, end = FinanceTheme.spacing.m, bottom = FinanceTheme.spacing.m)
+            )
+        }
+      }
     }
 }
 

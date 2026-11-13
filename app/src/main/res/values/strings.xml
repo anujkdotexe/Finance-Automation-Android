@@ -797,4 +797,9 @@
     <string name="trips_remove_cd">Remove trip %1$s</string>
     <string name="settings_msg_trip_removed">Trip removed</string>
     <string name="settings_err_trip_remove_failed">The trip could not be removed</string>
+
+    <!-- Setup page: the step that needs the user -->
+    <string name="onboarding_needs_attention">Needs attention</string>
+    <string name="onboarding_sign_in">Sign in</string>
+    <string name="onboarding_set_up_workbook">Set up workbook</string>
 </resources>
