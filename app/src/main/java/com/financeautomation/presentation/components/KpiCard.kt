@@ -31,13 +31,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.core.utils.formatRupeesCompact
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
+import com.financeautomation.presentation.theme.Typography
 import kotlin.math.abs
 
 /**
@@ -52,7 +51,7 @@ fun ShrinkToFitAmount(
     showExact: Boolean,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface,
-    floorFontSize: TextUnit = 16.sp
+    floorFontSize: TextUnit = Typography.bodyLarge.fontSize
 ) {
     val baseStyle = if (isLargeAmount) FinanceTheme.typography.amountHero else FinanceTheme.typography.amountMedium
     val exactText = formatRupeesAuto(amount)
