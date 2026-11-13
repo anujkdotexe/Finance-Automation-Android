@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -86,6 +88,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
@@ -228,55 +231,109 @@ fun AppNavHost(
         context.startActivity(intent)
     }
 
+    val isDebugOrBeta = com.financeautomation.BuildConfig.DEBUG ||
+        com.financeautomation.BuildConfig.BUILD_TYPE == "beta"
+
+    val accountEmail = settingsState.googleAccountEmail
+    val accountDisplayName = remember(accountEmail) {
+        if (!accountEmail.isNullOrBlank()) {
+            if (accountEmail.contains("@")) {
+                accountEmail.substringBefore("@")
+            } else {
+                accountEmail
+            }
+        } else {
+            "Authorized User"
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = true,
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = FinanceTheme.colors.surfaceContainerHigh,
-                modifier = Modifier.verticalScroll(rememberScrollState())
+                modifier = Modifier.fillMaxHeight()
             ) {
-                Column(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
-                    Text(
-                        text = "Finance Automation",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = settingsState.googleAccountEmail ?: "Local offline storage",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m))
-                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-
-                DRAWER_ITEMS.forEach { item ->
-                    if (!item.requiresDeveloperMode || settingsState.developerMode) {
-                        val isSelected = currentRoute == item.route
-                        NavigationDrawerItem(
-                            label = { Text(item.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
-                            icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
-                            selected = isSelected,
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                if (currentRoute != item.route) {
-                                    navController.navigate(item.route) {
-                                        popUpTo(AppRoutes.DASHBOARD) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            ),
-                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(FinanceTheme.spacing.l),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                    ) {
+                        AccountAvatar(
+                            email = accountEmail
                         )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = accountDisplayName,
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = accountEmail ?: "Local offline storage",
+                                style = FinanceTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m))
+                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+                    DRAWER_ITEMS.forEach { item ->
+                        if (item.route == AppRoutes.SUBSCRIPTIONS && !isDebugOrBeta) {
+                            return@forEach
+                        }
+                        if (!item.requiresDeveloperMode || settingsState.developerMode) {
+                            val isSelected = currentRoute == item.route
+                            NavigationDrawerItem(
+                                label = {
+                                    Column {
+                                        Text(
+                                            text = item.label,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                        if (item.route == AppRoutes.SUBSCRIPTIONS && isDebugOrBeta) {
+                                            Text(
+                                                text = "Coming in round 4",
+                                                style = FinanceTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                },
+                                icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
+                                selected = isSelected,
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    if (currentRoute != item.route) {
+                                        navController.navigate(item.route) {
+                                            popUpTo(AppRoutes.DASHBOARD) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                },
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                            )
+                        }
                     }
                 }
             }
