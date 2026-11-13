@@ -4,6 +4,15 @@ package com.financeautomation.domain.model
  * Domain request model for recording income / friend settlement in Table 2
  * and reconciling open debits via SettlementWaterfallUseCase.
  */
+/**
+ * Domain request to void an income or refund row (Table 2). The inflow id is the credit request id, which is also
+ * written to the row's UUID cell (column AD) when the credit is appended.
+ */
+data class VoidInflowRequest(
+    val inflowId: String,
+    val timestamp: Long
+)
+
 data class LogCreditRequest(
     val requestId: String,
     val settler: String,

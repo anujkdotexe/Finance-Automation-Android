@@ -9,5 +9,11 @@ interface InflowRepository {
     suspend fun getInflowById(id: String): Inflow?
     suspend fun insertInflow(inflow: Inflow)
     suspend fun updateStatus(id: String, status: String)
+
+    /**
+     * Voids an income or refund entry: sets the local status to VOID and queues the sheet update in one transaction.
+     * Voiding an already void entry succeeds without queuing again; an unknown id returns an error.
+     */
+    suspend fun voidInflow(id: String): com.financeautomation.core.model.Result<Unit>
 }
 

@@ -264,6 +264,7 @@ fun FailedQueueItemCard(
                 SyncQueueEntity.OP_INSERT -> "Expense Insert"
                 SyncQueueEntity.OP_UPDATE -> "Expense Update"
                 SyncQueueEntity.OP_VOID -> "Expense Void"
+                SyncQueueEntity.OP_VOID_INFLOW -> "Income Void"
                 else -> item.operationType
             }
             Text(
