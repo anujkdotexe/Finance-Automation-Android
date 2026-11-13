@@ -129,43 +129,50 @@ fun ReviewInboxContent(
 ) {
     val totalPendingCount = state.items.size + subscriptionsDue.size
 
-    Box(
+    Column(
         modifier = modifier.fillMaxSize()
     ) {
+        // 1. Single-line quiet sync line under top bar (always visible, including when list is empty)
+        SyncStatusLine(
+            waitingCount = 0,
+            failedCount = state.failedQueueItems.size,
+            lastSyncedText = "Synced 2m ago",
+            modifier = Modifier.padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.s)
+        )
+
         when {
             state.isLoading -> {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
             state.items.isEmpty() && subscriptionsDue.isEmpty() && state.failedQueueItems.isEmpty() -> {
-                EmptyInboxState(
-                    onNavigateToDashboard = onNavigateToDashboard,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    EmptyInboxState(
+                        onNavigateToDashboard = onNavigateToDashboard
+                    )
+                }
             }
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         start = FinanceTheme.spacing.l,
-                        top = FinanceTheme.spacing.s,
+                        top = FinanceTheme.spacing.xs,
                         end = FinanceTheme.spacing.l,
                         bottom = FinanceTheme.spacing.bottomFabClearance
                     ),
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
-                    // 1. Single-line quiet sync line
-                    item {
-                        SyncStatusLine(
-                            waitingCount = 0,
-                            failedCount = state.failedQueueItems.size,
-                            lastSyncedText = "Synced 2m ago"
-                        )
-                    }
-
-                    // 2. Section Header: "N to review" on left, "Confirm all" on right
+                    // Section Header: "N to review" on left, "Confirm all" on right
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
