@@ -47,6 +47,8 @@ data class SettingsUiState(
     val companions: List<Companion> = emptyList(),
     val companionOpenItemCounts: Map<String, Int> = emptyMap(),
     val tripTags: List<TripTag> = emptyList(),
+    /** Net expenditure per trip, keyed by the lower case trip name. */
+    val tripSummaries: Map<String, com.financeautomation.domain.usecase.TripSummary> = emptyMap(),
     val isSyncing: Boolean = false,
     val isConfigSyncing: Boolean = false,
     val isRegeneratingDashboard: Boolean = false,
@@ -180,6 +182,12 @@ class SettingsViewModel(
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.getThemeMode().collect { mode ->
                 _uiState.update { it.copy(themeMode = mode) }
+            }
+        }
+        viewModelScope.launch(ioDispatcher) {
+            val summaries = com.financeautomation.domain.usecase.TripSummaryUseCase()
+            transactionRepository.getTransactions().collect { rows ->
+                _uiState.update { it.copy(tripSummaries = summaries.byTrip(rows)) }
             }
         }
         viewModelScope.launch(ioDispatcher) {

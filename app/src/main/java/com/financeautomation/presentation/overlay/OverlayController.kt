@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.overlay
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import android.graphics.PixelFormat
 import android.provider.Settings
@@ -217,6 +218,10 @@ class OverlayController(
                 }
                 val companions = updatedCompanions
                 val activeTripTag = tripTagRepository.getActiveTagSync()
+                // Figures of the active trip, left out while the app lock is active
+                val tripSummary = if (locked || activeTripTag == null) null else
+                    com.financeautomation.domain.usecase.TripSummaryUseCase()
+                        .forTrip(activeTripTag.name, transactionRepository.getTransactions().first())
 
                 val initialScreen = when (request) {
                     is OverlayRequest.ChooseAction -> if (locked) { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE } else OverlayFlowScreen.MENU
@@ -267,6 +272,7 @@ class OverlayController(
                                         accounts = accounts,
                                         companions = companions,
                                         activeTripTag = activeTripTag,
+                                        tripSummary = tripSummary,
                                         openDebts = openDebtsState.value,
                                         onPersonChanged = ::loadOpenDebtsForPerson,
                                         onConfirmExpense = {
