@@ -1,6 +1,7 @@
 package com.financeautomation.domain.usecase
 
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.core.utils.stripVoidPrefix
 import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.InflowRepository
@@ -58,7 +59,7 @@ class ExportMonthCsvUseCase(
             out.appendLine(
                 row(
                     listOf(
-                        date(t.timestamp), time(t.timestamp), text(t.merchant), text(t.category), text(t.account),
+                        date(t.timestamp), time(t.timestamp), text(stripVoidPrefix(t.merchant)), text(t.category), text(t.account),
                         money(t.totalAmount), money(t.myShare), money(t.owedToMe), text(t.status.value),
                         text(t.companions)
                     )
@@ -72,7 +73,7 @@ class ExportMonthCsvUseCase(
             out.appendLine(
                 row(
                     listOf(
-                        date(i.timestamp), time(i.timestamp), text(i.source), text(i.note), text(i.inflowType),
+                        date(i.timestamp), time(i.timestamp), text(stripVoidPrefix(i.source)), text(i.note), text(i.inflowType),
                         text(i.account), money(i.amount)
                     )
                 )

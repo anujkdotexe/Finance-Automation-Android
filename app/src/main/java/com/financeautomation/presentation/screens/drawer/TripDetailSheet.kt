@@ -22,11 +22,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
+import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.formatRupees
+import com.financeautomation.core.utils.stripVoidPrefix
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.usecase.TripSummary
+import com.financeautomation.presentation.components.StatusChip
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import java.text.SimpleDateFormat
@@ -131,15 +135,32 @@ private fun TripTransactionRow(transaction: Transaction, dateFormat: SimpleDateF
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val isVoid = transaction.status == TransactionStatus.VOID
+        val cleanMerchant = stripVoidPrefix(transaction.merchant.ifBlank { transaction.category })
+
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = transaction.merchant.ifBlank { transaction.category },
-                style = FinanceTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+            ) {
+                Text(
+                    text = cleanMerchant,
+                    style = if (isVoid) {
+                        FinanceTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough)
+                    } else {
+                        FinanceTheme.typography.bodyMedium
+                    },
+                    fontWeight = FontWeight.Medium,
+                    color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                if (isVoid) {
+                    StatusChip(status = "Voided")
+                }
+            }
             Text(
                 text = stringResource(
                     R.string.trip_detail_row_meta,
@@ -156,7 +177,7 @@ private fun TripTransactionRow(transaction: Transaction, dateFormat: SimpleDateF
             Text(
                 text = formatRupees(transaction.totalAmount),
                 style = FinanceTheme.typography.numeric,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = stringResource(R.string.trip_detail_your_share, formatRupees(transaction.myShare)),

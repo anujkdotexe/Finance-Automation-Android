@@ -62,10 +62,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.R
+import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.core.utils.stripVoidPrefix
 import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AppCard
@@ -155,8 +158,9 @@ fun TransactionsScreen(
                 onVoidTransaction = { targetTxn ->
                     viewModel.voidTransaction(targetTxn)
                     coroutineScope.launch {
+                        val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
                         val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.txns_voided_msg),
+                            message = context.getString(R.string.txns_voided_named_msg, cleanName),
                             actionLabel = context.getString(R.string.action_undo),
                             duration = SnackbarDuration.Short
                         )
@@ -193,8 +197,9 @@ fun TransactionsScreen(
                     viewModel.voidTransaction(targetTxn)
                     selectedTransaction = null
                     coroutineScope.launch {
+                        val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
                         val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.txns_voided_msg),
+                            message = context.getString(R.string.txns_voided_named_msg, cleanName),
                             actionLabel = context.getString(R.string.action_undo),
                             duration = SnackbarDuration.Short
                         )
@@ -799,6 +804,9 @@ fun TransactionDetailSheet(
                 .padding(bottom = FinanceTheme.spacing.xl),
             verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
+            val isVoid = transaction.status == TransactionStatus.VOID
+            val cleanMerchant = stripVoidPrefix(transaction.merchant.ifBlank { transaction.category })
+
             // Header: Merchant + Status
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -806,18 +814,22 @@ fun TransactionDetailSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = transaction.merchant.ifBlank { transaction.category },
-                    style = FinanceTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = cleanMerchant,
+                    style = if (isVoid) {
+                        FinanceTheme.typography.titleLarge.copy(textDecoration = TextDecoration.LineThrough)
+                    } else {
+                        FinanceTheme.typography.titleLarge
+                    },
+                    color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
-                StatusChip(status = transaction.status.value)
+                StatusChip(status = if (isVoid) "Voided" else transaction.status.value)
             }
 
             // Big Mono Amount
             Text(
                 text = formatRupeesAuto(transaction.totalAmount),
                 style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
             )
 
             // Info items: Category, Account, Date & Time
@@ -927,6 +939,9 @@ fun IncomeDetailSheet(
                 .padding(bottom = FinanceTheme.spacing.xl),
             verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
+            val isVoid = inflow.status.equals("VOID", ignoreCase = true)
+            val cleanTitle = stripVoidPrefix(displayTitle)
+
             // Header: Source + Inflow type / Status
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -934,18 +949,22 @@ fun IncomeDetailSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = displayTitle,
-                    style = FinanceTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = cleanTitle,
+                    style = if (isVoid) {
+                        FinanceTheme.typography.titleLarge.copy(textDecoration = TextDecoration.LineThrough)
+                    } else {
+                        FinanceTheme.typography.titleLarge
+                    },
+                    color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
-                StatusChip(status = if (inflow.status.equals("VOID", ignoreCase = true)) "VOID" else inflow.inflowType)
+                StatusChip(status = if (isVoid) "Voided" else inflow.inflowType)
             }
 
-            // Big Mono Amount in positive color
+            // Big Mono Amount in positive color (or muted if voided)
             Text(
                 text = "+${formatRupeesAuto(inflow.amount)}",
                 style = MaterialTheme.typography.headlineLarge,
-                color = FinanceTheme.colors.moneyIn
+                color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else FinanceTheme.colors.moneyIn
             )
 
             // Info items: Source, Type, Account, Date & Time, Note

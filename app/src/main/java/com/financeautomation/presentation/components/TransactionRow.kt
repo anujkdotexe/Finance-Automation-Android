@@ -23,10 +23,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.core.utils.stripVoidPrefix
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -50,6 +52,8 @@ fun TransactionRow(
     isExpense: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
+    val isVoid = status.equals("VOID", ignoreCase = true)
+    val cleanMerchant = stripVoidPrefix(merchant)
     val metaText = when {
         time.isNotBlank() && category.isNotBlank() -> "$time · $category"
         time.isNotBlank() -> time
@@ -76,13 +80,31 @@ fun TransactionRow(
                 .padding(end = FinanceTheme.spacing.m),
             verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)
         ) {
-            Text(
-                text = merchant,
-                style = FinanceTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+            ) {
+                Text(
+                    text = cleanMerchant,
+                    style = if (isVoid) {
+                        FinanceTheme.typography.titleMedium.copy(textDecoration = TextDecoration.LineThrough)
+                    } else {
+                        FinanceTheme.typography.titleMedium
+                    },
+                    color = if (isVoid) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                if (isVoid) {
+                    StatusChip(status = "Voided")
+                }
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -113,7 +135,7 @@ fun TransactionRow(
                 style = FinanceTheme.typography.numeric.copy(
                     fontWeight = FontWeight.SemiBold
                 ),
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
             )
 
             if (!splitText.isNullOrBlank()) {
@@ -124,7 +146,7 @@ fun TransactionRow(
                     maxLines = 1,
                     overflow = TextOverflow.Clip
                 )
-            } else if (status.isNotBlank()) {
+            } else if (status.isNotBlank() && !isVoid) {
                 StatusChip(status = status)
             }
         }
@@ -185,7 +207,8 @@ fun InflowRow(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val displayTitle = source.ifBlank {
+    val isVoid = status.equals("VOID", ignoreCase = true)
+    val rawDisplayTitle = source.ifBlank {
         when (inflowType.uppercase()) {
             "FRIEND_SETTLEMENT" -> "Friend settlement"
             "SELF_TRANSFER" -> "Self transfer"
@@ -193,6 +216,7 @@ fun InflowRow(
             else -> "Income"
         }
     }
+    val cleanTitle = stripVoidPrefix(rawDisplayTitle)
     val typeLabel = when (inflowType.uppercase()) {
         "FRIEND_SETTLEMENT" -> "Settlement"
         "SELF_TRANSFER" -> "Transfer"
@@ -223,18 +247,36 @@ fun InflowRow(
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.CallReceived,
                 contentDescription = stringResource(R.string.cd_income),
-                tint = FinanceTheme.colors.moneyIn,
+                tint = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else FinanceTheme.colors.moneyIn,
                 modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
-                Text(
-                    text = displayTitle,
-                    style = FinanceTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                ) {
+                    Text(
+                        text = cleanTitle,
+                        style = if (isVoid) {
+                            FinanceTheme.typography.titleMedium.copy(textDecoration = TextDecoration.LineThrough)
+                        } else {
+                            FinanceTheme.typography.titleMedium
+                        },
+                        color = if (isVoid) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    if (isVoid) {
+                        StatusChip(status = "Voided")
+                    }
+                }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -268,12 +310,8 @@ fun InflowRow(
                 style = FinanceTheme.typography.numeric.copy(
                     fontWeight = FontWeight.SemiBold
                 ),
-                color = FinanceTheme.colors.moneyIn
+                color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else FinanceTheme.colors.moneyIn
             )
-
-            if (status.equals("VOID", ignoreCase = true)) {
-                StatusChip(status = "VOID")
-            }
         }
     }
 }

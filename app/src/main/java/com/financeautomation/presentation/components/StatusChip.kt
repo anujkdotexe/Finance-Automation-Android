@@ -81,6 +81,11 @@ fun StatusChip(
             FinanceTheme.colors.info,
             Icons.Rounded.HourglassEmpty
         )
+        upper == "VOID" || upper == "VOIDED" -> Triple(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            null
+        )
         else -> Triple(
             MaterialTheme.colorScheme.surfaceVariant,
             MaterialTheme.colorScheme.onSurfaceVariant,
@@ -104,7 +109,7 @@ fun StatusChip(
             )
         }
         Text(
-            text = normalized,
+            text = if (upper == "VOID" || upper == "VOIDED") "Voided" else normalized,
             style = FinanceTheme.typography.numericMicro,
             color = textColor,
             maxLines = 1,
