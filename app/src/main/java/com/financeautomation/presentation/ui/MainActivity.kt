@@ -124,7 +124,9 @@ class MainActivity : FragmentActivity() {
     private val subscriptionsViewModel: SubscriptionsViewModel by viewModels {
         val app = application as FinanceApplication
         SubscriptionsViewModel.provideFactory(
-            subscriptionRepository = app.appContainer.subscriptionRepository
+            subscriptionRepository = app.appContainer.subscriptionRepository,
+            transactionRepository = app.appContainer.transactionRepository,
+            preferencesRepository = app.appContainer.preferencesRepository
         )
     }
 

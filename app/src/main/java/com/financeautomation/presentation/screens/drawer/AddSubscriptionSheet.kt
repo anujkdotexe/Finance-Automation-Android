@@ -62,14 +62,18 @@ fun AddSubscriptionSheet(
     accounts: List<String>,
     onDismiss: () -> Unit,
     onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Opens the sheet filled in from a detected repeating payment. */
+    prefill: com.financeautomation.domain.usecase.RecurringSuggestion? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var name by remember { mutableStateOf("") }
-    var amountText by remember { mutableStateOf("649.00") }
+    var name by remember { mutableStateOf(prefill?.name.orEmpty()) }
+    var amountText by remember {
+        mutableStateOf(prefill?.let { com.financeautomation.core.utils.formatAmountInput(it.amount) } ?: "649.00")
+    }
     var isFixedAmount by remember { mutableStateOf(true) }
-    var selectedFrequency by remember { mutableStateOf(SubscriptionFrequency.MONTHLY) }
-    val defaultAccount = accounts.firstOrNull() ?: "Primary"
+    var selectedFrequency by remember { mutableStateOf(prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
+    val defaultAccount = prefill?.account?.takeIf { it in accounts } ?: accounts.firstOrNull() ?: "Primary"
     var selectedAccount by remember { mutableStateOf(defaultAccount) }
     var remindMe by remember { mutableStateOf(true) }
 
