@@ -119,6 +119,11 @@ interface AppContainer {
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
     val subscriptionRepository: SubscriptionRepository
     val budgetRepository: BudgetRepository
+    val appLockManager: com.financeautomation.domain.security.AppLockManager
+    val privacySettings: com.financeautomation.domain.security.PrivacySettings
+
+    /** Loads the saved lock and privacy settings once per process. Safe to call from every entry point. */
+    suspend fun ensureAppLockStarted()
     val inflowRepository: InflowRepository
     val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
     val subscriptionMatcher: SubscriptionMatcher
@@ -241,6 +246,21 @@ class DefaultAppContainer(
             dbProvider = { awaitDatabase() },
             ioDispatcher = ioDispatcher
         )
+    }
+
+    override val appLockManager: com.financeautomation.domain.security.AppLockManager by lazy {
+        com.financeautomation.domain.security.AppLockManager()
+    }
+
+    override val privacySettings: com.financeautomation.domain.security.PrivacySettings by lazy {
+        com.financeautomation.domain.security.PrivacySettings()
+    }
+
+    override suspend fun ensureAppLockStarted() {
+        if (appLockManager.isStarted) return
+        val prefs = preferencesRepository
+        privacySettings.set(prefs.getHideRecentsPreview())
+        appLockManager.onColdStart(prefs.getAppLockEnabled())
     }
 
     override val budgetRepository: BudgetRepository by lazy {
@@ -477,6 +497,11 @@ class DefaultAppContainer(
             payableDaoProvider = { awaitDatabase().payableDao() },
             ioDispatcher = ioDispatcher,
             mainDispatcher = mainDispatcher,
+            isLocked = {
+                ensureAppLockStarted()
+                appLockManager.isLockedNow()
+            },
+            hidePreview = { privacySettings.hideRecentsPreview.value },
             subscriptionRepository = subscriptionRepository
         )
     }

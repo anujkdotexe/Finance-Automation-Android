@@ -54,7 +54,9 @@ data class SettingsUiState(
     val userMessage: String? = null,
     val errorMessage: String? = null,
     val developerMode: Boolean = false,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val appLockEnabled: Boolean = false,
+    val hideRecentsPreview: Boolean = false
 )
 
 /**
@@ -76,7 +78,9 @@ class SettingsViewModel(
     private val workbookResolver: WorkbookResolver? = null,
     directPayableDao: PayableDao? = null,
     payableDaoProvider: (suspend () -> PayableDao)? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val appLockManager: com.financeautomation.domain.security.AppLockManager? = null,
+    private val privacySettings: com.financeautomation.domain.security.PrivacySettings? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -175,6 +179,11 @@ class SettingsViewModel(
                 _uiState.update { it.copy(themeMode = mode) }
             }
         }
+        viewModelScope.launch(ioDispatcher) {
+            val lockOn = preferencesRepository.getAppLockEnabled()
+            val hide = preferencesRepository.getHideRecentsPreview()
+            _uiState.update { it.copy(appLockEnabled = lockOn, hideRecentsPreview = hide) }
+        }
     }
 
     // --- Google Identity & Automated Provisioning ---
@@ -243,6 +252,35 @@ class SettingsViewModel(
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.setDeveloperMode(enabled)
             _uiState.update { it.copy(developerMode = enabled) }
+        }
+    }
+
+    /**
+     * Called after the phone confirmed the owner's identity. Turns the app lock on; without a successful
+     * authentication nothing changes.
+     */
+    fun onAppLockAuthenticated(success: Boolean) {
+        if (!success) return
+        if (appLockManager?.enable(authenticated = true) == false) return
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setAppLockEnabled(true)
+            _uiState.update { it.copy(appLockEnabled = true) }
+        }
+    }
+
+    fun onAppLockDisabled() {
+        appLockManager?.disable()
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setAppLockEnabled(false)
+            _uiState.update { it.copy(appLockEnabled = false) }
+        }
+    }
+
+    fun setHideRecentsPreview(enabled: Boolean) {
+        privacySettings?.set(enabled)
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setHideRecentsPreview(enabled)
+            _uiState.update { it.copy(hideRecentsPreview = enabled) }
         }
     }
 
@@ -320,7 +358,9 @@ class SettingsViewModel(
             workbookResolver: WorkbookResolver? = null,
             payableDao: PayableDao? = null,
             payableDaoProvider: (suspend () -> PayableDao)? = null,
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            appLockManager: com.financeautomation.domain.security.AppLockManager? = null,
+            privacySettings: com.financeautomation.domain.security.PrivacySettings? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -339,7 +379,9 @@ class SettingsViewModel(
                     workbookResolver = workbookResolver,
                     directPayableDao = payableDao,
                     payableDaoProvider = payableDaoProvider,
-                    ioDispatcher = ioDispatcher
+                    ioDispatcher = ioDispatcher,
+                    appLockManager = appLockManager,
+                    privacySettings = privacySettings
                 ) as T
             }
         }

@@ -688,4 +688,17 @@
         <item quantity="one">%d transaction needs review</item>
         <item quantity="other">%d transactions need review</item>
     </plurals>
+
+    <!-- App lock and privacy -->
+    <string name="pref_privacy_title">Privacy</string>
+    <string name="pref_app_lock_title">App lock</string>
+    <string name="pref_app_lock_desc">Ask for your fingerprint, face or screen lock when you open the app</string>
+    <string name="pref_hide_preview_title">Hide app preview in recent apps</string>
+    <string name="pref_hide_preview_desc">Blocks screenshots and blanks the app in the recent apps list</string>
+    <string name="pref_app_lock_unavailable">Set up a screen lock or fingerprint in your phone settings first, then turn on app lock.</string>
+    <string name="app_lock_prompt_title">Unlock Finance Automation</string>
+    <string name="app_lock_prompt_enable_title">Turn on app lock</string>
+    <string name="app_lock_title">Finance Automation is locked</string>
+    <string name="app_lock_message">Unlock to see your spending.</string>
+    <string name="app_lock_unlock">Unlock</string>
 </resources>

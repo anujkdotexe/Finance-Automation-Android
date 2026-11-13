@@ -81,11 +81,15 @@ class OverlayController(
     private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
-    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null
+    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null,
+    /** True while the app lock is active: the overlay then shows no friend names, balances or flows that list them. */
+    private val isLocked: suspend () -> Boolean = { false },
+    /** True when windows must hide their content from screenshots and the recents list. */
+    private val hidePreview: () -> Boolean = { false }
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val resultPill = ResultPillOverlay(appContext)
+    private val resultPill = ResultPillOverlay(appContext, hidePreview)
     private val blurHelper = OverlayBlurHelper(windowManager)
     private val mainScope = CoroutineScope(mainDispatcher + SupervisorJob())
 
@@ -177,6 +181,7 @@ class OverlayController(
                     @Suppress("DEPRECATION")
                     softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 }
+                com.financeautomation.presentation.security.SecureWindow.apply(layoutParams, hidePreview())
                 currentLayoutParams = layoutParams
 
                 // Android 12+ Hardware Cross-Window Blur handling
@@ -193,8 +198,9 @@ class OverlayController(
                 val viewModel = ViewModelProvider(treeOwners, viewModelFactory)[QuickLogViewModel::class.java]
 
                 val accounts = accountRepository.getAllAccounts()
-                val rawCompanions = peopleRepository.getAllCompanions()
-                val payables = payableDaoProvider?.invoke()?.getPending() ?: emptyList()
+                val locked = isLocked()
+                val rawCompanions = if (locked) emptyList() else peopleRepository.getAllCompanions()
+                val payables = if (locked) emptyList() else payableDaoProvider?.invoke()?.getPending() ?: emptyList()
                 val payableMap = payables.groupBy { it.paidBy.trim().lowercase() }
                     .mapValues { entry -> entry.value.sumOf { it.amountIOwe } }
 
@@ -213,11 +219,11 @@ class OverlayController(
                 val activeTripTag = tripTagRepository.getActiveTagSync()
 
                 val initialScreen = when (request) {
-                    is OverlayRequest.ChooseAction -> OverlayFlowScreen.MENU
+                    is OverlayRequest.ChooseAction -> if (locked) { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE } else OverlayFlowScreen.MENU
                     is OverlayRequest.Capture -> { viewModel.loadCapture(request.captureId); OverlayFlowScreen.EXPENSE }
                     is OverlayRequest.ManualExpense -> { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE }
                     is OverlayRequest.SelfTest -> { viewModel.setSelfTestMode(); OverlayFlowScreen.EXPENSE }
-                    is OverlayRequest.SpecificFlow -> when (request.flowType.uppercase()) {
+                    is OverlayRequest.SpecificFlow -> if (locked) { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE } else when (request.flowType.uppercase()) {
                         "INCOME_RETURN" -> OverlayFlowScreen.INCOME_RETURN
                         "FRIEND_PAID" -> OverlayFlowScreen.FRIEND_PAID
                         "REPAID_FRIEND" -> OverlayFlowScreen.REPAID_FRIEND
@@ -346,6 +352,10 @@ class OverlayController(
         }
         val useCase = getOpenDebtsForPersonUseCase ?: return
         openDebtsJob = mainScope.launch {
+            if (isLocked()) {
+                openDebtsState.value = emptyList()
+                return@launch
+            }
             val debts = useCase(query)
             openDebtsState.value = debts
         }
