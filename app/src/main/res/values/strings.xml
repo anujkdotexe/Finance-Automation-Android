@@ -622,7 +622,7 @@
     <string name="error_53_top_bar">Sync failure</string>
     <string name="error_53_title">Google Sheets API not enabled</string>
     <string name="error_53_desc">Enable the Google Sheets API in your Google Cloud console to sync transactions.</string>
-    <string name="error_53_action_open_console">Open Cloud</string>
+    <string name="error_53_action_open_console">Open console</string>
     <string name="error_53_action_retry">Retry</string>
     <string name="error_54_title">Permission not granted</string>
     <string name="error_54_desc">Notification access is needed to detect payment alerts and log expenses automatically.</string>
