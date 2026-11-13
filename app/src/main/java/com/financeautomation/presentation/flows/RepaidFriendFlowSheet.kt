@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupees
+import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.presentation.components.AppChip
@@ -165,7 +166,8 @@ fun RepaidFriendFlowSheet(
                 BasicTextField(
                     value = amountText,
                     onValueChange = { input ->
-                        if (input.isEmpty() || input.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
+                        val clean = input.replace(",", "")
+                        if (clean.isEmpty() || clean.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
                             amountText = input
                         }
                     },
@@ -202,12 +204,8 @@ fun RepaidFriendFlowSheet(
             val openBalance = selectedCompanion?.balance ?: 0.0
             if (openBalance > 0.0) {
                 Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-                val formattedBalance = formatRupees(openBalance, includeDecimals = false)
-                val fullAmountStr = if (openBalance == openBalance.toLong().toDouble()) {
-                    openBalance.toLong().toString()
-                } else {
-                    String.format(java.util.Locale.US, "%.2f", openBalance)
-                }
+                val formattedBalance = formatRupeesAuto(openBalance)
+                val fullAmountStr = formatRupees(openBalance, includeDecimals = true).removePrefix("₹")
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
@@ -252,9 +250,8 @@ fun RepaidFriendFlowSheet(
                 ) {
                     companions.forEach { companion ->
                         val isSelected = personName.equals(companion.name, ignoreCase = true)
-                        val formattedBalance = formatRupees(companion.balance, includeDecimals = false).replace("₹", "Rs ")
                         val label = if (companion.balance > 0.0) {
-                            "${companion.name}  $formattedBalance"
+                            "${companion.name}  ${formatRupeesAuto(companion.balance)}"
                         } else {
                             companion.name
                         }
@@ -266,11 +263,7 @@ fun RepaidFriendFlowSheet(
                                 focusManager.clearFocus()
                                 personName = companion.name
                                 if (companion.balance > 0.0 && amountText.isEmpty()) {
-                                    amountText = if (companion.balance == companion.balance.toLong().toDouble()) {
-                                        companion.balance.toLong().toString()
-                                    } else {
-                                        String.format(java.util.Locale.US, "%.2f", companion.balance)
-                                    }
+                                    amountText = formatRupees(companion.balance, includeDecimals = true).removePrefix("₹")
                                 }
                             }
                         )
@@ -443,8 +436,8 @@ fun RepaidFriendFlowSheet(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
-        // 6. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Record repayment" outside scrollable area
-        val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
+        // 6. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Save" outside scrollable area
+        val parsedAmount = amountText.replace(",", "").toDoubleOrNull() ?: 0.0
         val isValid = parsedAmount > 0.0 && personName.isNotBlank()
 
         ButtonPair(

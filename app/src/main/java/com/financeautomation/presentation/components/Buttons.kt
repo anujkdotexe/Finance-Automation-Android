@@ -192,6 +192,8 @@ fun LinkButton(
     )
 }
 
+const val MAX_BUTTON_PAIR_LABEL_LENGTH: Int = 14
+
 /**
  * Standard button pair in one row: equal width, equal height (48dp), 12dp gap, Outlined on left, Filled on right.
  */
@@ -206,6 +208,12 @@ fun ButtonPair(
     filledEnabled: Boolean = true,
     isFilledLoading: Boolean = false
 ) {
+    require(outlinedText.length <= MAX_BUTTON_PAIR_LABEL_LENGTH) {
+        "OutlinedButton text '$outlinedText' exceeds maximum length of $MAX_BUTTON_PAIR_LABEL_LENGTH characters"
+    }
+    require(filledText.length <= MAX_BUTTON_PAIR_LABEL_LENGTH) {
+        "FilledButton text '$filledText' exceeds maximum length of $MAX_BUTTON_PAIR_LABEL_LENGTH characters"
+    }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap),
