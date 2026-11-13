@@ -94,4 +94,25 @@ class TripSummaryUseCaseTest {
         assertTrue(!source.contains("peopleCount = 4"))
         assertTrue(source.contains("TripDetailSheet(summary = summaryFor(name)"))
     }
+
+    @Test
+    fun theTripModeSheetShowsRealFiguresAndNoFakeZeros() {
+        val sheet = java.io.File("src/main/java/com/financeautomation/presentation/flows/TripModeFlowSheet.kt").readText()
+        assertTrue(!sheet.contains("text = \"₹0.00\""))
+        assertTrue(sheet.contains("tripSummary?.totalPaid"))
+        assertTrue(sheet.contains("tripSummary?.netExpenditure"))
+        assertTrue(sheet.contains("if (tripSummary != null) Surface("))
+    }
+
+    @Test
+    fun bothOverlayHostsPassTheSummaryAndWithholdItWhileLocked() {
+        val controller = java.io.File("src/main/java/com/financeautomation/presentation/overlay/OverlayController.kt").readText()
+        val activity = java.io.File("src/main/java/com/financeautomation/presentation/ui/ModalBottomSheetActivity.kt").readText()
+        val host = java.io.File("src/main/java/com/financeautomation/presentation/overlay/OverlayContentHost.kt").readText()
+        assertTrue(host.contains("tripSummary = tripSummary"))
+        assertTrue(controller.contains("tripSummary = tripSummary"))
+        assertTrue(controller.contains("if (locked || activeTripTag == null) null"))
+        assertTrue(activity.contains("tripSummary = tripSummary"))
+        assertTrue(activity.contains("if (lockedNow || tag == null) null"))
+    }
 }
