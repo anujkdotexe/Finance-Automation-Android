@@ -137,34 +137,41 @@ fun TripModeFlowSheet(
                     }
 
                     // Optional Place text field
-                    OutlinedTextField(
-                        value = placeText,
-                        onValueChange = { placeText = it },
-                        placeholder = {
-                            Text(
-                                text = stringResource(R.string.prompt_place_optional),
-                                style = FinanceTheme.typography.bodyMedium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Rounded.LocationOn,
-                                contentDescription = null,
-                                tint = FinanceTheme.colors.onSurfaceVariant,
-                                modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                            )
-                        },
-                        singleLine = true,
-                        shape = FinanceShapes.card,
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Words,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = stringResource(R.string.prompt_place_optional),
+                            style = FinanceTheme.typography.labelUppercase,
+                            color = FinanceTheme.colors.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = placeText,
+                            onValueChange = { placeText = it },
+                            placeholder = {
+                                Text(
+                                    text = stringResource(R.string.hint_optional),
+                                    style = FinanceTheme.typography.bodyMedium
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.LocationOn,
+                                    contentDescription = null,
+                                    tint = FinanceTheme.colors.onSurfaceVariant,
+                                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                                )
+                            },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Words,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+                        )
+                    }
                 }
             }
 

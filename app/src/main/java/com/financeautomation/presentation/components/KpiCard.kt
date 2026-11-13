@@ -108,8 +108,7 @@ private fun KpiCardPreviewNormalLight() {
             amount = 28549.0,
             line1Text = "Down 12% vs last month",
             line1IsPrimary = true,
-            line2Text = "₹951.63 / day",
-            modifier = Modifier.width(104.dp)
+            line2Text = "₹951.63 / day"
         )
     }
 }
@@ -123,8 +122,7 @@ private fun KpiCardPreviewLargeFontLight() {
             amount = 28549.0,
             line1Text = "Down 12% vs last month",
             line1IsPrimary = true,
-            line2Text = "₹951.63 / day",
-            modifier = Modifier.width(104.dp)
+            line2Text = "₹951.63 / day"
         )
     }
 }
@@ -136,8 +134,7 @@ private fun KpiCardPreviewNormalDark() {
         KpiCard(
             label = "Savings",
             amount = 42000.0,
-            line1Text = "36.5% of income",
-            modifier = Modifier.width(104.dp)
+            line1Text = "36.5% of income"
         )
     }
 }

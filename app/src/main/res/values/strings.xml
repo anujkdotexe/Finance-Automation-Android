@@ -398,7 +398,8 @@
     <string name="action_retry">Retry</string>
     <string name="action_discard">Discard</string>
     <string name="action_not_yet">Not yet</string>
-    <string name="action_skip_this_time">Skip this time</string>
+    <string name="action_skip">Skip</string>
+    <string name="action_skip_this_time">Skip</string>
     <string name="action_confirm_all">Confirm all</string>
     <string name="action_clear_search">Clear search</string>
     <string name="action_search_all_months">Search all months</string>
@@ -621,13 +622,13 @@
     <string name="error_53_top_bar">Sync failure</string>
     <string name="error_53_title">Google Sheets API not enabled</string>
     <string name="error_53_desc">Enable the Google Sheets API in your Google Cloud console to sync transactions.</string>
-    <string name="error_53_action_open_console">Open Google Cloud</string>
+    <string name="error_53_action_open_console">Open Cloud</string>
     <string name="error_53_action_retry">Retry</string>
     <string name="error_54_title">Permission not granted</string>
     <string name="error_54_desc">Notification access is needed to detect payment alerts and log expenses automatically.</string>
     <string name="error_54_action_grant">Grant permission</string>
-    <string name="error_54_action_manual">Continue manually</string>
-    <string name="error_54_action_settings">Open settings</string>
+    <string name="error_54_action_manual">Continue</string>
+    <string name="error_54_action_settings">Settings</string>
     <string name="error_55_top_bar">Sync paused</string>
     <string name="error_55_title">Google API rate limited</string>
     <string name="error_55_desc">Google Sheets temporarily limited sync requests. Your entries are saved on this phone and will sync shortly.</string>
@@ -636,8 +637,8 @@
     <string name="error_55_safe_title">Offline safe</string>
     <string name="error_55_safe_badge">2 items saved</string>
     <string name="error_55_safe_desc">All changes are preserved safely on your device and will upload as soon as connectivity resumes.</string>
-    <string name="error_55_action_dashboard">Go to dashboard</string>
-    <string name="error_55_action_retry">Retry now</string>
+    <string name="error_55_action_dashboard">Dashboard</string>
+    <string name="error_55_action_retry">Retry</string>
 
     <!-- Onboarding Checklist (U12) -->
     <string name="onboarding_checklist_title">Setup checklist</string>
@@ -670,12 +671,12 @@
     <string name="onboarding_notif_card3_title">Stays on your device</string>
     <string name="onboarding_notif_card3_desc">All parsing happens offline on your phone. Nothing is shared.</string>
     <string name="onboarding_notif_action_grant">Grant in Android settings</string>
-    <string name="onboarding_notif_action_skip">Skip this time</string>
+    <string name="onboarding_notif_action_skip">Skip</string>
 
     <!-- Outside-the-App Surfaces (U13) -->
     <string name="notification_action_yes">Yes</string>
     <string name="notification_action_not_yet">Not yet</string>
-    <string name="notification_action_skip">Skip this time</string>
+    <string name="notification_action_skip">Skip</string>
     <string name="subscription_notification_title">Did you pay %1$s?</string>
     <string name="subscription_notification_due_today">%1$s due today</string>
     <string name="action_undo">Undo</string>

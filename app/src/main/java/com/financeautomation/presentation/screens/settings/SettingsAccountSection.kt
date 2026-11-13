@@ -174,32 +174,39 @@ fun SettingsAccountSection(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                OutlinedTextField(
-                    value = newAccountInput,
-                    onValueChange = { newAccountInput = it },
-                    label = { Text(stringResource(R.string.settings_new_account_label)) },
-                    singleLine = true,
-                    shape = FinanceTheme.shapes.medium,
-                    modifier = Modifier.weight(1f)
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                Text(
+                    text = stringResource(R.string.settings_new_account_label),
+                    style = FinanceTheme.typography.labelMedium,
+                    color = FinanceTheme.colors.onSurfaceVariant
                 )
-
-                Button(
-                    onClick = {
-                        if (newAccountInput.isNotBlank()) {
-                            onAddAccount(newAccountInput, null)
-                            newAccountInput = ""
-                        }
-                    },
-                    shape = FinanceTheme.shapes.medium
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text(stringResource(R.string.action_add))
+                    OutlinedTextField(
+                        value = newAccountInput,
+                        onValueChange = { newAccountInput = it },
+                        placeholder = { Text("e.g. HDFC", style = FinanceTheme.typography.bodyMedium) },
+                        singleLine = true,
+                        shape = FinanceTheme.shapes.card,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Button(
+                        onClick = {
+                            if (newAccountInput.isNotBlank()) {
+                                onAddAccount(newAccountInput, null)
+                                newAccountInput = ""
+                            }
+                        },
+                        shape = FinanceTheme.shapes.pill
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                        Text(stringResource(R.string.action_add))
+                    }
                 }
             }
         }
@@ -227,32 +234,39 @@ fun SettingsAccountSection(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                OutlinedTextField(
-                    value = newCompanionInput,
-                    onValueChange = { newCompanionInput = it },
-                    label = { Text(stringResource(R.string.settings_new_friend_label)) },
-                    singleLine = true,
-                    shape = FinanceTheme.shapes.medium,
-                    modifier = Modifier.weight(1f)
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                Text(
+                    text = stringResource(R.string.settings_new_friend_label),
+                    style = FinanceTheme.typography.labelMedium,
+                    color = FinanceTheme.colors.onSurfaceVariant
                 )
-
-                Button(
-                    onClick = {
-                        if (newCompanionInput.isNotBlank()) {
-                            onAddCompanion(newCompanionInput)
-                            newCompanionInput = ""
-                        }
-                    },
-                    shape = FinanceTheme.shapes.medium
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text(stringResource(R.string.action_add))
+                    OutlinedTextField(
+                        value = newCompanionInput,
+                        onValueChange = { newCompanionInput = it },
+                        placeholder = { Text("e.g. Karan", style = FinanceTheme.typography.bodyMedium) },
+                        singleLine = true,
+                        shape = FinanceTheme.shapes.card,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Button(
+                        onClick = {
+                            if (newCompanionInput.isNotBlank()) {
+                                onAddCompanion(newCompanionInput)
+                                newCompanionInput = ""
+                            }
+                        },
+                        shape = FinanceTheme.shapes.pill
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                        Text(stringResource(R.string.action_add))
+                    }
                 }
             }
         }
@@ -264,14 +278,21 @@ fun SettingsAccountSection(
             onDismissRequest = { renameCompanionTarget = null },
             title = { Text(stringResource(R.string.settings_manage_friend_title)) },
             text = {
-                OutlinedTextField(
-                    value = renameInput,
-                    onValueChange = { renameInput = it },
-                    label = { Text(stringResource(R.string.settings_friend_name_label)) },
-                    singleLine = true,
-                    shape = FinanceTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                    Text(
+                        text = stringResource(R.string.settings_friend_name_label),
+                        style = FinanceTheme.typography.labelMedium,
+                        color = FinanceTheme.colors.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = renameInput,
+                        onValueChange = { renameInput = it },
+                        placeholder = { Text("Name", style = FinanceTheme.typography.bodyMedium) },
+                        singleLine = true,
+                        shape = FinanceTheme.shapes.card,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             },
             confirmButton = {
                 Button(

@@ -166,33 +166,40 @@ fun SettingsCaptureSection(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                OutlinedTextField(
-                    value = newCategoryInput,
-                    onValueChange = { newCategoryInput = it },
-                    label = { Text(stringResource(R.string.settings_new_category_label)) },
-                    singleLine = true,
-                    shape = FinanceTheme.shapes.medium,
-                    modifier = Modifier.weight(1f)
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                Text(
+                    text = stringResource(R.string.settings_new_category_label),
+                    style = FinanceTheme.typography.labelMedium,
+                    color = FinanceTheme.colors.onSurfaceVariant
                 )
-
-                Button(
-                    onClick = {
-                        if (newCategoryInput.isNotBlank()) {
-                            onAddCategory(newCategoryInput, newCategoryBurnExclude)
-                            newCategoryInput = ""
-                            newCategoryBurnExclude = false
-                        }
-                    },
-                    shape = FinanceTheme.shapes.medium
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text(stringResource(R.string.action_add))
+                    OutlinedTextField(
+                        value = newCategoryInput,
+                        onValueChange = { newCategoryInput = it },
+                        placeholder = { Text("e.g. Groceries", style = FinanceTheme.typography.bodyMedium) },
+                        singleLine = true,
+                        shape = FinanceTheme.shapes.card,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Button(
+                        onClick = {
+                            if (newCategoryInput.isNotBlank()) {
+                                onAddCategory(newCategoryInput, newCategoryBurnExclude)
+                                newCategoryInput = ""
+                                newCategoryBurnExclude = false
+                            }
+                        },
+                        shape = FinanceTheme.shapes.pill
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                        Text(stringResource(R.string.action_add))
+                    }
                 }
             }
 
@@ -236,32 +243,39 @@ fun SettingsCaptureSection(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                OutlinedTextField(
-                    value = newTagInput,
-                    onValueChange = { newTagInput = it },
-                    label = { Text(stringResource(R.string.settings_new_trip_tag_label)) },
-                    singleLine = true,
-                    shape = FinanceTheme.shapes.medium,
-                    modifier = Modifier.weight(1f)
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                Text(
+                    text = stringResource(R.string.settings_new_trip_tag_label),
+                    style = FinanceTheme.typography.labelMedium,
+                    color = FinanceTheme.colors.onSurfaceVariant
                 )
-
-                Button(
-                    onClick = {
-                        if (newTagInput.isNotBlank()) {
-                            onAddTripTag(newTagInput)
-                            newTagInput = ""
-                        }
-                    },
-                    shape = FinanceTheme.shapes.medium
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text(stringResource(R.string.action_add))
+                    OutlinedTextField(
+                        value = newTagInput,
+                        onValueChange = { newTagInput = it },
+                        placeholder = { Text("e.g. Goa2026", style = FinanceTheme.typography.bodyMedium) },
+                        singleLine = true,
+                        shape = FinanceTheme.shapes.card,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Button(
+                        onClick = {
+                            if (newTagInput.isNotBlank()) {
+                                onAddTripTag(newTagInput)
+                                newTagInput = ""
+                            }
+                        },
+                        shape = FinanceTheme.shapes.pill
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                        Text(stringResource(R.string.action_add))
+                    }
                 }
             }
         }
