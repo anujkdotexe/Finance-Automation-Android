@@ -753,7 +753,7 @@ fun AppNavHost(
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = FinanceTheme.spacing.l, bottom = FinanceTheme.spacing.bottomFabClearance),
+                        .padding(end = FinanceTheme.spacing.l, bottom = FinanceTheme.sizes.fabSize + FinanceTheme.spacing.xxl),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
