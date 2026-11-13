@@ -78,3 +78,4 @@ class MainRouteValidatorTest {
         assertNull("Content URI must be rejected", contentLink)
     }
 }
+

@@ -3,6 +3,7 @@ package com.financeautomation.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
@@ -112,10 +113,12 @@ data class TransactionFilter(
     val account: String? = null,
     val person: String? = null,
     val tripTag: String? = null,
-    val status: String? = null
+    val status: String? = null,
+    val excludeSavingsAndIgnored: Boolean = false,
+    val type: String? = null
 ) {
     val isActive: Boolean
-        get() = category != null || account != null || person != null || tripTag != null || status != null
+        get() = category != null || account != null || person != null || tripTag != null || status != null || excludeSavingsAndIgnored || type != null
 }
 
 /**
@@ -240,6 +243,57 @@ class TransactionsViewModel(
         )
     }
 
+    fun setMonthOffset(offset: Int) {
+        monthOffsetFlow.value = offset
+    }
+
+    fun setCategoryFilter(category: String?) {
+        if (category.isNullOrBlank()) {
+            filterFlow.update { it.copy(category = null) }
+            return
+        }
+        val trimmed = category.trim()
+        val match = CategoryConstants.DEFAULT_CATEGORIES
+            .firstOrNull { it.equals(trimmed, ignoreCase = true) }
+        if (match != null) {
+            filterFlow.update { it.copy(category = match, excludeSavingsAndIgnored = false, status = null) }
+        }
+        // Unknown category is ignored
+    }
+
+    fun setTypeFilter(type: String?) {
+        if (type.isNullOrBlank()) {
+            filterFlow.update { it.copy(status = null, type = null, excludeSavingsAndIgnored = false) }
+            return
+        }
+        when (type.trim().lowercase()) {
+            "all" -> {
+                filterFlow.value = TransactionFilter()
+            }
+            "living_burn", "living burn" -> {
+                filterFlow.update { it.copy(excludeSavingsAndIgnored = true, category = null, status = null) }
+            }
+            "savings" -> {
+                setCategoryFilter(CategoryConstants.CATEGORY_SAVINGS)
+            }
+            "income" -> {
+                filterFlow.update { it.copy(status = "income", category = null, excludeSavingsAndIgnored = false) }
+            }
+            "needs review", "needs_review", "review" -> {
+                filterFlow.update { it.copy(status = "review", category = null, excludeSavingsAndIgnored = false) }
+            }
+            "upi" -> {
+                filterFlow.update { it.copy(account = "UPI", category = null, excludeSavingsAndIgnored = false) }
+            }
+            "card" -> {
+                filterFlow.update { it.copy(account = "Card", category = null, excludeSavingsAndIgnored = false) }
+            }
+            "cash" -> {
+                filterFlow.update { it.copy(account = "Cash", category = null, excludeSavingsAndIgnored = false) }
+            }
+        }
+    }
+
     fun clearFilter() {
         filterFlow.value = TransactionFilter()
     }
@@ -344,6 +398,14 @@ class TransactionsViewModel(
                 }
             }
 
+            if (filter.excludeSavingsAndIgnored) {
+                val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
+                val isTransfer = txn.category.equals("transfer", ignoreCase = true)
+                if (isSav || isTransfer) {
+                    return@filter false
+                }
+            }
+
             if (!filter.status.isNullOrBlank() && !isVoidFilter) {
                 val st = filter.status.trim().lowercase()
                 val rowStatus = computeRowStatus(txn, queueIds)
@@ -384,7 +446,7 @@ class TransactionsViewModel(
             }
 
             // Inflows don't have categories or trip tags; if those filters are set, exclude
-            if (!filter.category.isNullOrBlank() || !filter.tripTag.isNullOrBlank()) {
+            if (!filter.category.isNullOrBlank() || !filter.tripTag.isNullOrBlank() || filter.excludeSavingsAndIgnored) {
                 return@filter false
             }
 
@@ -419,7 +481,9 @@ class TransactionsViewModel(
         }
 
         // Header totals cover the whole month normally, and exactly the results for an all-months search
-        val totalsSource = if (searchAllMonths) filteredTransactions else monthTransactions.filter { it.status != TransactionStatus.VOID }
+        // or when a category/burn/income filter is active (G5)
+        val hasCategoryOrBurnFilter = !filter.category.isNullOrBlank() || filter.excludeSavingsAndIgnored || filter.status.equals("income", ignoreCase = true)
+        val totalsSource = if (searchAllMonths || hasCategoryOrBurnFilter) filteredTransactions else monthTransactions.filter { it.status != TransactionStatus.VOID }
         val totalOut = totalsSource.sumOf { it.totalAmount }
         val myShare = totalsSource.sumOf { it.myShare }
 

@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import com.financeautomation.R
 import com.financeautomation.presentation.components.AmountText
@@ -109,6 +111,8 @@ fun CategoryBreakdownSection(
     hasMore: Boolean,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
+    onCategoryClick: ((String) -> Unit)? = null,
+    onSeeAllClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (categories.isEmpty()) return
@@ -116,10 +120,14 @@ fun CategoryBreakdownSection(
     Column(modifier = modifier.fillMaxWidth()) {
         SectionTitle(
             title = stringResource(R.string.dashboard_where_it_went),
-            actionText = if (hasMore) {
-                if (isExpanded) stringResource(R.string.action_show_less) else stringResource(R.string.action_see_all)
-            } else null,
-            onActionClick = onToggleExpand
+            actionText = stringResource(R.string.action_see_all),
+            onActionClick = {
+                if (onSeeAllClick != null) {
+                    onSeeAllClick()
+                } else {
+                    onToggleExpand()
+                }
+            }
         )
 
         AppCard {
@@ -127,7 +135,13 @@ fun CategoryBreakdownSection(
                 categories.forEach { item ->
                     val percentageInt = (item.percentage * 100).toInt()
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (onCategoryClick != null) {
+                                    Modifier.clickable(role = Role.Button) { onCategoryClick(item.category) }
+                                } else Modifier
+                            ),
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.sm)
                     ) {
                         Row(

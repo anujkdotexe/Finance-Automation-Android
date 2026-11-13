@@ -56,6 +56,7 @@ data class DebtSummary(
  * Reactive state snapshot powering the calm utility Dashboard.
  */
 data class DashboardUiState(
+    val monthOffset: Int = 0,
     val selectedMonthLabel: String = "",
     val currentBurn: Double = 0.0,
     val dailyAverage: Double = 0.0,
@@ -525,6 +526,7 @@ class DashboardViewModel(
         val needsReviewTotal = needsReviewWithoutFailedSync + capturesInNeedsReview + failedCount
 
         return DashboardUiState(
+            monthOffset = monthOffset,
             selectedMonthLabel = selectedMonthLabel,
             currentBurn = currentBurn,
             dailyAverage = dailyAverage,

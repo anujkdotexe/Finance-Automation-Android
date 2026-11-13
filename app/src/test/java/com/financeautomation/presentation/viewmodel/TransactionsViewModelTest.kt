@@ -754,4 +754,135 @@ class TransactionsViewModelTest {
         assertEquals(1, voidItems.size)
         assertEquals("inf_void", voidItems[0].id)
     }
+
+    @Test
+    fun testCategoryAndTypeFiltersFromRoute_andUnknownCategoryIgnored() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val iRepo = FakeInflowRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 15)
+        }
+        val ts = nowCal.timeInMillis
+
+        val txnGroceries = Transaction(
+            id = "t_groc",
+            timestamp = ts,
+            totalAmount = 500.0,
+            myShare = 500.0,
+            owedToMe = 0.0,
+            category = "Groceries",
+            account = "UPI",
+            description = "Store",
+            status = TransactionStatus.SETTLED
+        )
+        val txnSavings = Transaction(
+            id = "t_sav",
+            timestamp = ts + 1000L,
+            totalAmount = 2000.0,
+            myShare = 2000.0,
+            owedToMe = 0.0,
+            category = "Savings",
+            account = "Bank",
+            description = "SIP",
+            status = TransactionStatus.SETTLED
+        )
+        val txnTransfer = Transaction(
+            id = "t_trans",
+            timestamp = ts + 2000L,
+            totalAmount = 1000.0,
+            myShare = 1000.0,
+            owedToMe = 0.0,
+            category = "Transfer",
+            account = "Bank",
+            description = "Self",
+            status = TransactionStatus.SETTLED
+        )
+
+        tRepo.insertTransaction(txnGroceries)
+        tRepo.insertTransaction(txnSavings)
+        tRepo.insertTransaction(txnTransfer)
+
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // 1. Initial full month total (all 3 transactions = 3500)
+        assertEquals(3500.0, vm.uiState.value.totalOut, 0.01)
+
+        // 2. Set Category filter: Groceries
+        vm.setCategoryFilter("Groceries")
+        advanceUntilIdle()
+        assertEquals("Groceries", vm.uiState.value.activeFilter.category)
+        assertEquals(500.0, vm.uiState.value.totalOut, 0.01)
+        val grocItems = vm.uiState.value.groupedTransactions.flatMap { it.items }
+        assertEquals(1, grocItems.size)
+        assertEquals("t_groc", grocItems[0].id)
+
+        // 3. Unknown category is ignored (filter remains unchanged)
+        vm.setCategoryFilter("HackedUnknownCategory123")
+        advanceUntilIdle()
+        assertEquals("Groceries", vm.uiState.value.activeFilter.category)
+        assertEquals(500.0, vm.uiState.value.totalOut, 0.01)
+
+        // 4. Type filter: living_burn (excludes Savings and Transfer, keeps Groceries = 500)
+        vm.setTypeFilter("living_burn")
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.activeFilter.excludeSavingsAndIgnored)
+        assertEquals(500.0, vm.uiState.value.totalOut, 0.01)
+        val livingItems = vm.uiState.value.groupedTransactions.flatMap { it.items }
+        assertEquals(1, livingItems.size)
+        assertEquals("t_groc", livingItems[0].id)
+
+        // 5. Clear filter: resets header total to full month total (3500)
+        vm.clearFilter()
+        advanceUntilIdle()
+        assertEquals(3500.0, vm.uiState.value.totalOut, 0.01)
+        assertEquals(3, vm.uiState.value.groupedTransactions.flatMap { it.items }.size)
+    }
+
+    @Test
+    fun testTypeFilter_incomeDisplaysOnlyInflows() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val iRepo = FakeInflowRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 15)
+        }
+        val ts = nowCal.timeInMillis
+
+        val txn = Transaction(
+            id = "t_expense",
+            timestamp = ts,
+            totalAmount = 300.0,
+            myShare = 300.0,
+            owedToMe = 0.0,
+            category = "Food & Drink",
+            account = "UPI",
+            description = "Cafe",
+            status = TransactionStatus.SETTLED
+        )
+        val inf = Inflow(
+            id = "inf_salary",
+            timestamp = ts + 500L,
+            amount = 50000.0,
+            account = "HDFC",
+            inflowType = "Income",
+            source = "Employer",
+            status = "CONFIRMED"
+        )
+
+        tRepo.insertTransaction(txn)
+        iRepo.insertInflow(inf)
+
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // Filter to income type
+        vm.setTypeFilter("income")
+        advanceUntilIdle()
+
+        val items = vm.uiState.value.groupedTransactions.flatMap { it.items }
+        assertEquals(1, items.size)
+        assertEquals("inf_salary", items[0].id)
+    }
 }
