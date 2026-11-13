@@ -31,9 +31,11 @@ import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.CategoryStatDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.domain.model.Companion as FriendCompanion
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.PeopleRepository
@@ -76,6 +78,7 @@ class OverlayController(
     private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
     private val predictCategoryUseCase: PredictCategoryUseCase = PredictCategoryUseCase(),
     private val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main,
     private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null
@@ -190,7 +193,23 @@ class OverlayController(
                 val viewModel = ViewModelProvider(treeOwners, viewModelFactory)[QuickLogViewModel::class.java]
 
                 val accounts = accountRepository.getAllAccounts()
-                val companions = peopleRepository.getAllCompanions()
+                val rawCompanions = peopleRepository.getAllCompanions()
+                val payables = payableDaoProvider?.invoke()?.getPending() ?: emptyList()
+                val payableMap = payables.groupBy { it.paidBy.trim().lowercase() }
+                    .mapValues { entry -> entry.value.sumOf { it.amountIOwe } }
+
+                val updatedCompanions = rawCompanions.map { comp ->
+                    val owed = payableMap[comp.name.trim().lowercase()] ?: comp.balance
+                    comp.copy(balance = owed)
+                }.toMutableList()
+
+                for ((nameLower, totalOwed) in payableMap) {
+                    if (totalOwed > 0.0 && updatedCompanions.none { it.name.trim().lowercase() == nameLower }) {
+                        val originalName = payables.first { it.paidBy.trim().lowercase() == nameLower }.paidBy.trim()
+                        updatedCompanions.add(FriendCompanion(id = "payable_$originalName", name = originalName, balance = totalOwed))
+                    }
+                }
+                val companions = updatedCompanions
                 val activeTripTag = tripTagRepository.getActiveTagSync()
 
                 val initialScreen = when (request) {

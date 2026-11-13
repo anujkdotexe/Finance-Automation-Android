@@ -261,7 +261,7 @@ fun TripModeFlowSheet(
                     onValueChange = { placeText = it },
                     placeholder = {
                         Text(
-                            text = stringResource(R.string.prompt_place_optional),
+                            text = stringResource(R.string.hint_optional),
                             style = FinanceTheme.typography.bodyMedium
                         )
                     },

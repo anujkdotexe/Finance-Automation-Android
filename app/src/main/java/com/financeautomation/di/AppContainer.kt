@@ -443,6 +443,7 @@ class DefaultAppContainer(
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
             predictCategoryUseCase = predictCategoryUseCase,
             getOpenDebtsForPersonUseCase = getOpenDebtsForPersonUseCase,
+            payableDaoProvider = { awaitDatabase().payableDao() },
             ioDispatcher = ioDispatcher,
             mainDispatcher = mainDispatcher,
             subscriptionRepository = subscriptionRepository

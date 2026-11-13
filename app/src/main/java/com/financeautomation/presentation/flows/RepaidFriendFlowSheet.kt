@@ -63,8 +63,10 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val SHEET_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
+private val DISPLAY_DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.US)
 
 /** Date picker rule: nothing after today (Asia/Kolkata). Picker dates are UTC midnights. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,7 +107,7 @@ fun RepaidFriendFlowSheet(
     var amountText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
 
-    val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
+    val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DISPLAY_DATE_FORMATTER) }
     var dateText by remember { mutableStateOf(todayFormatted) }
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -232,6 +234,7 @@ fun RepaidFriendFlowSheet(
         }
 
         // 2. Who You Repaid (Companion chips with open balance)
+        val hasOpenDebts = companions.any { it.balance > 0.0 }
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.prompt_friend_repaid),
@@ -239,55 +242,60 @@ fun RepaidFriendFlowSheet(
                 color = FinanceTheme.colors.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+            if (companions.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                companions.forEach { companion ->
-                    val isSelected = personName.equals(companion.name, ignoreCase = true)
-                    val label = if (companion.balance > 0.0) {
-                        "${companion.name} (${formatRupees(companion.balance, includeDecimals = false)})"
-                    } else {
-                        companion.name
-                    }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    companions.forEach { companion ->
+                        val isSelected = personName.equals(companion.name, ignoreCase = true)
+                        val formattedBalance = formatRupees(companion.balance, includeDecimals = false).replace("₹", "Rs ")
+                        val label = if (companion.balance > 0.0) {
+                            "${companion.name}  $formattedBalance"
+                        } else {
+                            companion.name
+                        }
 
-                    AppChip(
-                        text = label,
-                        selected = isSelected,
-                        onClick = {
-                            focusManager.clearFocus()
-                            personName = companion.name
-                            if (companion.balance > 0.0 && amountText.isEmpty()) {
-                                amountText = if (companion.balance == companion.balance.toLong().toDouble()) {
-                                    companion.balance.toLong().toString()
-                                } else {
-                                    String.format(java.util.Locale.US, "%.2f", companion.balance)
+                        AppChip(
+                            text = label,
+                            selected = isSelected,
+                            onClick = {
+                                focusManager.clearFocus()
+                                personName = companion.name
+                                if (companion.balance > 0.0 && amountText.isEmpty()) {
+                                    amountText = if (companion.balance == companion.balance.toLong().toDouble()) {
+                                        companion.balance.toLong().toString()
+                                    } else {
+                                        String.format(java.util.Locale.US, "%.2f", companion.balance)
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+            if (!hasOpenDebts) {
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            OutlinedTextField(
-                value = personName,
-                onValueChange = { personName = it },
-                placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
-                singleLine = true,
-                shape = FinanceShapes.card,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
-                    imeAction = ImeAction.Next
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
-            )
+                OutlinedTextField(
+                    value = personName,
+                    onValueChange = { personName = it },
+                    placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
+                    singleLine = true,
+                    shape = FinanceShapes.card,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+                )
+            }
         }
 
         // 3. Paid From Account Chips (user-defined accounts, no balances)
@@ -334,7 +342,7 @@ fun RepaidFriendFlowSheet(
             OutlinedTextField(
                 value = noteText,
                 onValueChange = { noteText = it },
-                placeholder = { Text(stringResource(R.string.prompt_settlement_note), style = FinanceTheme.typography.bodyMedium) },
+                placeholder = { Text(stringResource(R.string.hint_optional), style = FinanceTheme.typography.bodyMedium) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.EditNote,
@@ -389,10 +397,21 @@ fun RepaidFriendFlowSheet(
 
         if (showDatePicker) {
             val pickerState = rememberDatePickerState(
-                initialSelectedDateMillis = LocalDate.parse(dateText)
-                    .atStartOfDay(ZoneOffset.UTC)
-                    .toInstant()
-                    .toEpochMilli(),
+                initialSelectedDateMillis = runCatching {
+                    LocalDate.parse(dateText, DISPLAY_DATE_FORMATTER)
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli()
+                }.getOrElse {
+                    runCatching {
+                        LocalDate.parse(dateText)
+                            .atStartOfDay(ZoneOffset.UTC)
+                            .toInstant()
+                            .toEpochMilli()
+                    }.getOrElse {
+                        LocalDate.now(SHEET_ZONE).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                    }
+                },
                 selectableDates = NoFutureSelectableDates
             )
 
@@ -404,7 +423,7 @@ fun RepaidFriendFlowSheet(
                             val selected = Instant.ofEpochMilli(ms)
                                 .atZone(ZoneOffset.UTC)
                                 .toLocalDate()
-                            dateText = selected.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                            dateText = selected.format(DISPLAY_DATE_FORMATTER)
                         }
                         showDatePicker = false
                     }) {
@@ -433,13 +452,20 @@ fun RepaidFriendFlowSheet(
             onOutlinedClick = onDismiss,
             filledText = stringResource(R.string.btn_record_repayment),
             onFilledClick = {
-                val epochMillis = try {
-                    LocalDate.parse(dateText)
+                val epochMillis = runCatching {
+                    LocalDate.parse(dateText, DISPLAY_DATE_FORMATTER)
                         .atStartOfDay(SHEET_ZONE)
                         .toInstant()
                         .toEpochMilli()
-                } catch (e: Exception) {
-                    System.currentTimeMillis()
+                }.getOrElse {
+                    runCatching {
+                        LocalDate.parse(dateText)
+                            .atStartOfDay(SHEET_ZONE)
+                            .toInstant()
+                            .toEpochMilli()
+                    }.getOrElse {
+                        System.currentTimeMillis()
+                    }
                 }
                 onConfirm(parsedAmount, personName.trim(), epochMillis)
             },
