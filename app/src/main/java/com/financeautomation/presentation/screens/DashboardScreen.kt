@@ -2,13 +2,9 @@ package com.financeautomation.presentation.screens
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,26 +26,24 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
-import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.EmptyState
-import com.financeautomation.presentation.components.SectionTitle
 import com.financeautomation.presentation.components.SyncStatusLine
-import com.financeautomation.presentation.components.TonalCard
-import com.financeautomation.presentation.components.TransactionRow
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.CategorySpend
 import com.financeautomation.presentation.viewmodel.DashboardUiState
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
-import com.financeautomation.presentation.viewmodel.DebtSummary
-import com.financeautomation.presentation.viewmodel.QueuedItem
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
- * Rebuilt Calm Utility Dashboard screen matching November 2026 reference specifications.
- * Renders living burn hero metrics, receivables/payables, category distribution, and offline status.
+ * Frozen Dashboard screen conforming to UI Round 2 specifications.
+ * Order:
+ * 1. Single-line quiet sync status line
+ * 2. Month switcher
+ * 3. KPI row (3 horizontally scrolling 140dp cards: Living burn, Savings, Income)
+ * 4. Needs Review banner (only when count > 0)
+ * 5. Balances card (one card, two columns "Owed to me" and "I owe", mono amounts)
+ * 6. "Where it went" top 3 categories with thin bars and "See all"
+ * 7. Offline banner (when offline)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,24 +121,25 @@ fun DashboardContent(
             bottom = FinanceTheme.spacing.bottomFabClearance
         )
     ) {
+        // 1. Quiet Sync Status Line
         item {
-            // Single-line sync status indicator starts 8dp below the top bar
             SyncStatusLine(
                 waitingCount = state.waitingCount,
                 failedCount = state.failedCount,
                 isSyncing = state.isSyncing,
-                isOffline = state.isOffline
+                isOffline = state.isOffline,
+                onFailedClick = onNavigateToReview
             )
         }
 
-        // Offline Banner & Queued Items
+        // Offline Banner
         if (state.isOffline) {
             item {
-                OfflineSection(queuedItems = state.queuedItems)
+                OfflineBanner()
             }
         }
 
-        // 1. Month Switcher
+        // 2. Month Switcher
         item {
             MonthSwitcher(
                 monthLabel = state.selectedMonthLabel,
@@ -153,7 +148,7 @@ fun DashboardContent(
             )
         }
 
-        // Empty State vs Populated Dashboard
+        // Empty Month State vs Populated Dashboard
         if (state.transactionCount == 0 && state.currentBurn == 0.0) {
             item {
                 EmptyState(
@@ -164,31 +159,20 @@ fun DashboardContent(
                 )
             }
         } else {
-            // 2. Hero KPI Card: Living Burn
+            // 3. Horizontally scrolling KPI row (3 cards: Living burn, Savings, Income)
             item {
-                HeroBurnCard(
-                    currentBurn = state.currentBurn,
+                KpiRow(
+                    livingBurn = state.currentBurn,
                     dailyAverage = state.dailyAverage,
-                    lastMonthSameDayBurn = state.lastMonthSameDayBurn,
                     paceDeltaPercent = state.paceDeltaPercent,
-                    onTrack = state.onTrack
+                    savings = state.savings,
+                    income = state.income
                 )
             }
 
-            // 3. Owed to me and I owe cards
-            item {
-                OwedSummarySection(
-                    owedToMe = state.owedToMe,
-                    topOwedToMe = state.topOwedToMe,
-                    iOwePeople = state.iOwePeople,
-                    topIOwe = state.topIOwe,
-                    onPersonClick = onNavigateToSettlements
-                )
-            }
-
-            // 4. Needs Review Action Banner (calm tonal colors, not red)
-            if (state.needsReviewTotal > 0 || state.needsReviewCount > 0) {
-                val reviewCount = if (state.needsReviewTotal > 0) state.needsReviewTotal else state.needsReviewCount
+            // 4. Needs Review Calm Banner (only when count above zero)
+            val reviewCount = if (state.needsReviewTotal > 0) state.needsReviewTotal else state.needsReviewCount
+            if (reviewCount > 0) {
                 item {
                     NeedsReviewBanner(
                         count = reviewCount,
@@ -197,95 +181,55 @@ fun DashboardContent(
                 }
             }
 
-            // 5. Where It Went (Category Proportional Bars)
-            val displayedCategories = if (showAllCategories) state.allCategories else state.topCategories
-            if (displayedCategories.isNotEmpty()) {
-                item {
-                    CategoryBreakdownSection(
-                        categories = displayedCategories,
-                        hasMore = state.allCategories.size > 5,
-                        isExpanded = showAllCategories,
-                        onToggleExpand = { showAllCategories = !showAllCategories }
-                    )
-                }
-            }
-
-            // 6. Two Small Cards: Savings and Income
+            // 5. One Balances Card (two columns "Owed to me" and "I owe")
             item {
-                SavingsAndIncomeSection(
-                    savings = state.savings,
-                    income = state.income
+                BalancesCard(
+                    owedToMe = state.owedToMe,
+                    iOwe = state.iOwePeople,
+                    onClick = { onNavigateToSettlements("", true) }
                 )
             }
 
-            // 7. Recent Transactions (last 3 items)
-            if (state.recentTransactions.isNotEmpty()) {
+            // 6. "Where it went" Category Proportional Bars
+            val baseCategories = if (showAllCategories) state.allCategories else state.topCategories.take(3)
+            if (baseCategories.isNotEmpty()) {
                 item {
-                    SectionTitle(
-                        title = stringResource(R.string.dashboard_recent),
-                        actionText = stringResource(R.string.action_see_all),
-                        onActionClick = onNavigateToTransactions
+                    CategoryBreakdownSection(
+                        categories = baseCategories,
+                        hasMore = state.allCategories.size > 3,
+                        isExpanded = showAllCategories,
+                        onToggleExpand = { showAllCategories = !showAllCategories }
                     )
-                    TonalCard {
-                        Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
-                            state.recentTransactions.take(3).forEach { txn ->
-                                val dateStr = SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
-                                    .format(Date(txn.timestamp))
-                                TransactionRow(
-                                    merchant = txn.merchant.ifBlank { txn.category },
-                                    amount = txn.totalAmount,
-                                    category = txn.category,
-                                    account = txn.account,
-                                    time = dateStr,
-                                    status = txn.status.value,
-                                    splitText = if (txn.owedToMe > 0.0) {
-                                        "My share ${com.financeautomation.core.utils.formatRupeesAuto(txn.myShare)}, Owed ${com.financeautomation.core.utils.formatRupeesAuto(txn.owedToMe)}"
-                                    } else null,
-                                    isExpense = true
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
     }
 }
 
-@Preview(name = "Light", showBackground = true)
+@Preview(name = "Dashboard Light Normal Font", showBackground = true, fontScale = 1.0f)
 @Composable
-private fun DashboardScreenPreviewLight() {
+private fun DashboardPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
         DashboardContent(
             state = DashboardUiState(
+                currentBurn = 28549.0,
+                dailyAverage = 951.63,
+                paceDeltaPercent = -12.0,
+                savings = 42000.0,
+                income = 115000.0,
+                needsReviewCount = 3,
+                owedToMe = 442.50,
+                iOwePeople = 0.0,
                 selectedMonthLabel = "November 2026",
-                currentBurn = 6549.0,
-                dailyAverage = 273.0,
-                lastMonthBurn = 7100.0,
-                lastMonthSameDayBurn = 7100.0,
-                paceDeltaPercent = -7.8,
-                onTrack = true,
-                owedToMe = 2050.0,
-                topOwedToMe = listOf(
-                    DebtSummary("Rahul V.", 1400.0),
-                    DebtSummary("Priya S.", 650.0)
-                ),
-                iOwePeople = 1120.0,
-                topIOwe = listOf(
-                    DebtSummary("Karan M.", 1120.0)
-                ),
-                needsReviewTotal = 3,
                 topCategories = listOf(
-                    CategorySpend("Shopping", 1800.0, 0.27f),
-                    CategorySpend("Transit", 1490.0, 0.23f),
-                    CategorySpend("Groceries", 1200.0, 0.18f),
-                    CategorySpend("Food & Drink", 990.0, 0.15f),
-                    CategorySpend("Subscriptions", 649.0, 0.10f),
-                    CategorySpend("Health", 420.0, 0.06f)
+                    CategorySpend("Food & Drink", 255.0, 0.68f),
+                    CategorySpend("Transit", 120.0, 0.32f)
                 ),
-                savings = 25000.0,
-                income = 85000.0,
-                transactionCount = 14
+                allCategories = listOf(
+                    CategorySpend("Food & Drink", 255.0, 0.68f),
+                    CategorySpend("Transit", 120.0, 0.32f)
+                ),
+                transactionCount = 2
             ),
             onPreviousMonth = {},
             onNextMonth = {},
@@ -297,56 +241,65 @@ private fun DashboardScreenPreviewLight() {
     }
 }
 
-@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Preview(name = "Dashboard Light Font 1.3", showBackground = true, fontScale = 1.3f)
 @Composable
-private fun DashboardScreenPreviewDark() {
+private fun DashboardPreviewLargeFont() {
+    FinanceAutomationTheme(darkTheme = false) {
+        DashboardContent(
+            state = DashboardUiState(
+                currentBurn = 28549.0,
+                dailyAverage = 951.63,
+                paceDeltaPercent = -12.0,
+                savings = 42000.0,
+                income = 115000.0,
+                needsReviewCount = 3,
+                owedToMe = 442.50,
+                iOwePeople = 0.0,
+                selectedMonthLabel = "November 2026",
+                topCategories = listOf(
+                    CategorySpend("Food & Drink", 255.0, 0.68f),
+                    CategorySpend("Transit", 120.0, 0.32f)
+                ),
+                allCategories = listOf(
+                    CategorySpend("Food & Drink", 255.0, 0.68f),
+                    CategorySpend("Transit", 120.0, 0.32f)
+                ),
+                transactionCount = 2
+            ),
+            onPreviousMonth = {},
+            onNextMonth = {},
+            onNavigateToReview = {},
+            onNavigateToTransactions = {},
+            onNavigateToSettlements = { _, _ -> },
+            onAddExpense = {}
+        )
+    }
+}
+
+@Preview(name = "Dashboard Dark Normal Font", showBackground = true, fontScale = 1.0f, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun DashboardPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
         DashboardContent(
             state = DashboardUiState(
-                selectedMonthLabel = "November 2026",
-                currentBurn = 34820.0,
-                dailyAverage = 1240.0,
-                lastMonthSameDayBurn = 36000.0,
-                paceDeltaPercent = -3.2,
-                onTrack = true,
-                owedToMe = 1500.0,
-                topOwedToMe = listOf(DebtSummary("Aman", 1500.0)),
+                currentBurn = 28549.0,
+                dailyAverage = 951.63,
+                paceDeltaPercent = -12.0,
+                savings = 42000.0,
+                income = 115000.0,
+                needsReviewCount = 3,
+                owedToMe = 442.50,
                 iOwePeople = 0.0,
-                needsReviewTotal = 0,
-                savings = 10000.0,
-                income = 95000.0,
-                transactionCount = 28
-            ),
-            onPreviousMonth = {},
-            onNextMonth = {},
-            onNavigateToReview = {},
-            onNavigateToTransactions = {},
-            onNavigateToSettlements = { _, _ -> },
-            onAddExpense = {}
-        )
-    }
-}
-
-@Preview(name = "Font Scale 1.3x", fontScale = 1.3f, showBackground = true)
-@Composable
-private fun DashboardScreenPreviewScale() {
-    FinanceAutomationTheme(darkTheme = false) {
-        DashboardContent(
-            state = DashboardUiState(
                 selectedMonthLabel = "November 2026",
-                currentBurn = 12500.0,
-                dailyAverage = 416.0,
-                lastMonthSameDayBurn = 13000.0,
-                paceDeltaPercent = -3.8,
-                onTrack = true,
-                owedToMe = 450.0,
-                topOwedToMe = listOf(DebtSummary("Neha", 450.0)),
-                iOwePeople = 200.0,
-                topIOwe = listOf(DebtSummary("Vikram", 200.0)),
-                needsReviewTotal = 1,
-                savings = 5000.0,
-                income = 40000.0,
-                transactionCount = 8
+                topCategories = listOf(
+                    CategorySpend("Food & Drink", 255.0, 0.68f),
+                    CategorySpend("Transit", 120.0, 0.32f)
+                ),
+                allCategories = listOf(
+                    CategorySpend("Food & Drink", 255.0, 0.68f),
+                    CategorySpend("Transit", 120.0, 0.32f)
+                ),
+                transactionCount = 2
             ),
             onPreviousMonth = {},
             onNextMonth = {},

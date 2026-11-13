@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,13 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.financeautomation.R
-import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.components.AmountText
 import com.financeautomation.presentation.components.AmountTone
+import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.SectionTitle
-import com.financeautomation.presentation.components.TonalCard
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.CategorySpend
@@ -126,7 +122,7 @@ fun CategoryBreakdownSection(
             onActionClick = onToggleExpand
         )
 
-        TonalCard {
+        AppCard {
             Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.cardGap)) {
                 categories.forEach { item ->
                     val percentageInt = (item.percentage * 100).toInt()
@@ -161,7 +157,7 @@ fun CategoryBreakdownSection(
                             }
                         }
 
-                        // Proportional progress bar
+                        // Proportional progress bar (thin 4dp)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
