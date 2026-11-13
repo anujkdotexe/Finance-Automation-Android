@@ -2,6 +2,8 @@ package com.financeautomation.testutil
 
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.data.local.dao.InflowDao
+import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.InflowEntity
@@ -115,5 +117,25 @@ class InMemoryQueueDao : SyncQueueDao {
     }
     override suspend fun updatePlanJsonId(oldId: String, newId: String) {
         queue.values.filter { it.planJson?.contains(oldId) == true }.forEach { queue[it.id] = it.copy(planJson = it.planJson!!.replace(oldId, newId)) }
+    }
+}
+
+/** In-memory carry forward lineage table. */
+class InMemoryLineageDao : LineageDao {
+    val records = ConcurrentHashMap<String, LineageEntity>()
+    override suspend fun insert(entity: LineageEntity) { records[entity.uuid] = entity }
+    override suspend fun insertAll(entities: List<LineageEntity>) { entities.forEach { insert(it) } }
+    override suspend fun getByUuid(uuid: String): LineageEntity? = records[uuid]
+    override suspend fun getByCarriedFrom(carriedFromUuid: String): LineageEntity? =
+        records.values.firstOrNull { it.carriedFromUuid == carriedFromUuid }
+    override suspend fun getAll(): List<LineageEntity> = records.values.toList()
+    override suspend fun updateUuid(oldUuid: String, newUuid: String) {
+        records.remove(oldUuid)?.let { records[newUuid] = it.copy(uuid = newUuid) }
+    }
+    override suspend fun updateCarriedFromUuid(oldUuid: String, newUuid: String) {
+        records.values.filter { it.carriedFromUuid == oldUuid }.forEach { records[it.uuid] = it.copy(carriedFromUuid = newUuid) }
+    }
+    override suspend fun updateRootUuid(oldUuid: String, newUuid: String) {
+        records.values.filter { it.rootUuid == oldUuid }.forEach { records[it.uuid] = it.copy(rootUuid = newUuid) }
     }
 }

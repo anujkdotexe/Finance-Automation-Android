@@ -19,16 +19,20 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
     val tDao = InMemoryTransactionDao()
     val qDao = InMemoryQueueDao()
     val iDao = InMemoryInflowDao()
+    val lDao = InMemoryLineageDao()
     val server = ScriptedSheetsServer(tabs)
     val sheets = server.client()
     var syncRequests = 0
+    val preferences = mutableMapOf<String, String?>()
 
     @Suppress("UNCHECKED_CAST")
     private val prefs: PreferencesRepository = Proxy.newProxyInstance(
         PreferencesRepository::class.java.classLoader,
         arrayOf(PreferencesRepository::class.java)
-    ) { _, method, _ ->
+    ) { _, method, args ->
         when {
+            method.name == "getPreference" -> preferences[args!![0] as String]
+            method.name == "setPreference" -> { preferences[args!![0] as String] = args[1] as String?; null }
             method.name == "getSpreadsheetIdSync" || method.name == "getSpreadsheetIdForYearSync" -> "test_sheet_id"
             Flow::class.java.isAssignableFrom(method.returnType) -> flowOf<Any?>(null)
             method.returnType == java.lang.Boolean.TYPE -> false
@@ -41,10 +45,11 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
         transactionDao = tDao,
         syncQueueDao = qDao,
         inflowDao = iDao,
+        lineageDao = lDao,
         googleSheetsClient = sheets,
         preferencesRepository = prefs,
         accountingSyncExecutor = createTestAccountingSyncExecutor(
-            sheetsClient = sheets, syncQueueDao = qDao, transactionDao = tDao
+            sheetsClient = sheets, syncQueueDao = qDao, lineageDao = lDao, transactionDao = tDao
         ),
         onTriggerSync = { syncRequests++ },
         ioDispatcher = Dispatchers.Unconfined

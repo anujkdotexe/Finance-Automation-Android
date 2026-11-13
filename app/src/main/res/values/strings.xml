@@ -685,4 +685,7 @@
     <!-- Companion split & sync status -->
     <string name="companion_split_people_count">%1$d People</string>
     <string name="sync_status_failed_tap_to_fix">%1$d failed, tap to fix</string>
+
+    <!-- Voiding an income that settled debts -->
+    <string name="txns_inflow_void_blocked_msg">This income settled earlier debts, so it cannot be voided here. Reopen those debts in the sheet first.</string>
 </resources>
