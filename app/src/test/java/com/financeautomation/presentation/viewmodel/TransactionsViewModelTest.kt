@@ -1031,4 +1031,106 @@ class TransactionsViewModelTest {
         assertEquals(1, tRepo.syncCalls)
         assertEquals(false, vm.uiState.value.isSyncing)
     }
+
+    @Test
+    fun testFilterCombination_categoryAccountAndShowVoid() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz).apply { set(Calendar.DAY_OF_MONTH, 15) }
+        val ts = nowCal.timeInMillis
+
+        // 1. Food & Drink with UPI
+        val txnFoodUpi = Transaction(
+            id = "t_food_upi",
+            timestamp = ts,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Restaurant A",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED
+        )
+        // 2. Food & Drink with Card
+        val txnFoodCard = Transaction(
+            id = "t_food_card",
+            timestamp = ts + 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "HDFC Card",
+            merchant = "Restaurant B",
+            category = "Food & Drink",
+            totalAmount = 800.0,
+            companions = "Personal",
+            myShare = 800.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED
+        )
+        // 3. Groceries with UPI
+        val txnGroceriesUpi = Transaction(
+            id = "t_groceries_upi",
+            timestamp = ts + 2000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Market",
+            category = "Groceries",
+            totalAmount = 300.0,
+            companions = "Personal",
+            myShare = 300.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED
+        )
+        // 4. Food & Drink with UPI that is VOID
+        val txnFoodUpiVoid = Transaction(
+            id = "t_food_upi_void",
+            timestamp = ts + 3000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "[Void] Restaurant C",
+            category = "Food & Drink",
+            totalAmount = 0.0,
+            companions = "Personal",
+            myShare = 0.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.VOID
+        )
+
+        tRepo.insertTransaction(txnFoodUpi)
+        tRepo.insertTransaction(txnFoodCard)
+        tRepo.insertTransaction(txnGroceriesUpi)
+        tRepo.insertTransaction(txnFoodUpiVoid)
+
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // Default: 3 active transactions (void is hidden)
+        val defaultItems = vm.uiState.value.groupedTransactions.flatMap { it.transactions }
+        assertEquals(3, defaultItems.size)
+
+        // Filter: Category = Food & Drink
+        vm.setFilter(TransactionFilter(category = "Food & Drink"))
+        advanceUntilIdle()
+        val foodItems = vm.uiState.value.groupedTransactions.flatMap { it.transactions }
+        assertEquals(2, foodItems.size) // Food UPI, Food Card
+
+        // Combine Filter: Category = Food & Drink AND Account = UPI
+        vm.setFilter(TransactionFilter(category = "Food & Drink", account = "UPI"))
+        advanceUntilIdle()
+        val foodUpiItems = vm.uiState.value.groupedTransactions.flatMap { it.transactions }
+        assertEquals(1, foodUpiItems.size)
+        assertEquals("t_food_upi", foodUpiItems[0].id)
+
+        // Combine Filter: Category = Food & Drink AND Account = UPI AND showVoid = true
+        vm.setFilter(TransactionFilter(category = "Food & Drink", account = "UPI", showVoid = true))
+        advanceUntilIdle()
+        val foodUpiWithVoid = vm.uiState.value.groupedTransactions.flatMap { it.transactions }
+        assertEquals(2, foodUpiWithVoid.size)
+        assertTrue(foodUpiWithVoid.any { it.id == "t_food_upi" })
+        assertTrue(foodUpiWithVoid.any { it.id == "t_food_upi_void" })
+    }
 }

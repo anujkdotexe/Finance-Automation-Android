@@ -304,12 +304,13 @@ fun TransactionsContent(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
-        // 5. One Chip Filter Row: All, UPI, Card, Cash, Needs Review, Income (+ active Category / Living burn chip)
+        // 5. One Chip Filter Row: All, UPI, Card, Cash, Show void, Needs Review, Income (+ active Category / Living burn chip)
         val currentAccount = state.activeFilter.account
         val currentStatus = state.activeFilter.status
         val currentCategory = state.activeFilter.category
         val isLivingBurn = state.activeFilter.excludeSavingsAndIgnored
-        val isAllSelected = currentAccount == null && currentStatus == null && currentCategory == null && !isLivingBurn
+        val isShowVoid = state.activeFilter.showVoid
+        val isAllSelected = !state.activeFilter.isActive
         val scrollState = rememberScrollState()
 
         Row(
@@ -323,14 +324,14 @@ fun TransactionsContent(
                 AppChip(
                     text = "$currentCategory ✕",
                     selected = true,
-                    onClick = onClearFilter
+                    onClick = { onFilterChange(state.activeFilter.copy(category = null)) }
                 )
             }
             if (isLivingBurn) {
                 AppChip(
                     text = "Living burn ✕",
                     selected = true,
-                    onClick = onClearFilter
+                    onClick = { onFilterChange(state.activeFilter.copy(excludeSavingsAndIgnored = false)) }
                 )
             }
             AppChip(
@@ -342,42 +343,68 @@ fun TransactionsContent(
                 text = "UPI",
                 selected = currentAccount.equals("UPI", ignoreCase = true),
                 onClick = {
-                    if (currentAccount.equals("UPI", ignoreCase = true)) onClearFilter()
-                    else onFilterChange(TransactionFilter(account = "UPI"))
+                    val newAcc = if (currentAccount.equals("UPI", ignoreCase = true)) null else "UPI"
+                    onFilterChange(state.activeFilter.copy(account = newAcc))
                 }
             )
             AppChip(
                 text = "Card",
                 selected = currentAccount.equals("Card", ignoreCase = true),
                 onClick = {
-                    if (currentAccount.equals("Card", ignoreCase = true)) onClearFilter()
-                    else onFilterChange(TransactionFilter(account = "Card"))
+                    val newAcc = if (currentAccount.equals("Card", ignoreCase = true)) null else "Card"
+                    onFilterChange(state.activeFilter.copy(account = newAcc))
                 }
             )
             AppChip(
                 text = "Cash",
                 selected = currentAccount.equals("Cash", ignoreCase = true),
                 onClick = {
-                    if (currentAccount.equals("Cash", ignoreCase = true)) onClearFilter()
-                    else onFilterChange(TransactionFilter(account = "Cash"))
+                    val newAcc = if (currentAccount.equals("Cash", ignoreCase = true)) null else "Cash"
+                    onFilterChange(state.activeFilter.copy(account = newAcc))
+                }
+            )
+            AppChip(
+                text = "Show void",
+                selected = isShowVoid,
+                onClick = {
+                    onFilterChange(state.activeFilter.copy(showVoid = !isShowVoid))
                 }
             )
             AppChip(
                 text = "Needs Review",
                 selected = currentStatus.equals("review", ignoreCase = true),
                 onClick = {
-                    if (currentStatus.equals("review", ignoreCase = true)) onClearFilter()
-                    else onFilterChange(TransactionFilter(status = "review"))
+                    val newStatus = if (currentStatus.equals("review", ignoreCase = true)) null else "review"
+                    onFilterChange(state.activeFilter.copy(status = newStatus))
                 }
             )
             AppChip(
                 text = "Income",
                 selected = currentStatus.equals("income", ignoreCase = true),
                 onClick = {
-                    if (currentStatus.equals("income", ignoreCase = true)) onClearFilter()
-                    else onFilterChange(TransactionFilter(status = "income"))
+                    val newStatus = if (currentStatus.equals("income", ignoreCase = true)) null else "income"
+                    onFilterChange(state.activeFilter.copy(status = newStatus))
                 }
             )
+            val popularCategories = remember {
+                listOf(
+                    com.financeautomation.core.constants.CategoryConstants.CATEGORY_FOOD_AND_DRINK,
+                    com.financeautomation.core.constants.CategoryConstants.CATEGORY_GROCERIES,
+                    com.financeautomation.core.constants.CategoryConstants.CATEGORY_TRANSIT,
+                    com.financeautomation.core.constants.CategoryConstants.CATEGORY_SHOPPING
+                )
+            }
+            popularCategories.forEach { cat ->
+                if (!cat.equals(currentCategory, ignoreCase = true)) {
+                    AppChip(
+                        text = cat,
+                        selected = false,
+                        onClick = {
+                            onFilterChange(state.activeFilter.copy(category = cat))
+                        }
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
