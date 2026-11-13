@@ -50,6 +50,7 @@ object NotificationAccessAlertManager {
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra("extra_route", "capturePermissions")
+                com.financeautomation.presentation.ui.InternalIntentAuth.attach(context, this)
             } ?: Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }

@@ -195,6 +195,7 @@ class MainActivity : FragmentActivity() {
         } catch (_: Exception) {}
 
         setContent {
+          com.financeautomation.presentation.screens.StorageGate(application as FinanceApplication) {
             val app = application as FinanceApplication
             val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
             val googleEmail by app.appContainer.preferencesRepository.getGoogleAccountEmail().collectAsState(initial = null)
@@ -251,6 +252,7 @@ class MainActivity : FragmentActivity() {
                     }
                 }
             }
+          }
         }
     }
 
@@ -263,7 +265,9 @@ class MainActivity : FragmentActivity() {
     private fun extractRouteFromIntent(intent: Intent?) {
         val extraRoute = intent?.getStringExtra("extra_route")
         val dataUriString = intent?.dataString
-        val validatedRoute = MainRouteValidator.resolveRoute(extraRoute, dataUriString)
+        val validatedRoute = MainRouteValidator.resolveRoute(
+            extraRoute, dataUriString, internal = InternalIntentAuth.isInternal(intent, packageName)
+        )
         if (validatedRoute != null) {
             pendingRoute = validatedRoute
         }

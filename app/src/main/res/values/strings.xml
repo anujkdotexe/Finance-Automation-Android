@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Finance Automation</string>
+    <string name="storage_unavailable_title">Storage unavailable</string>
+    <string name="storage_unavailable_body">The secure storage on this phone is not ready, so nothing can be saved right now. Nothing was lost. Try again in a moment.</string>
+    <string name="storage_unavailable_retry">Try again</string>
+    <string name="storage_reset_title">Local data was reset</string>
+    <string name="storage_reset_body">The secure key for the data on this phone changed, so the old local data could not be opened and was set aside. Entries that were not yet synced to your Google Sheet are not recoverable. Your sheet is untouched and local data will be rebuilt from it.</string>
+    <string name="storage_reset_ok">OK</string>
     <string name="quick_add_tile_label">Add expense</string>
     <string name="notification_channel_heads_up_name">Expense Alerts</string>
     <string name="notification_channel_heads_up_desc">Interactive alerts for intercepted UPI expenses</string>
