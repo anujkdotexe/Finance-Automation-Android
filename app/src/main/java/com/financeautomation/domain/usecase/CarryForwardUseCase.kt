@@ -116,19 +116,29 @@ class CarryForwardUseCase {
         targetDebits: List<LedgerDebit>,
         targetPayables: List<LedgerPayable>,
         sourceDebits: List<LedgerDebit>,
-        sourcePayables: List<LedgerPayable>
+        sourcePayables: List<LedgerPayable>,
+        existingLineage: List<LineageRecord> = emptyList()
     ): CarryForwardResult {
-        // Guard: Check if target tab already contains carried-over rows from this source tab
         val prefix = "[Carried from $sourceTab]"
-        val alreadyCarriedDebit = targetDebits.any { it.item.startsWith(prefix, ignoreCase = true) }
-        val alreadyCarriedPayable = targetPayables.any { it.whatFor.startsWith(prefix, ignoreCase = true) }
-
-        if (alreadyCarriedDebit || alreadyCarriedPayable) {
-            return CarryForwardResult(
-                plan = AccountingPlan(message = "Debts from $sourceTab already carried forward into $targetTab"),
-                lineageRecords = emptyList(),
-                skippedAlreadyCarried = true
-            )
+        // Idempotent per source row, not per tab: a row is skipped when it already has a lineage record, or when
+        // the target already holds its copy (same text and amount). Everything else that is open is carried,
+        // so a debt logged after the first run is still picked up.
+        val carriedFrom = existingLineage.mapNotNull { it.carriedFromUuid }.map { it.trim().lowercase() }.toSet()
+        fun debitAlreadyCarried(d: LedgerDebit): Boolean {
+            val key = (d.uuid ?: "${d.tab}!Row${d.row}").trim().lowercase()
+            if (key in carriedFrom) return true
+            val text = "$prefix ${d.item}"
+            return targetDebits.any {
+                it.item.equals(text, ignoreCase = true) && Math.abs(it.owed - d.owed) < 0.005
+            }
+        }
+        fun payableAlreadyCarried(p: LedgerPayable): Boolean {
+            val key = (p.uuid ?: "${p.tab}!Row${p.row}").trim().lowercase()
+            if (key in carriedFrom) return true
+            val text = "$prefix ${p.whatFor}"
+            return targetPayables.any {
+                it.whatFor.equals(text, ignoreCase = true) && Math.abs(it.amountOwed - p.amountOwed) < 0.005
+            }
         }
 
         val appends = mutableListOf<NewRow>()
@@ -138,7 +148,7 @@ class CarryForwardUseCase {
 
         // 1. Rollover open debits (status == Pending and owed > 0)
         for (debit in sourceDebits) {
-            if (debit.status == "Pending" && debit.owed > 0.0) {
+            if (debit.status == "Pending" && debit.owed > 0.0 && !debitAlreadyCarried(debit)) {
                 val newUuid = "txn_" + UUID.randomUUID().toString().replace("-", "").take(12)
                 val sourceUuid = debit.uuid ?: "${debit.tab}!Row${debit.row}"
 
@@ -172,7 +182,7 @@ class CarryForwardUseCase {
 
         // 2. Rollover open payables (status in (Pending, Partial) and amountOwed > 0)
         for (payable in sourcePayables) {
-            if ((payable.status == "Pending" || payable.status == "Partial") && payable.amountOwed > 0.0) {
+            if ((payable.status == "Pending" || payable.status == "Partial") && payable.amountOwed > 0.0 && !payableAlreadyCarried(payable)) {
                 val newUuid = "pay_" + UUID.randomUUID().toString().replace("-", "").take(12)
                 val sourceUuid = payable.uuid ?: "${payable.tab}!Row${payable.row}"
 
