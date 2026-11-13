@@ -89,8 +89,6 @@ import java.io.File
 )
 abstract class FinanceDatabase : RoomDatabase() {
 
-    var isStorageTemporarilyUnavailable: Boolean = false
-
     abstract fun transactionDao(): TransactionDao
     abstract fun companionDao(): CompanionDao
     abstract fun categoryDao(): CategoryDao
@@ -111,6 +109,7 @@ abstract class FinanceDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
+        const val RESET_NOTICE_FILE: String = "storage_reset_notice"
         private const val TAG = "FinanceDatabase"
 
         init {
@@ -158,29 +157,16 @@ abstract class FinanceDatabase : RoomDatabase() {
             val appContext = context.applicationContext
             val keyProvider = DatabaseKeyProvider(appContext)
 
-            // Step 1: Obtain encryption passphrase with transient retry guard
-            var passphrase: ByteArray? = null
-            try {
-                passphrase = keyProvider.getOrCreatePassphrase()
-            } catch (e: Exception) {
-                Log.w(TAG, "Transient Keystore error: ${e.javaClass.simpleName}. Retrying once.")
-                try {
-                    // Retry with 150ms delay on background thread (never sleep or yield on main thread)
-                    if (Looper.myLooper() != Looper.getMainLooper()) {
-                        Thread.sleep(150)
-                    }
-                    passphrase = keyProvider.getOrCreatePassphrase()
-                } catch (retryEx: Exception) {
-                    Log.e(TAG, "Keystore unavailable after retry: ${retryEx.javaClass.simpleName}. Starting in storage-temporarily-unavailable mode.")
+            // Step 1: Obtain encryption passphrase with one short retry. There is no in-memory fallback:
+            // saves there would be lost. A failure throws StorageUnavailableException and the next access retries.
+            val passphrase: ByteArray = PassphraseAccess.obtain(
+                provider = { keyProvider.getOrCreatePassphrase() },
+                pause = {
+                    Log.w(TAG, "Transient Keystore error. Retrying once.")
+                    // Never sleep on the main thread
+                    if (Looper.myLooper() != Looper.getMainLooper()) Thread.sleep(150)
                 }
-            }
-
-            // If Keystore is temporarily unavailable or locked, start in-memory without crashing or deleting key file
-            if (passphrase == null) {
-                return createInMemory(appContext).also {
-                    it.isStorageTemporarilyUnavailable = true
-                }
-            }
+            )
 
             // Step 2: One-time plaintext SQLite migration. On failure, returns pointer to moved-aside plain backup.
             val failedPlainBackup = DatabaseEncryptionMigrator.migrateIfNeeded(
@@ -217,6 +203,8 @@ abstract class FinanceDatabase : RoomDatabase() {
                         Log.e(TAG, "Database key invalid or file not a database: ${e.javaClass.simpleName}. Moving aside to $DATABASE_NAME.unreadable")
                         val unreadableFile = File(dbFile.parentFile, "$DATABASE_NAME.unreadable_${System.currentTimeMillis()}")
                         dbFile.renameTo(unreadableFile)
+                        StorageResetNotice(File(appContext.filesDir, RESET_NOTICE_FILE)).mark()
+                        UnreadableDatabaseRetention.prune(dbFile.parentFile ?: appContext.filesDir, DATABASE_NAME, keep = 2)
                         val walFile = File(dbFile.parentFile, "$DATABASE_NAME-wal")
                         val shmFile = File(dbFile.parentFile, "$DATABASE_NAME-shm")
                         if (walFile.exists()) walFile.delete()
@@ -238,8 +226,8 @@ abstract class FinanceDatabase : RoomDatabase() {
                             canaryRetry.rawQuery("SELECT count(*) FROM sqlite_master", null).use { it.moveToFirst() }
                             canaryRetry.close()
                         } catch (retryEx: Exception) {
-                            Log.e(TAG, "Canary retry failed: ${retryEx.javaClass.simpleName}. Rethrowing transient error.")
-                            throw retryEx
+                            Log.e(TAG, "Canary retry failed: ${retryEx.javaClass.simpleName}. Storage unavailable.")
+                            throw StorageUnavailableException("The database could not be opened. Try again.", retryEx)
                         }
                     }
                 }
@@ -268,16 +256,6 @@ abstract class FinanceDatabase : RoomDatabase() {
             }
 
             return db
-        }
-
-        fun createInMemory(context: Context): FinanceDatabase {
-            return Room.inMemoryDatabaseBuilder(
-                context.applicationContext,
-                FinanceDatabase::class.java
-            )
-                .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
-                .allowMainThreadQueries()
-                .build()
         }
 
         private class DatabasePrepopulateCallback : Callback() {
