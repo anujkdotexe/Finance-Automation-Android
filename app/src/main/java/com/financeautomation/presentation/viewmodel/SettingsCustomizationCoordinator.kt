@@ -57,14 +57,19 @@ class SettingsCustomizationCoordinator(
                 payablesFlow
             ) { companions, transactions, pendingPayables ->
                 val receivablesByFriend = mutableMapOf<String, Double>()
+                val displayNamesByKey = mutableMapOf<String, String>()
                 val openItemsByFriend = mutableMapOf<String, Int>()
                 for (txn in transactions) {
                     if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
                         val perPersonShares = AccountingUtils.calculateReceivablesForTransaction(txn)
-                        for ((friend, amount) in perPersonShares) {
-                            val key = AccountingUtils.normalizePersonName(friend)
-                            receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + amount
+                        for (share in perPersonShares) {
+                            val key = share.key
+                            receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + share.amount
                             openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
+                            val existing = displayNamesByKey[key]
+                            if (existing == null || (existing.none { it.isUpperCase() } && share.displayName.any { it.isUpperCase() })) {
+                                displayNamesByKey[key] = share.displayName
+                            }
                         }
                     }
                 }
@@ -92,6 +97,7 @@ class SettingsCustomizationCoordinator(
                         val net = rec - pay
                         if (kotlin.math.abs(net) > 0.001) {
                             val originalName = pendingPayables.firstOrNull { AccountingUtils.normalizePersonName(it.paidBy) == key }?.paidBy?.trim()
+                                ?: displayNamesByKey[key]
                                 ?: key
                             updatedCompanions.add(
                                 Companion(
