@@ -31,6 +31,8 @@ class FutureDateGuardTest {
                 java.lang.Long.TYPE -> 1L
                 java.lang.Integer.TYPE -> 0
                 java.lang.Boolean.TYPE -> false
+                kotlinx.coroutines.flow.Flow::class.java -> kotlinx.coroutines.flow.flowOf(emptyList<Any>())
+                List::class.java -> emptyList<Any>()
                 else -> kotlin.Unit
             }
         } as T

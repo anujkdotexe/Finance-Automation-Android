@@ -239,12 +239,19 @@ class TransactionRepositoryImpl(
             runInDbTransaction {
                 tDao.update(entity)
 
-                val queueItem = SyncQueueEntity(
-                    transactionId = transaction.id,
-                    operationType = SyncQueueEntity.OP_UPDATE,
-                    payloadJson = transaction.id
-                )
-                qDao.insert(queueItem)
+                // The insert reads the row when it runs, so a change made before it ran needs no second item
+                val insertWaiting = qDao.getAllQueueFlow().first().any {
+                    it.transactionId == transaction.id && it.operationType == SyncQueueEntity.OP_INSERT && it.planJson == null
+                }
+                if (!insertWaiting) {
+                    qDao.insert(
+                        SyncQueueEntity(
+                            transactionId = transaction.id,
+                            operationType = SyncQueueEntity.OP_UPDATE,
+                            payloadJson = transaction.id
+                        )
+                    )
+                }
             }
             requestSync()
             Result.Success(Unit)
@@ -432,6 +439,18 @@ class TransactionRepositoryImpl(
                 "[Void] ${existing.merchant}"
             }
 
+            // Never delivered: there is nothing on the sheet to void, so drop its queue items and void it here only
+            val neverDelivered = existing.sheetRowIndex == null &&
+                qDao.getAllQueueFlow().first().any { it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT }
+            if (neverDelivered) {
+                runInDbTransaction {
+                    qDao.deleteByTransactionId(id)
+                    tDao.voidTransaction(id, voidTitle)
+                }
+                requestSync()
+                return Result.Success(Unit)
+            }
+
             runInDbTransaction {
                 tDao.voidTransaction(id, voidTitle)
 
@@ -614,17 +633,8 @@ class TransactionRepositoryImpl(
     }
 
     private suspend fun markTransportFailure(item: SyncQueueEntity, txn: Transaction, throwable: Throwable? = null) {
-        val tDao = resolveTransactionDao()
-        val qDao = resolveSyncQueueDao()
-        val newRetry = item.retryCount + 1
-        val kind = SyncErrorKind.fromThrowable(throwable).name
-        val detail = throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure"
-        if (newRetry >= MAX_SYNC_RETRIES) {
-            qDao.setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, newRetry, kind, detail)
-            tDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
-        } else {
-            qDao.updateStatusError(item.id, SyncQueueEntity.STATUS_FAILED, 1, kind, detail)
-        }
+        // The transaction keeps its review state: a retryable failure is not a reason to ask the user again
+        handleItemTransportFailure(item, throwable)
     }
 
     /** Called after every sync attempt, successful or not, for example to refresh the home screen widget. */
@@ -1023,8 +1033,10 @@ class TransactionRepositoryImpl(
                         }
 
                         if (targetRow == null) {
-                            syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                            transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
+                            markPermanentFailure(
+                                item, com.financeautomation.data.remote.SheetNotFoundException("", "Sheet changed: the row was not found"),
+                                "Sheet changed: the row was not found"
+                            )
                             continue
                         }
 
@@ -1062,8 +1074,10 @@ class TransactionRepositoryImpl(
                             }
 
                             if (targetRow == null) {
-                                syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-                                transactionDao.updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
+                                markPermanentFailure(
+                                    item, com.financeautomation.data.remote.SheetNotFoundException("", "Sheet changed: the row was not found"),
+                                    "Sheet changed: the row was not found"
+                                )
                                 continue
                             }
 
@@ -1396,9 +1410,18 @@ class TransactionRepositoryImpl(
             if (txn != null) markTransportFailure(item, txn, err) else handleItemTransportFailure(item, err)
             return isRunWideFailure(err)
         }
-        qDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, 999)
-        if (txn != null) resolveTransactionDao().updateReviewState(txn.id, ReviewState.NEEDS_REVIEW.name)
+        markPermanentFailure(item, err)
         return false
+    }
+
+    /**
+     * A permanent failure is shown as a failed queue item with its reason. The transaction keeps its review state, so a
+     * row the user already confirmed does not come back to Needs Review.
+     */
+    private suspend fun markPermanentFailure(item: SyncQueueEntity, err: Throwable?, fallbackDetail: String? = null) {
+        val kind = SyncErrorKind.fromThrowable(err).name
+        val detail = err?.message ?: fallbackDetail ?: err?.javaClass?.simpleName ?: "Permanent failure"
+        resolveSyncQueueDao().setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, 999, kind, detail.take(300))
     }
 
     private fun isRunWideFailure(err: Throwable): Boolean = when (err) {
