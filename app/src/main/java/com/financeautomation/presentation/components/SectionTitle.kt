@@ -43,14 +43,9 @@ fun SectionTitle(
         )
 
         if (!actionText.isNullOrBlank() && onActionClick != null) {
-            Text(
+            LinkButton(
                 text = actionText,
-                style = FinanceTheme.typography.labelMedium,
-                color = FinanceTheme.colors.brand,
-                modifier = Modifier
-                    .clickable(role = Role.Button, onClick = onActionClick)
-                    .defaultMinSize(minHeight = 48.dp)
-                    .padding(horizontal = FinanceTheme.spacing.xs, vertical = FinanceTheme.spacing.s)
+                onClick = onActionClick
             )
         }
     }
