@@ -86,7 +86,7 @@ class FontScaleOverflowAuditTest {
     }
 
     @Test
-    fun testKpiCardAmountFormatNeverExceedsSixCharactersUnderFontScale1_3() {
+    fun testStackedKpiLayoutAmountsNeverEllipsizeUnderFontScale1_3() {
         val boundaryAmounts = listOf(
             9999.0,
             10000.0,
@@ -96,11 +96,33 @@ class FontScaleOverflowAuditTest {
             1234567.0,
             12345678.0
         )
+
+        // 1. Half-width cards (Savings and Income):
+        // Width = (360dp - 32dp padding - 8dp gap) / 2 = 160dp.
+        // Content width after 24dp padding = 136dp.
+        // At 20sp * 1.3 font scale = 26sp mono font (char width ~15.6dp), capacity is 8 characters.
+        // Formatted amount must never exceed 6 characters.
         boundaryAmounts.forEach { amount ->
             val formatted = com.financeautomation.core.utils.formatRupeesCompact(amount)
             assertTrue(
                 "Formatted amount '$formatted' for $amount must not exceed 6 characters to prevent ellipsis on 360dp at font scale 1.3",
                 formatted.length <= 6
+            )
+        }
+
+        // 2. Full-width card (Living burn):
+        // Width = 360dp - 32dp padding = 328dp.
+        // Content width after 24dp padding = 304dp.
+        // At 32sp * 1.3 font scale = 41.6sp mono font (char width ~25dp), capacity is 12 characters.
+        boundaryAmounts.forEach { amount ->
+            val formatted = if (amount < 10000000.0) {
+                com.financeautomation.core.utils.formatRupeesAuto(amount)
+            } else {
+                com.financeautomation.core.utils.formatRupeesCompact(amount)
+            }
+            assertTrue(
+                "Full-width Living burn '$formatted' for $amount must fit within 12 characters",
+                formatted.length <= 12
             )
         }
     }

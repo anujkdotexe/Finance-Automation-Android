@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -29,22 +30,35 @@ import com.financeautomation.core.utils.formatRupeesCompact
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
+import kotlin.math.abs
 
 /**
- * KPI card for dashboard metrics row.
- * Design: 16dp radius, surfaceContainerLow fill, no border, equal-weight layout.
+ * KPI card for dashboard metrics row (Y1 final).
+ * Design: 16dp radius, surfaceContainerLow fill, no border.
+ * Supports full-width hero card (large amount style) and half-width compact cards.
  */
 @Composable
 fun KpiCard(
     label: String,
     amount: Double,
     modifier: Modifier = Modifier,
+    isLargeAmount: Boolean = false,
     line1Text: String? = null,
     line1IsPrimary: Boolean = false,
     line2Text: String? = null,
     onClick: (() -> Unit)? = null
 ) {
     var showExact by remember { mutableStateOf(false) }
+
+    val formattedAmount = if (showExact) {
+        formatRupeesAuto(amount)
+    } else if (isLargeAmount) {
+        // Full-width Living burn card shows exact figure up to 7 digits before compact
+        if (abs(amount) < 10000000.0) formatRupeesAuto(amount) else formatRupeesCompact(amount)
+    } else {
+        // Half-width cards: 5-digit and larger amounts switch to compact
+        formatRupeesCompact(amount)
+    }
 
     Card(
         shape = FinanceShapes.appCard,
@@ -67,6 +81,7 @@ fun KpiCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight()
                 .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -79,32 +94,34 @@ fun KpiCard(
             )
 
             Text(
-                text = if (showExact) formatRupeesAuto(amount) else formatRupeesCompact(amount),
-                style = FinanceTheme.typography.amountMedium,
+                text = formattedAmount,
+                style = if (isLargeAmount) FinanceTheme.typography.amountHero else FinanceTheme.typography.amountMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(vertical = FinanceTheme.spacing.xs)
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
-                if (!line1Text.isNullOrBlank()) {
-                    Text(
-                        text = line1Text,
-                        style = FinanceTheme.typography.labelSmall,
-                        color = if (line1IsPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (!line2Text.isNullOrBlank()) {
-                    Text(
-                        text = line2Text,
-                        style = FinanceTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            if (!line1Text.isNullOrBlank() || !line2Text.isNullOrBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
+                    if (!line1Text.isNullOrBlank()) {
+                        Text(
+                            text = line1Text,
+                            style = FinanceTheme.typography.labelSmall,
+                            color = if (line1IsPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (!line2Text.isNullOrBlank()) {
+                        Text(
+                            text = line2Text,
+                            style = FinanceTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
