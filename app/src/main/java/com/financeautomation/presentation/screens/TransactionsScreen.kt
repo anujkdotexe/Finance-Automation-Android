@@ -23,8 +23,12 @@ import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +69,7 @@ import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AppCard
+import com.financeautomation.presentation.util.MonthCsvExporter
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.FilledButton
@@ -113,6 +119,7 @@ fun TransactionsScreen(
     var selectedInflow by remember { mutableStateOf<Inflow?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -156,6 +163,16 @@ fun TransactionsScreen(
                         if (result == SnackbarResult.ActionPerformed) {
                             viewModel.undoVoid()
                         }
+                    }
+                },
+                onExportThisMonth = {
+                    coroutineScope.launch {
+                        MonthCsvExporter.exportMonth(context, state.monthOffset)
+                            .onFailure { e ->
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.export_failed, e.message ?: "Unknown error")
+                                )
+                            }
                     }
                 },
                 onAddExpense = onAddExpense,
@@ -223,6 +240,7 @@ fun TransactionsContent(
     onInflowClick: (Inflow) -> Unit = {},
     onNavigateToSync: () -> Unit = {},
     onVoidTransaction: (Transaction) -> Unit = {},
+    onExportThisMonth: () -> Unit = {},
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -242,13 +260,53 @@ fun TransactionsContent(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-        // 2. Month Switcher (shared component with Dashboard)
-        MonthSwitcher(
-            monthLabel = state.selectedMonthLabel,
-            onPreviousMonth = onPreviousMonth,
-            onNextMonth = onNextMonth,
-            onSelectMonthOffset = onSelectMonthOffset
-        )
+        // 2. Month Switcher (shared component with Dashboard) + Overflow Menu
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                MonthSwitcher(
+                    monthLabel = state.selectedMonthLabel,
+                    onPreviousMonth = onPreviousMonth,
+                    onNextMonth = onNextMonth,
+                    onSelectMonthOffset = onSelectMonthOffset
+                )
+            }
+
+            var showMenu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreHoriz,
+                        contentDescription = stringResource(R.string.action_export_this_month),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_export_this_month)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onExportThisMonth()
+                        }
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
