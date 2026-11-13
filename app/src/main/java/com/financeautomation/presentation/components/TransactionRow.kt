@@ -3,12 +3,15 @@ package com.financeautomation.presentation.components
 import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,10 +20,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
@@ -58,7 +60,7 @@ fun TransactionRow(
                     Modifier.clickable(role = Role.Button, onClick = onClick)
                 } else Modifier
             )
-            .padding(vertical = FinanceTheme.spacing.s, horizontal = FinanceTheme.spacing.xs),
+            .padding(vertical = FinanceTheme.spacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -81,11 +83,7 @@ fun TransactionRow(
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
             ) {
                 if (account.isNotBlank()) {
-                    AppChip(
-                        text = account,
-                        selected = false,
-                        onClick = {}
-                    )
+                    TransactionAccountChip(text = account)
                 }
 
                 if (metaText.isNotBlank()) {
@@ -123,6 +121,43 @@ fun TransactionRow(
             } else if (status.isNotBlank()) {
                 StatusChip(status = status)
             }
+        }
+    }
+}
+
+/**
+ * Account chip for transaction ledger rows.
+ * Conforms to frozen specifications:
+ * - Left aligned with merchant text
+ * - Uniform horizontal padding and minimum width
+ * - Low height to keep row at 56dp minimum without extra vertical space
+ */
+@Composable
+fun TransactionAccountChip(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = FinanceShapes.appChip,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+            .defaultMinSize(
+                minWidth = FinanceTheme.sizes.accountChipMinWidth,
+                minHeight = FinanceTheme.sizes.accountChipHeight
+            )
+            .height(FinanceTheme.sizes.accountChipHeight)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = FinanceTheme.spacing.sm),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = FinanceTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

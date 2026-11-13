@@ -87,6 +87,8 @@ object FinanceSizes {
     val kpiCardWidth: Dp = 140.dp
     val kpiCardMinHeight: Dp = 110.dp
     val minRowHeight: Dp = 56.dp
+    val accountChipMinWidth: Dp = 44.dp
+    val accountChipHeight: Dp = 22.dp
     val icon48: Dp = 48.dp
     val icon56: Dp = 56.dp
     val maxSheetHeight: Dp = 540.dp
