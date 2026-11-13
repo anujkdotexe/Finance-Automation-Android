@@ -59,8 +59,10 @@ class SyncErrorHandlingTest {
         val h = SyncHarness()
         h.server.fail = { call, _ -> if (metadataCall(call)) 403 to SyncHarness.errorBody(403, "forbidden") else null }
         h.saveAndSync("txn_a")
-        assertEquals(999, h.queueOf("txn_a").retryCount)
-        assertEquals(ReviewState.NEEDS_REVIEW.name, h.tDao.rows["txn_a"]!!.reviewState)
+        val item = h.queueOf("txn_a")
+        assertEquals(999, item.retryCount)
+        assertTrue("the reason is kept for the failed item", !item.lastErrorDetail.isNullOrBlank())
+        assertEquals("a failed item does not send the row back to review", ReviewState.CONFIRMED.name, h.tDao.rows["txn_a"]!!.reviewState)
     }
 
     // S-3: an expired token pauses the queue, it does not damage it

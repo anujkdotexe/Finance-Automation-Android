@@ -20,7 +20,8 @@ class InMemoryTransactionDao : TransactionDao {
     val rows = ConcurrentHashMap<String, TransactionEntity>()
 
     override fun getTransactionsFlow(): Flow<List<TransactionEntity>> = flowOf(rows.values.toList())
-    override fun getNeedsReviewFlow(): Flow<List<TransactionEntity>> = emptyFlow()
+    override fun getNeedsReviewFlow(): Flow<List<TransactionEntity>> =
+        flowOf(rows.values.filter { it.reviewState == "NEEDS_REVIEW" && !it.status.equals("Void", ignoreCase = true) })
     override fun getConfirmedUnsyncedFlow(): Flow<List<TransactionEntity>> = emptyFlow()
     override fun getAccountTransactionCounts(from: Long, to: Long): Flow<List<com.financeautomation.data.local.dao.AccountTransactionCount>> = emptyFlow()
     override suspend fun getById(id: String): TransactionEntity? = rows[id]
@@ -36,7 +37,7 @@ class InMemoryTransactionDao : TransactionDao {
         rows[id]?.let {
             rows[id] = it.copy(
                 totalAmount = 0.0, myShare = 0.0, owedToMe = 0.0, status = "Void",
-                syncState = SyncState.VOID.name, merchant = voidTitle
+                syncState = SyncState.VOID.name, merchant = voidTitle, reviewState = "CONFIRMED"
             )
         }
     }
