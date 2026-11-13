@@ -142,6 +142,20 @@ class TransactionRepositoryImpl(
 
     private val syncMutex = Mutex()
 
+    /**
+     * Asks for a background sync after something was queued. A failure to schedule must never fail the save,
+     * because the periodic job still picks the queue up.
+     */
+    private fun requestSync() {
+        try {
+            onTriggerSync?.invoke()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            com.financeautomation.core.utils.Diagnostics.record("TransactionRepositoryImpl", "sync request failed: ${e.javaClass.simpleName}")
+        }
+    }
+
     private suspend inline fun <T> runInDbTransaction(crossinline block: suspend () -> T): T {
         val db = databaseProvider?.invoke()
         return if (db != null) {
@@ -207,6 +221,7 @@ class TransactionRepositoryImpl(
                     qDao.insert(queueItem)
                 }
             }
+            if (transaction.syncState == SyncState.PENDING) requestSync()
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -229,6 +244,7 @@ class TransactionRepositoryImpl(
                 )
                 qDao.insert(queueItem)
             }
+            requestSync()
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -277,7 +293,7 @@ class TransactionRepositoryImpl(
                 resolveInflowDao()?.insert(inflow)
                 resolveSyncQueueDao().insert(queueItem)
             }
-            onTriggerSync?.invoke()
+            requestSync()
             Result.Success(reqId)
         } catch (e: Exception) {
             Result.Error(e)
@@ -306,7 +322,7 @@ class TransactionRepositoryImpl(
                 payloadJson = AccountingRequestJsonAdapter.payableRequestToJson(req)
             )
             resolveSyncQueueDao().insert(queueItem)
-            onTriggerSync?.invoke()
+            requestSync()
             Result.Success(reqId)
         } catch (e: Exception) {
             Result.Error(e)
@@ -335,7 +351,7 @@ class TransactionRepositoryImpl(
                 payloadJson = AccountingRequestJsonAdapter.repaymentRequestToJson(req)
             )
             resolveSyncQueueDao().insert(queueItem)
-            onTriggerSync?.invoke()
+            requestSync()
             Result.Success(reqId)
         } catch (e: Exception) {
             Result.Error(e)
@@ -362,7 +378,7 @@ class TransactionRepositoryImpl(
                 payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(req)
             )
             resolveSyncQueueDao().insert(queueItem)
-            onTriggerSync?.invoke()
+            requestSync()
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -379,7 +395,7 @@ class TransactionRepositoryImpl(
                 payloadJson = AccountingRequestJsonAdapter.yearCloseRequestToJson(req)
             )
             resolveSyncQueueDao().insert(queueItem)
-            onTriggerSync?.invoke()
+            requestSync()
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -419,6 +435,7 @@ class TransactionRepositoryImpl(
                 )
                 qDao.insert(queueItem)
             }
+            requestSync()
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
