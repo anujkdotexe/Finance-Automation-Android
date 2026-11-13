@@ -738,4 +738,16 @@
     <string name="sub_suggestion_every_year">year</string>
     <string name="sub_suggestion_track">Track it</string>
     <string name="sub_suggestion_not_now">Not now</string>
+
+    <!-- Month burn widget -->
+    <string name="widget_month_burn_label">Month burn</string>
+    <string name="widget_month_burn_desc">This month\'s living burn and the per day average</string>
+    <string name="widget_month_burn_title">Living burn</string>
+    <string name="widget_month_burn_per_day">%1$s a day</string>
+    <string name="widget_month_burn_up_to_date">Up to date</string>
+    <string name="widget_month_burn_waiting">%1$d waiting</string>
+    <string name="widget_month_burn_description">%1$s living burn %2$s, %3$s, %4$s</string>
+    <string name="widget_month_burn_placeholder_month">Month</string>
+    <string name="widget_month_burn_placeholder_amount">&#8377;0</string>
+    <string name="widget_month_burn_placeholder_per_day">&#8377;0 a day</string>
 </resources>

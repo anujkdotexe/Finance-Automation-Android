@@ -570,7 +570,22 @@ class TransactionRepositoryImpl(
         }
     }
 
-    override suspend fun syncPendingTransactions(): Result<Int> = withContext(ioDispatcher) {
+    /** Called after every sync attempt, successful or not, for example to refresh the home screen widget. */
+    var onSyncCompleted: (() -> Unit)? = null
+
+    override suspend fun syncPendingTransactions(): Result<Int> {
+        try {
+            return runSyncPendingTransactions()
+        } finally {
+            try {
+                onSyncCompleted?.invoke()
+            } catch (_: Exception) {
+                // A widget refresh must never turn a sync result into a failure
+            }
+        }
+    }
+
+    private suspend fun runSyncPendingTransactions(): Result<Int> = withContext(ioDispatcher) {
         syncMutex.withLock {
             try {
                 if (googleSheetsClient == null || preferencesRepository == null) {
