@@ -28,7 +28,7 @@ class SheetDimensionsTest {
 
     @Test
     fun testPointsAreConvertedToPixels() {
-        assertEquals(36, SheetProvisioner.pointsToPixels(27.0))
+        assertEquals(40, SheetProvisioner.pointsToPixels(30.0))
         assertEquals(24, SheetProvisioner.pointsToPixels(18.0))
         assertEquals(28, SheetProvisioner.pointsToPixels(21.0))
         assertEquals(17, SheetProvisioner.pointsToPixels(12.5))
@@ -39,11 +39,12 @@ class SheetDimensionsTest {
     @Test
     fun testMonthTabRowHeightsMatchIosReference() {
         val d = dims(SheetProvisioner.buildProvisionRequests(sheetId = 9, tabTitle = "Nov26"), 9)
-        assertEquals(36, d.pixelsFor("ROWS", 0))
+        // Live Nov26: row 1 is 30 points, rows 2 and 3 are 18 and 21, rows 4 and below have no custom height
+        assertEquals(40, d.pixelsFor("ROWS", 0))
         assertEquals(24, d.pixelsFor("ROWS", 1))
         assertEquals(28, d.pixelsFor("ROWS", 2))
-        assertEquals(17, d.pixelsFor("ROWS", 3))
-        assertEquals(17, d.pixelsFor("ROWS", 999))
+        assertEquals(null, d.pixelsFor("ROWS", 3))
+        assertEquals(null, d.pixelsFor("ROWS", 999))
     }
 
     @Test
@@ -51,7 +52,10 @@ class SheetDimensionsTest {
         val d = dims(SheetProvisioner.buildProvisionRequests(sheetId = 9, tabTitle = "Nov26"), 9)
         // A, D, I, J (J shares the I width in iOS), L spacer, S, T (T shares the S width), U spacer, V, AB
         assertEquals(90, d.pixelsFor("COLUMNS", 0))
-        assertEquals(140, d.pixelsFor("COLUMNS", 3))
+        assertEquals(129, d.pixelsFor("COLUMNS", 1)) // B 16.25
+        assertEquals(160, d.pixelsFor("COLUMNS", 3)) // D 20.13
+        assertEquals(75, d.pixelsFor("COLUMNS", 13)) // N 9.5
+        assertEquals(100, d.pixelsFor("COLUMNS", 15)) // P 12.63
         assertEquals(90, d.pixelsFor("COLUMNS", 8))
         assertEquals(90, d.pixelsFor("COLUMNS", 9))
         assertEquals(10, d.pixelsFor("COLUMNS", 11))

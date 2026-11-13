@@ -41,10 +41,22 @@ object SheetProvisioner {
         Triple(23, 24, 18.0), Triple(24, 25, 16.5), Triple(25, 26, 21.0), Triple(26, 36, 15.0)
     )
 
-    /** Month tab row heights from the iOS reference (rows 4 to 1000 are 12.5 points). */
+    /** Month tab row heights from the live iOS workbook; rows 4 and below have no custom height (default 15.75 points). */
     val MONTH_TAB_ROW_HEIGHT_POINTS: List<Triple<Int, Int, Double>> = listOf(
-        Triple(0, 1, 27.0), Triple(1, 2, 18.0), Triple(2, 3, 21.0), Triple(3, 1000, 12.5)
+        Triple(0, 1, 30.0), Triple(1, 2, 18.0), Triple(2, 3, 21.0)
     )
+
+    /** "Nov26" becomes "EXPENSE LEDGER — NOVEMBER 2026"; a tab name that is not a month tab is upper-cased as is. */
+    fun monthTabBannerTitle(tabTitle: String): String {
+        val month = try {
+            java.time.YearMonth.parse(tabTitle, java.time.format.DateTimeFormatter.ofPattern("MMMyy", java.util.Locale.US))
+                .format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.US))
+                .uppercase()
+        } catch (e: java.time.format.DateTimeParseException) {
+            tabTitle.uppercase()
+        }
+        return "EXPENSE LEDGER — $month"
+    }
 
     private const val ROW3_LAST_BORDERED_COL = 24 // column Y
 
@@ -162,6 +174,7 @@ object SheetProvisioner {
     private val blueSectionColor = hexToColorMap("3D85C6")
     private val lightSlateBg = hexToColorMap("EBEEF1")
     private val darkNavyBg = hexToColorMap("19227E")
+    private val ledgerBannerBg = hexToColorMap("1A237E")
     private val accentNavyBg = hexToColorMap("273492")
     private val buttonNavyBg = hexToColorMap("283593")
     private val headerSlateBg = hexToColorMap("37474F")
@@ -718,7 +731,7 @@ object SheetProvisioner {
                 )
             )
             // Category Spend Formula (Col Z)
-            val spendFormula = """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!F4:F"), Y$rowNum, INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!I4:I")), 0)"""
+            val spendFormula = DashboardFormulaBuilder.buildCategorySpendFormula(rowNum)
             requests.add(
                 createCellRequest(
                     sheetId = dashboardSheetId,
@@ -1076,7 +1089,7 @@ object SheetProvisioner {
         )
 
         // 4. Populate Row 1 Title Banner
-        val bannerTitle = "EXPENSE LEDGER — ${tabTitle.uppercase()}"
+        val bannerTitle = monthTabBannerTitle(tabTitle)
         requests.add(
             mapOf(
                 "repeatCell" to mapOf(
@@ -1090,13 +1103,13 @@ object SheetProvisioner {
                     "cell" to mapOf(
                         "userEnteredValue" to mapOf("stringValue" to bannerTitle),
                         "userEnteredFormat" to mapOf(
-                            "backgroundColor" to darkNavyBg,
+                            "backgroundColor" to ledgerBannerBg,
                             "horizontalAlignment" to "CENTER",
                             "verticalAlignment" to "MIDDLE",
                             "textFormat" to mapOf(
                                 "foregroundColor" to whiteColor,
                                 "bold" to true,
-                                "fontSize" to 16
+                                "fontSize" to 14
                             )
                         )
                     ),
@@ -1195,8 +1208,8 @@ object SheetProvisioner {
 
         // Exact Column Widths matching iOS master template
         val colWidths = listOf(
-            0 to 90, 1 to 75, 2 to 80, 3 to 140, 4 to 100, 5 to 110, 6 to 100, 7 to 120, 8 to 90,
-            9 to 90, 10 to 80, 11 to 10, 12 to 90, 13 to 112, 14 to 90, 15 to 112, 16 to 120,
+            0 to 90, 1 to 129, 2 to 80, 3 to 160, 4 to 100, 5 to 110, 6 to 100, 7 to 120, 8 to 90,
+            9 to 90, 10 to 80, 11 to 10, 12 to 90, 13 to 75, 14 to 90, 15 to 100, 16 to 120,
             17 to 125, 18 to 115, 19 to 115, 20 to 10, 21 to 95, 22 to 75, 23 to 95, 24 to 120,
             25 to 110, 26 to 95, 27 to 115
         )
