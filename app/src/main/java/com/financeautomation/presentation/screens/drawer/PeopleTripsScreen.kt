@@ -1,28 +1,29 @@
 package com.financeautomation.presentation.screens.drawer
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.BeachAccess
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.FlightTakeoff
-import androidx.compose.material.icons.rounded.People
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,134 +32,425 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
-import com.financeautomation.presentation.screens.SettingsCard
+import com.financeautomation.domain.model.Companion as FriendCompanion
+import com.financeautomation.presentation.components.EmptyState
+import com.financeautomation.presentation.components.HeaderActionButton
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PeopleTripsScreen(
     viewModel: SettingsViewModel,
     state: SettingsUiState,
+    onStartTrip: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    var newCompanionInput by remember { mutableStateOf("") }
-    var newTagInput by remember { mutableStateOf("") }
+    var showAddFriendSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(FinanceTheme.spacing.l),
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
+            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xl)
     ) {
-        // Friends & Companions Card
-        SettingsCard(
-            title = stringResource(R.string.settings_friends_title),
-            subtitle = stringResource(R.string.settings_friends_desc),
-            icon = Icons.Rounded.People
+        // Top Utility Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
             ) {
-                state.companions.forEach { companion ->
-                    FilterChip(
-                        selected = false,
-                        onClick = { },
-                        label = { Text(companion.name) }
+                Box(
+                    modifier = Modifier
+                        .size(FinanceTheme.spacing.s)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+                Text(
+                    text = "Live Ledgers",
+                    style = FinanceTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            HeaderActionButton(
+                text = stringResource(R.string.people_add_friend),
+                onClick = { showAddFriendSheet = true }
+            )
+        }
+
+        // SECTION 1: FRIENDS
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.people_section_friends),
+                            style = FinanceTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Surface(
+                            color = FinanceTheme.colors.surfaceContainerHigh,
+                            shape = FinanceShapes.pill
+                        ) {
+                            Text(
+                                text = "${state.companions.size} members",
+                                style = FinanceTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.people_friends_desc),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                OutlinedTextField(
-                    value = newCompanionInput,
-                    onValueChange = { newCompanionInput = it },
-                    label = { Text(stringResource(R.string.settings_new_friend_label)) },
-                    singleLine = true,
-                    shape = FinanceTheme.shapes.medium,
-                    modifier = Modifier.weight(1f)
+            if (state.companions.isEmpty()) {
+                EmptyState(
+                    message = stringResource(R.string.people_empty_title)
                 )
-
-                Button(
-                    onClick = {
-                        if (newCompanionInput.isNotBlank()) {
-                            viewModel.onAddCompanion(newCompanionInput)
-                            newCompanionInput = ""
-                        }
-                    },
-                    shape = FinanceTheme.shapes.medium
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text(stringResource(R.string.action_add))
+                    state.companions.forEach { companion ->
+                        FriendItemRow(companion = companion)
+                    }
                 }
             }
         }
 
-        // Trip Tags Card
-        SettingsCard(
-            title = stringResource(R.string.settings_trip_tags_title),
-            subtitle = "Active travel and event tags",
-            icon = Icons.Rounded.FlightTakeoff
+        // SECTION 2: TRIPS
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
-            FlowRow(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                state.tripTags.forEach { tag ->
-                    FilterChip(
-                        selected = tag.isActive,
-                        onClick = { viewModel.onToggleTripTagActive(tag.id) },
-                        label = { Text(tag.name) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.people_section_trips),
+                            style = FinanceTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Surface(
+                            color = FinanceTheme.colors.surfaceContainerHigh,
+                            shape = FinanceShapes.pill
+                        ) {
+                            Text(
+                                text = if (state.activeTripTag.isNotBlank()) stringResource(R.string.trip_active) else "0 active",
+                                style = FinanceTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.people_trips_desc),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                OutlinedTextField(
-                    value = newTagInput,
-                    onValueChange = { newTagInput = it },
-                    label = { Text(stringResource(R.string.settings_new_trip_tag_label)) },
-                    singleLine = true,
-                    shape = FinanceTheme.shapes.medium,
-                    modifier = Modifier.weight(1f)
+            // Trip Cards
+            if (state.activeTripTag.isNotBlank()) {
+                TripCard(
+                    tripName = state.activeTripTag,
+                    statusText = stringResource(R.string.trip_active),
+                    peopleCount = 4,
+                    totalSpend = "₹18,400.00"
                 )
-
-                Button(
-                    onClick = {
-                        if (newTagInput.isNotBlank()) {
-                            viewModel.onAddTripTag(newTagInput)
-                            newTagInput = ""
-                        }
-                    },
-                    shape = FinanceTheme.shapes.medium
+            } else {
+                Surface(
+                    color = FinanceTheme.colors.surfaceContainerLowest,
+                    shape = FinanceShapes.large,
+                    shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(FinanceShapes.large)
+                        .clickable(onClick = onStartTrip)
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(FinanceTheme.sizes.iconSmall))
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text(stringResource(R.string.action_add))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(FinanceTheme.spacing.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(FinanceTheme.spacing.s),
+                            modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.FlightTakeoff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.btn_start_new_trip),
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Isolate living burn with a dedicated trip ledger",
+                                style = FinanceTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
+            }
+        }
+    }
+
+    if (showAddFriendSheet) {
+        AddFriendSheet(
+            onDismiss = { showAddFriendSheet = false },
+            onSave = { name ->
+                viewModel.onAddCompanion(name)
+                showAddFriendSheet = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun FriendItemRow(
+    companion: FriendCompanion,
+    modifier: Modifier = Modifier
+) {
+    val initial = companion.name.firstOrNull()?.uppercase() ?: "F"
+
+    Surface(
+        color = FinanceTheme.colors.surfaceContainerLowest,
+        shape = FinanceShapes.large,
+        shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(FinanceTheme.sizes.buttonHeightMedium)
+                        .clip(CircleShape)
+                        .background(FinanceTheme.colors.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = initial,
+                        style = FinanceTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = companion.name,
+                        style = FinanceTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = stringResource(R.string.people_all_caught_up),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "₹0.00",
+                    style = FinanceTheme.typography.kpiMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Text(
+                    text = stringResource(R.string.people_settled),
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
         }
     }
 }
 
+@Composable
+private fun TripCard(
+    tripName: String,
+    statusText: String,
+    peopleCount: Int,
+    totalSpend: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = FinanceTheme.colors.surfaceContainerLowest,
+        shape = FinanceShapes.large,
+        shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(FinanceTheme.spacing.m),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(FinanceTheme.spacing.s),
+                        modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.BeachAccess,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                            )
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = tripName,
+                            style = FinanceTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Active travel ledger",
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Surface(
+                    color = FinanceTheme.colors.surfaceContainerHigh,
+                    shape = FinanceShapes.pill
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                        Text(
+                            text = statusText,
+                            style = FinanceTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Group,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
+                    )
+                    Text(
+                        text = stringResource(R.string.trip_people_count, peopleCount),
+                        style = FinanceTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = stringResource(R.string.trip_total_spend_label).uppercase(),
+                        style = FinanceTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = totalSpend,
+                        style = FinanceTheme.typography.kpiMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}

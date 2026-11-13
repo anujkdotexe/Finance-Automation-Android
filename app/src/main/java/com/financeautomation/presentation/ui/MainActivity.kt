@@ -26,6 +26,7 @@ import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModelFactory
+import com.financeautomation.presentation.viewmodel.SubscriptionsViewModel
 import com.financeautomation.presentation.viewmodel.TransactionsViewModel
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -111,6 +112,13 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private val subscriptionsViewModel: SubscriptionsViewModel by viewModels {
+        val app = application as FinanceApplication
+        SubscriptionsViewModel.provideFactory(
+            subscriptionRepository = app.appContainer.subscriptionRepository
+        )
+    }
+
     override fun onResume() {
         super.onResume()
         setupHealthViewModel.refreshChecks()
@@ -161,6 +169,7 @@ class MainActivity : ComponentActivity() {
                             setupHealthViewModel = setupHealthViewModel,
                             onboardingViewModel = onboardingViewModel,
                             overlayControllerProvider = { app.appContainer.overlayController },
+                            subscriptionsViewModel = subscriptionsViewModel,
                             onReRunSetup = { forceOnboarding = true }
                         )
                     }
