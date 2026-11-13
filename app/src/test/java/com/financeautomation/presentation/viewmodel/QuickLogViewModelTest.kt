@@ -278,4 +278,25 @@ class QuickLogViewModelTest {
         assertEquals(0, tRepo.inserted.size)
         assertEquals("That date is in the future.", vm.uiState.value.errorMessage)
     }
+
+    @Test
+    fun testSetManualMode_doesNotSetNeedsAmount() = runTest {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        vm.setManualMode()
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertEquals(null, state.captureId)
+        assertEquals("manual", state.sourcePackage)
+        assertEquals(false, state.isNeedsAmount)
+    }
 }
