@@ -17,6 +17,9 @@ object ConfigConstants {
     const val TYPE_PREF = "pref"
     const val TYPE_SUBSCRIPTION = "subscription"
 
+    /** Monthly category budget: key = category name, Value1 = amount. */
+    const val TYPE_BUDGET = "budget"
+
     // Meta Keys
     const val KEY_SCHEMA_VERSION = "schemaVersion"
 

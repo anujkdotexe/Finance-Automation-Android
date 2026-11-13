@@ -16,6 +16,7 @@ import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Inflow
+import com.financeautomation.domain.usecase.LivingBurn
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.InflowRepository
@@ -347,17 +348,8 @@ class DashboardViewModel(
         monthOffset: Int,
         inflows: List<Inflow> = emptyList()
     ): DashboardUiState {
-        val excludedCategoryNames: Set<String> = categories
-            .filter { it.isExcludedFromLivingBurn }
-            .map { it.name.trim().lowercase() }
-            .toSet()
-
-        fun isExcluded(category: String): Boolean {
-            val trimmed = category.trim().lowercase()
-            return excludedCategoryNames.contains(trimmed) ||
-                trimmed == CategoryConstants.CATEGORY_SAVINGS.lowercase() ||
-                trimmed == "transfer"
-        }
+        // The living burn rule lives in LivingBurn so budgets and the widget use exactly the same one
+        val excludedCategoryNames: Set<String> = LivingBurn.excludedNames(categories)
 
         val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
         val nowCal = Calendar.getInstance(kolkataTz)
@@ -387,6 +379,7 @@ class DashboardViewModel(
 
         cal.add(Calendar.MONTH, 1)
         val endOfMonth = cal.timeInMillis
+        val selectedWindow = startOfMonth until endOfMonth
 
         // Prior month window for "Last month" comparison
         val priorCal = Calendar.getInstance(kolkataTz).apply {
@@ -395,6 +388,7 @@ class DashboardViewModel(
         }
         val startOfPriorMonth = priorCal.timeInMillis
         val endOfPriorMonth = startOfMonth
+        val priorWindow = startOfPriorMonth until endOfPriorMonth
 
         val priorSameDayCal = (priorCal.clone() as Calendar).apply {
             add(Calendar.DAY_OF_MONTH, daysElapsed)
@@ -455,12 +449,10 @@ class DashboardViewModel(
             }
 
             // Prior month burn
-            if (txn.timestamp in startOfPriorMonth until endOfPriorMonth && txn.status != TransactionStatus.VOID) {
-                if (!isExcluded(txn.category)) {
-                    lastMonthBurn += txn.myShare
-                    if (txn.timestamp < endOfPriorSameDay) {
-                        lastMonthSameDayBurn += txn.myShare
-                    }
+            if (LivingBurn.counts(txn, priorWindow, excludedCategoryNames)) {
+                lastMonthBurn += txn.myShare
+                if (txn.timestamp < endOfPriorSameDay) {
+                    lastMonthSameDayBurn += txn.myShare
                 }
             }
 
@@ -473,7 +465,7 @@ class DashboardViewModel(
 
                 if (isSav) {
                     savings += txn.myShare
-                } else if (!isExcluded(txn.category)) {
+                } else if (LivingBurn.counts(txn, selectedWindow, excludedCategoryNames)) {
                     currentBurn += txn.myShare
                     categorySums[txn.category] = (categorySums[txn.category] ?: 0.0) + txn.myShare
                 }

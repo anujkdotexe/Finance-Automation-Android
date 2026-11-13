@@ -18,6 +18,7 @@ import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.data.repository.AccountRepositoryImpl
 import com.financeautomation.data.repository.CategoryRepositoryImpl
 import com.financeautomation.data.repository.ConfigRepositoryImpl
+import com.financeautomation.data.repository.BudgetRepositoryImpl
 import com.financeautomation.data.repository.InflowRepositoryImpl
 import com.financeautomation.data.repository.PeopleListRebuilder
 import com.financeautomation.data.repository.PeopleRepositoryImpl
@@ -35,6 +36,7 @@ import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.ConfigRepository
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
+import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
@@ -116,6 +118,7 @@ interface AppContainer {
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
     val subscriptionRepository: SubscriptionRepository
+    val budgetRepository: BudgetRepository
     val inflowRepository: InflowRepository
     val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
     val subscriptionMatcher: SubscriptionMatcher
@@ -236,6 +239,14 @@ class DefaultAppContainer(
     override val configSyncLocalGateway: ConfigSyncLocalGateway by lazy {
         ConfigSyncLocalGatewayImpl(
             dbProvider = { awaitDatabase() },
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val budgetRepository: BudgetRepository by lazy {
+        BudgetRepositoryImpl(
+            budgetDaoProvider = { awaitDatabase().budgetDao() },
+            configSyncCoordinatorProvider = { configSyncCoordinator },
             ioDispatcher = ioDispatcher
         )
     }

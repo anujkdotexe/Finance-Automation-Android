@@ -243,4 +243,53 @@ class DatabaseMigrationTest {
         assertTrue(v13.containsAll(v12))
         assertEquals(setOf("inflows"), v13 - v12)
     }
+
+    @Test
+    fun testMigration13to14_matchesSchema14Json() {
+        assertEquals(13, DatabaseMigrations.MIGRATION_13_14.startVersion)
+        assertEquals(14, DatabaseMigrations.MIGRATION_13_14.endVersion)
+        assertTrue(DatabaseMigrations.ALL_MIGRATIONS.contains(DatabaseMigrations.MIGRATION_13_14))
+
+        val root = loadSchema(14)
+        val database = root["database"]!!.jsonObject
+        assertEquals("14", database["version"]!!.jsonPrimitive.content)
+        val entities = database["entities"]!!.jsonArray
+
+        val executed = mutableListOf<String>()
+        val db = java.lang.reflect.Proxy.newProxyInstance(
+            javaClass.classLoader, arrayOf(androidx.sqlite.db.SupportSQLiteDatabase::class.java)
+        ) { _, method, args ->
+            if (method.name == "execSQL") executed.add(args!![0] as String)
+            null
+        } as androidx.sqlite.db.SupportSQLiteDatabase
+        DatabaseMigrations.MIGRATION_13_14.migrate(db)
+
+        val entity = entities.find { it.jsonObject["tableName"]?.jsonPrimitive?.content == "budgets" }?.jsonObject
+        assertNotNull("budgets must exist in schema 14.json", entity)
+        val expected = mutableListOf(entity!!["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", "budgets"))
+        entity["indices"]?.jsonArray?.forEach { idx ->
+            expected.add(idx.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", "budgets"))
+        }
+        assertEquals(expected.map(::normalizeSql).sorted(), executed.map(::normalizeSql).sorted())
+
+        val columns = entity["fields"]!!.jsonArray.map { it.jsonObject["columnName"]!!.jsonPrimitive.content }
+        assertEquals(listOf("category", "monthlyAmount", "updatedAt", "dirty", "deleted"), columns)
+        assertEquals("category", entity["primaryKey"]!!.jsonObject["columnNames"]!!.jsonArray.single().jsonPrimitive.content)
+    }
+
+    @Test
+    fun testSchema14KeepsEverySchema13Table() {
+        fun tables(root: kotlinx.serialization.json.JsonObject) =
+            root["database"]!!.jsonObject["entities"]!!.jsonArray.map { it.jsonObject["tableName"]!!.jsonPrimitive.content }.toSet()
+        val v13 = tables(loadSchema(13))
+        val v14 = tables(loadSchema(14))
+        assertTrue(v14.containsAll(v13))
+        assertEquals(setOf("budgets"), v14 - v13)
+    }
+
+    @Test
+    fun testDatabaseDeclaresVersion14() {
+        val source = java.io.File("src/main/java/com/financeautomation/data/local/FinanceDatabase.kt").readText()
+        assertTrue(source.contains("version = 14"))
+    }
 }
