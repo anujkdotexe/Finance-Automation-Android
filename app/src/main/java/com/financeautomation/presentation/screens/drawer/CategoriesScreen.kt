@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
 import com.financeautomation.domain.model.Category
+import com.financeautomation.presentation.components.HeaderActionButton
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
@@ -87,14 +88,10 @@ fun CategoriesScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = { showAddCategorySheet = true }) {
-                Text(
-                    text = stringResource(R.string.categories_action_add),
-                    style = FinanceTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            HeaderActionButton(
+                text = stringResource(R.string.categories_action_add),
+                onClick = { showAddCategorySheet = true }
+            )
         }
 
         // List of Categories
