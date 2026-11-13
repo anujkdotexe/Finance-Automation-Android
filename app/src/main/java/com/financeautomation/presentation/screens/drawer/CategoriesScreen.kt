@@ -42,22 +42,9 @@ import com.financeautomation.domain.model.Category
 import com.financeautomation.presentation.components.HeaderActionButton
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
+import com.financeautomation.presentation.theme.categoryDotColor
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
-
-private val CATEGORY_DOT_COLORS = listOf(
-    Color(0xFFF59E0B),
-    Color(0xFF006874),
-    Color(0xFF0284C7),
-    Color(0xFF6366F1),
-    Color(0xFF8B5CF6),
-    Color(0xFFEC4899),
-    Color(0xFF14B8A6),
-    Color(0xFFF97316),
-    Color(0xFF10B981),
-    Color(0xFF64748B),
-    Color(0xFF94A3B8)
-)
 
 @Composable
 fun CategoriesScreen(
@@ -114,7 +101,7 @@ fun CategoriesScreen(
             state.categories.forEachIndexed { index, category ->
                 val isLocked = category.name.equals("Savings", ignoreCase = true) ||
                     category.name.equals("Transfer", ignoreCase = true)
-                val dotColor = CATEGORY_DOT_COLORS[index % CATEGORY_DOT_COLORS.size]
+                val dotColor = categoryDotColor(category.name)
 
                 CategoryItemCard(
                     category = category,

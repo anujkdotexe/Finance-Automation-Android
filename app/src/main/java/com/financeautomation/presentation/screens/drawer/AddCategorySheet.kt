@@ -42,16 +42,7 @@ import com.financeautomation.R
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
-
-private val CATEGORY_COLORS = listOf(
-    Color(0xFF006874), // Teal
-    Color(0xFFB57400), // Amber
-    Color(0xFF3F51B5), // Indigo
-    Color(0xFFC2185B), // Rose
-    Color(0xFF00838F), // Cyan
-    Color(0xFF558B2F), // Lime
-    Color(0xFF4A6267)  // Slate
-)
+import com.financeautomation.presentation.theme.categoryPaletteColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +54,7 @@ fun AddCategorySheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var categoryName by remember { mutableStateOf("") }
     var selectedColorIndex by remember { mutableIntStateOf(0) }
+    val categoryColors = categoryPaletteColors()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -138,7 +130,7 @@ fun AddCategorySheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CATEGORY_COLORS.forEachIndexed { index, color ->
+                        categoryColors.forEachIndexed { index, color ->
                             val isSelected = selectedColorIndex == index
                             Box(
                                 modifier = Modifier
