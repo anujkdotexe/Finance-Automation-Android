@@ -32,6 +32,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -39,6 +41,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,11 +51,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.FilledButton
+import com.financeautomation.presentation.components.InflowRow
 import com.financeautomation.presentation.components.LinkButton
 import com.financeautomation.presentation.components.OutlinedButton
 import com.financeautomation.presentation.components.StatusChip
@@ -64,8 +69,10 @@ import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.DayTransactionGroup
 import com.financeautomation.presentation.viewmodel.SearchScope
 import com.financeautomation.presentation.viewmodel.TransactionFilter
+import com.financeautomation.presentation.viewmodel.TransactionListItem
 import com.financeautomation.presentation.viewmodel.TransactionsUiState
 import com.financeautomation.presentation.viewmodel.TransactionsViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,8 +98,12 @@ fun TransactionsScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
+    var selectedInflow by remember { mutableStateOf<Inflow?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier
@@ -109,6 +120,9 @@ fun TransactionsScreen(
             onTransactionClick = { txn ->
                 selectedTransaction = txn
                 onTransactionClick(txn)
+            },
+            onInflowClick = { inf ->
+                selectedInflow = inf
             },
             onAddExpense = onAddExpense,
             modifier = Modifier.padding(innerPadding)
@@ -128,6 +142,23 @@ fun TransactionsScreen(
                 }
             )
         }
+
+        selectedInflow?.let { inf ->
+            IncomeDetailSheet(
+                inflow = inf,
+                onDismiss = { selectedInflow = null },
+                onVoid = {
+                    viewModel.voidInflow(inf.id) { success ->
+                        if (success) {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Entry voided")
+                            }
+                        }
+                    }
+                    selectedInflow = null
+                }
+            )
+        }
     }
 }
 
@@ -142,6 +173,7 @@ fun TransactionsContent(
     onFilterChange: (TransactionFilter) -> Unit,
     onClearFilter: () -> Unit,
     onTransactionClick: (Transaction) -> Unit,
+    onInflowClick: (Inflow) -> Unit = {},
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -415,22 +447,41 @@ fun TransactionsContent(
                         }
 
                         items(
-                            items = group.transactions,
+                            items = group.items,
                             key = { it.id }
-                        ) { txn ->
-                            val splitText = if (txn.owedToMe > 0.0) "Split (${formatRupeesAuto(txn.myShare)})" else null
-                            val timeStr = timeFormat.format(Date(txn.timestamp))
+                        ) { item ->
+                            when (item) {
+                                is TransactionListItem.ExpenseItem -> {
+                                    val txn = item.transaction
+                                    val splitText = if (txn.owedToMe > 0.0) "Split (${formatRupeesAuto(txn.myShare)})" else null
+                                    val timeStr = timeFormat.format(Date(txn.timestamp))
 
-                            TransactionRow(
-                                merchant = txn.merchant.ifBlank { txn.category },
-                                amount = txn.totalAmount,
-                                category = txn.category,
-                                account = txn.account,
-                                time = timeStr,
-                                status = txn.status.value,
-                                splitText = splitText,
-                                onClick = { onTransactionClick(txn) }
-                            )
+                                    TransactionRow(
+                                        merchant = txn.merchant.ifBlank { txn.category },
+                                        amount = txn.totalAmount,
+                                        category = txn.category,
+                                        account = txn.account,
+                                        time = timeStr,
+                                        status = txn.status.value,
+                                        splitText = splitText,
+                                        onClick = { onTransactionClick(txn) }
+                                    )
+                                }
+                                is TransactionListItem.IncomeItem -> {
+                                    val inf = item.inflow
+                                    val timeStr = timeFormat.format(Date(inf.timestamp))
+
+                                    InflowRow(
+                                        source = inf.source,
+                                        amount = inf.amount,
+                                        inflowType = inf.inflowType,
+                                        account = inf.account,
+                                        time = timeStr,
+                                        status = inf.status,
+                                        onClick = { onInflowClick(inf) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -553,6 +604,120 @@ fun TransactionDetailSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Income / Inflow Detail Bottom Sheet Modal.
+ * Layout:
+ * - Header: Source as title + Inflow type / Status chip
+ * - Positive mono amount (+₹Amount)
+ * - Details card: Source, Type, Account, Date & Time, Note
+ * - Outlined "Void" button with confirm step
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun IncomeDetailSheet(
+    inflow: Inflow,
+    onDismiss: () -> Unit,
+    onVoid: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showConfirmVoid by remember { mutableStateOf(false) }
+    val fullDateFormat = remember { SimpleDateFormat("EEEE, d MMMM yyyy, h:mm a", Locale.getDefault()) }
+
+    val displayTitle = inflow.source.ifBlank {
+        when (inflow.inflowType.uppercase()) {
+            "FRIEND_SETTLEMENT" -> "Friend settlement"
+            "SELF_TRANSFER" -> "Self transfer"
+            "REFUND" -> "Refund"
+            else -> "Income"
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = FinanceShapes.sheet,
+        containerColor = FinanceTheme.colors.surfaceContainerLowest,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = FinanceTheme.spacing.l)
+                .padding(bottom = FinanceTheme.spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            // Header: Source + Inflow type / Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = displayTitle,
+                    style = FinanceTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                StatusChip(status = if (inflow.status.equals("VOID", ignoreCase = true)) "VOID" else inflow.inflowType)
+            }
+
+            // Big Mono Amount in positive color
+            Text(
+                text = "+${formatRupeesAuto(inflow.amount)}",
+                style = MaterialTheme.typography.headlineLarge,
+                color = FinanceTheme.colors.moneyIn
+            )
+
+            // Info items: Source, Type, Account, Date & Time, Note
+            AppCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = FinanceTheme.colors.surfaceContainerLow
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
+                    if (inflow.source.isNotBlank()) {
+                        DetailRow(label = "Source", value = inflow.source)
+                    }
+                    DetailRow(label = "Type", value = inflow.inflowType)
+                    DetailRow(label = "Account", value = inflow.account)
+                    DetailRow(label = "Date & time", value = fullDateFormat.format(Date(inflow.timestamp)))
+                    if (inflow.note.isNotBlank()) {
+                        DetailRow(label = "Note", value = inflow.note)
+                    }
+                }
+            }
+
+            if (!inflow.status.equals("VOID", ignoreCase = true)) {
+                if (showConfirmVoid) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = FinanceTheme.spacing.s),
+                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                    ) {
+                        Text(
+                            text = "Void this entry? It is removed from totals and marked void in your sheet.",
+                            style = FinanceTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        ButtonPair(
+                            outlinedText = stringResource(R.string.action_cancel),
+                            onOutlinedClick = { showConfirmVoid = false },
+                            filledText = stringResource(R.string.action_void),
+                            onFilledClick = onVoid
+                        )
+                    }
+                } else {
+                    OutlinedButton(
+                        text = stringResource(R.string.action_void),
+                        onClick = { showConfirmVoid = true },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
