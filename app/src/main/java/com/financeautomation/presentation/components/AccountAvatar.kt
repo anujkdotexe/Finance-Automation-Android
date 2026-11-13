@@ -36,7 +36,7 @@ fun AccountAvatar(
 
     Box(
         modifier = modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .defaultMinSize(minWidth = FinanceTheme.sizes.minTouchTarget, minHeight = FinanceTheme.sizes.minTouchTarget)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(role = Role.Button, onClick = onClick)
@@ -46,17 +46,14 @@ fun AccountAvatar(
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(FinanceTheme.sizes.avatarSmall)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = initial,
-                style = FinanceTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                ),
+                style = FinanceTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
         }

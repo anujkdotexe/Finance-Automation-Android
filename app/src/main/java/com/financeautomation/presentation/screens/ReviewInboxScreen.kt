@@ -181,10 +181,7 @@ fun ReviewInboxContent(
                         ) {
                             Text(
                                 text = "$totalPendingCount to review",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                ),
+                                style = FinanceTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
@@ -306,14 +303,11 @@ fun EmptyInboxState(
             imageVector = Icons.Rounded.CheckCircle,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(56.dp)
+            modifier = Modifier.size(FinanceTheme.sizes.icon56)
         )
         Text(
             text = "All caught up",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
+            style = FinanceTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface
         )
         OutlinedButton(

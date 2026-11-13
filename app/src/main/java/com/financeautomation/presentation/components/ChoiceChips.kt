@@ -84,10 +84,7 @@ fun AppChip(
             leadingIcon?.invoke()
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 12.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
-                ),
+                style = if (selected) FinanceTheme.typography.labelMedium else FinanceTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -217,8 +214,8 @@ fun <T> MultiChoiceChips(
 private fun AppChipPreviewNormalLight() {
     FinanceAutomationTheme(darkTheme = false) {
         Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             AppChip(text = "All", selected = true, onClick = {})
             AppChip(text = "UPI", selected = false, onClick = {})
@@ -232,8 +229,8 @@ private fun AppChipPreviewNormalLight() {
 private fun AppChipPreviewLargeFontLight() {
     FinanceAutomationTheme(darkTheme = false) {
         Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             AppChip(text = "All", selected = true, onClick = {})
             AppChip(text = "UPI", selected = false, onClick = {})
@@ -246,7 +243,7 @@ private fun AppChipPreviewLargeFontLight() {
 @Composable
 private fun SegmentedChoicePreviewNormalLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        Box(modifier = Modifier.padding(16.dp)) {
+        Box(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
             SegmentedChoice(
                 options = listOf("Expense", "Income", "Transfer"),
                 selectedOption = "Expense",
@@ -260,7 +257,7 @@ private fun SegmentedChoicePreviewNormalLight() {
 @Composable
 private fun SegmentedChoicePreviewLargeFontLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        Box(modifier = Modifier.padding(16.dp)) {
+        Box(modifier = Modifier.padding(FinanceTheme.spacing.l)) {
             SegmentedChoice(
                 options = listOf("Expense", "Income", "Transfer"),
                 selectedOption = "Expense",
@@ -275,8 +272,8 @@ private fun SegmentedChoicePreviewLargeFontLight() {
 private fun AppChipPreviewNormalDark() {
     FinanceAutomationTheme(darkTheme = true) {
         Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             AppChip(text = "All", selected = true, onClick = {})
             AppChip(text = "Card", selected = false, onClick = {})
@@ -290,8 +287,8 @@ private fun AppChipPreviewNormalDark() {
 private fun AppChipPreviewLargeFontDark() {
     FinanceAutomationTheme(darkTheme = true) {
         Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(FinanceTheme.spacing.l),
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
         ) {
             AppChip(text = "All", selected = true, onClick = {})
             AppChip(text = "Card", selected = false, onClick = {})

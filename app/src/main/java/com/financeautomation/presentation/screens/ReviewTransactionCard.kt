@@ -82,7 +82,7 @@ fun ReviewTransactionCard(
                         )
                         Text(
                             text = stringResource(R.string.review_duplicate_warning),
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            style = FinanceTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
@@ -101,10 +101,7 @@ fun ReviewTransactionCard(
                 ) {
                     Text(
                         text = transaction.merchant.ifBlank { transaction.category },
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
+                        style = FinanceTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -125,7 +122,7 @@ fun ReviewTransactionCard(
                         val dateStr = formatTransactionTime(transaction.timestamp)
                         Text(
                             text = dateStr,
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -133,10 +130,7 @@ fun ReviewTransactionCard(
 
                 Text(
                     text = formatRupeesAuto(transaction.totalAmount),
-                    style = FinanceTheme.typography.numeric.copy(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = FinanceTheme.typography.amountMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(start = FinanceTheme.spacing.m)
                 )
@@ -180,16 +174,13 @@ fun SubscriptionDueCard(
             Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
                 Text(
                     text = "Did you pay $subscriptionName?",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
+                    style = FinanceTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 val amountText = if (amount != null && amount > 0.0) formatRupeesAuto(amount) else "Amount varies"
                 Text(
                     text = "$amountText, due $dueFormatted",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    style = FinanceTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

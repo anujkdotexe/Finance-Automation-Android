@@ -91,21 +91,21 @@ fun StatusChip(
     Row(
         modifier = modifier
             .background(bgColor, FinanceShapes.chip)
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+            .padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = textColor,
-                modifier = Modifier.size(12.dp)
+                modifier = Modifier.size(FinanceTheme.sizes.icon12)
             )
         }
         Text(
             text = normalized,
-            style = FinanceTheme.typography.numeric.copy(fontSize = 11.sp),
+            style = FinanceTheme.typography.numericMicro,
             color = textColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -117,7 +117,7 @@ fun StatusChip(
 @Composable
 private fun StatusChipPreviewLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
             StatusChip(status = "Synced")
             StatusChip(status = "Pending")
             StatusChip(status = "Needs review")
@@ -131,7 +131,7 @@ private fun StatusChipPreviewLight() {
 @Composable
 private fun StatusChipPreviewDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
             StatusChip(status = "Pending")
             StatusChip(status = "Failed")
         }

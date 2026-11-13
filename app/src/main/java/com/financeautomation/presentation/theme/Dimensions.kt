@@ -84,6 +84,11 @@ object FinanceSizes {
     val elevationSheet: Dp = 6.dp
     val elevationDialog: Dp = 24.dp
     val proportionBarHeight: Dp = 8.dp
+    val kpiCardWidth: Dp = 140.dp
+    val kpiCardMinHeight: Dp = 110.dp
+    val minRowHeight: Dp = 56.dp
+    val icon48: Dp = 48.dp
+    val icon56: Dp = 56.dp
     val maxSheetHeight: Dp = 540.dp
     val maxOverlayHeight: Dp = 620.dp
 }

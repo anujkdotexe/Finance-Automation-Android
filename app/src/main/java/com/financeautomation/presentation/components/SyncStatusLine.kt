@@ -66,10 +66,7 @@ fun SyncStatusLine(
             ) {
                 Text(
                     text = "$failedCount failed, tap to fix",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    ),
+                    style = FinanceTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Icon(
@@ -94,10 +91,7 @@ fun SyncStatusLine(
         ) {
             Text(
                 text = statusText,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                ),
+                style = FinanceTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

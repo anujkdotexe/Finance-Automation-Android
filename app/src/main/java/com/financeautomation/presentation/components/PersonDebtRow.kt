@@ -53,7 +53,7 @@ fun PersonDebtRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
             .clip(FinanceShapes.small)
             .background(FinanceTheme.colors.surfaceContainerLow)
             .then(
@@ -72,14 +72,14 @@ fun PersonDebtRow(
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(FinanceTheme.sizes.icon32)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = initials,
-                    style = FinanceTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                    style = FinanceTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
@@ -94,7 +94,7 @@ fun PersonDebtRow(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
         ) {
             AmountText(
                 amount = amount,
@@ -105,7 +105,7 @@ fun PersonDebtRow(
                 imageVector = Icons.Rounded.ChevronRight,
                 contentDescription = null,
                 tint = FinanceTheme.colors.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(FinanceTheme.sizes.icon18)
             )
         }
     }
