@@ -60,27 +60,24 @@ class SettingsCustomizationCoordinator(
                 val openItemsByFriend = mutableMapOf<String, Int>()
                 for (txn in transactions) {
                     if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
-                        val tokens = AccountingUtils.tokens(txn.companions)
-                        if (tokens.isNotEmpty() && !txn.companions.equals("Personal", ignoreCase = true)) {
-                            val sharePerPerson = txn.owedToMe / tokens.size
-                            for (friend in tokens) {
-                                val key = friend.trim().lowercase()
-                                receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + sharePerPerson
-                                openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
-                            }
+                        val perPersonShares = AccountingUtils.calculateReceivablesForTransaction(txn)
+                        for ((friend, amount) in perPersonShares) {
+                            val key = AccountingUtils.normalizePersonName(friend)
+                            receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + amount
+                            openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
                         }
                     }
                 }
 
                 val payablesByFriend = mutableMapOf<String, Double>()
                 for (payable in pendingPayables) {
-                    val key = payable.paidBy.trim().lowercase()
+                    val key = AccountingUtils.normalizePersonName(payable.paidBy)
                     payablesByFriend[key] = (payablesByFriend[key] ?: 0.0) + payable.amountIOwe
                     openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
                 }
 
                 val updatedCompanions = companions.map { comp ->
-                    val key = comp.name.trim().lowercase()
+                    val key = AccountingUtils.normalizePersonName(comp.name)
                     val rec = receivablesByFriend[key] ?: 0.0
                     val pay = payablesByFriend[key] ?: 0.0
                     val net = rec - pay
@@ -89,13 +86,13 @@ class SettingsCustomizationCoordinator(
 
                 val allKeys = receivablesByFriend.keys + payablesByFriend.keys
                 for (key in allKeys) {
-                    if (updatedCompanions.none { it.name.trim().lowercase() == key }) {
+                    if (updatedCompanions.none { AccountingUtils.normalizePersonName(it.name) == key }) {
                         val rec = receivablesByFriend[key] ?: 0.0
                         val pay = payablesByFriend[key] ?: 0.0
                         val net = rec - pay
                         if (kotlin.math.abs(net) > 0.001) {
-                            val originalName = pendingPayables.firstOrNull { it.paidBy.trim().lowercase() == key }?.paidBy?.trim()
-                                ?: key.replaceFirstChar { it.uppercase() }
+                            val originalName = pendingPayables.firstOrNull { AccountingUtils.normalizePersonName(it.paidBy) == key }?.paidBy?.trim()
+                                ?: key
                             updatedCompanions.add(
                                 Companion(
                                     id = "friend_$key",
