@@ -46,12 +46,17 @@ class MonthlyRolloverWorker(
             repository: com.financeautomation.domain.repository.TransactionRepository,
             syncUseCase: suspend () -> com.financeautomation.core.model.Result<*>
         ): androidx.work.ListenableWorker.Result {
-            if (now.dayOfMonth >= 25) {
-                val nextMonth = now.plusMonths(1)
-                val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
-                val nextMonthTab = nextMonth.format(formatter)
+            val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
+            // Days 1 to 3: catch debts logged after the last run of the month before. Carry is idempotent per row.
+            val (targetTab, sourceTab) = when {
+                now.dayOfMonth >= 25 -> now.plusMonths(1).format(formatter) to null
+                now.dayOfMonth <= 3 -> now.format(formatter) to now.minusMonths(1).format(formatter)
+                else -> null to null
+            }
+            if (targetTab != null) {
+                val nextMonthTab = targetTab
 
-                val cfRes = repository.carryForward(targetTab = nextMonthTab)
+                val cfRes = repository.carryForward(targetTab = nextMonthTab, sourceTab = sourceTab)
                 if (cfRes is com.financeautomation.core.model.Result.Error) {
                     return androidx.work.ListenableWorker.Result.retry()
                 }
