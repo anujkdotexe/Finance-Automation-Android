@@ -5,7 +5,7 @@ import android.content.ContextWrapper
 import android.view.WindowManager
 import com.financeautomation.data.remote.TokenProvider
 import kotlinx.coroutines.CompletableDeferred
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 import java.lang.reflect.Proxy
@@ -33,54 +33,25 @@ class AppContainerTest {
         override fun refreshAccessToken(): String? = "test_token"
     }
 
-    private val all33LazyProperties: List<Pair<String, (AppContainer) -> Any?>> = listOf(
-        "okHttpClient" to { it.okHttpClient },
-        "googleDriveClient" to { it.googleDriveClient },
-        "googleSheetsClient" to { it.googleSheetsClient },
-        "workbookResolver" to { it.workbookResolver },
-        "profileAvatarManager" to { it.profileAvatarManager },
-        "transactionRepository" to { it.transactionRepository },
-        "preferencesRepository" to { it.preferencesRepository },
-        "peopleRepository" to { it.peopleRepository },
-        "accountRepository" to { it.accountRepository },
-        "categoryRepository" to { it.categoryRepository },
-        "tripTagRepository" to { it.tripTagRepository },
-        "configRepository" to { it.configRepository },
-        "configSyncLocalGateway" to { it.configSyncLocalGateway },
-        "configSyncCoordinator" to { it.configSyncCoordinator },
-        "configSheetManager" to { it.configSheetManager },
-        "parseNotificationUseCase" to { it.parseNotificationUseCase },
-        "syncTransactionsUseCase" to { it.syncTransactionsUseCase },
-        "syncConfigUseCase" to { it.syncConfigUseCase },
-        "regenerateDashboardUseCase" to { it.regenerateDashboardUseCase },
-        "calculateSplitUseCase" to { it.calculateSplitUseCase },
-        "logExpenseUseCase" to { it.logExpenseUseCase },
-        "predictCategoryUseCase" to { it.predictCategoryUseCase },
-        "nettingUseCase" to { it.nettingUseCase },
-        "settlementWaterfallUseCase" to { it.settlementWaterfallUseCase },
-        "repaymentWaterfallUseCase" to { it.repaymentWaterfallUseCase },
-        "carryForwardUseCase" to { it.carryForwardUseCase },
-        "voidTransactionUseCase" to { it.voidTransactionUseCase },
-        "yearCloseUseCase" to { it.yearCloseUseCase },
-        "accountingSyncExecutor" to { it.accountingSyncExecutor },
-        "foregroundWatcher" to { it.foregroundWatcher },
-        "overlayController" to { it.overlayController },
-        "peopleListRebuilder" to { it.peopleListRebuilder },
-        "getOpenDebtsForPersonUseCase" to { it.getOpenDebtsForPersonUseCase }
-    )
+    /** Not resolved here: building it calls the Play Services Identity client, which needs a real device. */
+    private val notResolvedInUnitTests = setOf("googleAuthTokenProvider")
 
     @Test
-    fun appContainer_touchesAll33LazyProperties_withoutCircularDependencyOrStackOverflow() {
+    fun appContainer_resolvesEveryRealProperty_withoutCircularDependencyOrStackOverflow() {
         val container: AppContainer = DefaultAppContainer(
             applicationContext = createFakeContext(),
             providedTokenProvider = fakeTokenProvider,
             providedDatabaseReady = CompletableDeferred()
         )
 
-        assertEquals("Expected exactly 33 lazy properties in test suite", 33, all33LazyProperties.size)
+        val getters = AppContainer::class.java.methods
+            .filter { it.parameterTypes.isEmpty() && it.name.startsWith("get") && it.returnType != Void.TYPE }
+        assertTrue("reflection found only ${getters.size} container properties", getters.size >= 33)
 
-        for ((name, getter) in all33LazyProperties) {
-            val instance = getter(container)
+        for (getter in getters) {
+            val name = getter.name.removePrefix("get").replaceFirstChar { it.lowercase() }
+            if (name in notResolvedInUnitTests) continue
+            val instance = getter.invoke(container)
             assertNotNull("Property $name resolved to null", instance)
         }
     }

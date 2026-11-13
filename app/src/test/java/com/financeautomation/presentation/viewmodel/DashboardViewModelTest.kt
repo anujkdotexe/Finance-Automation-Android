@@ -214,10 +214,10 @@ class DashboardViewModelTest {
             account = "Cash",
             merchant = "Cafe",
             category = "Food & Drink",
-            totalAmount = 500.0,
+            totalAmount = 300.0,
             companions = "Alice, Bob",
             myShare = 100.0,
-            owedToMe = 400.0,
+            owedToMe = 200.0,
             status = TransactionStatus.PENDING
         )
         val savingsTxn = Transaction(
@@ -266,13 +266,13 @@ class DashboardViewModelTest {
         val state = vm.uiState.value
         assertEquals(100.0, state.currentBurn, 0.001)
         assertEquals(5000.0, state.savings, 0.001)
-        assertEquals(400.0, state.owedToMe, 0.001)
+        assertEquals(200.0, state.owedToMe, 0.001)
         assertEquals(120.0, state.iOwePeople, 0.001)
 
         val topOwed = state.topOwedToMe
         assertEquals(2, topOwed.size)
-        assertTrue(topOwed.any { it.name == "Alice" && it.amount == 200.0 })
-        assertTrue(topOwed.any { it.name == "Bob" && it.amount == 200.0 })
+        assertTrue(topOwed.any { it.name == "Alice" && it.amount == 100.0 })
+        assertTrue(topOwed.any { it.name == "Bob" && it.amount == 100.0 })
     }
 
     @Test
@@ -974,5 +974,97 @@ class DashboardViewModelTest {
 
         val food = topCategories.first { it.category == "Food & Drink" }
         assertNull(food.budgetProgress)
+    }
+
+    @Test
+    fun testReceivables_mixedCaseNamesMerge_andCustomSplitDoesNotDivideEquallyByHeadCount() = runTest {
+        val now = System.currentTimeMillis()
+        val tRepo = FakeTransactionRepo()
+
+        // Two transactions with mixed-case companion names: "Alice" and "alice"
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_alice_1",
+                timestamp = now,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Cafe",
+                category = "Food & Drink",
+                totalAmount = 200.0,
+                companions = "Alice",
+                myShare = 100.0,
+                owedToMe = 100.0,
+                status = TransactionStatus.PENDING
+            )
+        )
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_alice_2",
+                timestamp = now,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Dinner",
+                category = "Food & Drink",
+                totalAmount = 100.0,
+                companions = "alice",
+                myShare = 50.0,
+                owedToMe = 50.0,
+                status = TransactionStatus.PENDING
+            )
+        )
+
+        // Custom split with multiple companions where individual shares are not stored
+        // Total = 300, myShare = 150, owedToMe = 150. Expected equal share would be 100.
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_custom",
+                timestamp = now,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Hotel",
+                category = "Food & Drink",
+                totalAmount = 300.0,
+                companions = "Bob, Charlie",
+                myShare = 150.0,
+                owedToMe = 150.0,
+                status = TransactionStatus.PENDING
+            )
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            budgetRepository = null,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val owedList = vm.uiState.value.topOwedToMe
+        val aliceEntries = owedList.filter { it.name.equals("Alice", ignoreCase = true) }
+
+        // Mixed-case names must merge into a single entry with sum of 150.0
+        assertEquals("Mixed-case names should merge into a single entry", 1, aliceEntries.size)
+        assertEquals("Merged Alice balance should be 150.0", 150.0, aliceEntries[0].amount, 0.001)
+
+        // Custom split must NOT divide equally by head count (Bob and Charlie must not each get 75.0)
+        val bobEntry = owedList.find { it.name.equals("Bob", ignoreCase = true) }
+        val charlieEntry = owedList.find { it.name.equals("Charlie", ignoreCase = true) }
+        assertTrue("Custom split should not divide equally by head count for Bob", bobEntry == null || bobEntry.amount != 75.0)
+        assertTrue("Custom split should not divide equally by head count for Charlie", charlieEntry == null || charlieEntry.amount != 75.0)
+
+        // Custom split gives one combined row labelled "Bob, Charlie" with full owed amount
+        val bobCharlieEntry = owedList.find { it.name == "Bob, Charlie" }
+        assertNotNull("Custom split should give one row labelled 'Bob, Charlie'", bobCharlieEntry)
+        assertEquals("Combined group row should have full owed amount 150.0", 150.0, bobCharlieEntry!!.amount, 0.001)
+
+        // No row should ever be named Others
+        val othersEntry = owedList.find { it.name.equals("Others", ignoreCase = true) }
+        assertNull("No row should ever be named Others", othersEntry)
     }
 }

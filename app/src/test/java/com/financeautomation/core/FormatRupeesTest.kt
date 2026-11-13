@@ -5,6 +5,7 @@ import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.core.utils.formatRupeesCompact
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class FormatRupeesTest {
@@ -78,5 +79,36 @@ class FormatRupeesTest {
         assertEquals("₹1L", formatRupeesCompact(100000.0))
         assertEquals("₹12.3L", formatRupeesCompact(1234567.0))
         assertEquals("₹1.2Cr", formatRupeesCompact(12345678.0))
+    }
+
+    @Test
+    fun testLongMoneyValues_neverUseEllipsis_andFormatAccurately() {
+        val longVal = 9999999.99
+        val exactWithDecimals = formatRupees(longVal, includeDecimals = true)
+        assertEquals("₹99,99,999.99", exactWithDecimals)
+        assertFalse(exactWithDecimals.contains("..."))
+
+        val exactWithoutDecimals = formatRupees(longVal, includeDecimals = false)
+        assertEquals("₹99,99,999", exactWithoutDecimals)
+        assertFalse(exactWithoutDecimals.contains("..."))
+
+        val exactAuto = formatRupeesAuto(longVal)
+        assertEquals("₹99,99,999.99", exactAuto)
+        assertFalse(exactAuto.contains("..."))
+
+        val compact = formatRupeesCompact(longVal)
+        assertEquals("₹99.9L", compact)
+        assertFalse(compact.contains("..."))
+
+        // Even larger: 1 Crore and beyond
+        val oneCrore = 10000000.00
+        assertEquals("₹1,00,00,000.00", formatRupees(oneCrore, includeDecimals = true))
+        assertEquals("₹1Cr", formatRupeesCompact(oneCrore))
+        assertFalse(formatRupeesCompact(oneCrore).contains("..."))
+
+        val tenCrores = 99999999.99
+        assertEquals("₹9,99,99,999.99", formatRupees(tenCrores, includeDecimals = true))
+        assertEquals("₹9.9Cr", formatRupeesCompact(tenCrores))
+        assertFalse(formatRupeesCompact(tenCrores).contains("..."))
     }
 }

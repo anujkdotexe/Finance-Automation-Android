@@ -48,12 +48,6 @@ object PackageWhitelist {
         PACKAGE_GMAIL
     )
 
-    // Precompiled OTP and 2FA suppression pattern
-    val OTP_SUPPRESSION_REGEX: Regex = Regex(
-        """\b(otp|one[- ]time[- ]password|verification[- ]code|secret[- ]code|do[- ]not[- ]share|security[- ]code|auth[- ]code)\b""",
-        RegexOption.IGNORE_CASE
-    )
-
     const val PACKAGE_DEBUG_SHELL: String = "com.android.shell"
     const val PACKAGE_DEBUG_TEST: String = "com.financeautomation.test"
 
@@ -102,7 +96,7 @@ object PackageWhitelist {
     }
 
     fun isOtpMessage(text: String): Boolean {
-        return OTP_SUPPRESSION_REGEX.containsMatchIn(text)
+        return com.financeautomation.core.utils.OtpClassifier.isOtp(text)
     }
 
     fun isOtpOrAuth(text: String): Boolean {

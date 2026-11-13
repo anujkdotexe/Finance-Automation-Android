@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -90,8 +91,8 @@ data class DashboardUiState(
     val queuedItems: List<QueuedItem> = emptyList(),
     val isHintDismissed: Boolean = false,
     val isSyncing: Boolean = false,
-    val syncMessage: String? = null,
-    val errorMessage: String? = null
+    val syncMessage: UiText? = null,
+    val errorMessage: UiText? = null
 )
 
 /**
@@ -467,7 +468,8 @@ class DashboardViewModel(
 
         val categorySums = mutableMapOf<String, Double>()
         val monthTransactions = mutableListOf<Transaction>()
-        val receivablesByFriend = mutableMapOf<String, Double>()
+        val receivablesByKey = mutableMapOf<String, Double>()
+        val displayNamesByKey = mutableMapOf<String, String>()
 
         for (txn in transactions) {
             if (txn.reviewState == ReviewState.NEEDS_REVIEW && txn.status != TransactionStatus.VOID) {
@@ -478,14 +480,12 @@ class DashboardViewModel(
 
             // Global unsettled receivables
             if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
-                val tokens = com.financeautomation.domain.utils.AccountingUtils.tokens(txn.companions)
-                if (tokens.isEmpty() || txn.companions.equals("Personal", ignoreCase = true)) {
-                    val friend = "Others"
-                    receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + txn.owedToMe
-                } else {
-                    val sharePerPerson = txn.owedToMe / tokens.size
-                    for (friend in tokens) {
-                        receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + sharePerPerson
+                val perPersonShares = com.financeautomation.domain.utils.AccountingUtils.calculateReceivablesForTransaction(txn)
+                for (share in perPersonShares) {
+                    receivablesByKey[share.key] = (receivablesByKey[share.key] ?: 0.0) + share.amount
+                    val existing = displayNamesByKey[share.key]
+                    if (existing == null || (existing.none { it.isUpperCase() } && share.displayName.any { it.isUpperCase() })) {
+                        displayNamesByKey[share.key] = share.displayName
                     }
                 }
             }
@@ -542,9 +542,9 @@ class DashboardViewModel(
 
         val topCategories = allCategories.take(5)
 
-        val totalOwedToMe = receivablesByFriend.values.sum()
-        val topOwedToMe = receivablesByFriend.entries
-            .map { DebtSummary(name = it.key, amount = it.value) }
+        val totalOwedToMe = receivablesByKey.values.sum()
+        val topOwedToMe = receivablesByKey.entries
+            .map { DebtSummary(name = displayNamesByKey[it.key] ?: it.key, amount = it.value) }
             .sortedByDescending { it.amount }
             .take(3)
 
@@ -615,7 +615,7 @@ class DashboardViewModel(
                     _uiState.update {
                         it.copy(
                             isSyncing = false,
-                            syncMessage = "Synced $count transaction(s) to Google Sheets"
+                            syncMessage = UiText.res(R.string.dashboard_msg_synced_sheets, count)
                         )
                     }
                 }
@@ -623,7 +623,8 @@ class DashboardViewModel(
                     _uiState.update {
                         it.copy(
                             isSyncing = false,
-                            errorMessage = res.message ?: "Sync failed with error: ${res.throwable.message}"
+                            errorMessage = res.message?.let { msg -> UiText.dynamic(msg) }
+                                ?: UiText.res(R.string.dashboard_err_sync_failed, res.throwable.message ?: "")
                         )
                     }
                 }

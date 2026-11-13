@@ -28,6 +28,13 @@ object MainRouteValidator {
         AppRoutes.ERROR_RATE_LIMITED
     )
 
+    /** The only screens an outside app, link or web page may open. Everything else needs an intent marked by this app. */
+    val EXTERNAL_ROUTES: Set<String> = setOf(
+        AppRoutes.DASHBOARD,
+        AppRoutes.NEEDS_REVIEW,
+        AppRoutes.TRANSACTIONS
+    )
+
     private const val DEEP_LINK_SCHEME = "financeautomation"
 
     /**
@@ -44,9 +51,9 @@ object MainRouteValidator {
      * Resolves and validates an intent's route from extra_route or a financeautomation:// URI string.
      * Ignores any query parameters, payload arguments, or unknown route names.
      */
-    fun resolveRoute(extraRoute: String?, dataUriString: String?): String? {
-        // 1. Extra route takes precedence if valid
-        val fromExtra = validateRoute(extraRoute)
+    fun resolveRoute(extraRoute: String?, dataUriString: String?, internal: Boolean = false): String? {
+        // 1. Extra route takes precedence if valid. Outside callers are limited to EXTERNAL_ROUTES.
+        val fromExtra = validateRoute(extraRoute)?.takeIf { internal || it in EXTERNAL_ROUTES }
         if (fromExtra != null) {
             return fromExtra
         }
@@ -64,7 +71,8 @@ object MainRouteValidator {
                 } else {
                     segments.firstOrNull()
                 }
-                return validateRoute(targetRoute)
+                // A link can come from any app or web page, so it is always limited to EXTERNAL_ROUTES
+                return validateRoute(targetRoute)?.takeIf { it in EXTERNAL_ROUTES }
             }
         }
 

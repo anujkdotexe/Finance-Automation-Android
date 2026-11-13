@@ -39,7 +39,20 @@ data class QuickLogUiState(
     val isSaved: Boolean = false,
     val isVoided: Boolean = false,
     val isDismissed: Boolean = false,
-    val resultMessage: String? = null,
-    val errorMessage: String? = null
-)
+    val resultMessage: UiText? = null,
+    val errorMessage: UiText? = null
+) {
+    val isSaveEnabled: Boolean
+        get() {
+            if (isSaving || amount <= 0.0) return false
+            if (splitMode == SplitMode.CUSTOM) {
+                val share = customShare ?: amount
+                val owed = amount - share
+                if (owed > 0.009 && selectedCompanionIds.isEmpty()) {
+                    return false
+                }
+            }
+            return true
+        }
+}
 
