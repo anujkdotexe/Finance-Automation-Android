@@ -576,6 +576,13 @@ fun AppNavHost(
                     composable(AppRoutes.NEEDS_REVIEW) {
                         ReviewInboxScreen(
                             reviewInboxViewModel = reviewInboxViewModel,
+                            onNavigateToDashboard = {
+                                navController.navigate(AppRoutes.DASHBOARD) {
+                                    popUpTo(AppRoutes.DASHBOARD) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
                             onEditTransaction = { txn ->
                                 val authIntent = PendingIntent.getActivity(
                                     context,

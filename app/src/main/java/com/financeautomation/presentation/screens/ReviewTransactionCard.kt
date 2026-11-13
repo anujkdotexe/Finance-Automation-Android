@@ -1,93 +1,78 @@
 package com.financeautomation.presentation.screens
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.DirectionsCar
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.LocalGroceryStore
-import androidx.compose.material.icons.rounded.Payments
-import androidx.compose.material.icons.rounded.Receipt
-import androidx.compose.material.icons.rounded.Restaurant
-import androidx.compose.material.icons.rounded.Savings
-import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.WarningAmber
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.financeautomation.R
-import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Transaction
-import com.financeautomation.presentation.components.AmountText
-import com.financeautomation.presentation.components.AmountTone
-import com.financeautomation.presentation.components.StatusChip
+import com.financeautomation.presentation.components.AppCard
+import com.financeautomation.presentation.components.AppChip
+import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.FilledButton
+import com.financeautomation.presentation.components.OutlinedButton
+import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Interactive card displaying a pending transaction for quick review and 1-tap confirmation.
+ * Interactive card displaying an unreviewed transaction.
+ * Layout:
+ * - Merchant, account chip, time, mono amount
+ * - ButtonPair: OutlinedButton "Edit" on left, FilledButton "Confirm" on right (equal width, equal height 48dp)
+ * - Duplicate warning banner if flagged
+ * - No Void button on the card (Void stays in Transaction detail sheet)
+ * - No Batch ID, no auto-confirm, no "Auto-Categorized"
  */
 @Composable
 fun ReviewTransactionCard(
     transaction: Transaction,
     onConfirm: () -> Unit,
-    onVoid: () -> Unit,
     onEdit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = FinanceTheme.colors.surface),
-        shape = FinanceTheme.shapes.large,
-        border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
-        elevation = CardDefaults.cardElevation(defaultElevation = FinanceTheme.sizes.strokeThin),
-        modifier = modifier.fillMaxWidth()
+    AppCard(
+        modifier = modifier.fillMaxWidth(),
+        containerColor = FinanceTheme.colors.surfaceContainerLowest
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(FinanceTheme.spacing.l)
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
-            // Duplicate Warning Banner
+            // Duplicate Warning Banner if applicable
             if (transaction.isPossibleDuplicate) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = FinanceTheme.shapes.card,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = FinanceTheme.spacing.m)
+                    shape = FinanceShapes.small,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.WarningAmber,
@@ -95,220 +80,215 @@ fun ReviewTransactionCard(
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
                         )
-                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
                         Text(
                             text = stringResource(R.string.review_duplicate_warning),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontWeight = FontWeight.Medium
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
                 }
             }
 
-            // Top Row: Category Avatar, Merchant Info, and Amount
+            // Top Row: Merchant + chips on left, Mono Amount on right
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(FinanceTheme.sizes.avatarMedium)
-                            .background(
-                                color = FinanceTheme.colors.primaryContainer,
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
+                    Text(
+                        text = transaction.merchant.ifBlank { transaction.category },
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                     ) {
-                        Icon(
-                            imageVector = resolveCategoryIcon(transaction.category),
-                            contentDescription = transaction.category,
-                            tint = FinanceTheme.colors.primary,
-                            modifier = Modifier.size(FinanceTheme.sizes.icon22)
-                        )
-                    }
+                        if (transaction.account.isNotBlank()) {
+                            AppChip(
+                                text = transaction.account,
+                                selected = false,
+                                onClick = {}
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.m))
-
-                    Column {
+                        val dateStr = formatTransactionTime(transaction.timestamp)
                         Text(
-                            text = transaction.merchant.ifBlank { stringResource(R.string.review_unknown_merchant) },
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = FinanceTheme.colors.onSurface
-                        )
-                        Text(
-                            text = formatTimestamp(transaction.timestamp),
-                            style = FinanceTheme.typography.bodySmall,
-                            color = FinanceTheme.colors.onSurfaceVariant
+                            text = dateStr,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                AmountText(
-                    amount = transaction.totalAmount,
-                    tone = AmountTone.MONEY_OUT,
-                    style = FinanceTheme.typography.amountLarge
+                Text(
+                    text = formatRupeesAuto(transaction.totalAmount),
+                    style = FinanceTheme.typography.numeric.copy(
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = FinanceTheme.spacing.m)
                 )
             }
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-            // Metadata Row: Category Pill, Status Badge, and Split Details
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    color = FinanceTheme.colors.surfaceVariant,
-                    shape = FinanceTheme.shapes.small
-                ) {
-                    Text(
-                        text = transaction.category.ifBlank { CategoryConstants.CATEGORY_FOOD_AND_DRINK },
-                        style = FinanceTheme.typography.labelSmall,
-                        color = FinanceTheme.colors.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs)
-                    )
-                }
-
-                StatusChip(status = transaction.status)
-
-                if (transaction.companions.isNotBlank() && transaction.companions != "Personal") {
-                    Text(
-                        text = stringResource(R.string.split_with_companions, transaction.companions),
-                        style = FinanceTheme.typography.bodySmall,
-                        color = FinanceTheme.colors.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
-
-            // Action Buttons: 1-Tap Confirm, Edit/Split, Void
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onConfirm,
-                    shape = FinanceTheme.shapes.card,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = FinanceTheme.colors.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    modifier = Modifier.weight(1.2f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
-                    )
-                    Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
-                    Text(
-                        text = stringResource(R.string.action_confirm),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = onEdit,
-                    shape = FinanceTheme.shapes.card,
-                    border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outline),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = null,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                    Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
-                    Text(
-                        text = stringResource(R.string.action_edit),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                TextButton(
-                    onClick = onVoid,
-                    colors = ButtonDefaults.textButtonColors(contentColor = FinanceTheme.colors.error)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.DeleteOutline,
-                        contentDescription = stringResource(R.string.action_void),
-                        modifier = Modifier.size(FinanceTheme.sizes.icon18)
-                    )
-                }
-            }
+            // Button Pair: Outlined "Edit" on left, Filled "Confirm" on right (equal width, 48dp height)
+            ButtonPair(
+                outlinedText = "Edit",
+                onOutlinedClick = onEdit,
+                filledText = "Confirm",
+                onFilledClick = onConfirm
+            )
         }
     }
 }
 
 /**
- * Empty inbox illustration and prompt with clean icon and friendly fintech typography.
+ * Subscription due card shown at top of Needs Review list when a cycle is in NEEDS_REVIEW state:
+ * - "Did you pay <name>?"
+ * - "<amount or Amount varies>, due <date>"
+ * - Three buttons: Yes (Filled), Not yet (Outlined), Skip this time (Outlined)
  */
 @Composable
-fun EmptyInboxState(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(FinanceTheme.spacing.xxl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+fun SubscriptionDueCard(
+    subscriptionName: String,
+    amount: Double?,
+    dueFormatted: String,
+    onYes: () -> Unit,
+    onNotYet: () -> Unit,
+    onSkipThisTime: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AppCard(
+        modifier = modifier.fillMaxWidth(),
+        containerColor = FinanceTheme.colors.surfaceContainerLowest
     ) {
-        Box(
-            modifier = Modifier
-                .size(FinanceTheme.sizes.avatarLarge)
-                .background(
-                    color = FinanceTheme.colors.primaryContainer,
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
-            Icon(
-                imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = stringResource(R.string.review_empty_title),
-                tint = FinanceTheme.colors.primary,
-                modifier = Modifier.size(FinanceTheme.sizes.avatar38)
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
+                Text(
+                    text = "Did you pay $subscriptionName?",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                val amountText = if (amount != null && amount > 0.0) formatRupeesAuto(amount) else "Amount varies"
+                Text(
+                    text = "$amountText, due $dueFormatted",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledButton(
+                    text = "Yes",
+                    onClick = onYes,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(
+                    text = "Not yet",
+                    onClick = onNotYet,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(
+                    text = "Skip this time",
+                    onClick = onSkipThisTime,
+                    modifier = Modifier.weight(1.3f)
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
-        Text(
-            text = stringResource(R.string.review_empty_title),
-            style = FinanceTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = FinanceTheme.colors.onSurface
-        )
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
-        Text(
-            text = stringResource(R.string.review_empty_desc),
-            style = FinanceTheme.typography.bodyMedium,
-            color = FinanceTheme.colors.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+    }
+}
+
+private fun formatTransactionTime(timestamp: Long): String {
+    val date = Date(timestamp)
+    val now = Date()
+    val sameDay = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(date) ==
+            SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(now)
+
+    return if (sameDay) {
+        "Today, " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(date)
+    } else {
+        SimpleDateFormat("d MMM, h:mm a", Locale.getDefault()).format(date)
+    }
+}
+
+@Preview(name = "Review Card Normal Font - Light", showBackground = true, fontScale = 1.0f)
+@Composable
+private fun ReviewTransactionCardPreviewNormalLight() {
+    FinanceAutomationTheme(darkTheme = false) {
+        ReviewTransactionCard(
+            transaction = Transaction(
+                id = "1",
+                timestamp = System.currentTimeMillis(),
+                dateSerial = 45600,
+                timeSerial = 0.5,
+                merchant = "Swiggy",
+                totalAmount = 600.0,
+                category = "Food & Drink",
+                account = "HDFC ••4921",
+                myShare = 600.0,
+                owedToMe = 0.0
+            ),
+            onConfirm = {},
+            onEdit = {}
         )
     }
 }
 
-private fun resolveCategoryIcon(category: String): ImageVector {
-    return when (category.lowercase()) {
-        "food & drink", "dining", "food" -> Icons.Rounded.Restaurant
-        "commute", "travel", "cab", "uber", "fuel" -> Icons.Rounded.DirectionsCar
-        "shopping", "clothing", "electronics" -> Icons.Rounded.ShoppingBag
-        "groceries", "supermarket" -> Icons.Rounded.LocalGroceryStore
-        "utilities", "recharge", "electricity", "bills" -> Icons.Rounded.Receipt
-        "savings", "investment", "sip", "stocks" -> Icons.Rounded.Savings
-        else -> Icons.Rounded.Payments
+@Preview(name = "Review Card Font 1.3 - Light", showBackground = true, fontScale = 1.3f)
+@Composable
+private fun ReviewTransactionCardPreviewLargeFontLight() {
+    FinanceAutomationTheme(darkTheme = false) {
+        ReviewTransactionCard(
+            transaction = Transaction(
+                id = "1",
+                timestamp = System.currentTimeMillis(),
+                dateSerial = 45600,
+                timeSerial = 0.5,
+                merchant = "Swiggy",
+                totalAmount = 600.0,
+                category = "Food & Drink",
+                account = "HDFC ••4921",
+                myShare = 600.0,
+                owedToMe = 0.0
+            ),
+            onConfirm = {},
+            onEdit = {}
+        )
     }
 }
 
-private fun formatTimestamp(timestamp: Long): String {
-    if (timestamp <= 0L) return ""
-    val formatter = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
-    return formatter.format(Date(timestamp))
+@Preview(name = "Subscription Due Card - Light", showBackground = true, fontScale = 1.0f)
+@Composable
+private fun SubscriptionDueCardPreviewLight() {
+    FinanceAutomationTheme(darkTheme = false) {
+        SubscriptionDueCard(
+            subscriptionName = "Netflix",
+            amount = 649.0,
+            dueFormatted = "today",
+            onYes = {},
+            onNotYet = {},
+            onSkipThisTime = {}
+        )
+    }
 }
