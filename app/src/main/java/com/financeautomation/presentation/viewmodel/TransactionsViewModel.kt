@@ -624,7 +624,7 @@ class TransactionsViewModel(
     fun syncNow(onComplete: ((Boolean) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
             isSyncingFlow.value = true
-            val res = transactionRepository.syncPendingTransactions()
+            val res = transactionRepository.syncPendingTransactions(userInitiated = true)
             isSyncingFlow.value = false
             onComplete?.invoke(res is Result.Success)
         }

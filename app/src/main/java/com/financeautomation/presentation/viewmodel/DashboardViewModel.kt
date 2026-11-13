@@ -77,6 +77,9 @@ data class DashboardUiState(
     val iOwePeople: Double = 0.0,
     val topIOwe: List<DebtSummary> = emptyList(),
     val needsReviewCount: Int = 0,
+    /** Rows waiting in review, which are not counted in the burn: how many and how much. */
+    val unconfirmedCount: Int = 0,
+    val unconfirmedAmount: Double = 0.0,
     val needsReviewTotal: Int = 0,
     val waitingCount: Int = 0,
     val failedCount: Int = 0,
@@ -438,9 +441,12 @@ class DashboardViewModel(
         }
         val endOfPriorSameDay = minOf(priorSameDayCal.timeInMillis, endOfPriorMonth)
 
-        val currentBurn = LivingBurn.total(transactions, selectedWindow, excludedCategoryNames)
-        var lastMonthBurn = 0.0
-        var lastMonthSameDayBurn = 0.0
+        val currentBurn = LivingBurn.total(transactions, selectedWindow, excludedCategoryNames, inflows)
+        val lastMonthBurn = LivingBurn.total(transactions, priorWindow, excludedCategoryNames, inflows)
+        val lastMonthSameDayBurn = LivingBurn.total(
+            transactions, startOfPriorMonth until endOfPriorSameDay, excludedCategoryNames, inflows
+        )
+        val unconfirmed = LivingBurn.unconfirmed(transactions, excludedCategoryNames)
         var savings = 0.0
         var income = 0.0
         for (inflow in inflows) {
@@ -487,14 +493,6 @@ class DashboardViewModel(
                     if (existing == null || (existing.none { it.isUpperCase() } && share.displayName.any { it.isUpperCase() })) {
                         displayNamesByKey[share.key] = share.displayName
                     }
-                }
-            }
-
-            // Prior month burn
-            if (LivingBurn.counts(txn, priorWindow, excludedCategoryNames)) {
-                lastMonthBurn += txn.myShare
-                if (txn.timestamp < endOfPriorSameDay) {
-                    lastMonthSameDayBurn += txn.myShare
                 }
             }
 
@@ -589,6 +587,8 @@ class DashboardViewModel(
             iOwePeople = totalIOwe,
             topIOwe = topIOwe,
             needsReviewCount = needsReviewCount,
+            unconfirmedCount = unconfirmed.count,
+            unconfirmedAmount = unconfirmed.amount,
             needsReviewTotal = needsReviewTotal,
             waitingCount = waitingCount,
             failedCount = failedCount,
@@ -609,7 +609,7 @@ class DashboardViewModel(
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
 
-            when (val res = transactionRepository.syncPendingTransactions()) {
+            when (val res = transactionRepository.syncPendingTransactions(userInitiated = true)) {
                 is Result.Success -> {
                     val count = res.data
                     _uiState.update {

@@ -63,9 +63,14 @@ class InsightsCalculator(private val zone: ZoneId = LivingBurn.KOLKATA) {
     }
 
     /** Total shown by the donut for [month]. */
-    fun total(transactions: List<Transaction>, categories: List<Category>, month: YearMonth): Double {
+    fun total(
+        transactions: List<Transaction>,
+        categories: List<Category>,
+        month: YearMonth,
+        inflows: List<com.financeautomation.domain.model.Inflow> = emptyList()
+    ): Double {
         val window = LivingBurn.monthWindow(month.year, month.monthValue, zone)
-        return LivingBurn.total(transactions, window, LivingBurn.excludedNames(categories))
+        return LivingBurn.total(transactions, window, LivingBurn.excludedNames(categories), inflows)
     }
 
     /** Living burn of the [count] months ending at [endMonth], oldest first; months without spending are zero. */
@@ -73,13 +78,14 @@ class InsightsCalculator(private val zone: ZoneId = LivingBurn.KOLKATA) {
         transactions: List<Transaction>,
         categories: List<Category>,
         endMonth: YearMonth,
-        count: Int = SERIES_MONTHS
+        count: Int = SERIES_MONTHS,
+        inflows: List<com.financeautomation.domain.model.Inflow> = emptyList()
     ): List<MonthlyBurn> {
         val excluded = LivingBurn.excludedNames(categories)
         return (count - 1 downTo 0).map { back ->
             val month = endMonth.minusMonths(back.toLong())
             val window = LivingBurn.monthWindow(month.year, month.monthValue, zone)
-            MonthlyBurn(month, LivingBurn.total(transactions, window, excluded))
+            MonthlyBurn(month, LivingBurn.total(transactions, window, excluded, inflows))
         }
     }
 

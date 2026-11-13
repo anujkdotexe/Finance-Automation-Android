@@ -93,7 +93,8 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
             val waiting = queue.count {
                 it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS
             }
-            return MonthBurnSummaryUseCase()(transactions, categories, waiting)
+            val inflows = container.inflowRepository.getAllInflows().first()
+            return MonthBurnSummaryUseCase()(transactions, categories, waiting, inflows = inflows)
         }
 
         private fun labels(context: Context) = MonthBurnWidgetLabels(

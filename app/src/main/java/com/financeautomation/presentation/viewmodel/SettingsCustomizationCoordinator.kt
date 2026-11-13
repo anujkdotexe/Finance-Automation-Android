@@ -353,9 +353,15 @@ class SettingsCustomizationCoordinator(
             return
         }
         scope.launch(ioDispatcher) {
-            val targetId = companion?.id ?: companionId
-            peopleRepository.deleteCompanionById(targetId)
-            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_companion_removed)) }
+            val targetName = companion?.name ?: companionId
+            when (val result = peopleRepository.removePerson(targetName)) {
+                is com.financeautomation.core.model.Result.Success ->
+                    uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_companion_removed)) }
+                is com.financeautomation.core.model.Result.Error ->
+                    uiState.update { it.copy(errorMessage = result.message?.let { m -> UiText.dynamic(m) }
+                        ?: UiText.res(R.string.settings_err_cannot_remove_open_balance, targetName)) }
+                else -> Unit
+            }
         }
     }
 }

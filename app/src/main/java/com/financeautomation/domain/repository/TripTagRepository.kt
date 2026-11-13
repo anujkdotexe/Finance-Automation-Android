@@ -74,4 +74,10 @@ interface TripTagRepository {
      * Permanently deletes a trip tag by identifier.
      */
     suspend fun deleteTripTag(id: String)
+
+    /**
+     * Removes a trip from the list. Transactions keep the trip name as text. Refuses while the trip is the active one.
+     */
+    suspend fun removeTripTag(name: String): com.financeautomation.core.model.Result<Unit> =
+        com.financeautomation.core.model.Result.Error(UnsupportedOperationException("removeTripTag is not supported"))
 }

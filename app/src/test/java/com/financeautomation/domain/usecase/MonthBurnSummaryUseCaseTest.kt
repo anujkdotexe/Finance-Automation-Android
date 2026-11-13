@@ -19,7 +19,8 @@ class MonthBurnSummaryUseCaseTest {
     private fun txn(category: String, share: Double, ts: Long, status: TransactionStatus = TransactionStatus.PERSONAL) =
         Transaction(
             id = "t$ts$category$share", timestamp = ts, dateSerial = 0, timeSerial = 0.0, account = "SBI",
-            merchant = "m", category = category, totalAmount = share, myShare = share, owedToMe = 0.0, status = status
+            merchant = "m", category = category, totalAmount = share, myShare = share, owedToMe = 0.0, status = status,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED
         )
 
     @Test

@@ -79,6 +79,12 @@ interface TransactionRepository {
     suspend fun syncPendingTransactions(): Result<Int>
 
     /**
+     * Same as [syncPendingTransactions]; [userInitiated] marks a tap on Sync now or pull to refresh, which may bypass
+     * the minimum interval between full ledger reads (at most once a minute).
+     */
+    suspend fun syncPendingTransactions(userInitiated: Boolean): Result<Int> = syncPendingTransactions()
+
+    /**
      * Enqueues a credit / friend settlement operation for cloud sync.
      */
     suspend fun logCredit(
