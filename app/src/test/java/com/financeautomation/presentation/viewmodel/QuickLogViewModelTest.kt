@@ -359,4 +359,27 @@ class QuickLogViewModelTest {
         assertEquals(450.0, state.owedToMe, 0.001)
         assertEquals(setOf("1"), state.selectedCompanionIds)
     }
+
+    @Test
+    fun testOnDateSelected_updatesCaptureTimestampAndCapsFuture() = runTest {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val pastTs = System.currentTimeMillis() - 86400000L
+        vm.onDateSelected(pastTs)
+        assertEquals(pastTs, vm.uiState.value.captureTimestamp)
+
+        val farFutureTs = System.currentTimeMillis() + 86400000L * 30
+        vm.onDateSelected(farFutureTs)
+        assertTrue(vm.uiState.value.captureTimestamp!! <= System.currentTimeMillis())
+    }
 }
