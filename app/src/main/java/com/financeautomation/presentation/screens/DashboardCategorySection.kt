@@ -286,6 +286,7 @@ fun CategoryBreakdownSection(
     onToggleExpand: () -> Unit,
     onCategoryClick: ((String) -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
+    onInsightsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (categories.isEmpty()) return
@@ -293,6 +294,9 @@ fun CategoryBreakdownSection(
     Column(modifier = modifier.fillMaxWidth()) {
         SectionTitle(
             title = stringResource(R.string.dashboard_where_it_went),
+            secondaryActionText = if (onInsightsClick != null) stringResource(R.string.insights_title) else null,
+            onSecondaryActionClick = onInsightsClick,
+            secondaryActionContentDescription = stringResource(R.string.dashboard_insights_link_cd),
             actionText = stringResource(R.string.action_see_all),
             onActionClick = {
                 if (onSeeAllClick != null) {

@@ -12,6 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
@@ -26,7 +28,10 @@ fun SectionTitle(
     title: String,
     modifier: Modifier = Modifier,
     actionText: String? = null,
-    onActionClick: (() -> Unit)? = null
+    onActionClick: (() -> Unit)? = null,
+    secondaryActionText: String? = null,
+    onSecondaryActionClick: (() -> Unit)? = null,
+    secondaryActionContentDescription: String? = null
 ) {
     Row(
         modifier = modifier
@@ -42,11 +47,31 @@ fun SectionTitle(
             color = FinanceTheme.colors.onSurface
         )
 
-        if (!actionText.isNullOrBlank() && onActionClick != null) {
-            LinkButton(
-                text = actionText,
-                onClick = onActionClick
-            )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!secondaryActionText.isNullOrBlank() && onSecondaryActionClick != null) {
+                LinkButton(
+                    text = secondaryActionText,
+                    onClick = onSecondaryActionClick,
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = FinanceTheme.sizes.minTouchTarget, minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .then(
+                            if (secondaryActionContentDescription != null) {
+                                Modifier.semantics { contentDescription = secondaryActionContentDescription }
+                            } else Modifier
+                        )
+                )
+            }
+
+            if (!actionText.isNullOrBlank() && onActionClick != null) {
+                LinkButton(
+                    text = actionText,
+                    onClick = onActionClick,
+                    modifier = Modifier.defaultMinSize(minWidth = FinanceTheme.sizes.minTouchTarget, minHeight = FinanceTheme.sizes.minTouchTarget)
+                )
+            }
         }
     }
 }
