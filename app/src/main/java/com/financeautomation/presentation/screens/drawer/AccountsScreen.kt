@@ -42,6 +42,7 @@ import com.financeautomation.R
 import com.financeautomation.domain.model.Account
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.EmptyState
+import com.financeautomation.presentation.components.HeaderActionButton
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
@@ -85,14 +86,10 @@ fun AccountsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = { showAddAccountDialog = true }) {
-                Text(
-                    text = stringResource(R.string.accounts_action_add),
-                    style = FinanceTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            HeaderActionButton(
+                text = stringResource(R.string.accounts_action_add),
+                onClick = { showAddAccountDialog = true }
+            )
         }
 
         if (state.accounts.isEmpty()) {
