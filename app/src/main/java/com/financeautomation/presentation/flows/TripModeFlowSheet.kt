@@ -61,6 +61,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 fun TripModeFlowSheet(
     activeTag: TripTag?,
     companions: List<Companion> = emptyList(),
+    tripSummary: com.financeautomation.domain.usecase.TripSummary? = null,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onStartTrip: (tagName: String) -> Unit,
@@ -175,8 +176,8 @@ fun TripModeFlowSheet(
                 }
             }
 
-            // Trip Summary Cards (Totals when active)
-            Surface(
+            // Trip Summary Cards (real totals; hidden when the figures are not available, for example while locked)
+            if (tripSummary != null) Surface(
                 shape = FinanceShapes.card,
                 color = FinanceTheme.colors.surfaceContainerLow,
                 modifier = Modifier.fillMaxWidth()
@@ -196,7 +197,7 @@ fun TripModeFlowSheet(
                         )
                         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
                         Text(
-                            text = "₹0.00",
+                            text = com.financeautomation.core.utils.formatRupees(tripSummary?.totalPaid ?: 0.0),
                             style = FinanceTheme.typography.kpiMedium,
                             color = FinanceTheme.colors.onSurface
                         )
@@ -213,7 +214,7 @@ fun TripModeFlowSheet(
                         )
                         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
                         Text(
-                            text = "₹0.00",
+                            text = com.financeautomation.core.utils.formatRupees(tripSummary?.netExpenditure ?: 0.0),
                             style = FinanceTheme.typography.kpiMedium,
                             color = FinanceTheme.colors.primary,
                             fontWeight = FontWeight.SemiBold

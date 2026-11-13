@@ -603,4 +603,15 @@
     <string name="txn_detail_type">Type</string>
     <string name="txn_detail_note">Note</string>
     <string name="txn_void_entry_confirm">Void this entry? It is removed from totals and marked void in your sheet.</string>
+
+    <!-- Trip net expenditure -->
+    <string name="trip_net_paid">Paid by you</string>
+    <string name="trip_net_given">Given, still owed to you</string>
+    <string name="trip_net_returned">Returned to you</string>
+    <string name="trip_net_expenditure">Net expenditure</string>
+    <string name="trip_detail_transactions">Transactions</string>
+    <string name="trip_detail_empty">No transactions on this trip yet</string>
+    <string name="trip_detail_people_and_count">%1$d people, %2$d transactions</string>
+    <string name="trip_detail_row_meta">%1$s, %2$s</string>
+    <string name="trip_detail_your_share">Your share %1$s</string>
 </resources>
