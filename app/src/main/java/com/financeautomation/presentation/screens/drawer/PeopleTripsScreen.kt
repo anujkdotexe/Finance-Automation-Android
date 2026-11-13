@@ -65,26 +65,9 @@ fun PeopleTripsScreen(
         // Top Utility Header
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(FinanceTheme.spacing.s)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-                Text(
-                    text = "Live Ledgers",
-                    style = FinanceTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
             HeaderActionButton(
                 text = stringResource(R.string.people_add_friend),
                 onClick = { showAddFriendSheet = true }
