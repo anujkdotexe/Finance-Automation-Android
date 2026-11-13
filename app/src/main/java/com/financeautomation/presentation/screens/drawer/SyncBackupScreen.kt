@@ -2,6 +2,7 @@ package com.financeautomation.presentation.screens.drawer
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,9 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +82,55 @@ fun SyncBackupScreen(
     val accountDisplayName = rawDisplayName?.takeIf { it != accountEmail }
 
     val showNameAndEmail = !accountDisplayName.isNullOrBlank() && !accountEmail.isNullOrBlank()
+
+    var showCreateFreshDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.userMessage) {
+        if (!state.userMessage.isNullOrBlank()) {
+            Toast.makeText(context, state.userMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(state.errorMessage) {
+        if (!state.errorMessage.isNullOrBlank()) {
+            Toast.makeText(context, state.errorMessage, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    if (showCreateFreshDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateFreshDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.create_fresh_workbook_confirm_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.create_fresh_workbook_confirm_body),
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCreateFreshDialog = false
+                        viewModel.onCreateFreshWorkbook()
+                    }
+                ) {
+                    Text(stringResource(R.string.action_create))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showCreateFreshDialog = false }
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -385,7 +439,7 @@ fun SyncBackupScreen(
 
                 OutlinedButton(
                     onClick = viewModel::onRegenerateDashboard,
-                    enabled = !state.isRegeneratingDashboard,
+                    enabled = !state.isRegeneratingDashboard && !state.isProvisioning,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -393,6 +447,51 @@ fun SyncBackupScreen(
                         text = "Regenerate dashboard formulas",
                         maxLines = 1
                     )
+                }
+
+                OutlinedButton(
+                    onClick = viewModel::autoProvisionMasterSheet,
+                    enabled = !state.isProvisioning,
+                    shape = FinanceTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_repair_workbook),
+                        maxLines = 1
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = { showCreateFreshDialog = true },
+                    enabled = !state.isProvisioning,
+                    shape = FinanceTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_create_fresh_workbook),
+                        maxLines = 1
+                    )
+                }
+
+                if (state.isProvisioning) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = FinanceTheme.spacing.xs),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = FinanceTheme.sizes.strokeThick,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
+                        Text(
+                            text = "Provisioning workbook...",
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
