@@ -54,4 +54,16 @@ class PackageWhitelistDisplayTest {
     fun privacyStatementIsExact() {
         assertEquals("We never read WhatsApp, Telegram or OTP messages.", PackageWhitelist.PRIVACY_STATEMENT)
     }
+
+    @Test
+    fun appDisplayNameMapsKnownPackages() {
+        assertEquals("Google Pay", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_GPAY))
+        assertEquals("BHIM", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_BHIM))
+        assertEquals("Supermoney", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_SUPERMONEY))
+        assertEquals("PhonePe", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_PHONEPE))
+        assertEquals("Paytm", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_PAYTM))
+        assertEquals("Bank SMS", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_GOOGLE_MESSAGES))
+        assertEquals("Bank SMS", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_DEFAULT_SMS))
+        assertEquals("Bank SMS", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_SAMSUNG_MESSAGES))
+    }
 }

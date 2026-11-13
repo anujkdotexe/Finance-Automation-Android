@@ -280,8 +280,8 @@
     <string name="prompt_settle_open_debt">Settle Open Debt (Optional)</string>
     <string name="prompt_auto_settle">Auto-Settle (All / Oldest First)</string>
     <string name="btn_record_inflow">Record Inflow</string>
-    <string name="btn_record_debt">Record Debt</string>
-    <string name="btn_record_repayment">Record Repayment</string>
+    <string name="btn_record_debt">Record debt</string>
+    <string name="btn_record_repayment">Record repayment</string>
     <string name="prompt_date_repaid">Date Repaid</string>
     <string name="trip_active_badge">Trip Mode Active</string>
     <string name="trip_active_desc">All new transactions will be tagged with this event until stopped.</string>
@@ -303,7 +303,7 @@
     <string name="action_end_trip">End Trip</string>
     <string name="badge_payment_intercepted">Payment Intercepted</string>
     <string name="badge_quick_expense">Quick Expense</string>
-    <string name="btn_save_expense">Save Expense</string>
+    <string name="btn_save_expense">Save expense</string>
     <string name="label_details">Details</string>
     <string name="label_raw_alert">Raw alert: %s</string>
     <string name="action_quick_save">Quick Save</string>
@@ -429,6 +429,21 @@
     <string name="crashlytics_opt_in_title">Help improve reliability</string>
     <string name="crashlytics_opt_in_desc">Sends crash and freeze reports (app version, phone model, Android version, error location). Never amounts, names or messages.</string>
     <string name="btn_test_crash">Test Crash (Debug/Beta)</string>
+    <string name="sheet_title_add_expense">Add expense</string>
+    <string name="sheet_title_log_payment">Log this payment</string>
+    <string name="sheet_caption_from_app">From %1$s</string>
+    <string name="amount_not_found_message">Amount not found. Enter it below.</string>
+    <string name="action_show_message">Show message</string>
+    <string name="action_hide_message">Hide message</string>
+    <string name="prompt_paid_from">Paid from</string>
+    <string name="prompt_category">Category</string>
+    <string name="hint_add_description">Add description</string>
+    <string name="btn_start_new_trip">Start new trip</string>
+    <string name="label_original_message">Original message</string>
+    <string name="split_with_friends">Split with</string>
+    <string name="split_participants">Participants</string>
+    <string name="label_my_share_uppercase">My share</string>
+    <string name="label_owed_to_me_uppercase">Owed to me</string>
 
     <!-- Plurals -->
     <plurals name="review_pending_count">

@@ -56,54 +56,9 @@ fun ChooseActionMenu(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Grabber Pill
-        Box(
-            modifier = Modifier
-                .width(FinanceTheme.sizes.grabberWidth)
-                .height(FinanceTheme.sizes.grabberHeight)
-                .clip(CircleShape)
-                .background(FinanceTheme.colors.outline.copy(alpha = 0.4f))
-        )
-
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-        // Header Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.prompt_choose_action),
-                style = FinanceTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = FinanceTheme.colors.onSurface
-            )
-
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(FinanceTheme.sizes.icon28)
-                    .clickable { onDismiss() }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.cd_close),
-                        tint = FinanceTheme.colors.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
         // 5 Flow Action Tiles
         ActionMenuTile(
             title = stringResource(R.string.action_menu_expense_title),
