@@ -123,6 +123,14 @@
             </intent-filter>
         </receiver>
 
+        <activity
+            android:name=".presentation.ui.SubscriptionYesActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.FinanceAutomation.TransparentEntry" />
+
         <receiver
             android:name=".service.SubscriptionActionReceiver"
             android:exported="false" />
