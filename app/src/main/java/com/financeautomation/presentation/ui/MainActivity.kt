@@ -195,6 +195,7 @@ class MainActivity : FragmentActivity() {
         } catch (_: Exception) {}
 
         setContent {
+          com.financeautomation.presentation.screens.StorageGate(application as FinanceApplication) {
             val app = application as FinanceApplication
             val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
             val googleEmail by app.appContainer.preferencesRepository.getGoogleAccountEmail().collectAsState(initial = null)
@@ -251,6 +252,7 @@ class MainActivity : FragmentActivity() {
                     }
                 }
             }
+          }
         }
     }
 
