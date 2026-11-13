@@ -382,4 +382,51 @@ class QuickLogViewModelTest {
         vm.onDateSelected(farFutureTs)
         assertTrue(vm.uiState.value.captureTimestamp!! <= System.currentTimeMillis())
     }
+
+    @Test
+    fun testOnPayeeChanged_remembersAndPreselectsLastAccountAndCategory() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val accRepo = FakeAccountRepo()
+        val catRepo = FakeCategoryRepo()
+        val ts = System.currentTimeMillis()
+
+        // Insert historical transaction with specific account and category
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_prev",
+                timestamp = ts - 100000L,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "SBI",
+                merchant = "Blue Tokai Coffee",
+                category = "Food & Drink",
+                totalAmount = 350.0,
+                companions = "Personal",
+                myShare = 350.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
+        )
+
+        val vm = QuickLogViewModel(
+            transactionRepository = tRepo,
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = catRepo,
+            accountRepository = accRepo,
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        // Set manual mode and type payee
+        vm.setManualMode()
+        vm.onPayeeChanged("Blue Tokai Coffee")
+        advanceUntilIdle()
+
+        // Account and category should be preselected from past transaction
+        assertEquals("SBI", vm.uiState.value.selectedAccount)
+        assertEquals("Food & Drink", vm.uiState.value.selectedCategory)
+    }
 }
