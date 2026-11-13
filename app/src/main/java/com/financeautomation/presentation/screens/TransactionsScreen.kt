@@ -37,6 +37,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -91,6 +92,7 @@ import java.util.Locale
  * - No results: search icon, "No matches found", OutlinedButton "Clear search", OutlinedButton "Search all months"
  * - Transaction detail bottom sheet with split summary, Void (outlined), Edit (filled), Details link
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
     viewModel: TransactionsViewModel,
@@ -110,25 +112,33 @@ fun TransactionsScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier
     ) { innerPadding ->
-        TransactionsContent(
-            state = state,
-            onPreviousMonth = viewModel::previousMonth,
-            onNextMonth = viewModel::nextMonth,
-            onCurrentMonth = viewModel::currentMonth,
-            onSearchQueryChange = viewModel::setSearchQuery,
-            onSearchScopeChange = viewModel::setSearchScope,
-            onFilterChange = viewModel::setFilter,
-            onClearFilter = viewModel::clearFilter,
-            onTransactionClick = { txn ->
-                selectedTransaction = txn
-                onTransactionClick(txn)
-            },
-            onInflowClick = { inf ->
-                selectedInflow = inf
-            },
-            onAddExpense = onAddExpense,
-            modifier = Modifier.padding(innerPadding)
-        )
+        PullToRefreshBox(
+            isRefreshing = state.isSyncing,
+            onRefresh = { viewModel.syncNow() },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            TransactionsContent(
+                state = state,
+                onPreviousMonth = viewModel::previousMonth,
+                onNextMonth = viewModel::nextMonth,
+                onCurrentMonth = viewModel::currentMonth,
+                onSearchQueryChange = viewModel::setSearchQuery,
+                onSearchScopeChange = viewModel::setSearchScope,
+                onFilterChange = viewModel::setFilter,
+                onClearFilter = viewModel::clearFilter,
+                onTransactionClick = { txn ->
+                    selectedTransaction = txn
+                    onTransactionClick(txn)
+                },
+                onInflowClick = { inf ->
+                    selectedInflow = inf
+                },
+                onAddExpense = onAddExpense,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         selectedTransaction?.let { txn ->
             TransactionDetailSheet(

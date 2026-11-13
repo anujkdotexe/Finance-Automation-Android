@@ -133,7 +133,8 @@ data class TransactionsUiState(
     val activeFilter: TransactionFilter = TransactionFilter(),
     val groupedTransactions: List<DayTransactionGroup> = emptyList(),
     val rowStatuses: Map<String, RowStatus> = emptyMap(),
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isSyncing: Boolean = false
 )
 
 /**
@@ -150,6 +151,7 @@ class TransactionsViewModel(
     private val monthOffsetFlow = MutableStateFlow(0)
     private val searchQueryFlow = MutableStateFlow("")
     private val searchScopeFlow = MutableStateFlow(SearchScope.THIS_MONTH)
+    private val isSyncingFlow = MutableStateFlow(false)
     private val filterFlow = MutableStateFlow(TransactionFilter())
 
     private val _uiState = MutableStateFlow(TransactionsUiState(isLoading = true))
@@ -185,7 +187,8 @@ class TransactionsViewModel(
                 searchQueryFlow,
                 filterFlow,
                 queueIdsFlow(),
-                searchScopeFlow
+                searchScopeFlow,
+                isSyncingFlow
             ) { values ->
                 @Suppress("UNCHECKED_CAST")
                 calculateState(
@@ -195,7 +198,8 @@ class TransactionsViewModel(
                     query = values[3] as String,
                     filter = values[4] as TransactionFilter,
                     queueIds = values[5] as QueueTransactionIds,
-                    scope = values[6] as SearchScope
+                    scope = values[6] as SearchScope,
+                    isSyncing = values[7] as Boolean
                 )
             }.collect { newState ->
                 _uiState.value = newState
@@ -309,7 +313,8 @@ class TransactionsViewModel(
         query: String,
         filter: TransactionFilter,
         queueIds: QueueTransactionIds,
-        scope: SearchScope = SearchScope.THIS_MONTH
+        scope: SearchScope = SearchScope.THIS_MONTH,
+        isSyncing: Boolean = false
     ): TransactionsUiState {
         val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
         val cal = Calendar.getInstance(kolkataTz).apply {
@@ -532,7 +537,8 @@ class TransactionsViewModel(
             activeFilter = filter,
             groupedTransactions = grouped,
             rowStatuses = filteredTransactions.associate { it.id to computeRowStatus(it, queueIds) },
-            isLoading = false
+            isLoading = false,
+            isSyncing = isSyncing
         )
     }
 
@@ -578,6 +584,15 @@ class TransactionsViewModel(
 
     fun recordSavedTransaction(id: String) {
         lastSavedTransactionId = id
+    }
+
+    fun syncNow(onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch(ioDispatcher) {
+            isSyncingFlow.value = true
+            val res = transactionRepository.syncPendingTransactions()
+            isSyncingFlow.value = false
+            onComplete?.invoke(res is Result.Success)
+        }
     }
 
     fun undoSave(txnId: String? = null, onComplete: ((Boolean) -> Unit)? = null) {
