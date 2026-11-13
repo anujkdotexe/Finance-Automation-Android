@@ -82,21 +82,37 @@ fun OverlayContentHost(
     val openedFromMenu = remember { initialScreen == OverlayFlowScreen.MENU }
     val quickLogState by quickLogViewModel.uiState.collectAsState()
 
+    val isExpense = currentScreen == OverlayFlowScreen.EXPENSE
+    val isCaptured = isExpense && quickLogState.captureId != null
+
     val sheetTitle = when (currentScreen) {
         OverlayFlowScreen.MENU -> stringResource(R.string.prompt_choose_action)
-        OverlayFlowScreen.EXPENSE -> if (quickLogState.captureId != null) {
-            stringResource(R.string.badge_payment_intercepted)
+        OverlayFlowScreen.EXPENSE -> if (isCaptured) {
+            stringResource(R.string.sheet_title_log_payment)
         } else {
-            stringResource(R.string.prompt_enter_amount)
+            stringResource(R.string.sheet_title_add_expense)
         }
-        OverlayFlowScreen.INCOME_RETURN -> stringResource(R.string.prompt_amount_received)
+        OverlayFlowScreen.INCOME_RETURN -> stringResource(R.string.action_menu_income_title)
         OverlayFlowScreen.FRIEND_PAID -> stringResource(R.string.action_menu_friend_paid_title)
         OverlayFlowScreen.REPAID_FRIEND -> stringResource(R.string.action_menu_repaid_friend_title)
         OverlayFlowScreen.TRIP_MODE -> stringResource(R.string.action_menu_trip_mode_title)
     }
 
+    val sheetCaption = if (isCaptured) {
+        stringResource(
+            R.string.sheet_caption_from_app,
+            com.financeautomation.core.constants.PackageWhitelist.appDisplayName(quickLogState.sourcePackage)
+        )
+    } else null
+
+    val backAction: (() -> Unit)? = if (openedFromMenu && currentScreen != OverlayFlowScreen.MENU) {
+        { currentScreen = OverlayFlowScreen.MENU }
+    } else null
+
     SheetScaffold(
         title = sheetTitle,
+        caption = sheetCaption,
+        onBack = backAction,
         onDismiss = onDismiss,
         modifier = modifier
             .fillMaxWidth()

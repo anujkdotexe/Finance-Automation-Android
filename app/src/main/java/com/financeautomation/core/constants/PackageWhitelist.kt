@@ -86,6 +86,17 @@ object PackageWhitelist {
     fun watchedAppsForDisplay(): List<String> =
         listOf("Google Pay", "BHIM", "Supermoney", "PhonePe", "Paytm", "Bank SMS")
 
+    /** Maps a captured package name to a clean user-facing app name. */
+    fun appDisplayName(packageName: String): String = when (packageName.trim()) {
+        PACKAGE_GPAY -> "Google Pay"
+        PACKAGE_BHIM -> "BHIM"
+        PACKAGE_SUPERMONEY -> "Supermoney"
+        PACKAGE_PHONEPE -> "PhonePe"
+        PACKAGE_PAYTM -> "Paytm"
+        PACKAGE_DEFAULT_SMS, PACKAGE_GOOGLE_MESSAGES, PACKAGE_SAMSUNG_MESSAGES -> "Bank SMS"
+        else -> if (packageName.isNotBlank() && packageName != "manual") packageName else "Payment App"
+    }
+
     fun isSmsPackage(packageName: String): Boolean {
         return SMS_PACKAGES.contains(packageName.trim())
     }

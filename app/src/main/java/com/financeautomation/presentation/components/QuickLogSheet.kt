@@ -7,16 +7,18 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -24,18 +26,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.rounded.Commute
+import androidx.compose.material.icons.rounded.FamilyRestroom
+import androidx.compose.material.icons.rounded.Flight
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MedicalServices
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.rounded.Savings
+import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.ShoppingCart
+import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -49,28 +55,36 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.SplitMode
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogUiState
 
 /**
- * Expense bottom sheet for review and logging (Phase 5.3).
- * Follows calm utility styling with spring animations, Material 3 design tokens,
- * and adaptive keyboard focus management.
+ * Rebuilt Expense bottom sheet following the frozen design specification:
+ * - Amount FIRST in mono 32 Medium.
+ * - 10 real categories in two rows.
+ * - Account chips (user-defined accounts, no balances).
+ * - Segmented control: Just me, Split equally, Custom (shown once).
+ * - Split equally: friend chips + Add friend, computing My share and Owed to me.
+ * - Custom: personal share input and computed Owed to me.
+ * - Unreadable amount fallback with "Amount not found" and expandable message text.
+ * - Buttons: FilledButton "Save expense", OutlinedButton "Cancel" as a pair.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun QuickLogSheet(
     state: QuickLogUiState,
@@ -93,6 +107,7 @@ fun QuickLogSheet(
     val focusManager = LocalFocusManager.current
     val amountFocusRequester = remember { FocusRequester() }
     val verticalScroll = rememberScrollState()
+    var showRawMessage by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.isNeedsAmount) {
         if (state.isNeedsAmount) {
@@ -110,220 +125,131 @@ fun QuickLogSheet(
         modifier = modifier
             .fillMaxWidth()
             .imePadding()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusManager.clearFocus() }
             .verticalScroll(verticalScroll),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
-        // Grabber Pill
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Header: Action Tag + Dismiss Button
-        Row(
+        // 1. Amount First in Mono (32 Medium)
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Surface(
-                shape = FinanceTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            Text(
+                text = stringResource(R.string.label_amount),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (state.captureId != null) {
-                        stringResource(R.string.badge_payment_intercepted)
-                    } else {
-                        stringResource(R.string.badge_quick_expense)
+                    text = "₹",
+                    style = FinanceTheme.typography.amountHero,
+                    color = FinanceTheme.colors.primary,
+                    modifier = Modifier.padding(end = FinanceTheme.spacing.xs)
+                )
+
+                BasicTextField(
+                    value = state.amountText,
+                    onValueChange = { input ->
+                        if (input.isEmpty() || input.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
+                            onAmountChanged(input)
+                        }
                     },
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                )
-            }
-
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(28.dp)
-                    .clickable { onDismiss() }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.cd_close),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // 1. Amount & 2. Payee inputs
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedTextField(
-                value = state.amountText,
-                onValueChange = onAmountChanged,
-                label = { Text(stringResource(R.string.prompt_enter_amount)) },
-                enabled = !state.isFinancialLocked,
-                singleLine = true,
-                shape = FinanceTheme.shapes.medium,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Next
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(amountFocusRequester)
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
-            )
-            OutlinedTextField(
-                value = state.payee,
-                onValueChange = onPayeeChanged,
-                label = { Text(stringResource(R.string.prompt_what_was_this_for)) },
-                singleLine = true,
-                shape = FinanceTheme.shapes.medium,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                modifier = Modifier
-                    .weight(1.3f)
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // 3. Account Chips
-        val accountScroll = rememberScrollState()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(accountScroll),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            state.availableAccounts.forEach { account ->
-                val isSelected = account.name.equals(state.selectedAccount, ignoreCase = true)
-                Surface(
-                    shape = FinanceTheme.shapes.medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                    enabled = !state.isFinancialLocked,
+                    singleLine = true,
+                    textStyle = FinanceTheme.typography.amountHero.copy(
+                        color = FinanceTheme.colors.onSurface,
+                        textAlign = TextAlign.Center
                     ),
-                    modifier = Modifier.clickable {
-                        focusManager.clearFocus()
-                        onAccountSelected(account.name)
-                    }
-                ) {
-                    Text(
-                        text = account.name,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // 4. Category Chips
-        val categoryScroll = rememberScrollState()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(categoryScroll),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            state.availableCategories.forEach { category ->
-                val isSelected = category.name.equals(state.selectedCategory, ignoreCase = true)
-                Surface(
-                    shape = FinanceTheme.shapes.medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    cursorBrush = SolidColor(FinanceTheme.colors.primary),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
                     ),
-                    modifier = Modifier.clickable {
-                        focusManager.clearFocus()
-                        onCategorySelected(category.name)
-                    }
-                ) {
-                    Text(
-                        text = category.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // 5. Split Control (Segmented Bar)
-        Surface(
-            shape = FinanceTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                val justMeLabel = stringResource(R.string.split_just_me)
-                val splitEquallyLabel = stringResource(R.string.split_equally)
-                val customSplitLabel = stringResource(R.string.split_custom)
-                val splitModes: List<Pair<SplitMode, String>> = listOf(
-                    SplitMode.JUST_ME to justMeLabel,
-                    SplitMode.SPLIT_EQUALLY to splitEquallyLabel,
-                    SplitMode.CUSTOM to customSplitLabel
-                )
-                splitModes.forEach { (mode, label) ->
-                    val isSelected = state.splitMode == mode
-                    Surface(
-                        shape = FinanceTheme.shapes.card,
-                        color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
-                        shadowElevation = if (isSelected) 2.dp else 0.dp,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(enabled = !state.isFinancialLocked) {
-                                focusManager.clearFocus()
-                                onSplitModeChanged(mode)
+                    modifier = Modifier
+                        .width(IntrinsicSize.Min)
+                        .defaultMinSize(minWidth = FinanceTheme.sizes.emptyStateIllustration)
+                        .focusRequester(amountFocusRequester)
+                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.Center) {
+                            if (state.amountText.isEmpty()) {
+                                Text(
+                                    text = "0.00",
+                                    style = FinanceTheme.typography.amountHero,
+                                    color = FinanceTheme.colors.outlineVariant
+                                )
                             }
+                            innerTextField()
+                        }
+                    }
+                )
+            }
+
+            // Unreadable Amount Fallback State
+            if (state.isNeedsAmount) {
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = null,
+                        tint = FinanceTheme.colors.primary,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                    )
+                    Text(
+                        text = stringResource(R.string.amount_not_found_message),
+                        style = FinanceTheme.typography.bodyMedium,
+                        color = FinanceTheme.colors.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
+
+                LinkButton(
+                    text = if (showRawMessage) {
+                        stringResource(R.string.action_hide_message)
+                    } else {
+                        stringResource(R.string.action_show_message)
+                    },
+                    onClick = { showRawMessage = !showRawMessage }
+                )
+
+                AnimatedVisibility(
+                    visible = showRawMessage,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Surface(
+                        shape = FinanceShapes.card,
+                        color = FinanceTheme.colors.surfaceContainerLow,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = FinanceTheme.spacing.xs)
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(FinanceTheme.spacing.m)) {
                             Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                text = stringResource(R.string.label_original_message),
+                                style = FinanceTheme.typography.labelUppercase,
+                                color = FinanceTheme.colors.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
+                            Text(
+                                text = state.payee.ifBlank { stringResource(R.string.hint_add_description) },
+                                style = FinanceTheme.typography.bodySmall,
+                                color = FinanceTheme.colors.onSurface
                             )
                         }
                     }
@@ -331,7 +257,183 @@ fun QuickLogSheet(
             }
         }
 
-        // 6. Companion Chips & 7. Custom Share Field (extracted component)
+        // 2. What Was This For / Description Field
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.prompt_what_was_this_for),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            OutlinedTextField(
+                value = state.payee,
+                onValueChange = onPayeeChanged,
+                placeholder = {
+                    Text(
+                        text = stringResource(R.string.hint_add_description),
+                        style = FinanceTheme.typography.bodyMedium
+                    )
+                },
+                singleLine = true,
+                shape = FinanceShapes.card,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+            )
+        }
+
+        // 3. Category Chips: Exactly 10 real categories in two rows
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.prompt_category),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            val row1Categories = remember {
+                listOf(
+                    CategoryConstants.CATEGORY_FOOD_AND_DRINK,
+                    CategoryConstants.CATEGORY_GROCERIES,
+                    CategoryConstants.CATEGORY_TRANSIT,
+                    CategoryConstants.CATEGORY_SUBSCRIPTIONS,
+                    CategoryConstants.CATEGORY_SHOPPING
+                )
+            }
+
+            val row2Categories = remember {
+                listOf(
+                    CategoryConstants.CATEGORY_TRIP_TRAVEL,
+                    CategoryConstants.CATEGORY_HEALTH,
+                    CategoryConstants.CATEGORY_FAMILY,
+                    CategoryConstants.CATEGORY_SAVINGS,
+                    CategoryConstants.CATEGORY_OTHER
+                )
+            }
+
+            val row1Scroll = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(row1Scroll),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                row1Categories.forEach { categoryName ->
+                    val isSelected = categoryName.equals(state.selectedCategory, ignoreCase = true)
+                    AppChip(
+                        text = categoryName,
+                        selected = isSelected,
+                        onClick = {
+                            focusManager.clearFocus()
+                            onCategorySelected(categoryName)
+                        },
+                        leadingIcon = {
+                            CategoryChipIcon(categoryName = categoryName, isSelected = isSelected)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            val row2Scroll = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(row2Scroll),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                row2Categories.forEach { categoryName ->
+                    val isSelected = categoryName.equals(state.selectedCategory, ignoreCase = true)
+                    AppChip(
+                        text = categoryName,
+                        selected = isSelected,
+                        onClick = {
+                            focusManager.clearFocus()
+                            onCategorySelected(categoryName)
+                        },
+                        leadingIcon = {
+                            CategoryChipIcon(categoryName = categoryName, isSelected = isSelected)
+                        }
+                    )
+                }
+            }
+        }
+
+        // 4. Account Chips (user-defined accounts, no balances)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.prompt_paid_from),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            val accountScroll = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(accountScroll),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                state.availableAccounts.forEach { account ->
+                    val isSelected = account.name.equals(state.selectedAccount, ignoreCase = true)
+                    AppChip(
+                        text = account.name,
+                        selected = isSelected,
+                        onClick = {
+                            focusManager.clearFocus()
+                            onAccountSelected(account.name)
+                        }
+                    )
+                }
+            }
+        }
+
+        // 5. Segmented Control: Just me, Split equally, Custom (shown once)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.prompt_split_mode),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            val justMeLabel = stringResource(R.string.split_just_me)
+            val splitEquallyLabel = stringResource(R.string.split_equally)
+            val customSplitLabel = stringResource(R.string.split_custom)
+
+            SegmentedChoice(
+                options = listOf(SplitMode.JUST_ME, SplitMode.SPLIT_EQUALLY, SplitMode.CUSTOM),
+                selectedOption = state.splitMode,
+                onOptionSelected = { mode ->
+                    focusManager.clearFocus()
+                    onSplitModeChanged(mode)
+                },
+                labelProvider = { mode ->
+                    when (mode) {
+                        SplitMode.JUST_ME -> justMeLabel
+                        SplitMode.SPLIT_EQUALLY -> splitEquallyLabel
+                        SplitMode.CUSTOM -> customSplitLabel
+                    }
+                }
+            )
+        }
+
+        // 6. Companion Split Content (Split Equally / Custom)
         CompanionSplitSection(
             state = state,
             onCompanionToggled = onCompanionToggled,
@@ -340,20 +442,58 @@ fun QuickLogSheet(
             onKeyboardFocusChanged = onKeyboardFocusChanged
         )
 
-        // 8. Trip Tag Chip (only when a trip tag is active)
+        // 7. Active Trip Tag Banner
         state.activeTripTag?.let { activeTrip ->
-            Spacer(modifier = Modifier.height(10.dp))
             ActiveTripBanner(
                 tripName = activeTrip.name,
                 onEndTrip = onEndTrip
             )
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // 8. Duplicate Warning (quiet, calm indicator)
+        if (state.isPossibleDuplicate) {
+            Surface(
+                shape = FinanceShapes.card,
+                color = FinanceTheme.colors.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = null,
+                        tint = FinanceTheme.colors.primary,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                    )
+                    Text(
+                        text = stringResource(R.string.expense_duplicate_warning),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = FinanceTheme.colors.onSurfaceVariant
+                    )
+                }
+            }
+        }
 
-        // 9. Confirm and Save Button
-        Button(
-            onClick = {
+        // 9. Error Message Display
+        state.errorMessage?.let { errorMsg ->
+            Text(
+                text = errorMsg,
+                style = FinanceTheme.typography.bodySmall,
+                color = FinanceTheme.colors.error
+            )
+        }
+
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+        // 10. Action Buttons: FilledButton "Save expense", OutlinedButton "Cancel" as a pair
+        ButtonPair(
+            outlinedText = stringResource(R.string.action_cancel),
+            onOutlinedClick = onDismiss,
+            filledText = stringResource(R.string.btn_save_expense),
+            onFilledClick = {
                 val hapticConstant = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     HapticFeedbackConstants.CONFIRM
                 } else {
@@ -362,57 +502,53 @@ fun QuickLogSheet(
                 view.performHapticFeedback(hapticConstant)
                 onConfirmAndSave()
             },
-            enabled = !state.isSaving && state.amount > 0.0,
-            shape = FinanceTheme.shapes.large,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-        ) {
-            if (state.isSaving) {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            } else {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.btn_save_expense),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
+            filledEnabled = !state.isSaving && state.amount > 0.0,
+            isFilledLoading = state.isSaving
+        )
 
+        // Optional Void Action for already-logged transactions
         if (state.transactionId != null && onVoid != null) {
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
-            SecondaryButton(
+            OutlinedButton(
                 text = stringResource(R.string.action_void),
                 onClick = onVoid,
-                enabled = !state.isSaving
-            )
-        }
-
-        state.errorMessage?.let { errorMsg ->
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = errorMsg,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
+                enabled = !state.isSaving,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
+/**
+ * Material symbol icon corresponding to each real category.
+ */
+@Composable
+private fun CategoryChipIcon(
+    categoryName: String,
+    isSelected: Boolean
+) {
+    val icon = when (categoryName) {
+        CategoryConstants.CATEGORY_FOOD_AND_DRINK -> Icons.Rounded.Restaurant
+        CategoryConstants.CATEGORY_GROCERIES -> Icons.Rounded.ShoppingCart
+        CategoryConstants.CATEGORY_TRANSIT -> Icons.Rounded.Commute
+        CategoryConstants.CATEGORY_SUBSCRIPTIONS -> Icons.Rounded.Subscriptions
+        CategoryConstants.CATEGORY_SHOPPING -> Icons.Rounded.ShoppingBag
+        CategoryConstants.CATEGORY_TRIP_TRAVEL -> Icons.Rounded.Flight
+        CategoryConstants.CATEGORY_HEALTH -> Icons.Rounded.MedicalServices
+        CategoryConstants.CATEGORY_FAMILY -> Icons.Rounded.FamilyRestroom
+        CategoryConstants.CATEGORY_SAVINGS -> Icons.Rounded.Savings
+        else -> Icons.Rounded.MoreHoriz
+    }
+
+    val tint = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        FinanceTheme.colors.onSurfaceVariant
+    }
+
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+    )
+}

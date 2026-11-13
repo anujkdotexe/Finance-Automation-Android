@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
@@ -26,24 +27,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
  * The single bottom sheet shell used across the floating overlay and ModalBottomSheetActivity (Design Guide 4).
- * Enforces grabber, title, scrollable content area, sticky action row, and system insets.
+ * Enforces grabber, title, caption, optional back button, scrollable content area, sticky action row, and system insets.
  */
 @Composable
 fun SheetScaffold(
     title: String,
     modifier: Modifier = Modifier,
+    caption: String? = null,
+    onBack: (() -> Unit)? = null,
     onDismiss: (() -> Unit)? = null,
     stickyAction: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     Surface(
-        shape = FinanceTheme.shapes.sheet,
+        shape = FinanceShapes.sheet,
         color = FinanceTheme.colors.surface,
         modifier = modifier
             .fillMaxWidth()
@@ -63,7 +66,7 @@ fun SheetScaffold(
             Box(
                 modifier = Modifier
                     .size(width = FinanceTheme.sizes.grabberWidth, height = FinanceTheme.sizes.grabberHeight)
-                    .background(FinanceTheme.colors.outline, FinanceTheme.shapes.chip)
+                    .background(FinanceTheme.colors.outlineVariant, FinanceShapes.chip)
             )
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
@@ -74,11 +77,35 @@ fun SheetScaffold(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    style = FinanceTheme.typography.titleMedium,
-                    color = FinanceTheme.colors.onSurface
-                )
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                ) {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = androidx.compose.ui.res.stringResource(com.financeautomation.R.string.cd_back),
+                                tint = FinanceTheme.colors.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = title,
+                            style = FinanceTheme.typography.titleMedium,
+                            color = FinanceTheme.colors.onSurface
+                        )
+                        if (!caption.isNullOrBlank()) {
+                            Text(
+                                text = caption,
+                                style = FinanceTheme.typography.bodySmall,
+                                color = FinanceTheme.colors.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
 
                 if (onDismiss != null) {
                     IconButton(onClick = onDismiss, modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)) {
