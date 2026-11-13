@@ -73,7 +73,7 @@ object DashboardFormulaBuilder {
      * Builds category spend SUMIF formula for category table row [rowNumber] (Z6 to Z15, referencing Y{rowNumber}).
      */
     fun buildCategorySpendFormula(rowNumber: Int): String {
-        return """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!F4:F"), Y$rowNumber, INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!I4:I")), 0)"""
+        return """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
     }
 
     /**

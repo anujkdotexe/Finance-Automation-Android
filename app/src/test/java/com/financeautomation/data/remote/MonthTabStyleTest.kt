@@ -43,7 +43,6 @@ class MonthTabStyleTest {
         }
         for (i in 25..27) {
             assertNull("col $i has no borders", cells[i]["borders"])
-            assertNull("col $i has no vertical alignment", cells[i]["verticalAlignment"])
         }
     }
 
@@ -68,7 +67,7 @@ class MonthTabStyleTest {
     }
 
     @Test
-    fun testRow2TitlesAreSize10AndTheOwePeopleFillIsF57F17() {
+    fun testRow2TitlesHaveNoSizeAndTheOwePeopleFillIsF57F17() {
         @Suppress("UNCHECKED_CAST")
         val byTitle = row2Requests().associate {
             val cell = it["cell"] as Map<String, Any?>
@@ -76,21 +75,55 @@ class MonthTabStyleTest {
         }
         for (title in listOf("EXPENSES (MONEY OUT)", "INFLOWS (MONEY IN)", "I OWE PEOPLE")) {
             val text = byTitle.getValue(title)["textFormat"] as Map<*, *>
-            assertEquals(title, 10, text["fontSize"])
+            assertEquals(title, false, text.containsKey("fontSize"))
         }
         assertEquals("F57F17", hex(byTitle.getValue("I OWE PEOPLE")["backgroundColor"]))
     }
 
     @Test
-    fun testRow2BlocksHaveThinOuterBorders() {
+    fun testRow2BordersMatchTheLiveWorkbook() {
         @Suppress("UNCHECKED_CAST")
-        val blocks = requests.mapNotNull { it["updateBorders"] as? Map<String, Any?> }
-            .map { it["range"] as Map<*, *> }
-            .filter { it["startRowIndex"] == 1 }
-            .map { (it["startColumnIndex"] as Int) to (it["endColumnIndex"] as Int) }
-            .toSet()
-        // A2:K2, L2, M2:T2, U2, V2:AB2
-        assertEquals(setOf(0 to 11, 11 to 12, 12 to 20, 20 to 21, 21 to 28), blocks)
+        val bySide = requests.mapNotNull { it["updateBorders"] as? Map<String, Any?> }
+            .filter { (it["range"] as Map<*, *>)["startRowIndex"] == 1 }
+            .associate { req ->
+                ((req["range"] as Map<*, *>)["startColumnIndex"] as Int) to
+                    setOf("top", "bottom", "left", "right").filter { req.containsKey(it) }.toSet()
+            }
+        assertEquals(
+            mapOf(
+                0 to setOf("top", "bottom", "left"),
+                11 to setOf("top", "bottom", "left"),
+                12 to setOf("bottom"),
+                20 to setOf("top", "bottom"),
+                21 to setOf("top", "bottom")
+            ),
+            bySide
+        )
+    }
+
+    @Test
+    fun testRow3GridIsReaffirmedOverAToY() {
+        @Suppress("UNCHECKED_CAST")
+        val grid = requests.mapNotNull { it["updateBorders"] as? Map<String, Any?> }
+            .first { (it["range"] as Map<*, *>).let { r -> r["startRowIndex"] == 2 } }
+        assertEquals(25, (grid["range"] as Map<*, *>)["endColumnIndex"])
+        assertEquals(true, grid.containsKey("innerVertical"))
+    }
+
+    @Test
+    fun testRow3IsVerticallyCenteredOnEveryHeaderCell() {
+        row3Cells().forEachIndexed { i, fmt -> assertEquals("col $i", "MIDDLE", fmt["verticalAlignment"]) }
+    }
+
+    @Test
+    fun testSpacerCellsOnRow2AreSize11AndTitlesHaveNoSize() {
+        for (request in row2Requests()) {
+            @Suppress("UNCHECKED_CAST")
+            val cell = request["cell"] as Map<String, Any?>
+            val title = (cell["userEnteredValue"] as Map<*, *>)["stringValue"] as String
+            val text = (cell["userEnteredFormat"] as Map<*, *>)["textFormat"] as Map<*, *>
+            if (title.isEmpty()) assertEquals(11, text["fontSize"]) else assertEquals(false, text.containsKey("fontSize"))
+        }
     }
 
     @Test
@@ -110,5 +143,39 @@ class MonthTabStyleTest {
     fun testNoConditionalFormattingIsAdded() {
         assertFalse(requests.any { it.containsKey("addConditionalFormatRule") })
         assertTrue(requests.isNotEmpty())
+    }
+
+    @Test
+    fun testCurrencyColumnsUseTheLiveRupeePatternWithoutQuotes() {
+        @Suppress("UNCHECKED_CAST")
+        val currencyColumns = requests.mapNotNull { it["repeatCell"] as? Map<String, Any?> }
+            .filter {
+                val fmt = ((it["cell"] as Map<*, *>)["userEnteredFormat"] as Map<*, *>)["numberFormat"] as? Map<*, *>
+                fmt?.get("type") == "CURRENCY" && fmt["pattern"] == "₹#,##0"
+            }
+            .map { (it["range"] as Map<*, *>)["startColumnIndex"] as Int }
+            .toSet()
+        assertEquals(setOf(6, 8, 9, 18, 25), currencyColumns)
+    }
+
+    @Test
+    fun testBannerTitleWritesTheMonthInFull() {
+        assertEquals("EXPENSE LEDGER — NOVEMBER 2026", SheetProvisioner.monthTabBannerTitle("Nov26"))
+        assertEquals("EXPENSE LEDGER — DECEMBER 2026", SheetProvisioner.monthTabBannerTitle("Dec26"))
+        assertEquals("EXPENSE LEDGER — JANUARY 2027", SheetProvisioner.monthTabBannerTitle("Jan27"))
+        assertEquals("EXPENSE LEDGER — SEPTEMBER 2026", SheetProvisioner.monthTabBannerTitle("Sep26"))
+        assertEquals("EXPENSE LEDGER — SOMETHING", SheetProvisioner.monthTabBannerTitle("Something"))
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test
+    fun testBannerIsSize14WithTheLiveFill() {
+        val banner = requests.mapNotNull { it["repeatCell"] as? Map<String, Any?> }
+            .first { (it["range"] as Map<*, *>).let { r -> r["startRowIndex"] == 0 && r["endColumnIndex"] == 28 } }
+        val fmt = (banner["cell"] as Map<String, Any?>)["userEnteredFormat"] as Map<String, Any?>
+        assertEquals(14, (fmt["textFormat"] as Map<*, *>)["fontSize"])
+        assertEquals("1A237E", hex(fmt["backgroundColor"]))
+        val value = ((banner["cell"] as Map<*, *>)["userEnteredValue"] as Map<*, *>)["stringValue"]
+        assertEquals("EXPENSE LEDGER — NOVEMBER 2026", value)
     }
 }
