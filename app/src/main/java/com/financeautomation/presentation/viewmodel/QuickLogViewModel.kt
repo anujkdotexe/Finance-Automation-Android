@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.constants.CategoryConstants
@@ -318,16 +319,16 @@ class QuickLogViewModel(
      * 3. Marks pending capture as DONE.
      * 4. Notifies completion callback for result pill display.
      */
-    fun onConfirmAndSave(onSaved: (message: String, transactionId: String?) -> Unit) {
+    fun onConfirmAndSave(onSaved: (message: UiText, transactionId: String?) -> Unit) {
         val state = _uiState.value
         if (state.amount <= 0.0) {
-            _uiState.update { it.copy(errorMessage = "Amount must be greater than zero") }
+            _uiState.update { it.copy(errorMessage = UiText.res(R.string.quicklog_err_amount_zero)) }
             return
         }
         val captureTs = state.captureTimestamp
         if (captureTs != null && com.financeautomation.core.utils.isFuture(captureTs)) {
             _uiState.update {
-                it.copy(errorMessage = com.financeautomation.core.utils.TimeGuardConstants.FUTURE_DATE_MESSAGE)
+                it.copy(errorMessage = UiText.res(R.string.quicklog_err_future_date))
             }
             return
         }
@@ -339,18 +340,19 @@ class QuickLogViewModel(
                 try {
                     when (val res = QuickLogTransactionHelper.updateExisting(txnId, state, transactionRepository)) {
                         is Result.Success -> {
-                            _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = "Updated") }
-                            onSaved("Updated", txnId)
+                            val msg = UiText.res(R.string.quicklog_msg_updated)
+                            _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = msg) }
+                            onSaved(msg, txnId)
                         }
                         is Result.Error -> {
-                            _uiState.update { it.copy(isSaving = false, errorMessage = res.message) }
+                            _uiState.update { it.copy(isSaving = false, errorMessage = res.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.quicklog_err_update_failed, "")) }
                         }
                         is Result.Loading -> Unit
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: updateTransaction")
-                    _uiState.update { it.copy(isSaving = false, errorMessage = "Update failed: ${e.message}") }
+                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_update_failed, e.message ?: "")) }
                 }
             }
             return
@@ -370,24 +372,24 @@ class QuickLogViewModel(
                     is Result.Success -> {
                         val loggedTxn = result.data
                         val formattedAmount = String.format(java.util.Locale.US, "%.2f", state.amount)
-                        val message = "Saved $formattedAmount, will sync"
+                        val message = UiText.res(R.string.quicklog_msg_saved_will_sync, formattedAmount)
                         _uiState.update { it.copy(isSaving = false, isSaved = true, transactionId = loggedTxn.id, resultMessage = message) }
                         onSaved(message, loggedTxn.id)
                     }
                     is Result.Error -> {
-                        _uiState.update { it.copy(isSaving = false, errorMessage = result.message) }
+                        _uiState.update { it.copy(isSaving = false, errorMessage = result.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.quicklog_err_save_failed, "")) }
                     }
                     is Result.Loading -> Unit
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onConfirmAndSave")
-                _uiState.update { it.copy(isSaving = false, errorMessage = "Save failed: ${e.message}") }
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_save_failed, e.message ?: "")) }
             }
         }
     }
 
-    fun onConfirmAndSave(onSaved: (String) -> Unit) {
+    fun onConfirmAndSave(onSaved: (UiText) -> Unit) {
         onConfirmAndSave { message, _ -> onSaved(message) }
     }
 
@@ -428,14 +430,14 @@ class QuickLogViewModel(
                         onVoided()
                     }
                     is Result.Error -> {
-                        _uiState.update { it.copy(isSaving = false, errorMessage = res.message ?: "Failed to void") }
+                        _uiState.update { it.copy(isSaving = false, errorMessage = res.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.quicklog_err_void_failed, "")) }
                     }
                     is Result.Loading -> Unit
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onVoid")
-                _uiState.update { it.copy(isSaving = false, errorMessage = "Void failed: ${e.message}") }
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_void_failed, e.message ?: "")) }
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
@@ -60,7 +61,7 @@ class SettingsSyncCoordinator(
                 it.copy(
                     googleAccountEmail = email,
                     googleAccountDisplayName = displayName ?: it.googleAccountDisplayName,
-                    userMessage = "Signed in as $email"
+                    userMessage = UiText.res(R.string.settings_msg_signed_in, email)
                 )
             }
             syncConfigUseCase?.pull()
@@ -87,7 +88,7 @@ class SettingsSyncCoordinator(
                 it.copy(
                     googleAccountEmail = null,
                     googleAccountDisplayName = null,
-                    userMessage = "Signed out of Google account"
+                    userMessage = UiText.res(R.string.settings_msg_signed_out)
                 )
             }
         }
@@ -111,7 +112,7 @@ class SettingsSyncCoordinator(
                             it.copy(
                                 spreadsheetId = spreadsheetId,
                                 isProvisioning = false,
-                                userMessage = "Successfully provisioned $workbookName master workbook"
+                                userMessage = UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
                             )
                         }
                     }
@@ -119,7 +120,7 @@ class SettingsSyncCoordinator(
                         uiState.update {
                             it.copy(
                                 isProvisioning = false,
-                                errorMessage = res.message ?: "Failed to provision workbook: ${res.throwable.message}"
+                                errorMessage = UiText.res(R.string.settings_err_provision_workbook, res.throwable.message ?: "")
                             )
                         }
                     }
@@ -151,7 +152,7 @@ class SettingsSyncCoordinator(
                             it.copy(
                                 spreadsheetId = existingId,
                                 isProvisioning = false,
-                                userMessage = "Connected and formatted $workbookName master workbook"
+                                userMessage = UiText.res(R.string.settings_msg_connected_workbook, workbookName)
                             )
                         }
                     } else {
@@ -160,7 +161,7 @@ class SettingsSyncCoordinator(
                             uiState.update {
                                 it.copy(
                                     isProvisioning = false,
-                                    errorMessage = "Failed to create folder 'Personal Finance': ${folderResult.throwable.message}"
+                                    errorMessage = UiText.res(R.string.settings_err_create_folder, folderResult.throwable.message ?: "")
                                 )
                             }
                             return@launch
@@ -172,7 +173,7 @@ class SettingsSyncCoordinator(
                             uiState.update {
                                 it.copy(
                                     isProvisioning = false,
-                                    errorMessage = "Failed to create spreadsheet '$workbookName': ${createResult.throwable.message}"
+                                    errorMessage = UiText.res(R.string.settings_err_create_spreadsheet, workbookName, createResult.throwable.message ?: "")
                                 )
                             }
                             return@launch
@@ -190,7 +191,7 @@ class SettingsSyncCoordinator(
                                     it.copy(
                                         spreadsheetId = newSpreadsheetId,
                                         isProvisioning = false,
-                                        userMessage = "Successfully provisioned $workbookName master workbook"
+                                        userMessage = UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
                                     )
                                 }
                             }
@@ -198,7 +199,7 @@ class SettingsSyncCoordinator(
                                 uiState.update {
                                     it.copy(
                                         isProvisioning = false,
-                                        errorMessage = "Failed to provision workbook tabs: ${provResult.throwable.message}"
+                                        errorMessage = UiText.res(R.string.settings_err_provision_tabs, provResult.throwable.message ?: "")
                                     )
                                 }
                             }
@@ -210,7 +211,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isProvisioning = false,
-                            errorMessage = "Google Drive search failed: ${searchResult.throwable.message}"
+                            errorMessage = UiText.res(R.string.settings_err_drive_search, searchResult.throwable.message ?: "")
                         )
                     }
                 }
@@ -230,7 +231,7 @@ class SettingsSyncCoordinator(
             val trimmed = newId.trim()
             val sheetsClient = googleSheetsClient
             if (trimmed.isBlank() || sheetsClient == null) {
-                uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_MESSAGE) }
+                uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_TEXT) }
                 return@launch
             }
             when (sheetsClient.getSheetTabsDetailed(trimmed)) {
@@ -238,11 +239,11 @@ class SettingsSyncCoordinator(
                     val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                     preferencesRepository.setSpreadsheetIdForYear(currentYear, trimmed)
                     uiState.update {
-                        it.copy(spreadsheetId = trimmed, errorMessage = null, userMessage = "Spreadsheet ID saved")
+                        it.copy(spreadsheetId = trimmed, errorMessage = null, userMessage = UiText.res(R.string.settings_msg_spreadsheet_id_saved))
                     }
                 }
                 is Result.Error -> {
-                    uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_MESSAGE) }
+                    uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_TEXT) }
                 }
                 is Result.Loading -> {}
             }
@@ -265,7 +266,7 @@ class SettingsSyncCoordinator(
                         it.copy(
                             spreadsheetId = res.data,
                             isProvisioning = false,
-                            userMessage = "Created a fresh Finance$currentYear workbook and switched to it"
+                            userMessage = UiText.res(R.string.settings_msg_fresh_workbook_switched, currentYear)
                         )
                     }
                 }
@@ -273,7 +274,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isProvisioning = false,
-                            errorMessage = res.message ?: "Failed to create a fresh workbook: ${res.throwable.message}"
+                            errorMessage = UiText.res(R.string.settings_err_fresh_workbook_failed, res.throwable.message ?: "")
                         )
                     }
                 }
@@ -293,7 +294,7 @@ class SettingsSyncCoordinator(
                         it.copy(
                             isSyncing = false,
                             syncResult = "Synced $count transaction(s) to Google Sheets",
-                            userMessage = "Sync completed successfully"
+                            userMessage = UiText.res(R.string.settings_msg_sync_completed)
                         )
                     }
                 }
@@ -301,7 +302,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isSyncing = false,
-                            errorMessage = result.message ?: "Sync failed with error: ${result.throwable.message}"
+                            errorMessage = UiText.res(R.string.settings_err_sync_failed, result.throwable.message ?: "")
                         )
                     }
                 }
@@ -319,7 +320,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isConfigSyncing = false,
-                            userMessage = "Configuration successfully mirrored to Google Sheets Config tab"
+                            userMessage = UiText.res(R.string.settings_msg_config_mirrored)
                         )
                     }
                 }
@@ -327,7 +328,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isConfigSyncing = false,
-                            errorMessage = res.message ?: "Failed to mirror config: ${res.throwable.message}"
+                            errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, res.throwable.message ?: "")
                         )
                     }
                 }
@@ -345,7 +346,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isConfigSyncing = false,
-                            userMessage = "Restored configuration from Google Sheets Config tab"
+                            userMessage = UiText.res(R.string.settings_msg_config_restored)
                         )
                     }
                 }
@@ -353,7 +354,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isConfigSyncing = false,
-                            errorMessage = res.message ?: "Failed to restore config: ${res.throwable.message}"
+                            errorMessage = UiText.res(R.string.settings_err_config_restore_failed, res.throwable.message ?: "")
                         )
                     }
                 }
@@ -379,7 +380,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isRegeneratingDashboard = false,
-                            userMessage = "Master Workbook (Dashboard, $currentMonthTab) formatted"
+                            userMessage = UiText.res(R.string.settings_msg_workbook_formatted, currentMonthTab)
                         )
                     }
                 }
@@ -390,7 +391,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             isRegeneratingDashboard = false,
-                            errorMessage = "Failed to format master workbook (status $statusCode, $errClass). Check network connection."
+                            errorMessage = UiText.res(R.string.settings_err_format_workbook, statusCode, errClass)
                         )
                     }
                 }
@@ -400,6 +401,7 @@ class SettingsSyncCoordinator(
     }
 
     companion object {
+        val SPREADSHEET_ID_REJECTED_TEXT: UiText = UiText.res(R.string.settings_err_spreadsheet_id_rejected)
         const val SPREADSHEET_ID_REJECTED_MESSAGE: String =
             "The app can only open workbooks it created. Use Create a fresh workbook, or ask Google Drive to open the file with this app."
     }

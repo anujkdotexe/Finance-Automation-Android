@@ -3,6 +3,7 @@ package com.financeautomation.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
@@ -54,8 +55,8 @@ data class SettingsUiState(
     val isRegeneratingDashboard: Boolean = false,
     val isProvisioning: Boolean = false,
     val syncResult: String? = null,
-    val userMessage: String? = null,
-    val errorMessage: String? = null,
+    val userMessage: UiText? = null,
+    val errorMessage: UiText? = null,
     val developerMode: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val appLockEnabled: Boolean = false,
@@ -258,7 +259,7 @@ class SettingsViewModel(
         val bounded = seconds.coerceIn(30, 300)
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.setSettleDelaySeconds(bounded)
-            _uiState.update { it.copy(settleDelaySeconds = bounded, userMessage = "Settle delay set to ${bounded}s") }
+            _uiState.update { it.copy(settleDelaySeconds = bounded, userMessage = UiText.res(R.string.settings_msg_settle_delay_set, bounded)) }
         }
     }
 
@@ -321,7 +322,7 @@ class SettingsViewModel(
         if (tapCount >= 7) {
             tapCount = 0
             setDeveloperMode(true)
-            _uiState.update { it.copy(userMessage = "Developer mode unlocked") }
+            _uiState.update { it.copy(userMessage = UiText.dynamic("Developer mode unlocked")) }
         }
     }
 
@@ -337,8 +338,12 @@ class SettingsViewModel(
         _uiState.update { it.copy(userMessage = null, errorMessage = null) }
     }
 
-    fun setErrorMessage(message: String) {
+    fun setErrorMessage(message: UiText?) {
         _uiState.update { it.copy(errorMessage = message) }
+    }
+
+    fun setErrorMessage(message: String) {
+        _uiState.update { it.copy(errorMessage = UiText.dynamic(message)) }
     }
 
     companion object {

@@ -121,13 +121,15 @@ fun SyncBackupScreen(
     }
 
     LaunchedEffect(state.userMessage) {
-        if (!state.userMessage.isNullOrBlank()) {
-            Toast.makeText(context, state.userMessage, Toast.LENGTH_SHORT).show()
+        state.userMessage?.let {
+            Toast.makeText(context, it.asString(context), Toast.LENGTH_SHORT).show()
+            viewModel.clearMessages()
         }
     }
     LaunchedEffect(state.errorMessage) {
-        if (!state.errorMessage.isNullOrBlank()) {
-            Toast.makeText(context, state.errorMessage, Toast.LENGTH_LONG).show()
+        state.errorMessage?.let {
+            Toast.makeText(context, it.asString(context), Toast.LENGTH_LONG).show()
+            viewModel.clearMessages()
         }
     }
 

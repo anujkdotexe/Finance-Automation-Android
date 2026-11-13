@@ -284,7 +284,7 @@ class OverlayController(
                                                     PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
                                                     dismiss()
                                                     resultPill.show(
-                                                        message = message,
+                                                        message = message.asString(appContext),
                                                         transactionId = txnId,
                                                         onUndo = if (txnId != null) {
                                                             { id ->

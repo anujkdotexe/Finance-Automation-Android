@@ -161,7 +161,7 @@ class SettingsViewModelTest {
         assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
         assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
         assertFalse(stateFlow.value.isProvisioning)
-        assertTrue(stateFlow.value.userMessage?.contains("repaired") == true || stateFlow.value.userMessage?.contains("provisioned") == true)
+        assertEquals(R.string.settings_msg_provisioned_workbook, stateFlow.value.userMessage?.resId)
     }
 
     @Test
@@ -369,7 +369,7 @@ class SettingsViewModelTest {
         vm.onVersionTapped(t0 + 6000L)
         assertTrue("Developer mode must unlock on the 7th tap", prefs.getDeveloperModeSync())
         assertTrue(vm.uiState.value.developerMode)
-        assertEquals("Developer mode unlocked", vm.uiState.value.userMessage)
+        assertEquals("Developer mode unlocked", (vm.uiState.value.userMessage as UiText.DynamicString).value)
     }
 
     @Test
@@ -582,7 +582,8 @@ class SettingsViewModelTest {
         assertEquals("sheet_123", prefs.activeSpreadsheetId)
         assertEquals("sheet_123", state.value.spreadsheetId)
         assertFalse(state.value.isProvisioning)
-        assertTrue(state.value.errorMessage?.contains("Drive quota") == true)
+        assertEquals(R.string.settings_err_fresh_workbook_failed, state.value.errorMessage?.resId)
+        assertTrue(state.value.errorMessage?.args?.get(0)?.toString()?.contains("Drive quota") == true)
     }
 
     @Test
@@ -596,7 +597,7 @@ class SettingsViewModelTest {
 
         assertEquals("new_sheet_id", prefs.yearMap[year])
         assertEquals("new_sheet_id", state.value.spreadsheetId)
-        assertEquals("Spreadsheet ID saved", state.value.userMessage)
+        assertEquals(R.string.settings_msg_spreadsheet_id_saved, state.value.userMessage?.resId)
         assertEquals(null, state.value.errorMessage)
     }
 
@@ -611,7 +612,7 @@ class SettingsViewModelTest {
         assertTrue(prefs.yearMap.isEmpty())
         assertEquals("sheet_123", prefs.activeSpreadsheetId)
         assertEquals("sheet_123", state.value.spreadsheetId)
-        assertEquals(SettingsSyncCoordinator.SPREADSHEET_ID_REJECTED_MESSAGE, state.value.errorMessage)
+        assertEquals(R.string.settings_err_spreadsheet_id_rejected, state.value.errorMessage?.resId)
     }
 
     private class FakeTripTagRepo(
@@ -654,7 +655,7 @@ class SettingsViewModelTest {
 
         assertEquals(null, prefs.email)
         assertEquals(null, state.value.googleAccountEmail)
-        assertEquals("Signed out of Google account", state.value.userMessage)
+        assertEquals(R.string.settings_msg_signed_out, state.value.userMessage?.resId)
     }
 
     @Test
@@ -681,7 +682,8 @@ class SettingsViewModelTest {
         coordinator.onRemoveCompanion("comp_bob")
 
         assertEquals(null, peopleRepo.deletedId)
-        assertTrue(state.value.errorMessage?.contains("Cannot remove Bob while they have an open balance") == true)
+        assertEquals(R.string.settings_err_cannot_remove_open_balance, state.value.errorMessage?.resId)
+        assertEquals(listOf("Bob"), state.value.errorMessage?.args)
     }
 
     @Test
@@ -708,7 +710,8 @@ class SettingsViewModelTest {
         coordinator.onRenameCompanion("comp_charlie", "Charles")
 
         assertEquals("comp_charlie" to "Charles", peopleRepo.updatedName)
-        assertEquals("Renamed companion to Charles", state.value.userMessage)
+        assertEquals(R.string.settings_msg_renamed_companion, state.value.userMessage?.resId)
+        assertEquals(listOf("Charles"), state.value.userMessage?.args)
     }
 
     @Test
@@ -737,7 +740,7 @@ class SettingsViewModelTest {
 
         assertEquals(null, tripRepo.activeTagId)
         assertEquals("", state.value.activeTripTag)
-        assertEquals("Deactivated trip tag", state.value.userMessage)
+        assertEquals(R.string.settings_msg_deactivated_trip_tag, state.value.userMessage?.resId)
     }
 
     @Test

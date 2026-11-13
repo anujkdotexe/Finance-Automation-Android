@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -46,8 +47,8 @@ data class ReviewInboxUiState(
     val isLoading: Boolean = false,
     val selectedTransaction: Transaction? = null,
     val openQuickLogCaptureId: String? = null,
-    val userMessage: String? = null,
-    val errorMessage: String? = null
+    val userMessage: UiText? = null,
+    val errorMessage: UiText? = null
 ) {
     val totalCount: Int
         get() = items.size + captures.size + newAccountCaptures.size + failedQueueItems.size
@@ -165,14 +166,14 @@ class ReviewInboxViewModel(
         viewModelScope.launch(ioDispatcher) {
             when (val outcome = actions.yes(cycleId)) {
                 is SubscriptionYesOutcome.Logged ->
-                    _uiState.update { it.copy(userMessage = "Subscription expense saved") }
+                    _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_subscription_saved)) }
                 is SubscriptionYesOutcome.NeedsAmount ->
                     _uiState.update { it.copy(openQuickLogCaptureId = outcome.captureId) }
                 is SubscriptionYesOutcome.Failed ->
-                    _uiState.update { it.copy(errorMessage = outcome.message) }
+                    _uiState.update { it.copy(errorMessage = UiText.dynamic(outcome.message)) }
                 SubscriptionYesOutcome.PastMonth ->
                     _uiState.update {
-                        it.copy(errorMessage = "That payment is from a previous month and cannot be added. Skip it instead.")
+                        it.copy(errorMessage = UiText.res(R.string.review_err_previous_month))
                     }
                 SubscriptionYesOutcome.NotFound, SubscriptionYesOutcome.AlreadyResolved -> Unit
             }
@@ -240,7 +241,7 @@ class ReviewInboxViewModel(
         viewModelScope.launch(ioDispatcher) {
             val captureDao = resolvePendingCaptureDao() ?: return@launch
             captureDao.updateState(id, PendingCaptureEntity.STATE_DISMISSED)
-            _uiState.update { it.copy(userMessage = "Capture dismissed") }
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_capture_dismissed)) }
         }
     }
 
@@ -253,14 +254,14 @@ class ReviewInboxViewModel(
             val trimmedLastFour = lastFour.trim()
             val existingAccounts = accountRepo.getAllAccounts(includeArchived = true)
 
-            val validationError = when {
-                trimmedName.isBlank() -> "Account name cannot be blank."
+            val validationError: UiText? = when {
+                trimmedName.isBlank() -> UiText.res(R.string.settings_err_account_blank)
                 existingAccounts.any { it.name.equals(trimmedName, ignoreCase = true) } ||
                     trimmedName.equals(CategoryConstants.ACCOUNT_CASH, ignoreCase = true) ||
                     trimmedName.equals(CategoryConstants.ACCOUNT_OTHER, ignoreCase = true) ->
-                    "An account named \"$trimmedName\" already exists."
+                    UiText.res(R.string.settings_err_account_exists, trimmedName)
                 trimmedLastFour.isNotEmpty() && !(trimmedLastFour.length == 4 && trimmedLastFour.all { it in '0'..'9' }) ->
-                    "Last four digits must be exactly 4 digits."
+                    UiText.res(R.string.review_err_last_four_digits)
                 else -> null
             }
             if (validationError != null) {
@@ -295,7 +296,7 @@ class ReviewInboxViewModel(
                 )
                 captureDao.update(updated)
             }
-            _uiState.update { it.copy(userMessage = "Account added") }
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_account_added)) }
         }
     }
 
@@ -329,7 +330,7 @@ class ReviewInboxViewModel(
             }
         }
         if (confirmedCount > 0) {
-            _uiState.update { it.copy(userMessage = "Confirmed $confirmedCount transaction(s)") }
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_confirmed_transactions, confirmedCount)) }
         }
         return confirmedCount
     }
@@ -363,7 +364,7 @@ class ReviewInboxViewModel(
                 )
                 transactionRepository.updateTransaction(updatedOther)
             }
-            _uiState.update { it.copy(userMessage = "Kept both transactions") }
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_kept_both)) }
         }
     }
 
@@ -386,7 +387,7 @@ class ReviewInboxViewModel(
                 )
                 transactionRepository.updateTransaction(updatedOlder)
             }
-            _uiState.update { it.copy(userMessage = "Kept one transaction") }
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_kept_one)) }
         }
     }
 
@@ -395,7 +396,7 @@ class ReviewInboxViewModel(
             val qDao = resolveSyncQueueDao() ?: return@launch
             qDao.resetQueueItem(id)
             transactionRepository.syncPendingTransactions()
-            _uiState.update { it.copy(userMessage = "Operation queued for retry") }
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_queued_for_retry)) }
         }
     }
 
@@ -412,7 +413,7 @@ class ReviewInboxViewModel(
                 }
             }
             qDao.deleteById(id)
-            _uiState.update { it.copy(userMessage = "Operation discarded") }
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_operation_discarded)) }
         }
     }
 
@@ -423,7 +424,7 @@ class ReviewInboxViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = exception.message ?: "Failed to load transactions for review"
+                            errorMessage = exception.message?.let { UiText.dynamic(it) } ?: UiText.res(R.string.review_err_load_failed)
                         )
                     }
                 }
@@ -445,7 +446,7 @@ class ReviewInboxViewModel(
         viewModelScope.launch(ioDispatcher) {
             val existing = transactionRepository.getTransactionById(txnId)
             if (existing == null) {
-                _uiState.update { it.copy(errorMessage = "Transaction not found") }
+                _uiState.update { it.copy(errorMessage = UiText.res(R.string.review_err_transaction_not_found)) }
                 return@launch
             }
 
@@ -475,12 +476,12 @@ class ReviewInboxViewModel(
             when (val result = transactionRepository.updateTransaction(updated)) {
                 is Result.Success -> {
                     _uiState.update {
-                        it.copy(userMessage = "Transaction confirmed")
+                        it.copy(userMessage = UiText.res(R.string.review_msg_transaction_confirmed))
                     }
                 }
                 is Result.Error -> {
                     _uiState.update {
-                        it.copy(errorMessage = result.message ?: "Failed to confirm transaction")
+                        it.copy(errorMessage = result.message?.let { UiText.dynamic(it) } ?: UiText.res(R.string.review_err_confirm_failed))
                     }
                 }
                 is Result.Loading -> {}
@@ -496,12 +497,12 @@ class ReviewInboxViewModel(
             when (val result = transactionRepository.voidTransaction(txnId)) {
                 is Result.Success -> {
                     _uiState.update {
-                        it.copy(userMessage = "Transaction voided")
+                        it.copy(userMessage = UiText.res(R.string.review_msg_transaction_voided))
                     }
                 }
                 is Result.Error -> {
                     _uiState.update {
-                        it.copy(errorMessage = result.message ?: "Failed to void transaction")
+                        it.copy(errorMessage = result.message?.let { UiText.dynamic(it) } ?: UiText.res(R.string.review_err_void_failed))
                     }
                 }
                 is Result.Loading -> {}
