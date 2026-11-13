@@ -213,6 +213,7 @@ fun OverlayContentHost(
                 OverlayFlowScreen.REPAID_FRIEND -> {
                     RepaidFriendFlowSheet(
                         companions = companions,
+                        accounts = accounts,
                         preselectedFriend = preselectedFriend,
                         onBack = {
                             if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
@@ -226,6 +227,7 @@ fun OverlayContentHost(
                 OverlayFlowScreen.TRIP_MODE -> {
                     TripModeFlowSheet(
                         activeTag = activeTripTag,
+                        companions = companions,
                         onBack = {
                             if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
                         },

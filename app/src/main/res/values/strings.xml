@@ -444,6 +444,18 @@
     <string name="split_participants">Participants</string>
     <string name="label_my_share_uppercase">My share</string>
     <string name="label_owed_to_me_uppercase">Owed to me</string>
+    <string name="btn_save_income">Save income</string>
+    <string name="prompt_pay_full">Pay full (%1$s)</string>
+    <string name="prompt_custom_amount">Custom amount</string>
+    <string name="prompt_place_optional">Place (optional)</string>
+    <string name="prompt_settlement_note">Settlement note</string>
+    <string name="prompt_friend_repaid">Friend repaid</string>
+    <string name="prompt_friend_who_paid">Friend who paid</string>
+    <string name="prompt_trip_name">Trip name</string>
+    <string name="hint_trip_name">e.g. Goa 2026</string>
+    <string name="trip_summary_total_spend">Total trip spend</string>
+    <string name="trip_people_on_trip">People on trip</string>
+    <string name="label_you">You</string>
 
     <!-- Plurals -->
     <plurals name="review_pending_count">

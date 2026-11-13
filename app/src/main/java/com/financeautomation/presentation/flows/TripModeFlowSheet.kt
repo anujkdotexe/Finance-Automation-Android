@@ -1,9 +1,9 @@
 package com.financeautomation.presentation.flows
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,23 +12,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Flight
-import androidx.compose.material.icons.rounded.FlightTakeoff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -48,16 +39,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.financeautomation.R
+import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.TripTag
+import com.financeautomation.presentation.components.AppChip
+import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Flow sheet for managing Trip Mode (Phase 5.6 point 5).
- * Enables starting a new active trip tag or ending the current one.
+ * Rebuilt Trip Mode flow sheet following the frozen design specification:
+ * - Trip name field.
+ * - Optional Place (optional) text field.
+ * - People on trip chips.
+ * - Totals when a trip is active.
+ * - ButtonPair: OutlinedButton "End trip" (or "Cancel"), FilledButton "Start new trip".
+ * - No map, no "Active trip" or "Live sync" labels.
  */
 @Composable
 fun TripModeFlowSheet(
     activeTag: TripTag?,
+    companions: List<Companion> = emptyList(),
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onStartTrip: (tagName: String) -> Unit,
@@ -66,6 +67,8 @@ fun TripModeFlowSheet(
     modifier: Modifier = Modifier
 ) {
     var tagNameText by remember { mutableStateOf("") }
+    var placeText by remember { mutableStateOf("") }
+
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
 
@@ -79,220 +82,284 @@ fun TripModeFlowSheet(
         modifier = modifier
             .fillMaxWidth()
             .imePadding()
-            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusManager.clearFocus() }
             .verticalScroll(scrollState),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
-        // Grabber Pill
-        Box(
-            modifier = Modifier
-                .width(FinanceTheme.sizes.grabberWidth)
-                .height(FinanceTheme.sizes.grabberHeight)
-                .clip(CircleShape)
-                .background(FinanceTheme.colors.outline.copy(alpha = 0.4f))
-        )
-
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-        // Header Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(FinanceTheme.sizes.icon28)
-                    .clickable { onBack() }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = stringResource(R.string.cd_back),
-                        tint = FinanceTheme.colors.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                }
-            }
-
-            Text(
-                text = stringResource(R.string.action_menu_trip_mode_title),
-                style = FinanceTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = FinanceTheme.colors.onSurface
-            )
-
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(FinanceTheme.sizes.icon28)
-                    .clickable { onDismiss() }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.cd_close),
-                        tint = FinanceTheme.colors.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
         if (activeTag != null) {
-            // Active Trip Display
+            // Active Trip Display Card
             Surface(
-                shape = FinanceTheme.shapes.dialog,
-                color = FinanceTheme.colors.primaryContainer.copy(alpha = 0.4f),
+                shape = FinanceShapes.card,
+                color = FinanceTheme.colors.surfaceContainerLow,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(FinanceTheme.spacing.l),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    modifier = Modifier.padding(FinanceTheme.spacing.m),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Flight,
-                        contentDescription = null,
-                        tint = FinanceTheme.colors.primary,
-                        modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
-                    )
-                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
-                    Text(
-                        text = stringResource(R.string.prompt_active_trip_tag),
-                        style = FinanceTheme.typography.labelLarge,
-                        color = FinanceTheme.colors.onSurfaceVariant
-                    )
-                    Text(
-                        text = activeTag.name,
-                        style = FinanceTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = FinanceTheme.colors.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-                    Text(
-                        text = stringResource(R.string.trip_active_desc),
-                        style = FinanceTheme.typography.bodySmall,
-                        color = FinanceTheme.colors.onSurfaceVariant
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = stringResource(R.string.prompt_trip_name),
+                                style = FinanceTheme.typography.labelUppercase,
+                                color = FinanceTheme.colors.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
+                            Text(
+                                text = activeTag.name,
+                                style = FinanceTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = FinanceTheme.colors.onSurface
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Icons.Rounded.Flight,
+                            contentDescription = null,
+                            tint = FinanceTheme.colors.primary,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
+                        )
+                    }
+
+                    // Optional Place text field
+                    OutlinedTextField(
+                        value = placeText,
+                        onValueChange = { placeText = it },
+                        placeholder = {
+                            Text(
+                                text = stringResource(R.string.prompt_place_optional),
+                                style = FinanceTheme.typography.bodyMedium
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.LocationOn,
+                                contentDescription = null,
+                                tint = FinanceTheme.colors.onSurfaceVariant,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                            )
+                        },
+                        singleLine = true,
+                        shape = FinanceShapes.card,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Words,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xl))
-
-            // Action Buttons for Active Trip
-            Button(
-                onClick = onEndTrip,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FinanceTheme.colors.error,
-                    contentColor = MaterialTheme.colorScheme.onError
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(FinanceTheme.sizes.buttonHeightLarge),
-                shape = FinanceTheme.shapes.large
+            // Trip Summary Cards (Totals when active)
+            Surface(
+                shape = FinanceShapes.card,
+                color = FinanceTheme.colors.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = stringResource(R.string.btn_end_trip),
-                    style = FinanceTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(FinanceTheme.spacing.m),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.trip_summary_total_spend),
+                            style = FinanceTheme.typography.labelUppercase,
+                            color = FinanceTheme.colors.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
+                        Text(
+                            text = "₹0.00",
+                            style = FinanceTheme.typography.kpiMedium,
+                            color = FinanceTheme.colors.onSurface
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
-
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(FinanceTheme.sizes.buttonHeightLarge),
-                shape = FinanceTheme.shapes.large
-            ) {
-                Text(
-                    text = stringResource(R.string.action_cancel),
-                    style = FinanceTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium
-                )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = stringResource(R.string.label_my_share_uppercase),
+                            style = FinanceTheme.typography.labelUppercase,
+                            color = FinanceTheme.colors.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
+                        Text(
+                            text = "₹0.00",
+                            style = FinanceTheme.typography.kpiMedium,
+                            color = FinanceTheme.colors.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
         } else {
-            // No Active Trip - Start Trip Prompt
-            Surface(
-                shape = FinanceTheme.shapes.dialog,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(FinanceTheme.spacing.l),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.FlightTakeoff,
-                        contentDescription = null,
-                        tint = FinanceTheme.colors.primary,
-                        modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
-                    )
-                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
-                    Text(
-                        text = stringResource(R.string.btn_start_trip),
-                        style = FinanceTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = FinanceTheme.colors.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-                    Text(
-                        text = stringResource(R.string.trip_active_desc),
-                        style = FinanceTheme.typography.bodySmall,
-                        color = FinanceTheme.colors.onSurfaceVariant
-                    )
-                }
+            // New Trip Input Fields
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.prompt_trip_name),
+                    style = FinanceTheme.typography.labelUppercase,
+                    color = FinanceTheme.colors.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+                OutlinedTextField(
+                    value = tagNameText,
+                    onValueChange = { tagNameText = it },
+                    placeholder = {
+                        Text(
+                            text = stringResource(R.string.hint_trip_name),
+                            style = FinanceTheme.typography.bodyMedium
+                        )
+                    },
+                    singleLine = true,
+                    shape = FinanceShapes.card,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+                )
             }
 
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
-
-            OutlinedTextField(
-                value = tagNameText,
-                onValueChange = { tagNameText = it },
-                label = { Text(stringResource(R.string.prompt_enter_trip_tag)) },
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = { focusManager.clearFocus() }
-                ),
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-                shape = FinanceTheme.shapes.large
-            )
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-            Button(
-                onClick = { onStartTrip(tagNameText.trim()) },
-                enabled = tagNameText.isNotBlank(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(FinanceTheme.sizes.buttonHeightLarge),
-                shape = FinanceTheme.shapes.large
-            ) {
+            // Optional Place field
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = stringResource(R.string.btn_start_trip),
-                    style = FinanceTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    text = stringResource(R.string.prompt_place_optional),
+                    style = FinanceTheme.typography.labelUppercase,
+                    color = FinanceTheme.colors.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+                OutlinedTextField(
+                    value = placeText,
+                    onValueChange = { placeText = it },
+                    placeholder = {
+                        Text(
+                            text = stringResource(R.string.prompt_place_optional),
+                            style = FinanceTheme.typography.bodyMedium
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.LocationOn,
+                            contentDescription = null,
+                            tint = FinanceTheme.colors.onSurfaceVariant,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                    },
+                    singleLine = true,
+                    shape = FinanceShapes.card,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
+        // People on Trip Chips
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.trip_people_on_trip),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            val peopleScroll = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(peopleScroll),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // "You" chip
+                AppChip(
+                    text = stringResource(R.string.label_you),
+                    selected = true,
+                    onClick = {},
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = FinanceTheme.colors.primary,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconXs)
+                        )
+                    }
+                )
+
+                companions.forEach { companion ->
+                    AppChip(
+                        text = companion.name,
+                        selected = false,
+                        onClick = {}
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+        // Action Buttons
+        if (activeTag != null) {
+            ButtonPair(
+                outlinedText = stringResource(R.string.action_end_trip),
+                onOutlinedClick = onEndTrip,
+                filledText = stringResource(R.string.btn_start_new_trip),
+                onFilledClick = {
+                    if (tagNameText.isNotBlank()) {
+                        val effectiveTag = if (placeText.isNotBlank()) {
+                            "${tagNameText.trim()} - ${placeText.trim()}"
+                        } else {
+                            tagNameText.trim()
+                        }
+                        onStartTrip(effectiveTag)
+                    }
+                },
+                filledEnabled = tagNameText.isNotBlank()
+            )
+        } else {
+            ButtonPair(
+                outlinedText = stringResource(R.string.action_cancel),
+                onOutlinedClick = onDismiss,
+                filledText = stringResource(R.string.btn_start_new_trip),
+                onFilledClick = {
+                    if (tagNameText.isNotBlank()) {
+                        val effectiveTag = if (placeText.isNotBlank()) {
+                            "${tagNameText.trim()} - ${placeText.trim()}"
+                        } else {
+                            tagNameText.trim()
+                        }
+                        onStartTrip(effectiveTag)
+                    }
+                },
+                filledEnabled = tagNameText.isNotBlank()
+            )
+        }
     }
 }

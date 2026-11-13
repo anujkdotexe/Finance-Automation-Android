@@ -1,13 +1,15 @@
 package com.financeautomation.presentation.flows
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -15,22 +17,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,22 +40,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.presentation.components.AppChip
+import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.FilledButton
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+private val SHEET_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 
 /**
- * Flow sheet for logging money borrowed from friends (Phase 5.6 point 3).
- * Records a payable obligation in Table 3 of the master ledger.
+ * Rebuilt Friend Paid For Me flow sheet following the frozen design specification:
+ * - Description line ("What was this for?").
+ * - Who paid (friend chips + "Add friend").
+ * - Amount hero in mono.
+ * - Category chips (real categories).
+ * - Date picker (no future dates).
+ * - ButtonPair: OutlinedButton "Cancel", FilledButton "Record debt".
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendPaidFlowSheet(
     companions: List<Companion>,
@@ -67,6 +85,14 @@ fun FriendPaidFlowSheet(
     var amountText by remember { mutableStateOf("") }
     var creditorName by remember { mutableStateOf("") }
     var whatForText by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf(CategoryConstants.CATEGORY_FOOD_AND_DRINK) }
+
+    val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
+    var dateText by remember { mutableStateOf(todayFormatted) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    var showAddFriendInput by remember { mutableStateOf(false) }
+    var newFriendName by remember { mutableStateOf("") }
 
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
@@ -81,194 +107,339 @@ fun FriendPaidFlowSheet(
         modifier = modifier
             .fillMaxWidth()
             .imePadding()
-            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusManager.clearFocus() }
             .verticalScroll(scrollState),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
-        // Grabber Pill
-        Box(
-            modifier = Modifier
-                .width(FinanceTheme.sizes.grabberWidth)
-                .height(FinanceTheme.sizes.grabberHeight)
-                .clip(CircleShape)
-                .background(FinanceTheme.colors.outline.copy(alpha = 0.4f))
-        )
-
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-        // Header Row
-        Row(
+        // 1. Amount Field
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(FinanceTheme.sizes.icon28)
-                    .clickable { onBack() }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = stringResource(R.string.cd_back),
-                        tint = FinanceTheme.colors.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                }
-            }
-
             Text(
-                text = stringResource(R.string.action_menu_friend_paid_title),
-                style = FinanceTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = FinanceTheme.colors.onSurface
+                text = stringResource(R.string.label_amount),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
             )
 
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .size(FinanceTheme.sizes.icon28)
-                    .clickable { onDismiss() }
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.cd_close),
-                        tint = FinanceTheme.colors.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                }
+                Text(
+                    text = "₹",
+                    style = FinanceTheme.typography.amountHero,
+                    color = FinanceTheme.colors.primary,
+                    modifier = Modifier.padding(end = FinanceTheme.spacing.xs)
+                )
+
+                BasicTextField(
+                    value = amountText,
+                    onValueChange = { input ->
+                        if (input.isEmpty() || input.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
+                            amountText = input
+                        }
+                    },
+                    singleLine = true,
+                    textStyle = FinanceTheme.typography.amountHero.copy(
+                        color = FinanceTheme.colors.onSurface,
+                        textAlign = TextAlign.Center
+                    ),
+                    cursorBrush = SolidColor(FinanceTheme.colors.primary),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier
+                        .width(IntrinsicSize.Min)
+                        .defaultMinSize(minWidth = FinanceTheme.sizes.emptyStateIllustration)
+                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.Center) {
+                            if (amountText.isEmpty()) {
+                                Text(
+                                    text = "0.00",
+                                    style = FinanceTheme.typography.amountHero,
+                                    color = FinanceTheme.colors.outlineVariant
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+        // 2. Who Paid (Friend chips + Add friend)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.prompt_friend_who_paid),
+                    style = FinanceTheme.typography.labelUppercase,
+                    color = FinanceTheme.colors.onSurfaceVariant
+                )
+            }
 
-        // Amount Input Field
-        OutlinedTextField(
-            value = amountText,
-            onValueChange = { input ->
-                if (input.isEmpty() || input.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
-                    amountText = input
-                }
-            },
-            label = { Text(stringResource(R.string.prompt_amount_i_owe)) },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Decimal,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = { focusManager.clearFocus() }
-            ),
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = FinanceTheme.shapes.large
-        )
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-        // Who Paid (Companion chips + text input)
-        Text(
-            text = stringResource(R.string.prompt_who_paid_for_you),
-            style = FinanceTheme.typography.labelMedium,
-            color = FinanceTheme.colors.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-        if (companions.isNotEmpty()) {
+            val friendScroll = rememberScrollState()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                    .horizontalScroll(friendScroll),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                companions.take(6).forEach { companion ->
-                    FilterChip(
-                        selected = (creditorName.equals(companion.name, ignoreCase = true)),
+                companions.forEach { companion ->
+                    val isSelected = creditorName.equals(companion.name, ignoreCase = true)
+                    AppChip(
+                        text = companion.name,
+                        selected = isSelected,
                         onClick = {
                             focusManager.clearFocus()
                             creditorName = companion.name
+                        }
+                    )
+                }
+
+                // + Add Friend Chip
+                AppChip(
+                    text = stringResource(R.string.action_add_friend),
+                    selected = false,
+                    onClick = {
+                        focusManager.clearFocus()
+                        showAddFriendInput = !showAddFriendInput
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = FinanceTheme.colors.primary,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                    }
+                )
+            }
+
+            if (showAddFriendInput) {
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newFriendName,
+                        onValueChange = { newFriendName = it },
+                        placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
+                        singleLine = true,
+                        shape = FinanceShapes.card,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Words,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (newFriendName.isNotBlank()) {
+                                    creditorName = newFriendName.trim()
+                                    newFriendName = ""
+                                    showAddFriendInput = false
+                                    focusManager.clearFocus()
+                                }
+                            }
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+                    )
+
+                    FilledButton(
+                        text = stringResource(R.string.action_add),
+                        onClick = {
+                            if (newFriendName.isNotBlank()) {
+                                creditorName = newFriendName.trim()
+                                newFriendName = ""
+                                showAddFriendInput = false
+                                focusManager.clearFocus()
+                            }
                         },
-                        label = { Text(companion.name) }
+                        enabled = newFriendName.isNotBlank()
                     )
                 }
             }
+
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            OutlinedTextField(
+                value = creditorName,
+                onValueChange = { creditorName = it },
+                placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
+                singleLine = true,
+                shape = FinanceShapes.card,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Next
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+            )
         }
 
-        OutlinedTextField(
-            value = creditorName,
-            onValueChange = { creditorName = it },
-            label = { Text(stringResource(R.string.hint_friends_name)) },
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Words,
-                imeAction = ImeAction.Next
-            ),
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = FinanceTheme.shapes.large
-        )
+        // 3. Description Line ("What was this for?")
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.prompt_what_was_this_for),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-        // What For Field
-        OutlinedTextField(
-            value = whatForText,
-            onValueChange = { whatForText = it },
-            label = { Text(stringResource(R.string.prompt_what_was_this_for)) },
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Sentences,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = { focusManager.clearFocus() }
-            ),
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-            shape = FinanceTheme.shapes.large
-        )
+            OutlinedTextField(
+                value = whatForText,
+                onValueChange = { whatForText = it },
+                placeholder = { Text(stringResource(R.string.hint_add_description), style = FinanceTheme.typography.bodyMedium) },
+                singleLine = true,
+                shape = FinanceShapes.card,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+            )
+        }
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
+        // 4. Category Chips
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.prompt_category),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
 
-        // Confirm Button
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            val catScroll = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(catScroll),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CategoryConstants.DEFAULT_CATEGORIES.forEach { category ->
+                    val isSelected = selectedCategory.equals(category, ignoreCase = true)
+                    AppChip(
+                        text = category,
+                        selected = isSelected,
+                        onClick = {
+                            focusManager.clearFocus()
+                            selectedCategory = category
+                        }
+                    )
+                }
+            }
+        }
+
+        // 5. Date Picker (no future dates)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.prompt_date_repaid),
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            OutlinedTextField(
+                value = dateText,
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(FinanceTheme.sizes.iconSmall)
+                            .clickable { showDatePicker = true }
+                    )
+                },
+                singleLine = true,
+                shape = FinanceShapes.card,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDatePicker = true }
+            )
+        }
+
+        if (showDatePicker) {
+            val datePickerState = rememberDatePickerState(
+                initialSelectedDateMillis = LocalDate.parse(dateText)
+                    .atStartOfDay(ZoneId.of("UTC"))
+                    .toInstant()
+                    .toEpochMilli(),
+                selectableDates = NoFutureSelectableDates
+            )
+
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selected = Instant.ofEpochMilli(millis)
+                                .atZone(ZoneId.of("UTC"))
+                                .toLocalDate()
+                            dateText = selected.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                        }
+                        showDatePicker = false
+                    }) {
+                        Text(stringResource(R.string.action_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            ) {
+                DatePicker(state = datePickerState)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+        // 6. Action Buttons: ButtonPair with OutlinedButton "Cancel" and FilledButton "Record debt"
         val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
         val isValid = parsedAmount > 0.0 && creditorName.isNotBlank() && whatForText.isNotBlank()
 
-        Button(
-            onClick = {
-                onConfirm(parsedAmount, creditorName.trim(), whatForText.trim())
+        ButtonPair(
+            outlinedText = stringResource(R.string.action_cancel),
+            onOutlinedClick = onDismiss,
+            filledText = stringResource(R.string.btn_record_debt),
+            onFilledClick = {
+                val effectiveWhatFor = if (whatForText.isNotBlank()) {
+                    whatForText.trim()
+                } else {
+                    selectedCategory
+                }
+                onConfirm(parsedAmount, creditorName.trim(), effectiveWhatFor)
             },
-            enabled = isValid,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(FinanceTheme.sizes.buttonHeightLarge),
-            shape = FinanceTheme.shapes.large
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Check,
-                contentDescription = null,
-                modifier = Modifier.size(FinanceTheme.sizes.icon18)
-            )
-            Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
-            Text(
-                text = stringResource(R.string.btn_record_debt),
-                style = FinanceTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
+            filledEnabled = isValid
+        )
     }
 }
