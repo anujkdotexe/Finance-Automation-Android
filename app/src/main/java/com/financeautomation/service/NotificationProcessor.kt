@@ -1,5 +1,8 @@
 package com.financeautomation.service
 
+import android.content.Context
+import androidx.room.withTransaction
+import com.financeautomation.FinanceApplication
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.PackageWhitelist
 import com.financeautomation.core.utils.Diagnostics
@@ -23,6 +26,8 @@ import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import com.financeautomation.domain.usecase.SubscriptionMatcher
 import com.financeautomation.domain.usecase.WordingClass
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -376,6 +381,54 @@ class NotificationProcessor(
     }
 
     companion object {
+        /**
+         * Developer-mode entry point for simulating financial payment notifications (X5).
+         * Runs through the real production NotificationProcessor pipeline.
+         */
+        suspend fun simulate(
+            context: Context,
+            sourcePackage: String,
+            title: String,
+            text: String
+        ): NotificationProcessingOutcome {
+            val app = context.applicationContext as FinanceApplication
+            val container = app.appContainer
+            val db = container.awaitDatabase()
+            val processor = NotificationProcessor(
+                pendingCaptureDao = db.pendingCaptureDao(),
+                handledNotificationDao = db.handledNotificationDao(),
+                accountDao = db.accountDao(),
+                preferenceDao = db.preferenceDao(),
+                transactionDao = db.transactionDao(),
+                subscriptionMatcher = container.subscriptionMatcher,
+                parseUseCase = container.parseNotificationUseCase,
+                runInTransaction = { block -> db.withTransaction { block() } },
+                ownPackageName = context.packageName
+            )
+            val sbnKey = "sim_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
+            val outcome = processor.process(
+                sourcePackage = sourcePackage,
+                title = title,
+                text = text,
+                postTime = System.currentTimeMillis(),
+                sbnKey = sbnKey
+            )
+            when (outcome) {
+                is NotificationProcessingOutcome.Captured -> {
+                    if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
+                        container.foregroundWatcher.notifyCaptureWaiting(CoroutineScope(Dispatchers.IO))
+                    }
+                }
+                is NotificationProcessingOutcome.Updated -> {
+                    if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
+                        container.foregroundWatcher.notifyCaptureWaiting(CoroutineScope(Dispatchers.IO))
+                    }
+                }
+                else -> {}
+            }
+            return outcome
+        }
+
         /**
          * Computes memory-only SHA-256 hash of lower-cased title and text, truncated to 16 hex characters.
          */
