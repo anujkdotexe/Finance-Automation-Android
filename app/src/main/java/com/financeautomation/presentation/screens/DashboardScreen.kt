@@ -122,7 +122,10 @@ fun DashboardContent(
     LazyColumn(
         modifier = modifier.padding(horizontal = FinanceTheme.spacing.l),
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
-        contentPadding = PaddingValues(top = FinanceTheme.spacing.s)
+        contentPadding = PaddingValues(
+            top = FinanceTheme.spacing.s,
+            bottom = FinanceTheme.spacing.bottomFabClearance
+        )
     ) {
         item {
             // Single-line sync status indicator starts 8dp below the top bar

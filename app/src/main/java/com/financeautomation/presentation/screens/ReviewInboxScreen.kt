@@ -148,7 +148,12 @@ fun ReviewInboxContent(
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(FinanceTheme.spacing.l),
+                    contentPadding = PaddingValues(
+                        start = FinanceTheme.spacing.l,
+                        top = FinanceTheme.spacing.l,
+                        end = FinanceTheme.spacing.l,
+                        bottom = FinanceTheme.spacing.bottomFabClearance
+                    ),
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
                     if (state.failedQueueItems.isNotEmpty()) {
