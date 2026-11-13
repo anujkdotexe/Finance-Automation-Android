@@ -162,7 +162,7 @@ class QuickLogViewModel(
                 amountText = "",
                 amount = 0.0,
                 payee = "",
-                isNeedsAmount = true,
+                isNeedsAmount = false,
                 isPossibleDuplicate = false,
                 isSaved = false,
                 isDismissed = false

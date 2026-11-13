@@ -109,8 +109,8 @@ fun QuickLogSheet(
     val verticalScroll = rememberScrollState()
     var showRawMessage by remember { mutableStateOf(false) }
 
-    LaunchedEffect(state.isNeedsAmount) {
-        if (state.isNeedsAmount) {
+    LaunchedEffect(state.isNeedsAmount, state.captureId) {
+        if (state.isNeedsAmount || state.captureId == null) {
             amountFocusRequester.requestFocus()
         }
     }
@@ -196,8 +196,8 @@ fun QuickLogSheet(
                 )
             }
 
-            // Unreadable Amount Fallback State
-            if (state.isNeedsAmount) {
+            // Unreadable Amount Fallback State - only shown for captured notifications with no parsed amount
+            if (state.isNeedsAmount && !state.captureId.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
