@@ -685,4 +685,94 @@
     <!-- Companion split & sync status -->
     <string name="companion_split_people_count">%1$d People</string>
     <string name="sync_status_failed_tap_to_fix">%1$d failed, tap to fix</string>
+
+    <!-- ViewModel and Coordinator user-visible messages -->
+    <!-- SettingsSyncCoordinator -->
+    <string name="settings_msg_signed_in">Signed in as %1$s</string>
+    <string name="settings_msg_signed_out">Signed out of Google account</string>
+    <string name="settings_msg_provisioned_workbook">Successfully provisioned %1$s master workbook</string>
+    <string name="settings_msg_connected_workbook">Connected and formatted %1$s master workbook</string>
+    <string name="settings_err_create_folder">Failed to create folder \'Personal Finance\': %1$s</string>
+    <string name="settings_err_create_spreadsheet">Failed to create spreadsheet \'%1$s\': %2$s</string>
+    <string name="settings_err_provision_workbook">Failed to provision workbook: %1$s</string>
+    <string name="settings_err_provision_tabs">Failed to provision workbook tabs: %1$s</string>
+    <string name="settings_err_drive_search">Google Drive search failed: %1$s</string>
+    <string name="settings_msg_spreadsheet_id_saved">Spreadsheet ID saved</string>
+    <string name="settings_err_spreadsheet_id_rejected">The app can only open workbooks it created. Use Create a fresh workbook, or ask Google Drive to open the file with this app.</string>
+    <string name="settings_msg_fresh_workbook_switched">Created a fresh Finance%1$d workbook and switched to it</string>
+    <string name="settings_err_fresh_workbook_failed">Failed to create a fresh workbook: %1$s</string>
+    <string name="settings_msg_sync_completed">Sync completed successfully</string>
+    <string name="settings_err_sync_failed">Sync failed with error: %1$s</string>
+    <string name="settings_msg_config_mirrored">Configuration successfully mirrored to Google Sheets Config tab</string>
+    <string name="settings_err_config_mirror_failed">Failed to mirror config: %1$s</string>
+    <string name="settings_msg_config_restored">Restored configuration from Google Sheets Config tab</string>
+    <string name="settings_err_config_restore_failed">Failed to restore config: %1$s</string>
+    <string name="settings_msg_workbook_formatted">Master Workbook (Dashboard, %1$s) formatted</string>
+    <string name="settings_err_format_workbook">Failed to format master workbook (status %1$d, %2$s). Check network connection.</string>
+
+    <!-- SettingsCustomizationCoordinator -->
+    <string name="settings_msg_default_account_set">Default account set to %1$s</string>
+    <string name="settings_err_account_blank">Account name cannot be blank</string>
+    <string name="settings_err_account_exists">Account \'%1$s\' already exists</string>
+    <string name="settings_msg_added_account">Added account %1$s</string>
+    <string name="settings_msg_account_archived">Account archived</string>
+    <string name="settings_err_category_blank">Category name cannot be blank</string>
+    <string name="settings_err_category_exists">Category \'%1$s\' already exists</string>
+    <string name="settings_msg_added_category">Added category %1$s</string>
+    <string name="settings_msg_category_archived">Category archived</string>
+    <string name="settings_msg_category_excluded_living_burn">Category excluded from living burn</string>
+    <string name="settings_msg_category_included_living_burn">Category included in living burn</string>
+    <string name="settings_err_trip_tag_blank">Trip tag cannot be blank</string>
+    <string name="settings_msg_added_trip_tag">Added trip tag %1$s</string>
+    <string name="settings_msg_deactivated_trip_tag">Deactivated trip tag</string>
+    <string name="settings_msg_activated_trip_tag">Activated trip tag \'%1$s\'</string>
+    <string name="settings_err_friend_blank">Friend name cannot be blank</string>
+    <string name="settings_err_companion_blank">Companion name cannot be blank</string>
+    <string name="settings_err_companion_exists">A companion with this name already exists</string>
+    <string name="settings_msg_added_companion">Added companion %1$s</string>
+    <string name="settings_msg_renamed_companion">Renamed companion to %1$s</string>
+    <string name="settings_msg_renamed_account">Renamed account to %1$s</string>
+    <string name="settings_msg_renamed_category">Renamed category to %1$s</string>
+    <string name="settings_err_cannot_remove_open_balance">Cannot remove %1$s while they have an open balance.</string>
+    <string name="settings_msg_companion_removed">Companion removed</string>
+
+    <!-- SettingsViewModel -->
+    <string name="settings_msg_settle_delay_set">Settle delay set to %1$ds</string>
+
+    <!-- ReviewInboxViewModel -->
+    <string name="review_msg_subscription_saved">Subscription expense saved</string>
+    <string name="review_err_previous_month">That payment is from a previous month and cannot be added. Skip it instead.</string>
+    <string name="review_msg_capture_dismissed">Capture dismissed</string>
+    <string name="review_msg_account_added">Account added</string>
+    <string name="review_err_last_four_digits">Last four digits must be exactly 4 digits.</string>
+    <string name="review_msg_confirmed_transactions">Confirmed %1$d transaction(s)</string>
+    <string name="review_msg_kept_both">Kept both transactions</string>
+    <string name="review_msg_kept_one">Kept one transaction</string>
+    <string name="review_msg_queued_for_retry">Operation queued for retry</string>
+    <string name="review_msg_operation_discarded">Operation discarded</string>
+    <string name="review_err_transaction_not_found">Transaction not found</string>
+    <string name="review_msg_transaction_confirmed">Transaction confirmed</string>
+    <string name="review_msg_transaction_voided">Transaction voided</string>
+    <string name="review_err_load_failed">Failed to load transactions for review</string>
+    <string name="review_err_confirm_failed">Failed to confirm transaction</string>
+    <string name="review_err_void_failed">Failed to void transaction</string>
+
+    <!-- QuickLogViewModel -->
+    <string name="quicklog_err_amount_zero">Amount must be greater than zero</string>
+    <string name="quicklog_err_future_date">That date is in the future.</string>
+    <string name="quicklog_msg_updated">Updated</string>
+    <string name="quicklog_msg_saved_will_sync">Saved %1$s, will sync</string>
+    <string name="quicklog_err_update_failed">Update failed: %1$s</string>
+    <string name="quicklog_err_save_failed">Save failed: %1$s</string>
+    <string name="quicklog_err_void_failed">Void failed: %1$s</string>
+
+    <!-- DashboardViewModel -->
+    <string name="dashboard_msg_synced_count">Synced %1$d transaction(s)</string>
+    <string name="dashboard_msg_synced_sheets">Synced %1$d transaction(s) to Google Sheets</string>
+    <string name="dashboard_msg_all_up_to_date">All transactions up to date</string>
+    <string name="dashboard_err_sync_failed">Sync failed with error: %1$s</string>
+
+    <!-- OnboardingViewModel -->
+    <string name="onboarding_err_consent_denied">Consent was not granted. Please grant Google Drive access to continue.</string>
+    <string name="onboarding_err_auth_failed">Authorization failed</string>
 </resources>

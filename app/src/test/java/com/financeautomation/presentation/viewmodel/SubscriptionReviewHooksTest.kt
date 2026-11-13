@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.FakeSubscriptionRepository
@@ -87,7 +88,7 @@ class SubscriptionReviewHooksTest {
         assertEquals(1, f.recorder.inserted.size)
         assertEquals(SubscriptionCycleState.PAID, f.repo.cycle(cycle.id).state)
         assertTrue(vm.subscriptionsDue.value.isEmpty())
-        assertEquals("Subscription expense saved", vm.uiState.value.userMessage)
+        assertEquals(R.string.review_msg_subscription_saved, vm.uiState.value.userMessage?.resId)
     }
 
     @Test

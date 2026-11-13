@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -90,8 +91,8 @@ data class DashboardUiState(
     val queuedItems: List<QueuedItem> = emptyList(),
     val isHintDismissed: Boolean = false,
     val isSyncing: Boolean = false,
-    val syncMessage: String? = null,
-    val errorMessage: String? = null
+    val syncMessage: UiText? = null,
+    val errorMessage: UiText? = null
 )
 
 /**
@@ -615,7 +616,7 @@ class DashboardViewModel(
                     _uiState.update {
                         it.copy(
                             isSyncing = false,
-                            syncMessage = "Synced $count transaction(s) to Google Sheets"
+                            syncMessage = UiText.res(R.string.dashboard_msg_synced_sheets, count)
                         )
                     }
                 }
@@ -623,7 +624,8 @@ class DashboardViewModel(
                     _uiState.update {
                         it.copy(
                             isSyncing = false,
-                            errorMessage = res.message ?: "Sync failed with error: ${res.throwable.message}"
+                            errorMessage = res.message?.let { msg -> UiText.dynamic(msg) }
+                                ?: UiText.res(R.string.dashboard_err_sync_failed, res.throwable.message ?: "")
                         )
                     }
                 }

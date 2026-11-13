@@ -183,7 +183,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         },
                         onConfirmExpense = {
                             quickLogViewModel.onConfirmAndSave { msg ->
-                                Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
                                 dismissSafely()
                             }
                         },

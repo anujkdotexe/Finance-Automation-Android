@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.TransactionStatus
@@ -233,12 +234,13 @@ class QuickLogViewModelTest {
         vm.loadCapture("cap_save_test")
         advanceUntilIdle()
 
-        var savedMessage: String? = null
+        var savedMessage: UiText? = null
         vm.onConfirmAndSave { msg -> savedMessage = msg }
         advanceUntilIdle()
 
         assertNotNull(savedMessage)
-        assertTrue(savedMessage!!.contains("120.00"))
+        assertEquals(R.string.quicklog_msg_saved_will_sync, savedMessage?.resId)
+        assertEquals(listOf("120.00"), savedMessage?.args)
         assertEquals(1, tRepo.inserted.size)
         val insertedTxn = tRepo.inserted.first()
         assertEquals(120.0, insertedTxn.totalAmount, 0.001)
@@ -278,7 +280,7 @@ class QuickLogViewModelTest {
         advanceUntilIdle()
         assertTrue(!saved)
         assertEquals(0, tRepo.inserted.size)
-        assertEquals("That date is in the future.", vm.uiState.value.errorMessage)
+        assertEquals(R.string.quicklog_err_future_date, vm.uiState.value.errorMessage?.resId)
     }
 
     @Test

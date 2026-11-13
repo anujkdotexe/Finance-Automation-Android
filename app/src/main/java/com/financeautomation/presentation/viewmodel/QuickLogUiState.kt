@@ -39,7 +39,7 @@ data class QuickLogUiState(
     val isSaved: Boolean = false,
     val isVoided: Boolean = false,
     val isDismissed: Boolean = false,
-    val resultMessage: String? = null,
-    val errorMessage: String? = null
+    val resultMessage: UiText? = null,
+    val errorMessage: UiText? = null
 )
 
