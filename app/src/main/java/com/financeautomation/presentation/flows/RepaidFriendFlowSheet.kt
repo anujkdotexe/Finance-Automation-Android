@@ -29,6 +29,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
@@ -46,15 +47,18 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
+import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.usecase.ExpressionEvaluator
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
@@ -166,8 +170,7 @@ fun RepaidFriendFlowSheet(
                 BasicTextField(
                     value = amountText,
                     onValueChange = { input ->
-                        val clean = input.replace(",", "")
-                        if (clean.isEmpty() || clean.matches(Regex("""^\d*(\.\d{0,2})?$"""))) {
+                        if (AmountInputSanitizer.isValidExpressionInput(input)) {
                             amountText = input
                         }
                     },
@@ -178,7 +181,7 @@ fun RepaidFriendFlowSheet(
                     ),
                     cursorBrush = SolidColor(FinanceTheme.colors.primary),
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
+                        keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.Next
                     ),
                     modifier = Modifier
@@ -197,6 +200,17 @@ fun RepaidFriendFlowSheet(
                             innerTextField()
                         }
                     }
+                )
+            }
+
+            val evaluated = remember(amountText) { ExpressionEvaluator().evaluate(amountText) }
+            if (amountText.any { it in "+-*/" } && evaluated != null && evaluated > 0.0) {
+                Text(
+                    text = "= ${formatRupeesAuto(evaluated)}",
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = FinanceTheme.spacing.xxs)
                 )
             }
 
@@ -438,7 +452,7 @@ fun RepaidFriendFlowSheet(
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // 6. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Save" outside scrollable area
-        val parsedAmount = amountText.replace(",", "").toDoubleOrNull() ?: 0.0
+        val parsedAmount = ExpressionEvaluator().evaluate(amountText) ?: 0.0
         val isValid = parsedAmount > 0.0 && personName.isNotBlank()
 
         ButtonPair(

@@ -24,6 +24,7 @@ import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.CalculateSplitUseCase
+import com.financeautomation.domain.usecase.ExpressionEvaluator
 import com.financeautomation.domain.usecase.LogExpenseUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import kotlinx.coroutines.CancellationException
@@ -58,6 +59,7 @@ class QuickLogViewModel(
 
     private val _uiState = MutableStateFlow(QuickLogUiState())
     val uiState: StateFlow<QuickLogUiState> = _uiState.asStateFlow()
+    private val expressionEvaluator = ExpressionEvaluator()
     private var pastTransactions: List<Transaction> = emptyList()
 
     init {
@@ -221,8 +223,8 @@ class QuickLogViewModel(
     }
 
     fun onAmountChanged(text: String) {
-        if (!AmountInputSanitizer.isValidAmountInput(text)) return
-        val parsed = text.toDoubleOrNull() ?: 0.0
+        if (!AmountInputSanitizer.isValidExpressionInput(text)) return
+        val parsed = expressionEvaluator.evaluate(text) ?: 0.0
         _uiState.update { it.copy(amountText = text, amount = parsed) }
         recalculateSplit()
     }
@@ -277,8 +279,8 @@ class QuickLogViewModel(
     }
 
     fun onCustomShareChanged(shareText: String) {
-        if (!AmountInputSanitizer.isValidAmountInput(shareText)) return
-        val parsed = shareText.toDoubleOrNull()
+        if (!AmountInputSanitizer.isValidExpressionInput(shareText)) return
+        val parsed = expressionEvaluator.evaluate(shareText)
         _uiState.update { it.copy(customShareText = shareText, customShare = parsed) }
         recalculateSplit()
     }
