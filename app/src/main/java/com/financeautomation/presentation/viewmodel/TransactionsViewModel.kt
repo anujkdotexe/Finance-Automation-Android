@@ -115,10 +115,11 @@ data class TransactionFilter(
     val tripTag: String? = null,
     val status: String? = null,
     val excludeSavingsAndIgnored: Boolean = false,
-    val type: String? = null
+    val type: String? = null,
+    val showVoid: Boolean = false
 ) {
     val isActive: Boolean
-        get() = category != null || account != null || person != null || tripTag != null || status != null || excludeSavingsAndIgnored || type != null
+        get() = category != null || account != null || person != null || tripTag != null || status != null || excludeSavingsAndIgnored || type != null || showVoid
 }
 
 /**
@@ -348,14 +349,15 @@ class TransactionsViewModel(
             inflows.filter { it.timestamp in startOfMonth until endOfMonth }
         }
 
-        val isVoidFilter = filter.status.equals("void", ignoreCase = true)
+        val isOnlyVoid = filter.status.equals("void", ignoreCase = true)
+        val showVoid = filter.showVoid || isOnlyVoid
 
         val filteredTransactions = monthTransactions.filter { txn ->
             val isVoid = txn.status == TransactionStatus.VOID
-            if (!isVoidFilter && isVoid) {
+            if (!showVoid && isVoid) {
                 return@filter false
             }
-            if (isVoidFilter && !isVoid) {
+            if (isOnlyVoid && !isVoid) {
                 return@filter false
             }
 
@@ -411,7 +413,7 @@ class TransactionsViewModel(
                 }
             }
 
-            if (!filter.status.isNullOrBlank() && !isVoidFilter) {
+            if (!filter.status.isNullOrBlank() && !isOnlyVoid) {
                 val st = filter.status.trim().lowercase()
                 val rowStatus = computeRowStatus(txn, queueIds)
                 val matchesStatus = when (st) {
@@ -432,10 +434,10 @@ class TransactionsViewModel(
 
         val filteredInflows = monthInflows.filter { inf ->
             val isVoid = inf.status.equals("VOID", ignoreCase = true)
-            if (!isVoidFilter && isVoid) {
+            if (!showVoid && isVoid) {
                 return@filter false
             }
-            if (isVoidFilter && !isVoid) {
+            if (isOnlyVoid && !isVoid) {
                 return@filter false
             }
 
@@ -455,7 +457,7 @@ class TransactionsViewModel(
                 return@filter false
             }
 
-            if (!filter.status.isNullOrBlank() && !isVoidFilter) {
+            if (!filter.status.isNullOrBlank() && !isOnlyVoid) {
                 val st = filter.status.trim().lowercase()
                 if (st != "income") {
                     return@filter false
