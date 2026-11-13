@@ -21,6 +21,7 @@ import kotlinx.coroutines.test.setMain
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -893,5 +894,62 @@ class TransactionsViewModelTest {
         val items = vm.uiState.value.groupedTransactions.flatMap { it.items }
         assertEquals(1, items.size)
         assertEquals("inf_salary", items[0].id)
+    }
+
+    @Test
+    fun testTransactionsMonthTotal_equalsLivingBurn_withSplitTransactions() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 10)
+        }
+        val ts = nowCal.timeInMillis
+
+        val splitTxn = Transaction(
+            id = "t_split",
+            timestamp = ts,
+            dateSerial = 46330,
+            timeSerial = 0.4,
+            account = "UPI",
+            merchant = "Dinner",
+            category = "Food & Drink",
+            totalAmount = 900.0,
+            companions = "Alice",
+            myShare = 450.0,
+            owedToMe = 450.0,
+            status = TransactionStatus.PENDING
+        )
+        val personalTxn = Transaction(
+            id = "t_personal",
+            timestamp = ts + 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Cafe",
+            category = "Food & Drink",
+            totalAmount = 200.0,
+            companions = "Personal",
+            myShare = 200.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED
+        )
+
+        tRepo.insertTransaction(splitTxn)
+        tRepo.insertTransaction(personalTxn)
+
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        val expectedLivingBurn = 650.0
+        val expectedGrossTotal = 1100.0
+
+        assertEquals(expectedLivingBurn, state.myShare, 0.001)
+        assertEquals(expectedGrossTotal, state.totalOut, 0.001)
+
+        val dayGroup = state.groupedTransactions.firstOrNull()
+        assertNotNull(dayGroup)
+        assertEquals(expectedLivingBurn, dayGroup!!.dayMyShare, 0.001)
+        assertEquals(expectedGrossTotal, dayGroup.dayTotalOut, 0.001)
     }
 }

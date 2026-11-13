@@ -209,13 +209,22 @@ fun TransactionsContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Column {
+                Text(
+                    text = "Your share",
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (state.totalOut > 0.0) {
+                    Text(
+                        text = "Total paid: ${formatRupeesAuto(state.totalOut)}",
+                        style = FinanceTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+            }
             Text(
-                text = stringResource(R.string.transactions_month_total),
-                style = FinanceTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = formatRupeesAuto(state.totalOut),
+                text = formatRupeesAuto(state.myShare),
                 style = FinanceTheme.typography.numeric.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -459,7 +468,7 @@ fun TransactionsContent(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = formatRupeesAuto(group.dayTotalOut),
+                                    text = formatRupeesAuto(group.dayMyShare),
                                     style = FinanceTheme.typography.numericMicro,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
