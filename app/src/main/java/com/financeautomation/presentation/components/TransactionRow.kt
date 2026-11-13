@@ -8,22 +8,26 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Standard transaction entry row.
- * Line 1: merchant and amount.
- * Line 2: category, account and time with status chip.
- * Optional Line 3: "My share X, Owed Y" for split rows.
+ * Standard transaction entry row (56dp minimum height).
+ * Layout:
+ * - Left: Merchant name (16sp), bottom row with account chip and "time · category"
+ * - Right: Mono amount (15sp Medium), optional split subtext
  */
 @Composable
 fun TransactionRow(
@@ -38,17 +42,17 @@ fun TransactionRow(
     isExpense: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
-    val subtitleParts = listOfNotNull(
-        category.takeIf { it.isNotBlank() },
-        account.takeIf { it.isNotBlank() },
-        time.takeIf { it.isNotBlank() }
-    )
-    val subtitle = subtitleParts.joinToString(" • ")
+    val metaText = when {
+        time.isNotBlank() && category.isNotBlank() -> "$time · $category"
+        time.isNotBlank() -> time
+        category.isNotBlank() -> category
+        else -> ""
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = 56.dp)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(role = Role.Button, onClick = onClick)
@@ -59,125 +63,126 @@ fun TransactionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
-            modifier = Modifier.weight(1f).padding(end = FinanceTheme.spacing.s),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = FinanceTheme.spacing.m),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)
         ) {
-            // Line 1: Merchant
             Text(
                 text = merchant,
-                style = FinanceTheme.typography.bodyMedium,
-                color = FinanceTheme.colors.onSurface,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            // Line 2: Category, account, time
-            if (subtitle.isNotBlank()) {
-                Text(
-                    text = subtitle,
-                    style = FinanceTheme.typography.bodySmall,
-                    color = FinanceTheme.colors.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            // Optional Line 3: Split details
-            if (!splitText.isNullOrBlank()) {
-                Text(
-                    text = splitText,
-                    style = FinanceTheme.typography.numeric,
-                    color = FinanceTheme.colors.moneyOwed,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+            ) {
+                if (account.isNotBlank()) {
+                    AppChip(
+                        text = account,
+                        selected = false,
+                        onClick = {}
+                    )
+                }
+
+                if (metaText.isNotBlank()) {
+                    Text(
+                        text = metaText,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
         Column(
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)
         ) {
-            AmountText(
-                amount = amount,
-                tone = if (isExpense) AmountTone.DEFAULT else AmountTone.MONEY_IN,
-                style = FinanceTheme.typography.kpiMedium,
-                prefix = if (isExpense) "" else "+"
+            Text(
+                text = formatRupeesAuto(amount),
+                style = FinanceTheme.typography.numeric.copy(
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = MaterialTheme.colorScheme.onSurface
             )
-            if (status.isNotBlank()) {
+
+            if (!splitText.isNullOrBlank()) {
+                Text(
+                    text = splitText,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else if (status.isNotBlank()) {
                 StatusChip(status = status)
             }
         }
     }
 }
 
-/**
- * Backward compatibility overload.
- */
+@Preview(name = "TransactionRow Normal Font - Light", showBackground = true, fontScale = 1.0f)
 @Composable
-fun TransactionRow(
-    description: String,
-    dateText: String,
-    account: String,
-    amount: Double,
-    status: String,
-    modifier: Modifier = Modifier,
-    isExpense: Boolean = true,
-    onClick: (() -> Unit)? = null
-) {
-    TransactionRow(
-        merchant = description,
-        amount = amount,
-        modifier = modifier,
-        category = "",
-        account = account,
-        time = dateText,
-        status = status,
-        isExpense = isExpense,
-        onClick = onClick
-    )
-}
-
-@Preview(name = "Light", showBackground = true)
-@Composable
-private fun TransactionRowPreviewLight() {
+private fun TransactionRowPreviewNormalLight() {
     FinanceAutomationTheme(darkTheme = false) {
-        TransactionRow(
-            merchant = "Blue Tokai Coffee",
-            amount = 340.0,
-            category = "Food & Drink",
-            account = "HDFC ••4921",
-            time = "Today, 2:15 PM",
-            status = "Needs review"
-        )
+        Column(modifier = Modifier.padding(16.dp)) {
+            TransactionRow(
+                merchant = "Swiggy",
+                amount = 600.0,
+                category = "Food",
+                account = "HDFC",
+                time = "02:15 PM",
+                splitText = "Split (₹200)",
+                onClick = {}
+            )
+        }
     }
 }
 
-@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
+@Preview(name = "TransactionRow Font 1.3 - Light", showBackground = true, fontScale = 1.3f)
 @Composable
-private fun TransactionRowPreviewDark() {
+private fun TransactionRowPreviewLargeFontLight() {
+    FinanceAutomationTheme(darkTheme = false) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            TransactionRow(
+                merchant = "Swiggy",
+                amount = 600.0,
+                category = "Food",
+                account = "HDFC",
+                time = "02:15 PM",
+                splitText = "Split (₹200)",
+                onClick = {}
+            )
+        }
+    }
+}
+
+@Preview(name = "TransactionRow Normal Font - Dark", showBackground = true, fontScale = 1.0f, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun TransactionRowPreviewNormalDark() {
     FinanceAutomationTheme(darkTheme = true) {
-        TransactionRow(
-            merchant = "Dinner with team",
-            amount = 2400.0,
-            category = "Food & Drink",
-            account = "ICICI ••1028",
-            time = "Yesterday",
-            status = "Pending",
-            splitText = "My share 600, Owed 1,800"
-        )
-    }
-}
-
-@Preview(name = "Font Scale 1.3x", fontScale = 1.3f, showBackground = true)
-@Composable
-private fun TransactionRowPreviewScale() {
-    FinanceAutomationTheme(darkTheme = false) {
-        TransactionRow(
-            merchant = "Shell Petrol",
-            amount = 1200.0,
-            category = "Transit",
-            account = "ICICI ••1028",
-            time = "24 Nov",
-            status = "Synced"
-        )
+        Column(modifier = Modifier.padding(16.dp)) {
+            TransactionRow(
+                merchant = "Blue Tokai Coffee",
+                amount = 340.0,
+                category = "Food & Drink",
+                account = "ICICI",
+                time = "11:30 AM",
+                onClick = {}
+            )
+        }
     }
 }
