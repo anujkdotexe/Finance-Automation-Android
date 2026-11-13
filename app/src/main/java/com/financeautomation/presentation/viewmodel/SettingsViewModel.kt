@@ -279,6 +279,7 @@ class SettingsViewModel(
     fun onAppLockAuthenticated(success: Boolean) {
         if (!success) return
         if (appLockManager?.enable(authenticated = true) == false) return
+        privacySettings?.setAppLockOn(true)
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.setAppLockEnabled(true)
             _uiState.update { it.copy(appLockEnabled = true) }
@@ -287,6 +288,7 @@ class SettingsViewModel(
 
     fun onAppLockDisabled() {
         appLockManager?.disable()
+        privacySettings?.setAppLockOn(false)
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.setAppLockEnabled(false)
             _uiState.update { it.copy(appLockEnabled = false) }
