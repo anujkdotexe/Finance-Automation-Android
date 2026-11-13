@@ -229,6 +229,23 @@ Rejected: retroactive expense dates (backlog for a later release), suggestion ch
 - Retroactive expense dates (add an expense for a past month), once month-tab and carry-forward handling is safe for past months.
 - Receipt scanning (OCR), sync history list.
 
+12.13 Subscriptions (new feature, owner request)
+Rules
+- No future-dated transactions anywhere: every save path rejects a timestamp later than now (small clock tolerance). Past dates beyond the current month stay a later feature (section 12.12), to be handled properly when the data moves from the sheet to a database.
+- A subscription is a recurring payment the user wants to track: name, amount (fixed, or "varies"), how often (weekly, monthly, yearly), due day or date, account, category (default Subscriptions), reminder on or off, active or paused.
+Behaviour
+- Each day at an end-of-day time (default 9 PM Asia/Kolkata, changeable in Preferences) the app checks subscriptions due today or overdue and not yet resolved. For each it posts one notification: "Did you pay Netflix, 649 rupees?" with three actions: Yes, Not yet, Skip this time.
+- Automatic match first: when a captured payment arrives whose amount equals the subscription amount (or any amount if it varies) and whose merchant text contains the subscription name or its saved keywords, within 3 days either side of the due date, the cycle is marked paid, the expense is logged normally (category Subscriptions), and no reminder is sent.
+- Yes with no captured payment: the app logs the expense for that due date with the subscription amount, category and account, and marks the cycle paid. Not yet: ask again the next evening, up to 3 times, then move the item to Needs Review. Skip this time: marks the cycle skipped, no expense.
+- If a payment alert arrives after the user already answered Yes for that cycle, it is flagged as a possible duplicate instead of being added twice.
+- Needs Review shows an overdue unresolved subscription as an item "Subscription due: Netflix 649 rupees, did you pay?" with Yes, Not yet, Skip, in case the notification was missed.
+Screens
+- Subscriptions (drawer item): list with name, amount, next due date, a pause switch and a three-dot menu; an empty state; Add button.
+- Add or edit subscription: name, amount or "varies", frequency, due date, account chips, category (Subscriptions preselected), reminder switch, optional match keywords (for example "NETFLIX").
+- Dashboard: an optional small "Due this week" line with total (later).
+- Reminder notification as described above.
+Data and sync: subscriptions are stored locally and written to the Config tab by Mirror config (new row type "subscription"), so Restore config brings them back. The logged expenses go to the normal expense table.
+
 ## 13. Data the screens read and write (for realistic mock data)
 
 - Transaction: id, date and time, merchant, category, account, total amount, my share, owed to me, status (Personal, Pending, Settled, Void, Carried), companions, trip tag, source (UPI app, SMS, manual), review state, sync state (pending, synced, failed).
