@@ -61,8 +61,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val SHEET_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
+private val DISPLAY_DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.US)
 
 /**
  * Rebuilt Friend Paid For Me flow sheet following the frozen design specification:
@@ -88,7 +90,7 @@ fun FriendPaidFlowSheet(
     var whatForText by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(CategoryConstants.CATEGORY_FOOD_AND_DRINK) }
 
-    val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
+    val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DISPLAY_DATE_FORMATTER) }
     var dateText by remember { mutableStateOf(todayFormatted) }
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -389,10 +391,21 @@ fun FriendPaidFlowSheet(
 
         if (showDatePicker) {
             val datePickerState = rememberDatePickerState(
-                initialSelectedDateMillis = LocalDate.parse(dateText)
-                    .atStartOfDay(ZoneId.of("UTC"))
-                    .toInstant()
-                    .toEpochMilli(),
+                initialSelectedDateMillis = runCatching {
+                    LocalDate.parse(dateText, DISPLAY_DATE_FORMATTER)
+                        .atStartOfDay(ZoneId.of("UTC"))
+                        .toInstant()
+                        .toEpochMilli()
+                }.getOrElse {
+                    runCatching {
+                        LocalDate.parse(dateText)
+                            .atStartOfDay(ZoneId.of("UTC"))
+                            .toInstant()
+                            .toEpochMilli()
+                    }.getOrElse {
+                        LocalDate.now(SHEET_ZONE).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+                    }
+                },
                 selectableDates = NoFutureSelectableDates
             )
 
@@ -404,7 +417,7 @@ fun FriendPaidFlowSheet(
                             val selected = Instant.ofEpochMilli(millis)
                                 .atZone(ZoneId.of("UTC"))
                                 .toLocalDate()
-                            dateText = selected.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                            dateText = selected.format(DISPLAY_DATE_FORMATTER)
                         }
                         showDatePicker = false
                     }) {

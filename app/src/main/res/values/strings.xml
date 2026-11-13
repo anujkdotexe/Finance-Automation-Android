@@ -36,7 +36,7 @@
     <string name="prompt_select_account">Select Account</string>
     <string name="prompt_what_was_this_for">What was this for?</string>
     <string name="prompt_select_category">Select Category</string>
-    <string name="prompt_split_mode">Split Mode</string>
+    <string name="prompt_split_mode">Split mode</string>
     <string name="split_just_me">Just Me</string>
     <string name="split_equally">Split Equally</string>
     <string name="split_custom">Custom Split</string>
@@ -248,13 +248,13 @@
     <!-- Flow Action Menu Options -->
     <string name="action_menu_expense_title">Expense</string>
     <string name="action_menu_expense_sub">Log a card or cash payment</string>
-    <string name="action_menu_income_title">Income / Refund</string>
+    <string name="action_menu_income_title">Add income</string>
     <string name="action_menu_income_sub">Inflow or debt repayment received</string>
-    <string name="action_menu_friend_paid_title">Friend Paid for Me</string>
+    <string name="action_menu_friend_paid_title">Friend paid for me</string>
     <string name="action_menu_friend_paid_sub">Record debt I owe to a friend</string>
-    <string name="action_menu_repaid_friend_title">Repaid a Friend</string>
+    <string name="action_menu_repaid_friend_title">Repaid a friend</string>
     <string name="action_menu_repaid_friend_sub">Settle debt I owed to a friend</string>
-    <string name="action_menu_trip_mode_title">Trip / Event Mode</string>
+    <string name="action_menu_trip_mode_title">Trip mode</string>
     <string name="action_menu_trip_mode_sub">Auto-tag transactions for an event</string>
 
     <!-- Speed Dial Add Menu Actions -->
@@ -273,16 +273,16 @@
     <string name="inflow_type_return">Refund / Return</string>
     <string name="inflow_type_friend">Friend Settlement</string>
     <string name="inflow_type_transfer">Self Transfer</string>
-    <string name="prompt_inflow_type">Inflow Type</string>
-    <string name="prompt_receiving_account">Receiving Account</string>
+    <string name="prompt_inflow_type">Inflow type</string>
+    <string name="prompt_receiving_account">Receiving account</string>
     <string name="prompt_who_settled">Who Settled (Friend)</string>
     <string name="prompt_sender_source">Sender / Source</string>
     <string name="prompt_settle_open_debt">Settle Open Debt (Optional)</string>
     <string name="prompt_auto_settle">Auto-Settle (All / Oldest First)</string>
     <string name="btn_record_inflow">Record Inflow</string>
     <string name="btn_record_debt">Record debt</string>
-    <string name="btn_record_repayment">Record repayment</string>
-    <string name="prompt_date_repaid">Date Repaid</string>
+    <string name="btn_record_repayment">Save repayment</string>
+    <string name="prompt_date_repaid">Date repaid</string>
     <string name="trip_active_badge">Trip Mode Active</string>
     <string name="trip_active_desc">All new transactions will be tagged with this event until stopped.</string>
     <string name="btn_start_trip">Start Trip Mode</string>
@@ -449,6 +449,7 @@
     <string name="prompt_custom_amount">Custom amount</string>
     <string name="prompt_place_optional">Place (optional)</string>
     <string name="prompt_settlement_note">Settlement note</string>
+    <string name="hint_optional">Optional</string>
     <string name="prompt_friend_repaid">Friend repaid</string>
     <string name="prompt_friend_who_paid">Friend who paid</string>
     <string name="prompt_trip_name">Trip name</string>

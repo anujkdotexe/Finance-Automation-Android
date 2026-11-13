@@ -96,7 +96,24 @@ class ModalBottomSheetActivity : ComponentActivity() {
                     value = withContext(Dispatchers.IO) { app.appContainer.accountRepository.getAllAccounts() }
                 }
                 val companions by produceState<List<FriendCompanion>>(initialValue = emptyList()) {
-                    value = withContext(Dispatchers.IO) { app.appContainer.peopleRepository.getAllCompanions() }
+                    val rawCompanions = withContext(Dispatchers.IO) { app.appContainer.peopleRepository.getAllCompanions() }
+                    val db = withContext(Dispatchers.IO) { app.appContainer.awaitDatabase() }
+                    val payables = withContext(Dispatchers.IO) { db.payableDao().getPending() }
+                    val payableMap = payables.groupBy { it.paidBy.trim().lowercase() }
+                        .mapValues { entry -> entry.value.sumOf { it.amountIOwe } }
+
+                    val updatedCompanions = rawCompanions.map { comp ->
+                        val owed = payableMap[comp.name.trim().lowercase()] ?: comp.balance
+                        comp.copy(balance = owed)
+                    }.toMutableList()
+
+                    for ((nameLower, totalOwed) in payableMap) {
+                        if (totalOwed > 0.0 && updatedCompanions.none { it.name.trim().lowercase() == nameLower }) {
+                            val originalName = payables.first { it.paidBy.trim().lowercase() == nameLower }.paidBy.trim()
+                            updatedCompanions.add(FriendCompanion(id = "payable_$originalName", name = originalName, balance = totalOwed))
+                        }
+                    }
+                    value = updatedCompanions
                 }
                 val activeTripTag by produceState<TripTag?>(initialValue = null) {
                     value = withContext(Dispatchers.IO) { app.appContainer.tripTagRepository.getActiveTagSync() }

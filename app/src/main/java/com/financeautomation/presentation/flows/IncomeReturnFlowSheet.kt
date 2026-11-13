@@ -358,7 +358,7 @@ fun IncomeReturnFlowSheet(
                 onValueChange = { reasonText = it },
                 placeholder = {
                     Text(
-                        text = stringResource(R.string.prompt_reason_note),
+                        text = stringResource(R.string.hint_optional),
                         style = FinanceTheme.typography.bodyMedium
                     )
                 },
