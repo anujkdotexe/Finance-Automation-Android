@@ -36,20 +36,7 @@ class SubscriptionNotifier(private val context: Context) : SubscriptionReminderN
         val notificationId = notificationId(cycle.id)
         val amountText = subscription.amount?.let { formatRupees(it) } ?: "Amount varies"
 
-        val yesIntent = if (subscription.amount == null) {
-            PendingIntent.getActivity(
-                context,
-                requestCode(cycle.id, 0),
-                Intent(context, EntryActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    putExtra(EntryActivity.EXTRA_SUBSCRIPTION_CYCLE_ID, cycle.id)
-                    putExtra(SubscriptionActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-                },
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-        } else {
-            receiverIntent(SubscriptionActionReceiver.ACTION_YES, cycle.id, notificationId, 0)
-        }
+        val yesIntent = receiverIntent(SubscriptionActionReceiver.ACTION_YES, cycle.id, notificationId, 0)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
