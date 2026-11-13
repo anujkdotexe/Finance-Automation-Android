@@ -57,11 +57,6 @@ object RegexPatterns {
         """(?i)(?:\bending\s+(?:with\s+|in\s+)?|[*xX]{2,}|\.\.{2,})(\d{3,4})\b"""
     )
 
-    // OTP and auth code suppression pattern
-    val OTP_REGEX: Regex = Regex(
-        """(?i)\b(otp|one[- ]time[- ]password|verification[- ]code|secret[- ]code|do[- ]not[- ]share|security[- ]code|auth[- ]code)\b"""
-    )
-
     // A completed payment: a direction verb directly tied to an amount ("Paid Rs 349", "Rs 500 debited")
     val CONFIRMATION_REGEX: Regex = Regex(
         """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
@@ -195,6 +190,6 @@ object RegexPatterns {
      * Returns true if text contains an OTP or authentication code.
      */
     fun isOtp(text: String): Boolean {
-        return OTP_REGEX.containsMatchIn(text)
+        return OtpClassifier.isOtp(text)
     }
 }
