@@ -599,6 +599,9 @@ fun AppNavHost(
                             onNavigateToBalances = {
                                 navController.navigate(AppRoutes.PEOPLE_TRIPS)
                             },
+                            onNavigateToSync = {
+                                navController.navigate(AppRoutes.SYNC_BACKUP)
+                            },
                             onAddExpense = { launchFlow("EXPENSE") }
                         )
                     }
@@ -675,6 +678,9 @@ fun AppNavHost(
                                     putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, txn.id)
                                     putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
                                 })
+                            },
+                            onNavigateToSync = {
+                                navController.navigate(AppRoutes.SYNC_BACKUP)
                             },
                             onAddExpense = { launchFlow("EXPENSE") }
                         )

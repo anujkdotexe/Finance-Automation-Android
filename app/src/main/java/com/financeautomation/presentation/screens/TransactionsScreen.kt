@@ -97,6 +97,7 @@ import java.util.Locale
 fun TransactionsScreen(
     viewModel: TransactionsViewModel,
     onTransactionClick: (Transaction) -> Unit = {},
+    onNavigateToSync: () -> Unit = {},
     onAddExpense: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -135,6 +136,7 @@ fun TransactionsScreen(
                 onInflowClick = { inf ->
                     selectedInflow = inf
                 },
+                onNavigateToSync = onNavigateToSync,
                 onAddExpense = onAddExpense,
                 modifier = Modifier.fillMaxSize()
             )
@@ -197,6 +199,7 @@ fun TransactionsContent(
     onClearFilter: () -> Unit,
     onTransactionClick: (Transaction) -> Unit,
     onInflowClick: (Inflow) -> Unit = {},
+    onNavigateToSync: () -> Unit = {},
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -210,7 +213,8 @@ fun TransactionsContent(
         // 1. Single-line quiet sync line
         SyncStatusLine(
             lastSyncedText = "Synced 2m ago",
-            modifier = Modifier.padding(top = FinanceTheme.spacing.s)
+            modifier = Modifier.padding(top = FinanceTheme.spacing.s),
+            onClick = onNavigateToSync
         )
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))

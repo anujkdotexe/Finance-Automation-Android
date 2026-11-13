@@ -44,7 +44,8 @@ fun SyncStatusLine(
     isSyncing: Boolean = false,
     isOffline: Boolean = false,
     lastSyncedText: String = "Synced just now",
-    onFailedClick: () -> Unit = {}
+    onFailedClick: () -> Unit = {},
+    onClick: (() -> Unit)? = null
 ) {
     if (failedCount > 0) {
         // Calm secondary container pill with chevron
@@ -86,7 +87,18 @@ fun SyncStatusLine(
         }
 
         Row(
-            modifier = modifier.padding(vertical = FinanceTheme.spacing.xxs),
+            modifier = modifier
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(
+                            role = Role.Button,
+                            onClick = onClick
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(vertical = FinanceTheme.spacing.xxs),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(

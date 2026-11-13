@@ -58,6 +58,7 @@ fun DashboardScreen(
     onNavigateToTransactions: (monthOffset: Int, category: String?, type: String?) -> Unit = { _, _, _ -> },
     onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit = { _, _ -> },
     onNavigateToBalances: () -> Unit = { onNavigateToSettlements("", true) },
+    onNavigateToSync: () -> Unit = {},
     onAddExpense: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -104,6 +105,7 @@ fun DashboardScreen(
                 onNavigateToReview = onNavigateToReview,
                 onNavigateToTransactions = onNavigateToTransactions,
                 onNavigateToBalances = onNavigateToBalances,
+                onNavigateToSync = onNavigateToSync,
                 onShowExact = ::showExactSnackbar,
                 onAddExpense = onAddExpense,
                 modifier = Modifier.fillMaxSize()
@@ -123,6 +125,7 @@ fun DashboardContent(
     onNavigateToReview: () -> Unit,
     onNavigateToTransactions: (monthOffset: Int, category: String?, type: String?) -> Unit,
     onNavigateToBalances: () -> Unit,
+    onNavigateToSync: () -> Unit = {},
     onShowExact: (String, Double) -> Unit,
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
@@ -144,7 +147,8 @@ fun DashboardContent(
                 failedCount = state.failedCount,
                 isSyncing = state.isSyncing,
                 isOffline = state.isOffline,
-                onFailedClick = onNavigateToReview
+                onFailedClick = onNavigateToReview,
+                onClick = onNavigateToSync
             )
         }
 
