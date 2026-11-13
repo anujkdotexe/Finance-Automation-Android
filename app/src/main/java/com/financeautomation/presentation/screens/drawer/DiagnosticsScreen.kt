@@ -183,7 +183,7 @@ fun DiagnosticsScreen(
                         onClick = {
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, "Finance Automation Diagnostics Dump\nAccount: ${state.googleAccountEmail}\nSpreadsheet: ${state.spreadsheetId}")
+                                putExtra(Intent.EXTRA_TEXT, com.financeautomation.core.utils.MaskUtils.diagnosticsShareText(state.googleAccountEmail, state.spreadsheetId))
                                 type = "text/plain"
                             }
                             context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.diag_share_chooser_title)).apply {
