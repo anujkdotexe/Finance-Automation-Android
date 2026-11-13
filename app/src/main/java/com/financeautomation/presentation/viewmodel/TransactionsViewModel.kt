@@ -169,6 +169,10 @@ class TransactionsViewModel(
         searchScopeFlow.value = scope
     }
 
+    fun setFilter(filter: TransactionFilter) {
+        filterFlow.value = filter
+    }
+
     fun setFilter(
         category: String? = null,
         account: String? = null,
@@ -249,7 +253,15 @@ class TransactionsViewModel(
             }
 
             if (!filter.account.isNullOrBlank()) {
-                if (!txn.account.equals(filter.account.trim(), ignoreCase = true)) {
+                val accFilter = filter.account.trim().lowercase()
+                val txnAcc = txn.account.trim().lowercase()
+                val matches = when (accFilter) {
+                    "card" -> txnAcc.contains("card") || txnAcc.contains("hdfc") || txnAcc.contains("icici") || txnAcc.contains("sbi") || txnAcc.contains("axis")
+                    "upi" -> txnAcc.contains("upi") || txnAcc.contains("gpay") || txnAcc.contains("phonepe") || txnAcc.contains("paytm") || txnAcc.contains("supermoney")
+                    "cash" -> txnAcc.contains("cash")
+                    else -> txnAcc.equals(accFilter, ignoreCase = true)
+                }
+                if (!matches) {
                     return@filter false
                 }
             }
@@ -275,7 +287,7 @@ class TransactionsViewModel(
                     "pending", "waiting to sync", "waiting_to_sync" -> rowStatus == RowStatus.WAITING_TO_SYNC
                     "synced" -> rowStatus == RowStatus.SYNCED
                     "failed" -> rowStatus == RowStatus.FAILED
-                    "needs review", "needs_review" -> rowStatus == RowStatus.NEEDS_REVIEW
+                    "needs review", "needs_review", "review" -> rowStatus == RowStatus.NEEDS_REVIEW
                     else -> true
                 }
                 if (!matchesStatus) {
@@ -332,6 +344,12 @@ class TransactionsViewModel(
             rowStatuses = filteredTransactions.associate { it.id to computeRowStatus(it, queueIds) },
             isLoading = false
         )
+    }
+
+    fun voidTransaction(txnId: String) {
+        viewModelScope.launch(ioDispatcher) {
+            transactionRepository.voidTransaction(txnId)
+        }
     }
 
     companion object {

@@ -612,7 +612,8 @@ fun AppNavHost(
                                     putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, txn.id)
                                     putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
                                 })
-                            }
+                            },
+                            onAddExpense = { launchFlow("EXPENSE") }
                         )
                     }
 
