@@ -61,7 +61,19 @@ class SubscriptionScheduleUseCase {
         return result
     }
 
+    /**
+     * The first due date on or after [fromEpochDay] (never before the anchor), or null for a paused subscription.
+     * Unlike [dueDates] this looks forward.
+     */
+    fun nextDue(sub: Subscription, fromEpochDay: Long): Long? {
+        if (!sub.active) return null
+        val lower = maxOf(fromEpochDay, sub.anchorEpochDay)
+        val upper = lower + SEARCH_DAYS
+        return dueDates(sub, lower, upper, todayEpochDay = upper).firstOrNull()
+    }
+
     companion object {
+        private const val SEARCH_DAYS = 400L
         val IST: ZoneId = ZoneId.of("Asia/Kolkata")
     }
 }

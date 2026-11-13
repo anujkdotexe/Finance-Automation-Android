@@ -66,6 +66,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.R
+import com.financeautomation.core.utils.DisplayDateTime
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.core.utils.stripVoidPrefix
@@ -249,8 +250,7 @@ fun TransactionsContent(
     onAddExpense: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val timeFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
-
+    
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -642,7 +642,7 @@ fun TransactionsContent(
                                 is TransactionListItem.ExpenseItem -> {
                                     val txn = item.transaction
                                     val splitText = if (txn.owedToMe > 0.0) "Split (${formatRupeesAuto(txn.myShare)})" else null
-                                    val timeStr = timeFormat.format(Date(txn.timestamp))
+                                    val timeStr = DisplayDateTime.time(txn.timestamp)
 
                                     SwipeableTransactionRow(
                                         txn = txn,
@@ -654,7 +654,7 @@ fun TransactionsContent(
                                 }
                                 is TransactionListItem.IncomeItem -> {
                                     val inf = item.inflow
-                                    val timeStr = timeFormat.format(Date(inf.timestamp))
+                                    val timeStr = DisplayDateTime.time(inf.timestamp)
 
                                     InflowRow(
                                         source = inf.source,
@@ -788,7 +788,6 @@ fun TransactionDetailSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDetails by remember { mutableStateOf(false) }
-    val fullDateFormat = remember { SimpleDateFormat("EEEE, d MMMM yyyy, h:mm a", Locale.getDefault()) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -822,7 +821,7 @@ fun TransactionDetailSheet(
                     },
                     color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
-                StatusChip(status = if (isVoid) "Voided" else transaction.status.value)
+                StatusChip(status = if (isVoid) "VOID" else transaction.status.value)
             }
 
             // Big Mono Amount
@@ -840,7 +839,7 @@ fun TransactionDetailSheet(
                 Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
                     DetailRow(label = stringResource(R.string.txn_detail_category), value = transaction.category)
                     DetailRow(label = stringResource(R.string.txn_detail_account), value = transaction.account)
-                    DetailRow(label = stringResource(R.string.txn_detail_datetime), value = fullDateFormat.format(Date(transaction.timestamp)))
+                    DetailRow(label = stringResource(R.string.txn_detail_datetime), value = DisplayDateTime.full(transaction.timestamp))
 
                     val splitSummary = if (transaction.owedToMe > 0.0) {
                         "My share ${formatRupeesAuto(transaction.myShare)} · Owed ${formatRupeesAuto(transaction.owedToMe)}"
@@ -914,7 +913,6 @@ fun IncomeDetailSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showConfirmVoid by remember { mutableStateOf(false) }
-    val fullDateFormat = remember { SimpleDateFormat("EEEE, d MMMM yyyy, h:mm a", Locale.getDefault()) }
 
     val displayTitle = inflow.source.ifBlank {
         when (inflow.inflowType.uppercase()) {
@@ -957,7 +955,7 @@ fun IncomeDetailSheet(
                     },
                     color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
-                StatusChip(status = if (isVoid) "Voided" else inflow.inflowType)
+                StatusChip(status = if (isVoid) "VOID" else inflow.inflowType)
             }
 
             // Big Mono Amount in positive color (or muted if voided)
@@ -978,7 +976,7 @@ fun IncomeDetailSheet(
                     }
                     DetailRow(label = stringResource(R.string.txn_detail_type), value = inflow.inflowType)
                     DetailRow(label = stringResource(R.string.txn_detail_account), value = inflow.account)
-                    DetailRow(label = stringResource(R.string.txn_detail_datetime), value = fullDateFormat.format(Date(inflow.timestamp)))
+                    DetailRow(label = stringResource(R.string.txn_detail_datetime), value = DisplayDateTime.full(inflow.timestamp))
                     if (inflow.note.isNotBlank()) {
                         DetailRow(label = stringResource(R.string.txn_detail_note), value = inflow.note)
                     }

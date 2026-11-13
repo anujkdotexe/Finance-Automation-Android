@@ -149,6 +149,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         (application as FinanceApplication).appContainer.appLockManager.onBackgrounded()
+        // Redraw the home screen widget so a changed app lock setting shows there
+        com.financeautomation.service.MonthBurnWidgetProvider.requestUpdate(applicationContext)
         super.onStop()
     }
 

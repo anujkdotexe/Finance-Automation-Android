@@ -219,6 +219,9 @@
     <string name="notif_auth_reconnect_title">Reconnect Google Drive sync</string>
     <string name="notif_auth_reconnect_text">Tap to authorize Google Drive sync and resume queued operations</string>
     <string name="notif_payment_detected_title">Payment Detected</string>
+    <string name="notif_public_payment_title">Payment detected</string>
+    <string name="notif_public_subscription_title">Subscription due</string>
+    <string name="notif_public_open_to_view">Open the app to view</string>
     <string name="notif_expense_tracking_disabled_title">Expense Tracking Disabled</string>
     <string name="notif_expense_tracking_disabled_text">Notification access was turned off. Tap to re-enable automated capture.</string>
 
@@ -379,6 +382,8 @@
     <string name="sub_per_month">/ month</string>
     <string name="sub_active_title">Active subscriptions</string>
     <string name="sub_next_due">Next due %1$s</string>
+    <string name="sub_paused_label">Paused</string>
+    <string name="sub_total_excludes_varies">%1$d without a fixed amount, not in this total</string>
     <string name="sub_next_due_formatted">Next due %1$s, %2$s</string>
     <string name="sub_paused_title">Paused subscriptions</string>
     <string name="sub_empty_title">No active subscriptions</string>
@@ -555,6 +560,7 @@
     <string name="widget_month_burn_title">Living burn</string>
     <string name="widget_month_burn_per_day">%1$s a day</string>
     <string name="widget_month_burn_up_to_date">Up to date</string>
+    <string name="widget_month_burn_unlock">Unlock to view</string>
     <string name="widget_month_burn_waiting">%1$d waiting</string>
     <string name="widget_month_burn_description">%1$s living burn %2$s, %3$s, %4$s</string>
     <string name="widget_month_burn_placeholder_month">Month</string>

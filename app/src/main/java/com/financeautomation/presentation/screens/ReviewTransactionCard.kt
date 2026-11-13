@@ -126,7 +126,7 @@ fun ReviewTransactionCard(
                         )
 
                         if (isVoid) {
-                            StatusChip(status = "Voided")
+                            StatusChip(status = "VOID")
                         }
                     }
 
@@ -234,15 +234,10 @@ fun SubscriptionDueCard(
 }
 
 private fun formatTransactionTime(timestamp: Long): String {
-    val date = Date(timestamp)
-    val now = Date()
-    val sameDay = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(date) ==
-            SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(now)
-
-    return if (sameDay) {
-        "Today, " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(date)
+    return if (com.financeautomation.core.utils.DisplayDateTime.isSameDay(timestamp, System.currentTimeMillis())) {
+        "Today, " + com.financeautomation.core.utils.DisplayDateTime.timeShort(timestamp)
     } else {
-        SimpleDateFormat("d MMM, h:mm a", Locale.getDefault()).format(date)
+        com.financeautomation.core.utils.DisplayDateTime.dayMonthTime(timestamp)
     }
 }
 

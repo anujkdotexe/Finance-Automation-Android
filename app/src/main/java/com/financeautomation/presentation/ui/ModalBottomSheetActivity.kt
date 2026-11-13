@@ -292,17 +292,23 @@ class ModalBottomSheetActivity : ComponentActivity() {
             withContext(Dispatchers.IO) { container.ensureAppLockStarted() }
             val locked = container.appLockManager.isLockedNow()
             lockedState.value = locked
-            when {
-                !captureId.isNullOrBlank() -> {
-                    quickLogViewModel.loadCapture(captureId)
+            when (ModalSheetLoadPolicy.decide(captureId, txnId, locked)) {
+                ModalSheetLoadPolicy.Action.LOAD_CAPTURE -> quickLogViewModel.loadCapture(captureId.orEmpty())
+                ModalSheetLoadPolicy.Action.LOAD_TRANSACTION -> quickLogViewModel.loadTransaction(txnId.orEmpty())
+                ModalSheetLoadPolicy.Action.SHOW_LOCK_PROMPT -> {
+                    // Locked: load nothing. The main screen shows the unlock prompt; the capture stays waiting.
+                    startActivity(
+                        InternalIntentAuth.attach(
+                            this@ModalBottomSheetActivity,
+                            Intent(this@ModalBottomSheetActivity, MainActivity::class.java).apply {
+                                putExtra("extra_route", AppRoutes.NEEDS_REVIEW)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                        )
+                    )
+                    finish()
                 }
-                // An existing transaction is never shown while locked
-                !txnId.isNullOrBlank() && !locked -> {
-                    quickLogViewModel.loadTransaction(txnId)
-                }
-                else -> {
-                    quickLogViewModel.setManualMode()
-                }
+                ModalSheetLoadPolicy.Action.MANUAL -> quickLogViewModel.setManualMode()
             }
         }
     }

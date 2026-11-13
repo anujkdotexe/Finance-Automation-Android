@@ -125,7 +125,7 @@ class NotificationSimulatorTest {
             // Verify ParseNotificationUseCase drops with OTP_MESSAGE
             val parseResult = parser(
                 sourcePackage = PackageWhitelist.PACKAGE_GOOGLE_MESSAGES,
-                title = "HDFC Bank",
+                title = "AX-HDFCBK",
                 text = text
             )
             assertTrue(
@@ -141,7 +141,7 @@ class NotificationSimulatorTest {
             // Verify NotificationProcessor drops / ignores with Ignored
             val processResult = processor.process(
                 sourcePackage = PackageWhitelist.PACKAGE_GOOGLE_MESSAGES,
-                title = "HDFC Bank",
+                title = "AX-HDFCBK",
                 text = text
             )
             assertTrue(

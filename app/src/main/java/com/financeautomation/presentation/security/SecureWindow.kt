@@ -31,9 +31,9 @@ object SecureWindow {
 
     /** Keeps [window] in step with the setting for as long as [scope] lives. */
     fun follow(window: Window, settings: PrivacySettings, scope: CoroutineScope) {
-        apply(window, settings.hideRecentsPreview.value)
+        apply(window, settings.secure.value)
         scope.launch(Dispatchers.Main.immediate) {
-            settings.hideRecentsPreview.collect { apply(window, it) }
+            settings.secure.collect { apply(window, it) }
         }
     }
 }

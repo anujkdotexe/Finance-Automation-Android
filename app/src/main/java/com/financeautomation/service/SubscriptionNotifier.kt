@@ -22,7 +22,11 @@ import com.financeautomation.service.worker.SubscriptionReminderNotifier
  * Posts the "Did you pay <name>?" notification with Yes, Not yet and Skip this time actions.
  * All PendingIntents are immutable and target explicit, non-exported components.
  */
-class SubscriptionNotifier(private val context: Context) : SubscriptionReminderNotifier {
+class SubscriptionNotifier(
+    private val context: Context,
+    /** True when the app lock is on: the lock screen then shows only "Subscription due". */
+    private val appLockOn: Boolean = false
+) : SubscriptionReminderNotifier {
 
     override fun post(subscription: Subscription, cycle: SubscriptionCycle) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -53,7 +57,7 @@ class SubscriptionNotifier(private val context: Context) : SubscriptionReminderN
             receiverIntent(SubscriptionActionReceiver.ACTION_YES, cycle.id, notificationId, 0)
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(context.getString(R.string.subscription_notification_title, subscription.name))
             .setContentText(context.getString(R.string.subscription_notification_due_today, amountText))
@@ -63,8 +67,11 @@ class SubscriptionNotifier(private val context: Context) : SubscriptionReminderN
             .addAction(0, context.getString(R.string.notification_action_yes), yesIntent)
             .addAction(0, context.getString(R.string.notification_action_not_yet), receiverIntent(SubscriptionActionReceiver.ACTION_NOT_YET, cycle.id, notificationId, 1))
             .addAction(0, context.getString(R.string.notification_action_skip), receiverIntent(SubscriptionActionReceiver.ACTION_SKIP, cycle.id, notificationId, 2))
-            .build()
-        manager.notify(notificationId, notification)
+        NotificationPrivacy.apply(
+            builder, context, CHANNEL_ID, appLockOn,
+            publicTitle = context.getString(R.string.notif_public_subscription_title)
+        )
+        manager.notify(notificationId, builder.build())
     }
 
     private fun receiverIntent(action: String, cycleId: String, notificationId: Int, slot: Int): PendingIntent {

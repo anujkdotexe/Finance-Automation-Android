@@ -12,6 +12,7 @@ import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.RecurringDetector
 import com.financeautomation.domain.usecase.RecurringSuggestion
+import com.financeautomation.domain.usecase.SubscriptionScheduleUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
@@ -29,6 +30,10 @@ data class SubscriptionsUiState(
     val pausedSubscriptions: List<Subscription> = emptyList(),
     val totalMonthlySpend: Double = 0.0,
     val nextDueSubscription: Subscription? = null,
+    /** Next due date (epoch day, Asia/Kolkata) per active subscription id. */
+    val nextDueByDay: Map<String, Long> = emptyMap(),
+    /** Active subscriptions without a fixed amount; they are left out of [totalMonthlySpend]. */
+    val variesAmountCount: Int = 0,
     val isLoading: Boolean = false,
     /** Payments that repeat but are not tracked yet. At most [SubscriptionsViewModel.MAX_SUGGESTIONS] are shown. */
     val suggestions: List<RecurringSuggestion> = emptyList()
@@ -56,7 +61,12 @@ class SubscriptionsViewModel(
                 val paused = allSubs.filter { !it.active }
 
                 // Calculate total monthly burn
-                val totalMonthly = active.sumOf { sub ->
+                val today = todayEpochDay()
+                val schedule = SubscriptionScheduleUseCase()
+                val nextDueByDay = active.mapNotNull { s -> schedule.nextDue(s, today)?.let { s.id to it } }.toMap()
+                val soonest = active.filter { nextDueByDay.containsKey(it.id) }.minByOrNull { nextDueByDay.getValue(it.id) }
+                // A subscription without a fixed amount is unknown, not zero: left out of the total and counted
+                val totalMonthly = active.filter { it.amount != null }.sumOf { sub ->
                     val amt = sub.amount ?: 0.0
                     when (sub.frequency) {
                         SubscriptionFrequency.MONTHLY -> amt
@@ -71,7 +81,9 @@ class SubscriptionsViewModel(
                         activeSubscriptions = active,
                         pausedSubscriptions = paused,
                         totalMonthlySpend = totalMonthly,
-                        nextDueSubscription = active.firstOrNull(),
+                        nextDueSubscription = soonest,
+                        nextDueByDay = nextDueByDay,
+                        variesAmountCount = active.count { it.amount == null },
                         isLoading = false
                     )
                 }
@@ -102,13 +114,17 @@ class SubscriptionsViewModel(
         viewModelScope.launch { preferencesRepository?.addDismissedRecurring(suggestion.key) }
     }
 
+    /** Today in Asia/Kolkata as an epoch day, from the injected clock. */
+    private fun todayEpochDay(): Long =
+        java.time.Instant.ofEpochMilli(clock()).atZone(SubscriptionScheduleUseCase.IST).toLocalDate().toEpochDay()
+
     fun addSubscription(
         name: String,
         amount: Double?,
         frequency: SubscriptionFrequency = SubscriptionFrequency.MONTHLY,
         account: String = "Primary",
         remind: Boolean = true,
-        anchorEpochDay: Long = LocalDate.now().toEpochDay(),
+        anchorEpochDay: Long? = null,
         category: String = Subscription.DEFAULT_CATEGORY
     ) {
         viewModelScope.launch {
@@ -117,7 +133,7 @@ class SubscriptionsViewModel(
                 name = name.trim(),
                 amount = amount,
                 frequency = frequency,
-                anchorEpochDay = anchorEpochDay,
+                anchorEpochDay = anchorEpochDay ?: todayEpochDay(),
                 account = account,
                 category = category,
                 remind = remind,
