@@ -35,6 +35,8 @@ object FinanceShapes {
     val sheet = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     val pill = CircleShape
     val chip = CircleShape
+    val appChip = RoundedCornerShape(8.dp)
+    val appCard = RoundedCornerShape(16.dp)
 }
 
 object FinanceSizes {
@@ -55,6 +57,14 @@ object FinanceSizes {
     val iconLarge: Dp = 24.dp
     val icon28: Dp = 28.dp
     val icon32: Dp = 32.dp
+    val buttonHeight: Dp = 48.dp
+    val headerActionHeight: Dp = 40.dp
+    val chipHeight: Dp = 32.dp
+    val chipRadius: Dp = 8.dp
+    val segmentedChoiceHeight: Dp = 40.dp
+    val cardRadius: Dp = 16.dp
+    val cardPadding: Dp = 16.dp
+    val cardGap: Dp = 12.dp
     val buttonHeightSmall: Dp = 34.dp
     val buttonHeight36: Dp = 36.dp
     val avatarSmall: Dp = 36.dp
