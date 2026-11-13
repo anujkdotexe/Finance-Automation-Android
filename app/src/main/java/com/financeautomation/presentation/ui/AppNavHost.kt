@@ -611,6 +611,9 @@ fun AppNavHost(
                             onNavigateToSync = {
                                 navController.navigate(AppRoutes.SYNC_BACKUP)
                             },
+                            onNavigateToInsights = {
+                                navController.navigate(AppRoutes.INSIGHTS)
+                            },
                             onAddExpense = { launchFlow("EXPENSE") }
                         )
                     }

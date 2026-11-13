@@ -60,6 +60,7 @@ fun DashboardScreen(
     onNavigateToSettlements: (personName: String, owedToMe: Boolean) -> Unit = { _, _ -> },
     onNavigateToBalances: () -> Unit = { onNavigateToSettlements("", true) },
     onNavigateToSync: () -> Unit = {},
+    onNavigateToInsights: () -> Unit = {},
     onAddExpense: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -108,6 +109,7 @@ fun DashboardScreen(
                 onNavigateToTransactions = onNavigateToTransactions,
                 onNavigateToBalances = onNavigateToBalances,
                 onNavigateToSync = onNavigateToSync,
+                onNavigateToInsights = onNavigateToInsights,
                 onShowExact = ::showExactSnackbar,
                 onDismissHint = viewModel::dismissFirstRunHint,
                 onAddExpense = onAddExpense,
@@ -130,6 +132,7 @@ fun DashboardContent(
     onNavigateToTransactions: (monthOffset: Int, category: String?, type: String?) -> Unit,
     onNavigateToBalances: () -> Unit,
     onNavigateToSync: () -> Unit = {},
+    onNavigateToInsights: () -> Unit = {},
     onShowExact: (String, Double) -> Unit,
     onDismissHint: () -> Unit = {},
     onAddExpense: () -> Unit,
@@ -256,7 +259,8 @@ fun DashboardContent(
                         },
                         onSeeAllClick = {
                             onNavigateToTransactions(state.monthOffset, null, null)
-                        }
+                        },
+                        onInsightsClick = onNavigateToInsights
                     )
                 }
             }
