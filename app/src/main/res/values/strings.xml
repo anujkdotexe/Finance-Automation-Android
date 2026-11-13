@@ -265,7 +265,7 @@
     <string name="speed_dial_trip_mode">Trip mode</string>
     <string name="speed_dial_income_refund">Income or refund</string>
 
-    <string name="menu_sync_backup">Sync and Backup</string>
+    <string name="menu_sync_backup">Sync and backup</string>
     <string name="nav_subscriptions_placeholder">Coming in round 4</string>
 
     <!-- Sheet Flow Prompts and Labels -->
@@ -474,7 +474,7 @@
     <!-- Accounts Screen -->
     <string name="accounts_title">Accounts</string>
     <string name="accounts_action_add">Add</string>
-    <string name="accounts_section_title">All Accounts</string>
+    <string name="accounts_section_title">All accounts</string>
     <string name="accounts_section_subtitle">Connected accounts for automatic expense tracking</string>
     <string name="accounts_badge_default">Default</string>
     <string name="accounts_tx_count">%1$d transactions this month</string>
@@ -546,7 +546,7 @@
     <string name="diag_view_sync_log_desc">Inspect timestamps and error codes</string>
     <string name="diag_export_logs">Export logs</string>
     <string name="diag_export_logs_desc">Share sanitized debug logs to disk</string>
-    <string name="diag_locked_title">Diagnostics Locked</string>
+    <string name="diag_locked_title">Diagnostics locked</string>
     <string name="diag_locked_desc">Developer options are currently disabled. Open About and tap the version number 7 times to unlock.</string>
 
     <!-- Subscriptions Screen (U11) -->
@@ -606,17 +606,17 @@
     <string name="about_privacy_title">Strict privacy sandbox</string>
     <string name="about_privacy_desc">We never read WhatsApp, Telegram, or OTP messages.</string>
     <string name="about_metric_sms_filter">SMS filter</string>
-    <string name="about_metric_sms_val">Zero Log</string>
+    <string name="about_metric_sms_val">Zero log</string>
     <string name="about_metric_sms_sub">Ephemeral memory</string>
     <string name="about_metric_storage">Storage</string>
-    <string name="about_metric_storage_val">Local First</string>
+    <string name="about_metric_storage_val">Local first</string>
     <string name="about_metric_storage_sub">Google Sheets target</string>
     <string name="about_link_privacy">Privacy policy</string>
     <string name="about_link_licences">Open source licences</string>
     <string name="about_footer">Built for local-first Android finance automation with Google Sheets.</string>
 
     <!-- Error Screens (U12) -->
-    <string name="error_53_top_bar">Sync Failure</string>
+    <string name="error_53_top_bar">Sync failure</string>
     <string name="error_53_title">Google Sheets API not enabled</string>
     <string name="error_53_desc">Enable the Google Sheets API in your Google Cloud console to sync transactions.</string>
     <string name="error_53_action_open_console">Open Google Cloud</string>
@@ -626,21 +626,21 @@
     <string name="error_54_action_grant">Grant permission</string>
     <string name="error_54_action_manual">Continue manually</string>
     <string name="error_54_action_settings">Open settings</string>
-    <string name="error_55_top_bar">Sync Paused</string>
+    <string name="error_55_top_bar">Sync paused</string>
     <string name="error_55_title">Google API rate limited</string>
     <string name="error_55_desc">Google Sheets temporarily limited sync requests. Your entries are saved on this phone and will sync shortly.</string>
-    <string name="error_55_badge">Temporary Pause</string>
+    <string name="error_55_badge">Temporary pause</string>
     <string name="error_55_headline">Sync rate limited</string>
-    <string name="error_55_safe_title">Offline Safe</string>
+    <string name="error_55_safe_title">Offline safe</string>
     <string name="error_55_safe_badge">2 items saved</string>
     <string name="error_55_safe_desc">All changes are preserved safely on your device and will upload as soon as connectivity resumes.</string>
-    <string name="error_55_action_dashboard">Go to Dashboard</string>
+    <string name="error_55_action_dashboard">Go to dashboard</string>
     <string name="error_55_action_retry">Retry now</string>
 
     <!-- Onboarding Checklist (U12) -->
     <string name="onboarding_checklist_title">Setup checklist</string>
     <string name="onboarding_checklist_desc">Complete these quick steps to start logging expenses automatically.</string>
-    <string name="onboarding_checklist_step1_title">Connect Google Sheet</string>
+    <string name="onboarding_checklist_step1_title">Connect Google sheet</string>
     <string name="onboarding_checklist_step1_default_sheet">Finance 2026</string>
     <string name="onboarding_checklist_step1_connected">Connected</string>
     <string name="onboarding_checklist_step1_connect">Connect</string>
@@ -656,7 +656,7 @@
     <string name="onboarding_checklist_trouble">Having trouble?</string>
 
     <!-- Notification Access Screen (U12 / 51) -->
-    <string name="onboarding_notif_top_title">Permissions Verification</string>
+    <string name="onboarding_notif_top_title">Permissions verification</string>
     <string name="onboarding_notif_step_badge">Step 3 of 3</string>
     <string name="onboarding_notif_ready_badge">Ready</string>
     <string name="onboarding_notif_hero_title">Enable notification access</string>
@@ -667,7 +667,7 @@
     <string name="onboarding_notif_card2_desc">Personal messages and codes are never accessed or stored.</string>
     <string name="onboarding_notif_card3_title">Stays on your device</string>
     <string name="onboarding_notif_card3_desc">All parsing happens offline on your phone. Nothing is shared.</string>
-    <string name="onboarding_notif_action_grant">Grant in Android Settings</string>
+    <string name="onboarding_notif_action_grant">Grant in Android settings</string>
     <string name="onboarding_notif_action_skip">Skip this time</string>
 
     <!-- Outside-the-App Surfaces (U13) -->
