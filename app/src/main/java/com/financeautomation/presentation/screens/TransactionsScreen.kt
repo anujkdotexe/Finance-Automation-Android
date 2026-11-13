@@ -212,10 +212,10 @@ fun TransactionsScreen(
                 onDismiss = { selectedInflow = null },
                 onVoid = {
                     viewModel.voidInflow(inf.id) { success ->
-                        if (success) {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(context.getString(R.string.txns_entry_voided_msg))
-                            }
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                context.getString(if (success) R.string.txns_entry_voided_msg else R.string.txns_inflow_void_blocked_msg)
+                            )
                         }
                     }
                     selectedInflow = null

@@ -38,6 +38,12 @@ class FinanceApplication : Application() {
         CrashlyticsManager.initAtAppStart(this)
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
+        // Periodic sync must not depend on a reboot or an app update; KEEP makes this a no-op when already scheduled
+        try {
+            com.financeautomation.service.worker.SyncTransactionsWorker.enqueuePeriodic(applicationContext)
+        } catch (e: Exception) {
+            Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: schedule periodic sync")
+        }
 
         PipelineTrail.initialize(applicationContext, Dispatchers.IO) {
             appContainer.awaitDatabase().pipelineEventDao()
