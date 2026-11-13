@@ -49,6 +49,7 @@ class TransactionsViewModelTest {
         val voidCalls = mutableListOf<String>()
         val undoRecentSaveCalls = mutableListOf<String>()
         val updateCalls = mutableListOf<Transaction>()
+        var syncCalls = 0
 
         override fun getTransactions(): Flow<List<Transaction>> = txns
         override fun getNeedsReview(): Flow<List<Transaction>> = flowOf(emptyList())
@@ -72,7 +73,10 @@ class TransactionsViewModelTest {
             return Result.Success(Unit)
         }
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
-        override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
+        override suspend fun syncPendingTransactions(): Result<Int> {
+            syncCalls++
+            return Result.Success(1)
+        }
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
@@ -1011,5 +1015,20 @@ class TransactionsViewModelTest {
         assertTrue(undoSaveCompleted)
         assertEquals(listOf("t_newly_saved"), tRepo.undoRecentSaveCalls)
         assertNull(vm.lastSavedTransactionId)
+    }
+
+    @Test
+    fun testSyncNow_triggersSyncPendingTransactions() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        var syncCompleted = false
+        vm.syncNow { success -> syncCompleted = success }
+        advanceUntilIdle()
+
+        assertTrue(syncCompleted)
+        assertEquals(1, tRepo.syncCalls)
+        assertEquals(false, vm.uiState.value.isSyncing)
     }
 }
