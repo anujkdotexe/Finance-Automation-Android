@@ -183,7 +183,7 @@ class SettingsViewModel(
 
     fun onGoogleSignInSuccess(email: String) = syncCoordinator.onGoogleSignInSuccess(email)
 
-    fun onGoogleSignOut() = syncCoordinator.onGoogleSignOut()
+    fun onGoogleSignOut(context: android.content.Context? = null) = syncCoordinator.onGoogleSignOut(context)
 
     fun autoProvisionMasterSheet() = syncCoordinator.autoProvisionMasterSheet()
 
@@ -201,11 +201,15 @@ class SettingsViewModel(
 
     fun onAddAccount(name: String, lastFourDigits: String? = null) = customizationCoordinator.onAddAccount(name, lastFourDigits)
 
+    fun onRenameAccount(accountId: String, newName: String, lastFourDigits: String? = null) = customizationCoordinator.onRenameAccount(accountId, newName, lastFourDigits)
+
     fun onArchiveAccount(accountId: String) = customizationCoordinator.onArchiveAccount(accountId)
 
     // --- Expense Categories & Living Burn ---
 
     fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false) = customizationCoordinator.onAddCategory(name, isExcludedFromLivingBurn)
+
+    fun onRenameCategory(categoryId: String, newName: String) = customizationCoordinator.onRenameCategory(categoryId, newName)
 
     fun onToggleCategoryLivingBurnExclusion(categoryId: String, isExcluded: Boolean) = customizationCoordinator.onToggleCategoryLivingBurnExclusion(categoryId, isExcluded)
 

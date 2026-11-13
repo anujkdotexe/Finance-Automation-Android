@@ -58,13 +58,23 @@ class SettingsSyncCoordinator(
         }
     }
 
-    fun onGoogleSignOut() {
+    fun onGoogleSignOut(context: android.content.Context? = null) {
         scope.launch(ioDispatcher) {
             googleAuthTokenProvider?.clearCache()
             preferencesRepository.setGoogleAccountEmail(null)
+            preferencesRepository.setGoogleAccountDisplayName(null)
+            context?.let { ctx ->
+                try {
+                    val avatarFile = java.io.File(ctx.filesDir, "google_avatar.png")
+                    if (avatarFile.exists()) {
+                        avatarFile.delete()
+                    }
+                } catch (_: Exception) {}
+            }
             uiState.update {
                 it.copy(
                     googleAccountEmail = null,
+                    googleAccountDisplayName = null,
                     userMessage = "Signed out of Google account"
                 )
             }

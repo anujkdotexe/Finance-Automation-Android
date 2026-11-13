@@ -57,6 +57,7 @@ fun AccountsScreen(
 ) {
     val scrollState = rememberScrollState()
     var showAddAccountDialog by remember { mutableStateOf(false) }
+    var selectedAccountForEdit by remember { mutableStateOf<Account?>(null) }
     var newAccountName by remember { mutableStateOf("") }
     var newAccountDigits by remember { mutableStateOf("") }
 
@@ -116,12 +117,101 @@ fun AccountsScreen(
                             account = account,
                             isDefault = isDefault,
                             transactionCount = txCount,
-                            onClick = { viewModel.onDefaultAccountChanged(account.name) }
+                            onClick = { selectedAccountForEdit = account }
                         )
                     }
                 }
             }
         }
+    }
+
+    selectedAccountForEdit?.let { account ->
+        val isDefault = account.isDefault || account.name == state.defaultAccount
+        var editName by remember { mutableStateOf(account.name) }
+        var editDigits by remember { mutableStateOf(account.lastFourDigits.orEmpty()) }
+
+        AlertDialog(
+            onDismissRequest = { selectedAccountForEdit = null },
+            title = {
+                Text(
+                    text = "Edit Account",
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = "Account Name",
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = "Last 4 Digits",
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = editDigits,
+                            onValueChange = { if (it.length <= 4) editDigits = it },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    if (!isDefault) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                viewModel.onDefaultAccountChanged(account.name)
+                                selectedAccountForEdit = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Set as default account")
+                        }
+
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                viewModel.onArchiveAccount(account.id)
+                                selectedAccountForEdit = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Archive account", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                ButtonPair(
+                    outlinedText = stringResource(R.string.action_cancel),
+                    onOutlinedClick = { selectedAccountForEdit = null },
+                    filledText = stringResource(R.string.action_save),
+                    onFilledClick = {
+                        if (editName.isNotBlank()) {
+                            viewModel.onRenameAccount(account.id, editName, editDigits)
+                            selectedAccountForEdit = null
+                        }
+                    },
+                    filledEnabled = editName.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        )
     }
 
     if (showAddAccountDialog) {

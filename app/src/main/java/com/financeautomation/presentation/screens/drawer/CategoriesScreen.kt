@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.screens.drawer
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -61,6 +66,7 @@ fun CategoriesScreen(
 ) {
     val scrollState = rememberScrollState()
     var showAddCategorySheet by remember { mutableStateOf(false) }
+    var selectedCategoryForEdit by remember { mutableStateOf<Category?>(null) }
 
     Column(
         modifier = modifier
@@ -108,8 +114,12 @@ fun CategoriesScreen(
                     category = category,
                     dotColor = dotColor,
                     isLocked = isLocked,
+                    onClick = {
+                        if (!isLocked) {
+                            selectedCategoryForEdit = category
+                        }
+                    },
                     onToggleBurn = { enabled ->
-                        // Switch is "Count toward living burn" so enabled == true means !isExcludedFromLivingBurn
                         viewModel.onToggleCategoryLivingBurnExclusion(category.id, !enabled)
                     }
                 )
@@ -126,6 +136,69 @@ fun CategoriesScreen(
             }
         )
     }
+
+    selectedCategoryForEdit?.let { cat ->
+        var editName by remember { mutableStateOf(cat.name) }
+        AlertDialog(
+            onDismissRequest = { selectedCategoryForEdit = null },
+            title = {
+                Text(
+                    text = "Edit Category",
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = "Category Name",
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.onArchiveCategory(cat.id)
+                            selectedCategoryForEdit = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Hide category", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editName.isNotBlank()) {
+                            viewModel.onRenameCategory(cat.id, editName.trim())
+                            selectedCategoryForEdit = null
+                        }
+                    },
+                    enabled = editName.isNotBlank() && editName.trim() != cat.name
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { selectedCategoryForEdit = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -133,6 +206,7 @@ private fun CategoryItemCard(
     category: Category,
     dotColor: Color,
     isLocked: Boolean,
+    onClick: () -> Unit = {},
     onToggleBurn: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -140,7 +214,10 @@ private fun CategoryItemCard(
         color = FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
         shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(FinanceShapes.large)
+            .clickable(enabled = !isLocked, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
