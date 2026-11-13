@@ -66,15 +66,18 @@ fun AppChip(
     }
 
     Surface(
-        onClick = onClick,
-        enabled = enabled,
         shape = FinanceShapes.appChip,
         border = border,
         color = containerColor,
         contentColor = contentColor,
         modifier = modifier
             .height(FinanceTheme.sizes.chipHeight)
-            .defaultMinSize(minHeight = FinanceTheme.sizes.chipHeight)
+            .clip(FinanceShapes.appChip)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick
+            )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m),

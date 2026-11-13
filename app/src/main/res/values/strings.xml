@@ -373,7 +373,7 @@
     <string name="expense_merchant_placeholder">Merchant or purpose</string>
     <string name="expense_my_share_format">My share: %s</string>
     <string name="expense_owed_to_me_format">Owed to me: %s</string>
-    <string name="action_add_friend">+ Add friend</string>
+    <string name="action_add_friend">Add friend</string>
     <string name="placeholder_friend_name">Friend name</string>
     <string name="placeholder_amount_zero">0.00</string>
 

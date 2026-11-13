@@ -129,11 +129,16 @@ fun QuickLogSheet(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { focusManager.clearFocus() }
-            .verticalScroll(verticalScroll),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
     ) {
-        // 1. Amount First in Mono (32 Medium)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(verticalScroll),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            // 1. Amount First in Mono (32 Medium)
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -289,7 +294,7 @@ fun QuickLogSheet(
             )
         }
 
-        // 3. Category Chips: Exactly 10 real categories in two rows
+        // 3. Category Chips: Exactly 10 real categories in wrapping FlowRow
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.prompt_category),
@@ -299,18 +304,13 @@ fun QuickLogSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val row1Categories = remember {
+            val allCategories = remember {
                 listOf(
                     CategoryConstants.CATEGORY_FOOD_AND_DRINK,
                     CategoryConstants.CATEGORY_GROCERIES,
                     CategoryConstants.CATEGORY_TRANSIT,
                     CategoryConstants.CATEGORY_SUBSCRIPTIONS,
-                    CategoryConstants.CATEGORY_SHOPPING
-                )
-            }
-
-            val row2Categories = remember {
-                listOf(
+                    CategoryConstants.CATEGORY_SHOPPING,
                     CategoryConstants.CATEGORY_TRIP_TRAVEL,
                     CategoryConstants.CATEGORY_HEALTH,
                     CategoryConstants.CATEGORY_FAMILY,
@@ -319,41 +319,12 @@ fun QuickLogSheet(
                 )
             }
 
-            val row1Scroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(row1Scroll),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
-                row1Categories.forEach { categoryName ->
-                    val isSelected = categoryName.equals(state.selectedCategory, ignoreCase = true)
-                    AppChip(
-                        text = categoryName,
-                        selected = isSelected,
-                        onClick = {
-                            focusManager.clearFocus()
-                            onCategorySelected(categoryName)
-                        },
-                        leadingIcon = {
-                            CategoryChipIcon(categoryName = categoryName, isSelected = isSelected)
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-
-            val row2Scroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(row2Scroll),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                row2Categories.forEach { categoryName ->
+                allCategories.forEach { categoryName ->
                     val isSelected = categoryName.equals(state.selectedCategory, ignoreCase = true)
                     AppChip(
                         text = categoryName,
@@ -370,7 +341,7 @@ fun QuickLogSheet(
             }
         }
 
-        // 4. Account Chips (user-defined accounts, no balances)
+        // 4. Account Chips (user-defined accounts, no balances) in wrapping FlowRow
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = stringResource(R.string.prompt_paid_from),
@@ -380,13 +351,10 @@ fun QuickLogSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val accountScroll = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(accountScroll),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 state.availableAccounts.forEach { account ->
                     val isSelected = account.name.equals(state.selectedAccount, ignoreCase = true)
@@ -485,10 +453,11 @@ fun QuickLogSheet(
                 color = FinanceTheme.colors.error
             )
         }
+        }
 
-        Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+        Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
-        // 10. Action Buttons: FilledButton "Save expense", OutlinedButton "Cancel" as a pair
+        // 10. Action Buttons: Pinned FilledButton "Save expense", OutlinedButton "Cancel" as a pair outside scrollable area
         ButtonPair(
             outlinedText = stringResource(R.string.action_cancel),
             onOutlinedClick = onDismiss,
@@ -508,6 +477,7 @@ fun QuickLogSheet(
 
         // Optional Void Action for already-logged transactions
         if (state.transactionId != null && onVoid != null) {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
             OutlinedButton(
                 text = stringResource(R.string.action_void),
                 onClick = onVoid,

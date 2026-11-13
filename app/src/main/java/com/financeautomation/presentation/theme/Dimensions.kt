@@ -91,8 +91,8 @@ object FinanceSizes {
     val accountChipHeight: Dp = 22.dp
     val icon48: Dp = 48.dp
     val icon56: Dp = 56.dp
-    val maxSheetHeight: Dp = 540.dp
-    val maxOverlayHeight: Dp = 620.dp
+    val maxSheetHeight: Dp = 760.dp
+    val maxOverlayHeight: Dp = 760.dp
 }
 
 object FinanceAlphas {
