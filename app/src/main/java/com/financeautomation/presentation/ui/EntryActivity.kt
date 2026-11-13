@@ -65,19 +65,6 @@ object EntryIntentValidator {
     }
 
     /**
-     * Filters raw incoming extras keys to guarantee that no unvalidated extras or injection
-     * payloads are ever forwarded to internal activities.
-     */
-    fun sanitizeExtraKeys(incomingKeys: Set<String>): Set<String> {
-        val allowed = setOf(
-            EntryActivity.EXTRA_CAPTURE_ID,
-            EntryActivity.EXTRA_FLOW,
-            ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH
-        )
-        return incomingKeys.filter { it in allowed }.toSet()
-    }
-
-    /**
      * Builds a sanitized fallback intent for [ModalBottomSheetActivity].
      * Copies strictly only the validated capture ID and flow name; never forwards raw extras.
      */

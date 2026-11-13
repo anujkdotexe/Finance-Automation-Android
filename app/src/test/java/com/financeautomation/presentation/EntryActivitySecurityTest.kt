@@ -47,39 +47,4 @@ class EntryActivitySecurityTest {
         assertTrue("SHOWN capture is open", EntryIntentValidator.isCaptureOpen(PendingCaptureEntity.STATE_SHOWN))
         assertTrue("AWAITING_SUCCESS capture is open", EntryIntentValidator.isCaptureOpen(PendingCaptureEntity.STATE_AWAITING_SUCCESS))
     }
-
-    @Test
-    fun testSubscriptionExtraIgnored_andNoRawExtrasForwarded() {
-        // Incoming set of raw extras keys from an untrusted caller
-        val rawIncomingKeys = setOf(
-            "com.financeautomation.extra.SUBSCRIPTION_CYCLE_ID",
-            "injected_amount",
-            "malicious_key",
-            EntryActivity.EXTRA_CAPTURE_ID,
-            EntryActivity.EXTRA_FLOW,
-            ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH
-        )
-
-        val sanitizedKeys = EntryIntentValidator.sanitizeExtraKeys(rawIncomingKeys)
-
-        // Ensure allowed keys survive
-        assertTrue(sanitizedKeys.contains(EntryActivity.EXTRA_CAPTURE_ID))
-        assertTrue(sanitizedKeys.contains(EntryActivity.EXTRA_FLOW))
-        assertTrue(sanitizedKeys.contains(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH))
-
-        // Ensure malicious/unvalidated keys are completely stripped
-        assertFalse("Subscription cycle extra must not survive sanitization",
-            sanitizedKeys.contains("com.financeautomation.extra.SUBSCRIPTION_CYCLE_ID"))
-        assertFalse("Injected amount must not survive sanitization",
-            sanitizedKeys.contains("injected_amount"))
-        assertFalse("Malicious extra must not survive sanitization",
-            sanitizedKeys.contains("malicious_key"))
-        assertEquals(3, sanitizedKeys.size)
-    }
-
-    @Test
-    fun testEmptyRawExtras_producesEmptySanitizedKeys() {
-        val sanitized = EntryIntentValidator.sanitizeExtraKeys(emptySet())
-        assertTrue(sanitized.isEmpty())
-    }
 }
