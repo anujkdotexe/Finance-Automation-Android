@@ -43,7 +43,11 @@ class FontScaleOverflowAuditTest {
             "error_54_action_settings",
             "error_55_action_dashboard",
             "error_55_action_retry",
-            "onboarding_notif_action_skip"
+            "onboarding_notif_action_skip",
+            "sub_suggestion_not_now",
+            "sub_suggestion_track",
+            "app_lock_unlock",
+            "health_fix_button"
         )
 
         val foundMap = mutableMapOf<String, String>()
