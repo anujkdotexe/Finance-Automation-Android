@@ -182,6 +182,14 @@ class ParseNotificationUseCase(
             )
         }
 
+        // 3b. SMS from a personal number is rejected on the sender alone, before any of its text is examined
+        if (PackageWhitelist.isSmsPackage(sourcePackage) && RegexPatterns.isPersonalSender(title)) {
+            return NotificationParseResult.Dropped(
+                reason = DropReason.NOT_WHITELISTED,
+                sourcePackage = sourcePackage
+            )
+        }
+
         val fullContent = if (title.isNotBlank()) "$title. $text".trim() else text.trim()
 
         // 4. OTP and verification suppression check
