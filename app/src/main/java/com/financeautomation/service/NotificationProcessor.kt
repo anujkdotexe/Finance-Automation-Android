@@ -396,12 +396,14 @@ class NotificationProcessor(
             val container = app.appContainer
             val db = container.awaitDatabase()
 
-            val isDevMode = db.preferenceDao().getPreference(
-                PreferenceDao.KEY_DEVELOPER_MODE
-            )?.toBoolean() ?: false
+            val isDevMode = try {
+                container.preferencesRepository.getDeveloperModeSync()
+            } catch (e: Exception) {
+                false
+            }
 
             if (!BuildConfig.ENABLE_SIMULATOR || !isDevMode) {
-                return NotificationProcessingOutcome.IgnoredNotFinancial
+                return NotificationProcessingOutcome.Ignored("Simulator is disabled in this build or developer mode is inactive")
             }
             val processor = NotificationProcessor(
                 pendingCaptureDao = db.pendingCaptureDao(),
