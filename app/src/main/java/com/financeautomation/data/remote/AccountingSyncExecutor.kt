@@ -21,6 +21,7 @@ import com.financeautomation.domain.usecase.CarryForwardUseCase
 import com.financeautomation.domain.usecase.NettingUseCase
 import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
+import com.financeautomation.domain.usecase.VoidTransactionUseCase
 import com.financeautomation.domain.usecase.YearCloseUseCase
 import com.financeautomation.domain.utils.AccountingUtils
 import java.util.Locale
@@ -48,7 +49,8 @@ class AccountingSyncExecutor(
     private val repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
     private val carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
     private val nettingUseCase: NettingUseCase = NettingUseCase(),
-    private val yearCloseUseCase: YearCloseUseCase = YearCloseUseCase()
+    private val yearCloseUseCase: YearCloseUseCase = YearCloseUseCase(),
+    private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase()
 ) {
     constructor(
         googleSheetsClient: GoogleSheetsClient,
@@ -125,13 +127,46 @@ class AccountingSyncExecutor(
                 tabName = tabName,
                 allDebits = allDebits,
                 resolveCarriedFn = resolveCarriedFn
-            )
+            ).withInflowUuid(item.transactionId)
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
             resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
         return applyAccountingPlan(spreadsheetId, plan)
+    }
+
+    /**
+     * The use case generates a random id for the Table 2 row. Store the credit request id instead, so the row can be
+     * found again later (for example to void it). Plans cached before this change keep their random id.
+     */
+    private fun AccountingPlan.withInflowUuid(inflowId: String): AccountingPlan = withInflowRowUuid(inflowId)
+
+    /**
+     * Voids the Table 2 row written for the given income entry, found by its id in column AD. Zeroes the amount and
+     * prefixes the reason with "[Void] ", the same convention as a void debit. A row that is not found is an error
+     * that is not retried (for example an entry written by an older build, which stored a different id).
+     */
+    suspend fun executeVoidInflow(
+        item: SyncQueueEntity,
+        spreadsheetId: String,
+        tabName: String
+    ): Result<Unit> {
+        val req = AccountingRequestJsonAdapter.voidInflowRequestFromJson(item.payloadJson)
+        val rowRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AD", req.inflowId)
+        if (rowRes is Result.Error) return Result.Error(rowRes.exception)
+        val row = (rowRes as Result.Success).data
+            ?: return Result.Error(IllegalStateException("Income row not found in $tabName for ${req.inflowId}"))
+
+        val reasonRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "R$row")
+        if (reasonRes is Result.Error) return Result.Error(reasonRes.exception)
+        val currentReason = (reasonRes as Result.Success).data.orEmpty()
+
+        val plan = voidTransactionUseCase.voidInflow(tabName, row, currentReason)
+        val updates = plan.edits.associate { edit ->
+            "'${edit.tab}'!${edit.column}${edit.row}" to listOf(listOf(edit.value))
+        }
+        return googleSheetsClient.batchUpdateValues(spreadsheetId, updates)
     }
 
     suspend fun executeLogPayable(
@@ -530,3 +565,8 @@ class AccountingSyncExecutor(
     }
 }
 
+/** Replaces the id of the Table 2 append in this plan with [inflowId] (ignored when blank). */
+internal fun AccountingPlan.withInflowRowUuid(inflowId: String): AccountingPlan {
+    if (inflowId.isBlank()) return this
+    return copy(appends = appends.map { if (it.table == TableType.INFLOW) it.copy(uuid = inflowId) else it })
+}

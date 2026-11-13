@@ -53,6 +53,7 @@ data class SyncQueueEntity(
         const val OP_INSERT: String = "INSERT"
         const val OP_UPDATE: String = "UPDATE"
         const val OP_VOID: String = "VOID"
+        const val OP_VOID_INFLOW: String = "VOID_INFLOW"
         const val OP_CONFIG_PUSH: String = "CONFIG_PUSH"
         const val OP_LOG_CREDIT: String = "LOG_CREDIT"
         const val OP_LOG_PAYABLE: String = "LOG_PAYABLE"
