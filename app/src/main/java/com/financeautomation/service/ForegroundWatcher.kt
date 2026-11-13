@@ -17,6 +17,7 @@ import android.app.PendingIntent
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.constants.PackageWhitelist
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
@@ -132,11 +133,14 @@ class ForegroundWatcher(
 
     /**
      * Inspects UsageEvents to determine if the target application is currently in the foreground.
+     * Restricts queries strictly to whitelisted payment packages and a tight 5-minute window.
      */
     fun isInForeground(targetPackage: String): Boolean {
+        if (!PackageWhitelist.isWhitelisted(targetPackage)) return false
+
         val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return false
         val now = System.currentTimeMillis()
-        val events = usageStats.queryEvents(now - 60 * 60_000L, now) ?: return false
+        val events = usageStats.queryEvents(now - 5 * 60_000L, now) ?: return false
 
         var lastResumeTime = 0L
         var lastPauseTime = 0L
