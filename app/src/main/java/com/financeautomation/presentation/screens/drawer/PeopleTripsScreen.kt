@@ -37,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
+import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.domain.model.Companion as FriendCompanion
 import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.components.HeaderActionButton
@@ -248,6 +249,31 @@ private fun FriendItemRow(
 ) {
     val initial = companion.name.firstOrNull()?.uppercase() ?: "F"
 
+    val balance = companion.balance
+    val isPositive = balance > 0.001
+    val isNegative = balance < -0.001
+
+    val amountText = when {
+        isPositive -> formatRupees(balance, includeDecimals = true)
+        isNegative -> formatRupees(kotlin.math.abs(balance), includeDecimals = true)
+        else -> "₹0.00"
+    }
+    val statusText = when {
+        isPositive -> stringResource(R.string.people_owes_you)
+        isNegative -> stringResource(R.string.people_you_owe)
+        else -> stringResource(R.string.people_settled)
+    }
+    val subtitleText = when {
+        isPositive -> stringResource(R.string.people_owes_you)
+        isNegative -> stringResource(R.string.people_you_owe)
+        else -> stringResource(R.string.people_all_caught_up)
+    }
+    val textColor = when {
+        isPositive -> MaterialTheme.colorScheme.primary
+        isNegative -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.outline
+    }
+
     Surface(
         color = FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
@@ -292,7 +318,7 @@ private fun FriendItemRow(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = stringResource(R.string.people_all_caught_up),
+                        text = subtitleText,
                         style = FinanceTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -301,15 +327,15 @@ private fun FriendItemRow(
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "₹0.00",
+                    text = amountText,
                     style = FinanceTheme.typography.kpiMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.outline
+                    color = textColor
                 )
                 Text(
-                    text = stringResource(R.string.people_settled),
+                    text = statusText,
                     style = FinanceTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = textColor
                 )
             }
         }

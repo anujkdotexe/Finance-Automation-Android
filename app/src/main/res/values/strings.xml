@@ -585,6 +585,8 @@
     <string name="people_trips_desc">Shared travel ledgers</string>
     <string name="people_owed_to_you">Owed to you</string>
     <string name="people_i_owe">I owe</string>
+    <string name="people_owes_you">Owes you</string>
+    <string name="people_you_owe">You owe</string>
     <string name="people_settled">Settled</string>
     <string name="people_all_caught_up">All caught up</string>
     <string name="people_empty_title">No friends added</string>
