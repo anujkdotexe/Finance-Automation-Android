@@ -74,7 +74,10 @@ enum class DropReason {
     NOT_WHITELISTED,
     BLACKLISTED,
     OTP_MESSAGE,
-    SELF_NOTIFICATION
+    SELF_NOTIFICATION,
+    PROMOTIONAL,
+    NO_SUCCESS_WORDING,
+    UNKNOWN_DIRECTION
 }
 
 /**
@@ -216,6 +219,24 @@ class ParseNotificationUseCase(
                 sourcePackage = sourcePackage,
                 timestamp = timestamp
             )
+        }
+
+        // 6b. Promotions and reminders are ignored unless the text confirms a completed payment with an amount
+        if (!RegexPatterns.hasConfirmation(fullContent) && RegexPatterns.isPromotional(fullContent)) {
+            return NotificationParseResult.Dropped(reason = DropReason.PROMOTIONAL, sourcePackage = sourcePackage)
+        }
+
+        // 6c. Payment apps must show success (or in-progress) wording and a known direction
+        if (!isSms) {
+            if (wording == WordingClass.UNKNOWN) {
+                return NotificationParseResult.Dropped(reason = DropReason.NO_SUCCESS_WORDING, sourcePackage = sourcePackage)
+            }
+            val knownDirection = RegexPatterns.isDebit(fullContent) ||
+                RegexPatterns.isPaymentSuccessful(fullContent) ||
+                RegexPatterns.isCredit(fullContent)
+            if (wording == WordingClass.SUCCESS && !knownDirection) {
+                return NotificationParseResult.Dropped(reason = DropReason.UNKNOWN_DIRECTION, sourcePackage = sourcePackage)
+            }
         }
 
         // 7. Direction discrimination

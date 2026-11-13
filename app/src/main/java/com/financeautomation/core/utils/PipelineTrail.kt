@@ -64,7 +64,10 @@ enum class PipelineCode {
     SUCCESS,
     TRANSPORT_FAILURE,
     NEEDS_REVIEW,
-    SNAPSHOT
+    SNAPSHOT,
+    DROPPED_PROMO,
+    DROPPED_NO_SUCCESS_WORDING,
+    DROPPED_UNKNOWN_DIRECTION
 }
 
 object PipelineTrail {

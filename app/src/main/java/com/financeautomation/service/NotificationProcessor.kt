@@ -162,7 +162,8 @@ class NotificationProcessor(
 
         return when (parseResult) {
             is NotificationParseResult.Dropped -> {
-                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
+                // Counted by reason only; the notification text is never recorded
+                PipelineTrail.record(PipelineStage.ALERT, pipelineCodeFor(parseResult.reason))
                 NotificationProcessingOutcome.Ignored("ParseUseCase dropped: ${parseResult.reason}")
             }
             is NotificationParseResult.FailureAlert -> {
@@ -382,6 +383,17 @@ class NotificationProcessor(
     }
 
     companion object {
+        /** Maps a drop reason to its diagnostics counter code. */
+        fun pipelineCodeFor(reason: com.financeautomation.domain.usecase.DropReason): PipelineCode = when (reason) {
+            com.financeautomation.domain.usecase.DropReason.OTP_MESSAGE -> PipelineCode.DROPPED_OTP
+            com.financeautomation.domain.usecase.DropReason.PROMOTIONAL -> PipelineCode.DROPPED_PROMO
+            com.financeautomation.domain.usecase.DropReason.NO_SUCCESS_WORDING -> PipelineCode.DROPPED_NO_SUCCESS_WORDING
+            com.financeautomation.domain.usecase.DropReason.UNKNOWN_DIRECTION -> PipelineCode.DROPPED_UNKNOWN_DIRECTION
+            com.financeautomation.domain.usecase.DropReason.NOT_WHITELISTED -> PipelineCode.DROPPED_NOT_WHITELISTED_COUNT
+            com.financeautomation.domain.usecase.DropReason.BLACKLISTED,
+            com.financeautomation.domain.usecase.DropReason.SELF_NOTIFICATION -> PipelineCode.DROPPED_BLACKLIST
+        }
+
         /**
          * Developer-mode entry point for simulating financial payment notifications (X5).
          * Runs through the real production NotificationProcessor pipeline.
