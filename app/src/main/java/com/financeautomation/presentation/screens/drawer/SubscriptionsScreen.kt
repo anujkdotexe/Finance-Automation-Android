@@ -158,11 +158,17 @@ fun SubscriptionsScreen(
                         }
                         if (state.activeSubscriptions.isNotEmpty()) {
                             val nextDue = state.nextDueSubscription
-                            val nextDueText = if (nextDue != null) {
-                                val anchorDate = LocalDate.ofEpochDay(nextDue.anchorEpochDay)
-                                val monthStr = anchorDate.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
-                                stringResource(R.string.sub_next_due_formatted, nextDue.name, "${anchorDate.dayOfMonth} $monthStr")
+                            val nextDueDay = nextDue?.let { state.nextDueByDay[it.id] }
+                            val nextDueText = if (nextDue != null && nextDueDay != null) {
+                                stringResource(R.string.sub_next_due_formatted, nextDue.name, formatDueDay(nextDueDay))
                             } else null
+                            if (state.variesAmountCount > 0) {
+                                Text(
+                                    text = stringResource(R.string.sub_total_excludes_varies, state.variesAmountCount),
+                                    style = FinanceTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
 
                             if (nextDueText != null) {
                                 Text(
@@ -237,7 +243,7 @@ fun SubscriptionsScreen(
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
                     state.activeSubscriptions.forEach { subscription ->
-                        SubscriptionItemCard(subscription = subscription)
+                        SubscriptionItemCard(subscription = subscription, nextDueDay = state.nextDueByDay[subscription.id])
                     }
                 }
             }
@@ -311,9 +317,16 @@ fun SubscriptionsScreen(
     }
 }
 
+private val DUE_DAY_FORMAT: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.US)
+
+/** An epoch day (a calendar date in Asia/Kolkata) as "15 Apr 2026". */
+private fun formatDueDay(epochDay: Long): String = LocalDate.ofEpochDay(epochDay).format(DUE_DAY_FORMAT)
+
 @Composable
 private fun SubscriptionItemCard(
     subscription: Subscription,
+    nextDueDay: Long?,
     modifier: Modifier = Modifier
 ) {
     val icon = remember(subscription.name) {
@@ -370,7 +383,11 @@ private fun SubscriptionItemCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = stringResource(R.string.sub_next_due, "20 Dec 2026"),
+                        text = if (nextDueDay != null) {
+                            stringResource(R.string.sub_next_due, formatDueDay(nextDueDay))
+                        } else {
+                            stringResource(R.string.sub_paused_label)
+                        },
                         style = FinanceTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
