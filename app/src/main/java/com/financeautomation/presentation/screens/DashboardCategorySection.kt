@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import java.text.DateFormatSymbols
 import java.util.Calendar
 import java.util.Locale
@@ -112,7 +111,7 @@ fun MonthSwitcher(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(FinanceShapes.small)
                     .then(
                         if (onSelectMonthOffset != null) {
                             Modifier.clickable(
@@ -228,8 +227,8 @@ fun MonthPickerDialog(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .height(FinanceTheme.sizes.buttonHeightMedium)
+                                    .clip(FinanceShapes.small)
                                     .background(
                                         when {
                                             isDisplayedMonth -> MaterialTheme.colorScheme.primaryContainer
