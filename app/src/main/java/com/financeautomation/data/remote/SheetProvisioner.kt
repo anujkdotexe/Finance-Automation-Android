@@ -482,7 +482,7 @@ object SheetProvisioner {
             Pair(
                 0,
                 Triple(
-                    """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)""",
+                    DashboardFormulaBuilder.buildCurrentBurnFormula(emptyList()),
                     burnRedColor,
                     true
                 )
@@ -491,7 +491,7 @@ object SheetProvisioner {
             Pair(
                 3,
                 Triple(
-                    """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!I4:I"), INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!F4:F"), "<>Transfer"), 0)""",
+                    DashboardFormulaBuilder.buildPrevMonthBurnFormula(emptyList()),
                     darkTextColor,
                     true
                 )
@@ -639,7 +639,7 @@ object SheetProvisioner {
                 )
             )
             // Personal Burn (Col V)
-            val personalBurnFormula = """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNum & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & ${'$'}U$rowNum & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & ${'$'}U$rowNum & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+            val personalBurnFormula = DashboardFormulaBuilder.buildMonthlySummaryBurnFormula(rowNum, emptyList())
             requests.add(
                 createCellRequest(
                     sheetId = dashboardSheetId,

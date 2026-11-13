@@ -219,7 +219,8 @@ class DashboardViewModelTest {
             myShare = 100.0,
             owedToMe = 200.0,
             status = TransactionStatus.PENDING
-        )
+        ,
+        reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val savingsTxn = Transaction(
             id = "txn_savings",
             timestamp = now,
@@ -233,7 +234,8 @@ class DashboardViewModelTest {
             myShare = 5000.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+        reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         tRepo.insertTransaction(foodTxn)
         tRepo.insertTransaction(savingsTxn)
 
@@ -303,7 +305,8 @@ class DashboardViewModelTest {
                 myShare = 200.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val priorMonthTxn1Cal = Calendar.getInstance(kolkataTz).apply {
@@ -325,7 +328,8 @@ class DashboardViewModelTest {
                 myShare = 300.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val vm = DashboardViewModel(
@@ -371,7 +375,8 @@ class DashboardViewModelTest {
                 myShare = 500.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val priorMonthTxnCal = Calendar.getInstance(kolkataTz).apply {
@@ -393,7 +398,8 @@ class DashboardViewModelTest {
                 myShare = 250.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val vm = DashboardViewModel(
@@ -439,7 +445,8 @@ class DashboardViewModelTest {
                 myShare = 150.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val vm = DashboardViewModel(
@@ -698,7 +705,8 @@ class DashboardViewModelTest {
             id = id, timestamp = at, dateSerial = 46330, timeSerial = 0.5, account = "UPI", merchant = id,
             category = category, totalAmount = total, companions = "Personal", myShare = share,
             owedToMe = total - share, status = status
-        )
+        ,
+        reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
         val tRepo = FakeTransactionRepo()
         listOf(
@@ -804,7 +812,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun testRefundIncreasesIncome_doesNotReduceLivingBurn() = runTest {
+    fun testRefundIsIncomeAndAlsoReducesLivingBurn() = runTest {
         val now = System.currentTimeMillis()
         val tRepo = FakeTransactionRepo()
         val inflowRepo = FakeInflowRepo()
@@ -847,8 +855,8 @@ class DashboardViewModelTest {
 
         // Income reflects the refund
         assertEquals(200.0, vm.uiState.value.income, 0.001)
-        // Living burn remains exactly 1000.0 (refunds do not reduce living burn in master ledger schema)
-        assertEquals(1000.0, vm.uiState.value.currentBurn, 0.001)
+        // Owner rule: a refund also reduces the month's living burn (1000 spent, 200 refunded)
+        assertEquals(800.0, vm.uiState.value.currentBurn, 0.001)
     }
 
     @Test
@@ -926,7 +934,8 @@ class DashboardViewModelTest {
                 myShare = 4000.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
         tRepo.insertTransaction(
             Transaction(
@@ -942,7 +951,8 @@ class DashboardViewModelTest {
                 myShare = 1500.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val budgetRepo = FakeBudgetRepo(
@@ -996,7 +1006,8 @@ class DashboardViewModelTest {
                 myShare = 100.0,
                 owedToMe = 100.0,
                 status = TransactionStatus.PENDING
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
         tRepo.insertTransaction(
             Transaction(
@@ -1012,7 +1023,8 @@ class DashboardViewModelTest {
                 myShare = 50.0,
                 owedToMe = 50.0,
                 status = TransactionStatus.PENDING
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         // Custom split with multiple companions where individual shares are not stored
@@ -1031,7 +1043,8 @@ class DashboardViewModelTest {
                 myShare = 150.0,
                 owedToMe = 150.0,
                 status = TransactionStatus.PENDING
-            )
+            ,
+                reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val vm = DashboardViewModel(

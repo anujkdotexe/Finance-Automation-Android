@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.domain.model.Category
+import com.financeautomation.domain.model.Inflow
+import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.TransactionRepository
@@ -45,6 +47,7 @@ data class InsightsUiState(
 class InsightsViewModel(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository? = null,
+    private val inflowRepository: InflowRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val zone: ZoneId = LivingBurn.KOLKATA,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -63,19 +66,25 @@ class InsightsViewModel(
             combine(
                 transactionRepository.getTransactions(),
                 categoryRepository?.getCategories() ?: flowOf(emptyList()),
+                inflowRepository?.getAllInflows() ?: flowOf(emptyList()),
                 selectedMonth
-            ) { transactions, categories, month -> build(transactions, categories, month) }
+            ) { transactions, categories, inflows, month -> build(transactions, categories, inflows, month) }
                 .collect { _uiState.value = it }
         }
     }
 
-    private fun build(transactions: List<Transaction>, categories: List<Category>, month: YearMonth): InsightsUiState =
+    private fun build(
+        transactions: List<Transaction>,
+        categories: List<Category>,
+        inflows: List<Inflow>,
+        month: YearMonth
+    ): InsightsUiState =
         InsightsUiState(
             selectedMonth = month,
             currentMonth = currentMonth,
             slices = calculator.slices(transactions, categories, month, otherLabel),
-            total = calculator.total(transactions, categories, month),
-            series = calculator.monthlySeries(transactions, categories, currentMonth),
+            total = calculator.total(transactions, categories, month, inflows),
+            series = calculator.monthlySeries(transactions, categories, currentMonth, inflows = inflows),
             isLoading = false
         )
 
@@ -96,6 +105,7 @@ class InsightsViewModel(
         fun provideFactory(
             transactionRepository: TransactionRepository,
             categoryRepository: CategoryRepository? = null,
+            inflowRepository: InflowRepository? = null,
             otherLabel: String = InsightsCalculator.OTHER_LABEL,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -104,6 +114,7 @@ class InsightsViewModel(
                 InsightsViewModel(
                     transactionRepository = transactionRepository,
                     categoryRepository = categoryRepository,
+                    inflowRepository = inflowRepository,
                     ioDispatcher = ioDispatcher,
                     otherLabel = otherLabel
                 ) as T
