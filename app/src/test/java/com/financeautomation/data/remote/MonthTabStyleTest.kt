@@ -124,4 +124,25 @@ class MonthTabStyleTest {
             .toSet()
         assertEquals(setOf(6, 8, 9, 18, 25), currencyColumns)
     }
+
+    @Test
+    fun testBannerTitleWritesTheMonthInFull() {
+        assertEquals("EXPENSE LEDGER — NOVEMBER 2026", SheetProvisioner.monthTabBannerTitle("Nov26"))
+        assertEquals("EXPENSE LEDGER — DECEMBER 2026", SheetProvisioner.monthTabBannerTitle("Dec26"))
+        assertEquals("EXPENSE LEDGER — JANUARY 2027", SheetProvisioner.monthTabBannerTitle("Jan27"))
+        assertEquals("EXPENSE LEDGER — SEPTEMBER 2026", SheetProvisioner.monthTabBannerTitle("Sep26"))
+        assertEquals("EXPENSE LEDGER — SOMETHING", SheetProvisioner.monthTabBannerTitle("Something"))
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test
+    fun testBannerIsSize14WithTheLiveFill() {
+        val banner = requests.mapNotNull { it["repeatCell"] as? Map<String, Any?> }
+            .first { (it["range"] as Map<*, *>).let { r -> r["startRowIndex"] == 0 && r["endColumnIndex"] == 28 } }
+        val fmt = (banner["cell"] as Map<String, Any?>)["userEnteredFormat"] as Map<String, Any?>
+        assertEquals(14, (fmt["textFormat"] as Map<*, *>)["fontSize"])
+        assertEquals("1A237E", hex(fmt["backgroundColor"]))
+        val value = ((banner["cell"] as Map<*, *>)["userEnteredValue"] as Map<*, *>)["stringValue"]
+        assertEquals("EXPENSE LEDGER — NOVEMBER 2026", value)
+    }
 }
