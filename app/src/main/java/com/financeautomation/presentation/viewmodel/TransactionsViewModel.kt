@@ -3,10 +3,13 @@ package com.financeautomation.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.data.local.dao.SyncQueueDao
+import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.utils.AccountingUtils
 import kotlinx.coroutines.CoroutineDispatcher
@@ -18,12 +21,40 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+
+/**
+ * Unified item interface for the transactions ledger (both expenses and inflows).
+ */
+sealed interface TransactionListItem {
+    val id: String
+    val timestamp: Long
+    val amount: Double
+    val account: String
+    val isVoid: Boolean
+
+    data class ExpenseItem(val transaction: Transaction) : TransactionListItem {
+        override val id: String get() = transaction.id
+        override val timestamp: Long get() = transaction.timestamp
+        override val amount: Double get() = transaction.totalAmount
+        override val account: String get() = transaction.account
+        override val isVoid: Boolean get() = transaction.status == TransactionStatus.VOID
+    }
+
+    data class IncomeItem(val inflow: Inflow) : TransactionListItem {
+        override val id: String get() = inflow.id
+        override val timestamp: Long get() = inflow.timestamp
+        override val amount: Double get() = inflow.amount
+        override val account: String get() = inflow.account
+        override val isVoid: Boolean get() = inflow.status.equals("VOID", ignoreCase = true)
+    }
+}
 
 /**
  * Group of transactions belonging to a single calendar day.
@@ -33,8 +64,24 @@ data class DayTransactionGroup(
     val dayTimestamp: Long,
     val dayTotalOut: Double,
     val dayMyShare: Double,
-    val transactions: List<Transaction>
-)
+    val items: List<TransactionListItem> = emptyList(),
+    val transactions: List<Transaction> = items.filterIsInstance<TransactionListItem.ExpenseItem>().map { it.transaction }
+) {
+    constructor(
+        dateLabel: String,
+        dayTimestamp: Long,
+        dayTotalOut: Double,
+        dayMyShare: Double,
+        transactions: List<Transaction>
+    ) : this(
+        dateLabel = dateLabel,
+        dayTimestamp = dayTimestamp,
+        dayTotalOut = dayTotalOut,
+        dayMyShare = dayMyShare,
+        items = transactions.map { TransactionListItem.ExpenseItem(it) },
+        transactions = transactions
+    )
+}
 
 /**
  * Where a search looks: the selected month only, or every month.
@@ -93,7 +140,8 @@ data class TransactionsUiState(
 class TransactionsViewModel(
     private val transactionRepository: TransactionRepository,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val inflowRepository: InflowRepository? = null
 ) : ViewModel() {
 
     private val monthOffsetFlow = MutableStateFlow(0)
@@ -125,9 +173,11 @@ class TransactionsViewModel(
     }.catch { emit(QueueTransactionIds()) }
 
     private fun observeTransactions() {
+        val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
         viewModelScope.launch(ioDispatcher) {
             combine(
                 transactionRepository.getTransactions(),
+                inflowsFlow,
                 monthOffsetFlow,
                 searchQueryFlow,
                 filterFlow,
@@ -137,11 +187,12 @@ class TransactionsViewModel(
                 @Suppress("UNCHECKED_CAST")
                 calculateState(
                     transactions = values[0] as List<Transaction>,
-                    monthOffset = values[1] as Int,
-                    query = values[2] as String,
-                    filter = values[3] as TransactionFilter,
-                    queueIds = values[4] as QueueTransactionIds,
-                    scope = values[5] as SearchScope
+                    inflows = values[1] as List<Inflow>,
+                    monthOffset = values[2] as Int,
+                    query = values[3] as String,
+                    filter = values[4] as TransactionFilter,
+                    queueIds = values[5] as QueueTransactionIds,
+                    scope = values[6] as SearchScope
                 )
             }.collect { newState ->
                 _uiState.value = newState
@@ -199,6 +250,7 @@ class TransactionsViewModel(
 
     private fun calculateState(
         transactions: List<Transaction>,
+        inflows: List<Inflow>,
         monthOffset: Int,
         query: String,
         filter: TransactionFilter,
@@ -231,8 +283,20 @@ class TransactionsViewModel(
             transactions.filter { it.timestamp in startOfMonth until endOfMonth }
         }
 
+        val monthInflows = if (searchAllMonths) {
+            inflows
+        } else {
+            inflows.filter { it.timestamp in startOfMonth until endOfMonth }
+        }
+
+        val isVoidFilter = filter.status.equals("void", ignoreCase = true)
+
         val filteredTransactions = monthTransactions.filter { txn ->
-            if (txn.status == TransactionStatus.VOID) {
+            val isVoid = txn.status == TransactionStatus.VOID
+            if (!isVoidFilter && isVoid) {
+                return@filter false
+            }
+            if (isVoidFilter && !isVoid) {
                 return@filter false
             }
 
@@ -280,7 +344,7 @@ class TransactionsViewModel(
                 }
             }
 
-            if (!filter.status.isNullOrBlank()) {
+            if (!filter.status.isNullOrBlank() && !isVoidFilter) {
                 val st = filter.status.trim().lowercase()
                 val rowStatus = computeRowStatus(txn, queueIds)
                 val matchesStatus = when (st) {
@@ -288,9 +352,65 @@ class TransactionsViewModel(
                     "synced" -> rowStatus == RowStatus.SYNCED
                     "failed" -> rowStatus == RowStatus.FAILED
                     "needs review", "needs_review", "review" -> rowStatus == RowStatus.NEEDS_REVIEW
+                    "income" -> false
                     else -> true
                 }
                 if (!matchesStatus) {
+                    return@filter false
+                }
+            }
+
+            true
+        }
+
+        val filteredInflows = monthInflows.filter { inf ->
+            val isVoid = inf.status.equals("VOID", ignoreCase = true)
+            if (!isVoidFilter && isVoid) {
+                return@filter false
+            }
+            if (isVoidFilter && !isVoid) {
+                return@filter false
+            }
+
+            if (query.isNotBlank()) {
+                val q = query.trim().lowercase()
+                val matchSource = inf.source.lowercase().contains(q)
+                val matchType = inf.inflowType.lowercase().contains(q)
+                val matchNote = inf.note.lowercase().contains(q)
+                val matchAccount = inf.account.lowercase().contains(q)
+                if (!matchSource && !matchType && !matchNote && !matchAccount) {
+                    return@filter false
+                }
+            }
+
+            // Inflows don't have categories or trip tags; if those filters are set, exclude
+            if (!filter.category.isNullOrBlank() || !filter.tripTag.isNullOrBlank()) {
+                return@filter false
+            }
+
+            if (!filter.status.isNullOrBlank() && !isVoidFilter) {
+                val st = filter.status.trim().lowercase()
+                if (st != "income") {
+                    return@filter false
+                }
+            }
+
+            if (!filter.account.isNullOrBlank()) {
+                val accFilter = filter.account.trim().lowercase()
+                val infAcc = inf.account.trim().lowercase()
+                val matches = when (accFilter) {
+                    "card" -> infAcc.contains("card") || infAcc.contains("hdfc") || infAcc.contains("icici") || infAcc.contains("sbi") || infAcc.contains("axis")
+                    "upi" -> infAcc.contains("upi") || infAcc.contains("gpay") || infAcc.contains("phonepe") || infAcc.contains("paytm") || infAcc.contains("supermoney")
+                    "cash" -> infAcc.contains("cash")
+                    else -> infAcc.equals(accFilter, ignoreCase = true)
+                }
+                if (!matches) {
+                    return@filter false
+                }
+            }
+
+            if (!filter.person.isNullOrBlank()) {
+                if (!inf.source.equals(filter.person.trim(), ignoreCase = true)) {
                     return@filter false
                 }
             }
@@ -317,19 +437,25 @@ class TransactionsViewModel(
             return dayCal.timeInMillis
         }
 
-        val grouped = filteredTransactions
+        val allItems: List<TransactionListItem> =
+            filteredTransactions.map { TransactionListItem.ExpenseItem(it) } +
+            filteredInflows.map { TransactionListItem.IncomeItem(it) }
+
+        val grouped = allItems
             .sortedByDescending { it.timestamp }
             .groupBy { getStartOfDay(it.timestamp) }
-            .map { (dayStart, txnsInDay) ->
+            .map { (dayStart, dayItems) ->
                 val dateLabel = dayFormat.format(dayStart)
-                val dayTotalOut = txnsInDay.sumOf { it.totalAmount }
-                val dayMyShare = txnsInDay.sumOf { it.myShare }
+                val dayTxns = dayItems.filterIsInstance<TransactionListItem.ExpenseItem>().map { it.transaction }
+                val dayTotalOut = dayTxns.sumOf { it.totalAmount }
+                val dayMyShare = dayTxns.sumOf { it.myShare }
                 DayTransactionGroup(
                     dateLabel = dateLabel,
                     dayTimestamp = dayStart,
                     dayTotalOut = dayTotalOut,
                     dayMyShare = dayMyShare,
-                    transactions = txnsInDay
+                    items = dayItems,
+                    transactions = dayTxns
                 )
             }
 
@@ -352,6 +478,14 @@ class TransactionsViewModel(
         }
     }
 
+    fun voidInflow(inflowId: String, onComplete: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch(ioDispatcher) {
+            val result = inflowRepository?.voidInflow(inflowId)
+            val success = result is Result.Success
+            onComplete?.invoke(success)
+        }
+    }
+
     companion object {
         /**
          * Single source of truth for a row's sync/review status.
@@ -367,6 +501,7 @@ class TransactionsViewModel(
         fun provideFactory(
             transactionRepository: TransactionRepository,
             syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+            inflowRepository: InflowRepository? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -374,6 +509,7 @@ class TransactionsViewModel(
                 return TransactionsViewModel(
                     transactionRepository = transactionRepository,
                     syncQueueDaoProvider = syncQueueDaoProvider,
+                    inflowRepository = inflowRepository,
                     ioDispatcher = ioDispatcher
                 ) as T
             }

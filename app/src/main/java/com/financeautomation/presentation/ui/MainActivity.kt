@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
         TransactionsViewModel.provideFactory(
             transactionRepository = app.appContainer.transactionRepository,
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
+            inflowRepository = app.appContainer.inflowRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
