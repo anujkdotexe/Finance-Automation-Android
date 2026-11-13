@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.financeautomation.R
@@ -61,6 +62,8 @@ fun HeroBurnCard(
     onTrack: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val hasLastMonthData = lastMonthSameDayBurn > 0.0 || paceDeltaPercent != null
+
     TonalCard(modifier = modifier) {
         // Top Header Row
         Row(
@@ -77,7 +80,7 @@ fun HeroBurnCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (onTrack) {
+            if (onTrack && hasLastMonthData) {
                 Row(
                     modifier = Modifier
                         .clip(CircleShape)
@@ -123,57 +126,114 @@ fun HeroBurnCard(
         HorizontalDivider(color = FinanceTheme.colors.surfaceContainer)
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
-        // Comparisons & Run Rates
+        // Comparisons & Run Rates: Rebuilt as two equal-weight columns separated by 12dp
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Left column: Daily average
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
                 Text(
-                    text = stringResource(R.string.dashboard_daily_average_prefix),
-                    style = FinanceTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = stringResource(R.string.dashboard_daily_average_label),
+                    style = FinanceTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "${formatRupeesAuto(dailyAverage)} / day",
                     style = FinanceTheme.typography.numeric.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Column(horizontalAlignment = Alignment.End) {
-                if (paceDeltaPercent != null) {
-                    val isDown = paceDeltaPercent <= 0.0
-                    val deltaAbs = abs(paceDeltaPercent)
-                    val deltaFormatted = String.format(java.util.Locale.US, "%.1f", deltaAbs)
-                    val deltaText = if (isDown) "Down $deltaFormatted% vs last month" else "Up $deltaFormatted% vs last month"
-                    val deltaColor = if (isDown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    val deltaIcon = if (isDown) Icons.Rounded.ArrowDownward else Icons.Rounded.ArrowUpward
+            // Right column: Same day last month
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = stringResource(R.string.dashboard_same_day_last_month_label),
+                    style = FinanceTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val rightValueText = if (hasLastMonthData) {
+                    formatRupeesAuto(lastMonthSameDayBurn)
+                } else {
+                    stringResource(R.string.dashboard_no_data)
+                }
+                Text(
+                    text = rightValueText,
+                    style = FinanceTheme.typography.numeric.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (hasLastMonthData) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (hasLastMonthData) {
+                    if (paceDeltaPercent != null) {
+                        val isDown = paceDeltaPercent <= 0.0
+                        val deltaAbs = abs(paceDeltaPercent)
+                        val deltaFormatted = String.format(java.util.Locale.US, "%.1f", deltaAbs)
+                        val deltaText = if (isDown) "Down $deltaFormatted%" else "Up $deltaFormatted%"
+                        val deltaColor = if (isDown) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        val deltaIcon = if (isDown) Icons.Rounded.ArrowDownward else Icons.Rounded.ArrowUpward
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Icon(
-                            imageVector = deltaIcon,
-                            contentDescription = null,
-                            tint = deltaColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = deltaText,
-                            style = FinanceTheme.typography.numeric.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
-                            color = deltaColor
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = deltaIcon,
+                                contentDescription = null,
+                                tint = deltaColor,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = deltaText,
+                                style = FinanceTheme.typography.numeric.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.sp
+                                ),
+                                color = deltaColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    } else if (onTrack) {
+                        Row(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.dashboard_on_track).uppercase(),
+                                style = FinanceTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 9.sp
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
-
-                Text(
-                    text = "${stringResource(R.string.dashboard_vs_same_day_prefix)}${formatRupeesAuto(lastMonthSameDayBurn)}",
-                    style = FinanceTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
