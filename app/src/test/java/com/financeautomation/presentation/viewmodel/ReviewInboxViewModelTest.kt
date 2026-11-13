@@ -7,6 +7,7 @@ import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.data.repository.PreferencesRepositoryImpl
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.model.Transaction
@@ -916,6 +917,40 @@ class ReviewInboxViewModelTest {
             )
         )
         assertEquals(4, populatedState.totalCount)
+    }
+
+    @Test
+    fun testFirstRunHint_dismissAndPersist() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val prefs = PreferencesRepositoryImpl(isTestHeadless = true)
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            accountRepository = FakeAccountRepo(),
+            preferencesRepository = prefs,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isHintDismissed)
+
+        vm.dismissFirstRunHint()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isHintDismissed)
+        assertTrue(prefs.isNeedsReviewHintDismissed())
+
+        val vm2 = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            accountRepository = FakeAccountRepo(),
+            preferencesRepository = prefs,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertTrue(vm2.uiState.value.isHintDismissed)
     }
 }
 

@@ -51,7 +51,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
+import com.financeautomation.core.utils.AmountInputSanitizer
+import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.SubscriptionFrequency
+import com.financeautomation.domain.usecase.ExpressionEvaluator
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -190,10 +193,20 @@ fun AddSubscriptionSheet(
                                 )
                                 OutlinedTextField(
                                     value = amountText,
-                                    onValueChange = { amountText = it },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    onValueChange = {
+                                        if (AmountInputSanitizer.isValidExpressionInput(it)) {
+                                            amountText = it
+                                        }
+                                    },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                                     singleLine = true,
                                     textStyle = FinanceTheme.typography.amountHero,
+                                    supportingText = if (amountText.any { it in "+-*/" }) {
+                                        val evaluated = ExpressionEvaluator().evaluate(amountText)
+                                        if (evaluated != null && evaluated > 0.0) {
+                                            { Text(text = "= ${formatRupeesAuto(evaluated)}", color = MaterialTheme.colorScheme.primary) }
+                                        } else null
+                                    } else null,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -494,7 +507,7 @@ fun AddSubscriptionSheet(
                     filledText = stringResource(R.string.action_save),
                     onFilledClick = {
                         if (name.isNotBlank()) {
-                            val amt = if (isFixedAmount) amountText.toDoubleOrNull() else null
+                            val amt = if (isFixedAmount) ExpressionEvaluator().evaluate(amountText) else null
                             onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe)
                         }
                     },

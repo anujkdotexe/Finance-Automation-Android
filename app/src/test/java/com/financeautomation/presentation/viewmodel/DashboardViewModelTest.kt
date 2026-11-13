@@ -9,10 +9,14 @@ import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.data.repository.PreferencesRepositoryImpl
+import com.financeautomation.domain.model.Budget
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.TransactionRepository
+import com.financeautomation.domain.usecase.BudgetState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +30,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -178,6 +183,19 @@ class DashboardViewModelTest {
         override suspend fun unarchiveCategory(id: String) {}
         override suspend fun deleteCategory(id: String) {}
         override suspend fun reorderCategories(categoryIds: List<String>) {}
+    }
+
+    private class FakeBudgetRepo(initial: List<Budget> = emptyList()) : BudgetRepository {
+        val budgets = MutableStateFlow(initial)
+        override fun observeBudgets(): Flow<List<Budget>> = budgets
+        override suspend fun setBudget(category: String, monthlyAmount: Double): Result<Unit> {
+            budgets.value = budgets.value.filter { it.category != category } + Budget(category, monthlyAmount, System.currentTimeMillis())
+            return Result.Success(Unit)
+        }
+        override suspend fun removeBudget(category: String): Result<Unit> {
+            budgets.value = budgets.value.filter { it.category != category }
+            return Result.Success(Unit)
+        }
     }
 
     @Test
@@ -854,74 +872,107 @@ class DashboardViewModelTest {
         assertEquals(-2, vm.uiState.value.monthOffset)
     }
 
-    private fun shoppingTxn(id: String, amount: Double, share: Double = amount): Transaction {
-        val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 10)
-        }
-        return Transaction(
-            id = id,
-            timestamp = cal.timeInMillis,
-            dateSerial = 46330,
-            timeSerial = 0.5,
-            account = "UPI",
-            merchant = "Shop",
-            category = "Shopping",
-            totalAmount = amount,
-            companions = "Personal",
-            myShare = share,
-            owedToMe = amount - share,
-            status = TransactionStatus.SETTLED
-        )
-    }
-
     @Test
-    fun budgetProgressIsKeyedByCategoryAndUsesMyShare() = runTest {
+    fun testFirstRunHint_dismissAndPersist() = runTest {
         val tRepo = FakeTransactionRepo()
-        tRepo.insertTransaction(shoppingTxn("b1", amount = 1000.0, share = 500.0))
-        tRepo.insertTransaction(shoppingTxn("b2", amount = 300.0))
+        val prefs = PreferencesRepositoryImpl(isTestHeadless = true)
         val vm = DashboardViewModel(
             transactionRepository = tRepo,
             directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
             categoryRepository = FakeCategoryRepo(),
-            budgetRepository = FakeBudgetFlowRepository(mapOf("Shopping" to 1000.0, "Food & Drink" to 500.0)),
+            preferencesRepository = prefs,
             ioDispatcher = testDispatcher
         )
         advanceUntilIdle()
 
-        val progress = vm.uiState.value.budgetProgress
-        assertEquals(setOf("shopping", "food & drink"), progress.keys)
-        assertEquals(800.0, progress.getValue("shopping").spent, 0.001)
-        assertEquals(80.0, progress.getValue("shopping").percentUsed, 0.001)
-        assertEquals(com.financeautomation.domain.usecase.BudgetState.WARNING, progress.getValue("shopping").state)
-        assertEquals(0.0, progress.getValue("food & drink").spent, 0.001)
+        assertFalse(vm.uiState.value.isHintDismissed)
+
+        vm.dismissFirstRunHint()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isHintDismissed)
+        assertTrue(prefs.isDashboardHintDismissed())
+
+        val vm2 = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            preferencesRepository = prefs,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertTrue(vm2.uiState.value.isHintDismissed)
     }
 
     @Test
-    fun budgetProgressIsEmptyWithoutBudgetsAndForOtherMonths() = runTest {
+    fun testWhereItWent_budgetProgressCalculated() = runTest {
         val tRepo = FakeTransactionRepo()
-        tRepo.insertTransaction(shoppingTxn("b3", amount = 300.0))
-        val withoutBudgets = DashboardViewModel(
-            transactionRepository = tRepo,
-            directSyncQueueDao = FakeSyncQueueDao(),
-            categoryRepository = FakeCategoryRepo(),
-            budgetRepository = FakeBudgetFlowRepository(),
-            ioDispatcher = testDispatcher
+        val now = System.currentTimeMillis()
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn1",
+                timestamp = now,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "UPI",
+                merchant = "Grocery Store",
+                category = "Groceries",
+                totalAmount = 4000.0,
+                companions = "Personal",
+                myShare = 4000.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
         )
-        advanceUntilIdle()
-        assertTrue(withoutBudgets.uiState.value.budgetProgress.isEmpty())
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn2",
+                timestamp = now,
+                dateSerial = 46330,
+                timeSerial = 0.5,
+                account = "Card",
+                merchant = "Restaurant",
+                category = "Food & Drink",
+                totalAmount = 1500.0,
+                companions = "Personal",
+                myShare = 1500.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED
+            )
+        )
+
+        val budgetRepo = FakeBudgetRepo(
+            listOf(
+                Budget(category = "Groceries", monthlyAmount = 5000.0, updatedAt = now)
+            )
+        )
 
         val vm = DashboardViewModel(
             transactionRepository = tRepo,
             directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
             categoryRepository = FakeCategoryRepo(),
-            budgetRepository = FakeBudgetFlowRepository(mapOf("Shopping" to 1000.0)),
+            budgetRepository = budgetRepo,
             ioDispatcher = testDispatcher
         )
         advanceUntilIdle()
-        assertEquals(300.0, vm.uiState.value.budgetProgress.getValue("shopping").spent, 0.001)
-        vm.previousMonth()
-        advanceUntilIdle()
-        assertEquals(0.0, vm.uiState.value.budgetProgress.getValue("shopping").spent, 0.001)
+
+        val topCategories = vm.uiState.value.topCategories
+        assertEquals(2, topCategories.size)
+
+        val groceries = topCategories.first { it.category == "Groceries" }
+        assertNotNull(groceries.budgetProgress)
+        assertEquals(5000.0, groceries.budgetProgress!!.budget, 0.001)
+        assertEquals(4000.0, groceries.budgetProgress!!.spent, 0.001)
+        assertEquals(80.0, groceries.budgetProgress!!.percentUsed, 0.001)
+        assertEquals(BudgetState.WARNING, groceries.budgetProgress!!.state)
+
+        val food = topCategories.first { it.category == "Food & Drink" }
+        assertNull(food.budgetProgress)
     }
 }

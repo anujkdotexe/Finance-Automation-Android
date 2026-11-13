@@ -13,10 +13,11 @@ class BudgetWiringAndStringsTest {
     private val strings = File("src/main/res/values/strings.xml").readText()
 
     @Test
-    fun theDashboardCategorySectionShowsABudgetBarForCategoriesWithABudget() {
+    fun theDashboardHasExactlyOneBudgetBarPerCategoryRow() {
         val section = read("screens/DashboardCategorySection.kt")
-        assertTrue(section.contains("BudgetBar(progress = progress)"))
-        assertTrue(read("screens/DashboardScreen.kt").contains("budgetProgress = state.budgetProgress"))
+        assertTrue(section.contains("progress = item.budgetProgress"))
+        assertTrue(section.split("BudgetBar(").size - 1 == 1)
+        assertFalse(read("screens/DashboardScreen.kt").contains("budgetProgress = state.budgetProgress"))
         assertTrue(read("ui/MainActivity.kt").contains("budgetRepository = app.appContainer.budgetRepository"))
     }
 

@@ -236,6 +236,11 @@
     <string name="action_clear_search">Clear search</string>
     <string name="action_search_all_months">Search all months</string>
     <string name="action_go_to_current_month">Go to current month</string>
+    <string name="hint_dashboard_first_run">Tip: Tap + to log an expense or enable notification capture in Settings.</string>
+    <string name="hint_needs_review_first_run">Tip: Incoming bank and UPI notifications will appear here for 1-tap review.</string>
+    <string name="action_dismiss_tip">Dismiss tip</string>
+    <string name="action_export_this_month">Export this month</string>
+    <string name="export_failed">Export failed: %1$s</string>
     <string name="action_go_to_dashboard">Go to Dashboard</string>
     <string name="action_details">Details</string>
     <string name="action_hide_details">Hide details</string>

@@ -23,7 +23,7 @@ object Spacing {
     val xl: Dp = 24.dp
     val xxl: Dp = 32.dp
     val screenEdge: Dp = 16.dp
-    val bottomFabClearance: Dp = 112.dp
+    val bottomFabClearance: Dp = 160.dp
 }
 
 object FinanceShapes {
