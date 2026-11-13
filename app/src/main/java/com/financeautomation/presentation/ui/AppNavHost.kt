@@ -111,6 +111,7 @@ import com.financeautomation.presentation.screens.drawer.CapturePermissionsScree
 import com.financeautomation.presentation.screens.drawer.DiagnosticsScreen
 import com.financeautomation.presentation.screens.drawer.PeopleTripsScreen
 import com.financeautomation.presentation.screens.drawer.PreferencesScreen
+import com.financeautomation.presentation.screens.drawer.SubscriptionsScreen
 import com.financeautomation.presentation.screens.drawer.SyncBackupScreen
 import com.financeautomation.presentation.theme.FinanceAlphas
 import com.financeautomation.presentation.theme.FinanceShapes
@@ -120,6 +121,7 @@ import com.financeautomation.presentation.viewmodel.OnboardingViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
 import com.financeautomation.presentation.viewmodel.SetupHealthViewModel
+import com.financeautomation.presentation.viewmodel.SubscriptionsViewModel
 import com.financeautomation.presentation.viewmodel.TransactionsViewModel
 import kotlinx.coroutines.launch
 
@@ -177,6 +179,7 @@ fun AppNavHost(
     setupHealthViewModel: SetupHealthViewModel,
     onboardingViewModel: OnboardingViewModel,
     overlayControllerProvider: () -> OverlayController,
+    subscriptionsViewModel: SubscriptionsViewModel? = null,
     onReRunSetup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -623,20 +626,28 @@ fun AppNavHost(
                     composable(AppRoutes.PEOPLE_TRIPS) {
                         PeopleTripsScreen(
                             viewModel = settingsViewModel,
-                            state = settingsState
+                            state = settingsState,
+                            onStartTrip = { launchFlow("TRIP") }
                         )
                     }
 
                     composable(AppRoutes.SUBSCRIPTIONS) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.nav_subscriptions_placeholder),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = FinanceTheme.colors.onSurfaceVariant
+                        if (subscriptionsViewModel != null) {
+                            SubscriptionsScreen(
+                                viewModel = subscriptionsViewModel,
+                                accounts = settingsState.accounts.map { it.name }
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.nav_subscriptions_placeholder),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = FinanceTheme.colors.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
