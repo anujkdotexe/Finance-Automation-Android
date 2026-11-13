@@ -51,7 +51,7 @@ class ParseNotificationUseCaseTest {
     fun testParseWhitelistedSmsAlert() {
         val result = useCase(
             sourcePackage = PackageWhitelist.PACKAGE_GOOGLE_MESSAGES,
-            title = "Bank Alert",
+            title = "AX-BANKAL",
             text = "A/c 4321 debited for INR 1,500.00 on 05-Nov. Ref: 556677889900"
         )
 
@@ -90,7 +90,7 @@ class ParseNotificationUseCaseTest {
     fun testOtpAlertIsDropped() {
         val result = useCase(
             sourcePackage = PackageWhitelist.PACKAGE_GOOGLE_MESSAGES,
-            title = "Bank OTP",
+            title = "AX-BANKOT",
             text = "Your OTP is 987654. Do not share this verification code with anyone."
         )
 

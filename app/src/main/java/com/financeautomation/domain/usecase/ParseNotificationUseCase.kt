@@ -183,7 +183,7 @@ class ParseNotificationUseCase(
         }
 
         // 3b. SMS from a personal number is rejected on the sender alone, before any of its text is examined
-        if (PackageWhitelist.isSmsPackage(sourcePackage) && RegexPatterns.isPersonalSender(title)) {
+        if (PackageWhitelist.isSmsPackage(sourcePackage) && !RegexPatterns.isBankSenderId(title)) {
             return NotificationParseResult.Dropped(
                 reason = DropReason.NOT_WHITELISTED,
                 sourcePackage = sourcePackage
@@ -204,13 +204,6 @@ class ParseNotificationUseCase(
 
         // 5. SMS privacy and financial content guard
         if (isSms) {
-            // Drop SMS from personal numbers or contacts
-            if (RegexPatterns.isPersonalSender(title)) {
-                return NotificationParseResult.Dropped(
-                    reason = DropReason.NOT_WHITELISTED,
-                    sourcePackage = sourcePackage
-                )
-            }
             // Drop SMS that lack financial transaction indicators
             if (!RegexPatterns.hasFinancialKeywords(fullContent)) {
                 return NotificationParseResult.Dropped(
