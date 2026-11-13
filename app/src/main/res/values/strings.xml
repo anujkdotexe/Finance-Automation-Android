@@ -281,7 +281,7 @@
     <string name="prompt_auto_settle">Auto-Settle (All / Oldest First)</string>
     <string name="btn_record_inflow">Record Inflow</string>
     <string name="btn_record_debt">Record debt</string>
-    <string name="btn_record_repayment">Save repayment</string>
+    <string name="btn_record_repayment">Save</string>
     <string name="prompt_date_repaid">Date repaid</string>
     <string name="trip_active_badge">Trip Mode Active</string>
     <string name="trip_active_desc">All new transactions will be tagged with this event until stopped.</string>
