@@ -1,6 +1,8 @@
 package com.financeautomation.presentation.components
 
 import android.content.res.Configuration
+import android.os.Build
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,8 +52,17 @@ fun FilledButton(
     enabled: Boolean = true,
     isLoading: Boolean = false
 ) {
+    val view = LocalView.current
     Button(
-        onClick = onClick,
+        onClick = {
+            val hapticConstant = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.CONFIRM
+            } else {
+                HapticFeedbackConstants.VIRTUAL_KEY
+            }
+            view.performHapticFeedback(hapticConstant)
+            onClick()
+        },
         enabled = enabled && !isLoading,
         shape = FinanceShapes.pill,
         colors = ButtonDefaults.buttonColors(

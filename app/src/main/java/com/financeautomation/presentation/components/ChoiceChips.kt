@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.components
 
 import android.content.res.Configuration
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +67,8 @@ fun AppChip(
         BorderStroke(FinanceTheme.sizes.strokeThin, MaterialTheme.colorScheme.outlineVariant)
     }
 
+    val view = LocalView.current
+
     Surface(
         shape = FinanceShapes.appChip,
         border = border,
@@ -76,7 +80,10 @@ fun AppChip(
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
-                onClick = onClick
+                onClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    onClick()
+                }
             )
     ) {
         Row(
@@ -106,6 +113,7 @@ fun <T> SegmentedChoice(
     modifier: Modifier = Modifier,
     labelProvider: (T) -> String = { it.toString() }
 ) {
+    val view = LocalView.current
     Surface(
         shape = FinanceShapes.pill,
         color = FinanceTheme.colors.surfaceContainerLow,
@@ -137,7 +145,10 @@ fun <T> SegmentedChoice(
                         .then(bgModifier)
                         .clickable(
                             role = Role.RadioButton,
-                            onClick = { onOptionSelected(option) }
+                            onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                onOptionSelected(option)
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
