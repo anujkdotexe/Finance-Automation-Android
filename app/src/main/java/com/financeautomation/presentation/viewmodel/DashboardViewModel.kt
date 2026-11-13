@@ -325,6 +325,10 @@ class DashboardViewModel(
         monthOffsetFlow.value = 0
     }
 
+    fun setMonthOffset(offset: Int) {
+        monthOffsetFlow.value = offset
+    }
+
     private fun buildQueuedItems(
         transactions: List<Transaction>,
         queueItems: List<SyncQueueEntity>

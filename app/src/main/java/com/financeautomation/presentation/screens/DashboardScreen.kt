@@ -102,6 +102,7 @@ fun DashboardScreen(
                 state = state,
                 onPreviousMonth = viewModel::previousMonth,
                 onNextMonth = viewModel::nextMonth,
+                onSelectMonthOffset = viewModel::setMonthOffset,
                 onNavigateToReview = onNavigateToReview,
                 onNavigateToTransactions = onNavigateToTransactions,
                 onNavigateToBalances = onNavigateToBalances,
@@ -122,6 +123,7 @@ fun DashboardContent(
     state: DashboardUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
+    onSelectMonthOffset: (Int) -> Unit = {},
     onNavigateToReview: () -> Unit,
     onNavigateToTransactions: (monthOffset: Int, category: String?, type: String?) -> Unit,
     onNavigateToBalances: () -> Unit,
@@ -164,7 +166,8 @@ fun DashboardContent(
             MonthSwitcher(
                 monthLabel = state.selectedMonthLabel,
                 onPreviousMonth = onPreviousMonth,
-                onNextMonth = onNextMonth
+                onNextMonth = onNextMonth,
+                onSelectMonthOffset = onSelectMonthOffset
             )
         }
 

@@ -773,4 +773,25 @@ class DashboardViewModelTest {
         // Living burn remains exactly 1000.0 (refunds do not reduce living burn in master ledger schema)
         assertEquals(1000.0, vm.uiState.value.currentBurn, 0.001)
     }
+
+    @Test
+    fun testSetMonthOffset_updatesMonthOffsetAndState() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(0, vm.uiState.value.monthOffset)
+
+        vm.setMonthOffset(-2)
+        advanceUntilIdle()
+
+        assertEquals(-2, vm.uiState.value.monthOffset)
+    }
 }
