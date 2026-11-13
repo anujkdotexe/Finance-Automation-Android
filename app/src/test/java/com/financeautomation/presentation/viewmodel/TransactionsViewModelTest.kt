@@ -458,4 +458,86 @@ class TransactionsViewModelTest {
         assertEquals(listOf("now"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
         assertEquals(100.0, vm.uiState.value.totalOut, 0.001)
     }
+
+    @Test
+    fun testMonthTotal_andChipFilters_All_Upi_Card_Cash_NeedsReview() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 15)
+            set(Calendar.HOUR_OF_DAY, 12)
+        }
+        val ts = nowCal.timeInMillis
+
+        val tUpi = baseTxn("t_upi").copy(
+            account = "GPay UPI",
+            merchant = "Chai Point",
+            totalAmount = 200.0,
+            myShare = 200.0,
+            timestamp = ts
+        )
+        val tCard = baseTxn("t_card").copy(
+            account = "HDFC Card",
+            merchant = "Zara",
+            totalAmount = 500.0,
+            myShare = 500.0,
+            timestamp = ts
+        )
+        val tCash = baseTxn("t_cash").copy(
+            account = "Cash",
+            merchant = "Vegetables",
+            totalAmount = 100.0,
+            myShare = 100.0,
+            timestamp = ts
+        )
+        val tReview = baseTxn("t_review", ReviewState.NEEDS_REVIEW).copy(
+            account = "Other",
+            merchant = "Mystery Store",
+            totalAmount = 400.0,
+            myShare = 400.0,
+            timestamp = ts
+        )
+
+        tRepo.insertTransaction(tUpi)
+        tRepo.insertTransaction(tCard)
+        tRepo.insertTransaction(tCash)
+        tRepo.insertTransaction(tReview)
+
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // 1. All (no filter) -> month total = 1200.0
+        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(4, vm.uiState.value.groupedTransactions.flatMap { it.transactions }.size)
+
+        // 2. UPI filter chip
+        vm.setFilter(TransactionFilter(account = "UPI"))
+        advanceUntilIdle()
+        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(listOf("t_upi"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+
+        // 3. Card filter chip
+        vm.setFilter(TransactionFilter(account = "Card"))
+        advanceUntilIdle()
+        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(listOf("t_card"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+
+        // 4. Cash filter chip
+        vm.setFilter(TransactionFilter(account = "Cash"))
+        advanceUntilIdle()
+        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(listOf("t_cash"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+
+        // 5. Needs Review filter chip
+        vm.setFilter(TransactionFilter(status = "Needs Review"))
+        advanceUntilIdle()
+        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(listOf("t_review"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+
+        // 6. Clear filter back to All
+        vm.clearFilter()
+        advanceUntilIdle()
+        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(4, vm.uiState.value.groupedTransactions.flatMap { it.transactions }.size)
+    }
 }

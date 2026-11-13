@@ -8,9 +8,15 @@ import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.Account
+import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.TransactionRepository
+import com.financeautomation.domain.usecase.FakeSubscriptionRepository
+import com.financeautomation.domain.usecase.LogExpenseUseCase
+import com.financeautomation.domain.usecase.SubscriptionActionUseCase
+import com.financeautomation.domain.usecase.SubscriptionScheduleUseCase
+import com.financeautomation.domain.usecase.testSubscription
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -51,7 +57,7 @@ class ReviewInboxViewModelTest {
         val txns = MutableStateFlow<List<Transaction>>(emptyList())
         var updateCalls = 0
         override fun getTransactions(): Flow<List<Transaction>> = txns
-        override fun getNeedsReview(): Flow<List<Transaction>> = flowOf(txns.value.filter { it.reviewState == ReviewState.NEEDS_REVIEW })
+        override fun getNeedsReview(): Flow<List<Transaction>> = txns.map { list -> list.filter { it.reviewState == ReviewState.NEEDS_REVIEW } }
         override suspend fun getTransactionById(id: String): Transaction? = txns.value.find { it.id == id }
         override suspend fun insertTransaction(transaction: Transaction): Result<Unit> {
             txns.value = txns.value + transaction
@@ -740,6 +746,130 @@ class ReviewInboxViewModelTest {
         assertEquals(0, updatedQueue.retryCount)
         assertNull(updatedQueue.lastErrorKind)
         assertNull(updatedQueue.lastErrorDetail)
+    }
+
+    @Test
+    fun testConfirmAll_confirmsEligibleTransactions() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cDao = FakePendingCaptureDao()
+        val aRepo = FakeAccountRepo()
+
+        val txn1 = Transaction(
+            id = "t1",
+            timestamp = System.currentTimeMillis(),
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Cafe",
+            category = "Food & Drink",
+            totalAmount = 200.0,
+            companions = "Personal",
+            myShare = 200.0,
+            owedToMe = 0.0,
+            reviewState = ReviewState.NEEDS_REVIEW
+        )
+        val txn2 = Transaction(
+            id = "t2",
+            timestamp = System.currentTimeMillis(),
+            dateSerial = 46330,
+            timeSerial = 0.6,
+            account = "SBI",
+            merchant = "Bakery",
+            category = "Food & Drink",
+            totalAmount = 150.0,
+            companions = "Personal",
+            myShare = 150.0,
+            owedToMe = 0.0,
+            reviewState = ReviewState.NEEDS_REVIEW
+        )
+        tRepo.insertTransaction(txn1)
+        tRepo.insertTransaction(txn2)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = cDao,
+            accountRepository = aRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(2, vm.uiState.value.items.size)
+
+        vm.confirmAll()
+        advanceUntilIdle()
+
+        assertEquals(0, vm.uiState.value.items.size)
+        assertEquals(ReviewState.CONFIRMED, tRepo.getTransactionById("t1")?.reviewState)
+        assertEquals(ReviewState.CONFIRMED, tRepo.getTransactionById("t2")?.reviewState)
+    }
+
+    @Test
+    fun testSubscriptionDue_actions_yes_notYet_skip() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val cDao = FakePendingCaptureDao()
+        val aRepo = FakeAccountRepo()
+        val subRepo = FakeSubscriptionRepository()
+        val subActions = SubscriptionActionUseCase(
+            repository = subRepo,
+            logExpenseUseCase = LogExpenseUseCase(tRepo),
+            createCapture = { _, _ -> "cap_varies" }
+        )
+
+        val today = java.time.LocalDate.now(SubscriptionScheduleUseCase.IST).toEpochDay()
+        val sub = testSubscription(id = "sub_spotify", name = "Spotify", amount = 119.0)
+        subRepo.addSubscription(sub)
+
+        // 1. Cycle 1: test subscriptionYes
+        val cycle1 = subRepo.addCycle("sub_spotify", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = cDao,
+            accountRepository = aRepo,
+            ioDispatcher = testDispatcher,
+            subscriptionRepository = subRepo,
+            subscriptionActions = subActions
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, vm.subscriptionsDue.value.size)
+        assertEquals(cycle1.id, vm.subscriptionsDue.value.first().cycle.id)
+
+        vm.subscriptionYes(cycle1.id)
+        advanceUntilIdle()
+
+        val updatedCycle1 = subRepo.getCycle(cycle1.id)
+        assertEquals(SubscriptionCycleState.PAID, updatedCycle1?.state)
+        assertEquals(0, vm.subscriptionsDue.value.size)
+
+        // 2. Cycle 2: test subscriptionNotYet
+        val cycle2 = subRepo.addCycle("sub_spotify", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+        advanceUntilIdle()
+        assertEquals(1, vm.subscriptionsDue.value.size)
+
+        vm.subscriptionNotYet(cycle2.id)
+        advanceUntilIdle()
+
+        val updatedCycle2 = subRepo.getCycle(cycle2.id)
+        assertEquals(SubscriptionCycleState.DUE, updatedCycle2?.state)
+        assertEquals(2, updatedCycle2?.remindCount)
+        assertEquals(0, vm.subscriptionsDue.value.size)
+
+        // 3. Cycle 3: test subscriptionSkip
+        val cycle3 = subRepo.addCycle("sub_spotify", today, SubscriptionCycleState.NEEDS_REVIEW, remindCount = 3)
+        advanceUntilIdle()
+        assertEquals(1, vm.subscriptionsDue.value.size)
+
+        vm.subscriptionSkip(cycle3.id)
+        advanceUntilIdle()
+
+        val updatedCycle3 = subRepo.getCycle(cycle3.id)
+        assertEquals(SubscriptionCycleState.SKIPPED, updatedCycle3?.state)
+        assertEquals(0, vm.subscriptionsDue.value.size)
     }
 }
 
