@@ -15,3 +15,7 @@ This document records verification for Round 6 items X1 through X6, Round 6b ite
 9. Item Z1: Stacked KPI layout (hero Living burn card at 7 digits exact, half-width Savings and Income cards at 5 digits exact, compact beyond), tap-to-reveal, and font scale 1.3 audit.
 10. Item Z2: Accurate tracking and reporting of test entry details.
 11. Item F1: Removed debug logging from MainActivity by manual edit, purged unused imports, and verified zero financial data logging across source tree.
+12. Item F2: Half-width KPI cards show exact figures up to 5 digits with shrink-to-fit amount composable (font reduction to 16sp floor before compact fallback) and font scale 1.3 audit passing.
+13. Item F3: Half-width KPI cards standardized with top alignment, amount directly below label at identical Y positions, sub-line placeholder, and equal heights.
+14. Item F4: Increased bottom content padding on Dashboard, Transactions, and Needs Review so scrolling content clears the floating action button.
+15. Item F5: Captured 5 portrait evidence screenshots in ui-evidence-final directory (navigation drawer, About, onboarding setup checklist, notification access, and Google Sheets API error screen).
