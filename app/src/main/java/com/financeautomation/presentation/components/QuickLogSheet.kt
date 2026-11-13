@@ -315,7 +315,7 @@ fun QuickLogSheet(
         // Date Chips: Today, Yesterday, Pick date (no future dates)
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "DATE",
+                text = stringResource(R.string.quick_log_date_label),
                 style = FinanceTheme.typography.labelUppercase,
                 color = FinanceTheme.colors.onSurfaceVariant
             )
@@ -340,28 +340,32 @@ fun QuickLogSheet(
             }
             val isPickDate = !isToday && !isYesterday
 
-            val pickDateLabel = remember(selectedTs, isPickDate) {
+            val defaultPickDateLabel = stringResource(R.string.quick_log_pick_date)
+            val pickDateLabel = remember(selectedTs, isPickDate, defaultPickDateLabel) {
                 if (isPickDate) {
                     val sdf = SimpleDateFormat("d MMM", Locale.US).apply { timeZone = tz }
                     sdf.format(Date(selectedTs))
                 } else {
-                    "Pick date"
+                    defaultPickDateLabel
                 }
             }
+
+            val todayLabel = stringResource(R.string.quick_log_today)
+            val yesterdayLabel = stringResource(R.string.quick_log_yesterday)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
                 AppChip(
-                    text = "Today",
+                    text = todayLabel,
                     selected = isToday,
                     onClick = {
                         onDateSelected(System.currentTimeMillis())
                     }
                 )
                 AppChip(
-                    text = "Yesterday",
+                    text = yesterdayLabel,
                     selected = isYesterday,
                     onClick = {
                         val cal = Calendar.getInstance(tz)

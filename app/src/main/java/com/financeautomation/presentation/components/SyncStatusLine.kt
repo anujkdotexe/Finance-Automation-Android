@@ -17,11 +17,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.financeautomation.R
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -66,7 +68,7 @@ fun SyncStatusLine(
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
             ) {
                 Text(
-                    text = "$failedCount failed, tap to fix",
+                    text = stringResource(R.string.sync_status_failed_tap_to_fix, failedCount),
                     style = FinanceTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )

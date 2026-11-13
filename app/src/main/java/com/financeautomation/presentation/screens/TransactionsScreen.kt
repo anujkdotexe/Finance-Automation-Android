@@ -156,8 +156,8 @@ fun TransactionsScreen(
                     viewModel.voidTransaction(targetTxn)
                     coroutineScope.launch {
                         val result = snackbarHostState.showSnackbar(
-                            message = "Transaction voided",
-                            actionLabel = "Undo",
+                            message = context.getString(R.string.txns_voided_msg),
+                            actionLabel = context.getString(R.string.action_undo),
                             duration = SnackbarDuration.Short
                         )
                         if (result == SnackbarResult.ActionPerformed) {
@@ -194,8 +194,8 @@ fun TransactionsScreen(
                     selectedTransaction = null
                     coroutineScope.launch {
                         val result = snackbarHostState.showSnackbar(
-                            message = "Transaction voided",
-                            actionLabel = "Undo",
+                            message = context.getString(R.string.txns_voided_msg),
+                            actionLabel = context.getString(R.string.action_undo),
                             duration = SnackbarDuration.Short
                         )
                         if (result == SnackbarResult.ActionPerformed) {
@@ -214,7 +214,7 @@ fun TransactionsScreen(
                     viewModel.voidInflow(inf.id) { success ->
                         if (success) {
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Entry voided")
+                                snackbarHostState.showSnackbar(context.getString(R.string.txns_entry_voided_msg))
                             }
                         }
                     }
@@ -326,7 +326,7 @@ fun TransactionsContent(
                 )
                 if (state.totalOut > 0.0) {
                     Text(
-                        text = "Total paid: ${formatRupeesAuto(state.totalOut)}",
+                        text = stringResource(R.string.txns_total_paid, formatRupeesAuto(state.totalOut)),
                         style = FinanceTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
@@ -408,7 +408,7 @@ fun TransactionsContent(
             }
             if (isLivingBurn) {
                 AppChip(
-                    text = "Living burn ✕",
+                    text = stringResource(R.string.txns_filter_living_burn_dismiss),
                     selected = true,
                     onClick = { onFilterChange(state.activeFilter.copy(excludeSavingsAndIgnored = false)) }
                 )
@@ -865,12 +865,15 @@ fun TransactionDetailSheet(
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                     ) {
                         Text(
-                            text = "Sheet row: ${transaction.sheetRowIndex ?: "Unassigned"}",
+                            text = stringResource(
+                                R.string.txns_sheet_row,
+                                transaction.sheetRowIndex?.toString() ?: stringResource(R.string.txns_unassigned)
+                            ),
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "ID: ${transaction.id}",
+                            text = stringResource(R.string.txns_id_label, transaction.id),
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -20,10 +20,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
@@ -220,7 +222,7 @@ fun InflowRow(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.CallReceived,
-                contentDescription = "Income",
+                contentDescription = stringResource(R.string.cd_income),
                 tint = FinanceTheme.colors.moneyIn,
                 modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
             )

@@ -367,18 +367,18 @@ fun AppNavHost(
                                     text = when (baseRoute) {
                                         AppRoutes.DASHBOARD -> stringResource(R.string.nav_dashboard_title)
                                         AppRoutes.NEEDS_REVIEW -> stringResource(R.string.nav_inbox_title)
-                                        AppRoutes.TRANSACTIONS -> "Transactions"
-                                        AppRoutes.ACCOUNTS -> "Accounts"
-                                        AppRoutes.CATEGORIES -> "Categories"
-                                        AppRoutes.PEOPLE_TRIPS -> "People and trips"
-                                        AppRoutes.SUBSCRIPTIONS -> "Subscriptions"
+                                        AppRoutes.TRANSACTIONS -> stringResource(R.string.nav_transactions_title)
+                                        AppRoutes.ACCOUNTS -> stringResource(R.string.nav_accounts_title)
+                                        AppRoutes.CATEGORIES -> stringResource(R.string.nav_categories_title)
+                                        AppRoutes.PEOPLE_TRIPS -> stringResource(R.string.nav_people_trips_title)
+                                        AppRoutes.SUBSCRIPTIONS -> stringResource(R.string.nav_subscriptions_title)
                                         AppRoutes.INSIGHTS -> stringResource(R.string.insights_title)
-                                        AppRoutes.CAPTURE_PERMISSIONS -> "Capture and permissions"
-                                        AppRoutes.SYNC_BACKUP -> "Sync and backup"
-                                        AppRoutes.PREFERENCES -> "Preferences"
-                                        AppRoutes.DIAGNOSTICS -> "Diagnostics"
-                                        AppRoutes.ABOUT -> "About"
-                                        else -> "Finance Automation"
+                                        AppRoutes.CAPTURE_PERMISSIONS -> stringResource(R.string.nav_capture_permissions_title)
+                                        AppRoutes.SYNC_BACKUP -> stringResource(R.string.nav_sync_backup_title)
+                                        AppRoutes.PREFERENCES -> stringResource(R.string.nav_preferences_title)
+                                        AppRoutes.DIAGNOSTICS -> stringResource(R.string.nav_diagnostics_title)
+                                        AppRoutes.ABOUT -> stringResource(R.string.nav_about_title)
+                                        else -> stringResource(R.string.app_name)
                                     },
                                     style = FinanceTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
@@ -390,7 +390,7 @@ fun AppNavHost(
                                     IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                         Icon(
                                             imageVector = Icons.Rounded.Menu,
-                                            contentDescription = "Open navigation menu",
+                                            contentDescription = stringResource(R.string.cd_open_drawer),
                                             tint = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
@@ -402,7 +402,7 @@ fun AppNavHost(
                                     }) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                            contentDescription = "Navigate back",
+                                            contentDescription = stringResource(R.string.cd_back),
                                             tint = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
@@ -484,14 +484,14 @@ fun AppNavHost(
                                 },
                                 label = {
                                     Text(
-                                        text = "Dashboard",
+                                        text = stringResource(R.string.nav_dashboard_title),
                                         fontWeight = if (isDashboardSelected) FontWeight.Bold else FontWeight.Medium
                                     )
                                 },
                                 icon = {
                                     Icon(
                                         imageVector = Icons.Rounded.Dashboard,
-                                        contentDescription = "Dashboard",
+                                        contentDescription = stringResource(R.string.nav_dashboard_title),
                                         modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                                     )
                                 },
@@ -518,7 +518,7 @@ fun AppNavHost(
                                 },
                                 label = {
                                     Text(
-                                        text = "Needs Review",
+                                        text = stringResource(R.string.nav_inbox_title),
                                         fontWeight = if (isInboxSelected) FontWeight.Bold else FontWeight.Medium
                                     )
                                 },
@@ -535,14 +535,14 @@ fun AppNavHost(
                                         }) {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Rounded.ReceiptLong,
-                                                contentDescription = "Needs Review",
+                                                contentDescription = stringResource(R.string.nav_inbox_title),
                                                 modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                                             )
                                         }
                                     } else {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.ReceiptLong,
-                                            contentDescription = "Needs Review",
+                                            contentDescription = stringResource(R.string.nav_inbox_title),
                                             modifier = Modifier.size(FinanceTheme.sizes.iconLarge)
                                         )
                                     }
