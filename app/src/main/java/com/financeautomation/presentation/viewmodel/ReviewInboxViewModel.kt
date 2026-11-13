@@ -310,6 +310,12 @@ class ReviewInboxViewModel(
         return confirmedCount
     }
 
+    fun confirmAll() {
+        viewModelScope.launch(ioDispatcher) {
+            confirmAllEligible()
+        }
+    }
+
     fun keepBoth(id: String) {
         viewModelScope.launch(ioDispatcher) {
             val target = transactionRepository.getTransactionById(id) ?: return@launch
