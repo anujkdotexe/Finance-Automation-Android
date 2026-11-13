@@ -194,6 +194,11 @@ class QuickLogViewModel(
         refreshPredictedCategories(text)
     }
 
+    fun onDateSelected(timestampMillis: Long) {
+        val capped = minOf(timestampMillis, System.currentTimeMillis())
+        _uiState.update { it.copy(captureTimestamp = capped) }
+    }
+
     fun onAccountSelected(accountName: String) = _uiState.update { it.copy(selectedAccount = accountName) }
 
     fun onCategorySelected(categoryName: String) = _uiState.update { it.copy(selectedCategory = categoryName) }

@@ -68,6 +68,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -90,6 +95,7 @@ fun QuickLogSheet(
     state: QuickLogUiState,
     onAmountChanged: (String) -> Unit,
     onPayeeChanged: (String) -> Unit,
+    onDateSelected: (Long) -> Unit = {},
     onAccountSelected: (String) -> Unit,
     onCategorySelected: (String) -> Unit,
     onSplitModeChanged: (SplitMode) -> Unit,
@@ -292,6 +298,90 @@ fun QuickLogSheet(
                     .fillMaxWidth()
                     .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
             )
+        }
+
+        // Date Chips: Today, Yesterday, Pick date (no future dates)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "DATE",
+                style = FinanceTheme.typography.labelUppercase,
+                color = FinanceTheme.colors.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
+
+            val context = LocalView.current.context
+            val tz = remember { TimeZone.getTimeZone("Asia/Kolkata") }
+            val nowTs = remember { System.currentTimeMillis() }
+            val selectedTs = state.captureTimestamp ?: nowTs
+
+            val isToday = remember(selectedTs) {
+                isSameDay(selectedTs, nowTs, tz)
+            }
+            val yesterdayTs = remember {
+                val c = Calendar.getInstance(tz)
+                c.add(Calendar.DAY_OF_YEAR, -1)
+                c.timeInMillis
+            }
+            val isYesterday = remember(selectedTs) {
+                isSameDay(selectedTs, yesterdayTs, tz)
+            }
+            val isPickDate = !isToday && !isYesterday
+
+            val pickDateLabel = remember(selectedTs, isPickDate) {
+                if (isPickDate) {
+                    val sdf = SimpleDateFormat("d MMM", Locale.US).apply { timeZone = tz }
+                    sdf.format(Date(selectedTs))
+                } else {
+                    "Pick date"
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+            ) {
+                AppChip(
+                    text = "Today",
+                    selected = isToday,
+                    onClick = {
+                        onDateSelected(System.currentTimeMillis())
+                    }
+                )
+                AppChip(
+                    text = "Yesterday",
+                    selected = isYesterday,
+                    onClick = {
+                        val cal = Calendar.getInstance(tz)
+                        cal.add(Calendar.DAY_OF_YEAR, -1)
+                        onDateSelected(cal.timeInMillis)
+                    }
+                )
+                AppChip(
+                    text = pickDateLabel,
+                    selected = isPickDate,
+                    onClick = {
+                        val cal = Calendar.getInstance(tz).apply { timeInMillis = selectedTs }
+                        android.app.DatePickerDialog(
+                            context,
+                            { _, year, month, dayOfMonth ->
+                                val pickedCal = Calendar.getInstance(tz).apply {
+                                    set(Calendar.YEAR, year)
+                                    set(Calendar.MONTH, month)
+                                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                }
+                                val chosen = minOf(pickedCal.timeInMillis, System.currentTimeMillis())
+                                onDateSelected(chosen)
+                            },
+                            cal.get(Calendar.YEAR),
+                            cal.get(Calendar.MONTH),
+                            cal.get(Calendar.DAY_OF_MONTH)
+                        ).apply {
+                            datePicker.maxDate = System.currentTimeMillis()
+                        }.show()
+                    }
+                )
+            }
         }
 
         // 3. Category Chips: Exactly 10 real categories in wrapping FlowRow
@@ -499,6 +589,13 @@ fun QuickLogSheet(
             )
         }
     }
+}
+
+private fun isSameDay(t1: Long, t2: Long, tz: TimeZone): Boolean {
+    val c1 = Calendar.getInstance(tz).apply { timeInMillis = t1 }
+    val c2 = Calendar.getInstance(tz).apply { timeInMillis = t2 }
+    return c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) &&
+           c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR)
 }
 
 /**
