@@ -536,9 +536,65 @@ class TransactionsViewModel(
         )
     }
 
+    var lastVoidedTransaction: Transaction? = null
+        private set
+
+    var lastSavedTransactionId: String? = null
+        private set
+
+    fun voidTransaction(txn: Transaction, onComplete: ((Boolean) -> Unit)? = null) {
+        lastVoidedTransaction = txn
+        viewModelScope.launch(ioDispatcher) {
+            val result = transactionRepository.voidTransaction(txn.id)
+            onComplete?.invoke(result is Result.Success)
+        }
+    }
+
     fun voidTransaction(txnId: String) {
+        val currentTxn = _uiState.value.groupedTransactions
+            .flatMap { it.transactions }
+            .firstOrNull { it.id == txnId }
+        lastVoidedTransaction = currentTxn
         viewModelScope.launch(ioDispatcher) {
             transactionRepository.voidTransaction(txnId)
+        }
+    }
+
+    fun undoVoid(onComplete: ((Boolean) -> Unit)? = null) {
+        val txn = lastVoidedTransaction ?: run {
+            onComplete?.invoke(false)
+            return
+        }
+        viewModelScope.launch(ioDispatcher) {
+            val result = transactionRepository.updateTransaction(txn)
+            if (result is Result.Success) {
+                lastVoidedTransaction = null
+                onComplete?.invoke(true)
+            } else {
+                onComplete?.invoke(false)
+            }
+        }
+    }
+
+    fun recordSavedTransaction(id: String) {
+        lastSavedTransactionId = id
+    }
+
+    fun undoSave(txnId: String? = null, onComplete: ((Boolean) -> Unit)? = null) {
+        val targetId = txnId ?: lastSavedTransactionId ?: run {
+            onComplete?.invoke(false)
+            return
+        }
+        viewModelScope.launch(ioDispatcher) {
+            val result = transactionRepository.undoRecentSave(targetId)
+            if (result is Result.Success) {
+                if (lastSavedTransactionId == targetId) {
+                    lastSavedTransactionId = null
+                }
+                onComplete?.invoke(true)
+            } else {
+                onComplete?.invoke(false)
+            }
         }
     }
 

@@ -22,6 +22,7 @@ import com.financeautomation.data.local.entity.SyncQueueEntity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -45,6 +46,10 @@ class TransactionsViewModelTest {
 
     private class FakeTransactionRepo : TransactionRepository {
         val txns = MutableStateFlow<List<Transaction>>(emptyList())
+        val voidCalls = mutableListOf<String>()
+        val undoRecentSaveCalls = mutableListOf<String>()
+        val updateCalls = mutableListOf<Transaction>()
+
         override fun getTransactions(): Flow<List<Transaction>> = txns
         override fun getNeedsReview(): Flow<List<Transaction>> = flowOf(emptyList())
         override suspend fun getTransactionById(id: String): Transaction? = txns.value.find { it.id == id }
@@ -53,12 +58,19 @@ class TransactionsViewModelTest {
             return Result.Success(Unit)
         }
         override suspend fun updateTransaction(transaction: Transaction): Result<Unit> {
+            updateCalls.add(transaction)
             txns.value = txns.value.map { if (it.id == transaction.id) transaction else it }
             return Result.Success(Unit)
         }
-        override suspend fun voidTransaction(id: String): Result<Unit> = Result.Success(Unit)
+        override suspend fun voidTransaction(id: String): Result<Unit> {
+            voidCalls.add(id)
+            return Result.Success(Unit)
+        }
         override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = Result.Success(Unit)
-        override suspend fun undoRecentSave(id: String): Result<Unit> = Result.Success(Unit)
+        override suspend fun undoRecentSave(id: String): Result<Unit> {
+            undoRecentSaveCalls.add(id)
+            return Result.Success(Unit)
+        }
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
@@ -951,5 +963,53 @@ class TransactionsViewModelTest {
         assertNotNull(dayGroup)
         assertEquals(expectedLivingBurn, dayGroup!!.dayMyShare, 0.001)
         assertEquals(expectedGrossTotal, dayGroup.dayTotalOut, 0.001)
+    }
+
+    @Test
+    fun testVoidTransaction_andUndoVoid_andUndoSave() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val ts = System.currentTimeMillis()
+        val txn = Transaction(
+            id = "t_voidable",
+            timestamp = ts,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Grocery Store",
+            category = "Groceries",
+            totalAmount = 300.0,
+            companions = "Personal",
+            myShare = 300.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED
+        )
+        tRepo.insertTransaction(txn)
+
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // Void the transaction
+        vm.voidTransaction(txn)
+        advanceUntilIdle()
+        assertEquals(listOf("t_voidable"), tRepo.voidCalls)
+        assertEquals(txn, vm.lastVoidedTransaction)
+
+        // Undo the void
+        var undoVoidCompleted = false
+        vm.undoVoid { success -> undoVoidCompleted = success }
+        advanceUntilIdle()
+        assertTrue(undoVoidCompleted)
+        assertEquals(listOf(txn), tRepo.updateCalls)
+        assertNull(vm.lastVoidedTransaction)
+
+        // Undo save
+        vm.recordSavedTransaction("t_newly_saved")
+        assertEquals("t_newly_saved", vm.lastSavedTransactionId)
+        var undoSaveCompleted = false
+        vm.undoSave { success -> undoSaveCompleted = success }
+        advanceUntilIdle()
+        assertTrue(undoSaveCompleted)
+        assertEquals(listOf("t_newly_saved"), tRepo.undoRecentSaveCalls)
+        assertNull(vm.lastSavedTransactionId)
     }
 }
