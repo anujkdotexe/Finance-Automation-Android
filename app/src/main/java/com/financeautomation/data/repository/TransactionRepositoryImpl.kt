@@ -242,6 +242,8 @@ class TransactionRepositoryImpl(
     }
 
     override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = withContext(ioDispatcher) {
+        // Wait for a running sync: it may be delivering this very row, and the edit must be queued after it
+        syncMutex.withLock {
         try {
             if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
@@ -268,6 +270,7 @@ class TransactionRepositoryImpl(
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
+        }
         }
     }
 
