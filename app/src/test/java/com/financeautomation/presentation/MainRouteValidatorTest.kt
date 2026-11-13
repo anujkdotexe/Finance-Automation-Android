@@ -30,7 +30,9 @@ class MainRouteValidatorTest {
         val dashboard = MainRouteValidator.resolveRoute(AppRoutes.DASHBOARD, null)
         assertEquals(AppRoutes.DASHBOARD, dashboard)
 
-        val syncBackup = MainRouteValidator.resolveRoute(AppRoutes.SYNC_BACKUP, null)
+        // Sync and Backup is reachable only from an intent marked by this app
+        assertNull(MainRouteValidator.resolveRoute(AppRoutes.SYNC_BACKUP, null))
+        val syncBackup = MainRouteValidator.resolveRoute(AppRoutes.SYNC_BACKUP, null, internal = true)
         assertEquals(AppRoutes.SYNC_BACKUP, syncBackup)
 
         val invalid = MainRouteValidator.resolveRoute("not_a_real_route", null)
@@ -41,11 +43,11 @@ class MainRouteValidatorTest {
     fun testResolveRoute_fromDeepLinkUri() {
         // Form 1: financeautomation://route/capturePermissions
         val perm = MainRouteValidator.resolveRoute(null, "financeautomation://route/capturePermissions")
-        assertEquals(AppRoutes.CAPTURE_PERMISSIONS, perm)
+        assertNull("links may no longer open Capture and Permissions", perm)
 
         // Form 2: financeautomation://route/syncBackup
         val sync = MainRouteValidator.resolveRoute(null, "financeautomation://route/syncBackup")
-        assertEquals(AppRoutes.SYNC_BACKUP, sync)
+        assertNull("links may no longer open Sync and Backup", sync)
 
         // Form 3: financeautomation://dashboard
         val dash = MainRouteValidator.resolveRoute(null, "financeautomation://dashboard")

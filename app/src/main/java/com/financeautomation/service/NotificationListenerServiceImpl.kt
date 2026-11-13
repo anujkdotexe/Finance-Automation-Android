@@ -65,6 +65,11 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         val extras = sbn.notification.extras ?: Bundle.EMPTY
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         val extraText = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        // Sender and keyword filter on the title and a short prefix first; the long text is only read after it passes
+        if (!NotificationPreFilter.shouldReadFullText(sourcePackage, title, extraText.take(NotificationPreFilter.PREFIX_LENGTH))) {
+            PipelineTrail.recordDroppedNotWhitelisted()
+            return
+        }
         val extraBigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
         val text = if (extraBigText.length > extraText.length) extraBigText else extraText
         val postTime = if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()

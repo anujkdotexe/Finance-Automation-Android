@@ -57,10 +57,30 @@ object RegexPatterns {
         """(?i)(?:\bending\s+(?:with\s+|in\s+)?|[*xX]{2,}|\.\.{2,})(\d{3,4})\b"""
     )
 
-    // OTP and auth code suppression pattern
-    val OTP_REGEX: Regex = Regex(
-        """(?i)\b(otp|one[- ]time[- ]password|verification[- ]code|secret[- ]code|do[- ]not[- ]share|security[- ]code|auth[- ]code)\b"""
+    // A completed payment: a direction verb directly tied to an amount ("Paid Rs 349", "Rs 500 debited")
+    val CONFIRMATION_REGEX: Regex = Regex(
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|credited|received)\b"""
     )
+
+    // "Payment successful" style wording that confirms an outgoing payment without a separate debit verb
+    val PAYMENT_SUCCESS_REGEX: Regex = Regex(
+        """(?i)\bpayment\b[^.]{0,40}\bsuccessful(?:ly)?\b|\bsuccessful(?:ly)?\s+payment\b|\bpaid\s+successfully\b"""
+    )
+
+    // Promotional or reminder wording used by payment apps
+    val PROMO_REGEX: Regex = Regex(
+        """(?i)\b(cashbacks?|offers?|rewards?|coupons?|vouchers?|discounts?|scratch\s*cards?|win|earn|refer(?:ral)?|invite|bonus|due|overdue|reminder|bills?|recharge|expires?|expiring|apply\s+now|pre-?approved|loans?|emi|limited\s+time|get\s+up\s+to|upto)\b"""
+    )
+
+    /** True when the text states a completed payment with an amount (verb and amount together). */
+    fun hasConfirmation(text: String): Boolean = CONFIRMATION_REGEX.containsMatchIn(text)
+
+    /** True for "payment successful" wording. */
+    fun isPaymentSuccessful(text: String): Boolean = PAYMENT_SUCCESS_REGEX.containsMatchIn(text)
+
+    /** True for promotional or reminder wording. */
+    fun isPromotional(text: String): Boolean = PROMO_REGEX.containsMatchIn(text)
 
     /**
      * Extracts parsed currency amount from arbitrary notification text.
@@ -170,6 +190,6 @@ object RegexPatterns {
      * Returns true if text contains an OTP or authentication code.
      */
     fun isOtp(text: String): Boolean {
-        return OTP_REGEX.containsMatchIn(text)
+        return OtpClassifier.isOtp(text)
     }
 }

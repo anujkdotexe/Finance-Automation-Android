@@ -186,3 +186,31 @@ if (project.hasProperty("devFast")) {
         }
     }
 }
+
+
+// Signing safety. Without keystore.properties the release and beta types fall back to the debug key (see
+// signingConfigs above). That is acceptable for a local beta build, never for a release build.
+gradle.taskGraph.whenReady {
+    if (!rootProject.file("keystore.properties").exists()) {
+        val appTasks = allTasks.filter { it.project == project }
+        val buildsApk = { t: org.gradle.api.Task ->
+            t.name.startsWith("assemble") || t.name.startsWith("bundle") || t.name.startsWith("package")
+        }
+        val releaseTask = appTasks.firstOrNull { buildsApk(it) && it.name.contains("Release") }
+        if (releaseTask != null) {
+            throw GradleException(
+                "keystore.properties is missing, so the release build would be signed with the DEBUG key. " +
+                    "Create keystore.properties (storeFile, storePassword, keyAlias, keyPassword) and build again. " +
+                    "A beta build (assembleBeta) does not need it."
+            )
+        }
+        if (appTasks.any { buildsApk(it) && it.name.contains("Beta") }) {
+            logger.warn("")
+            logger.warn("==================================================================")
+            logger.warn("WARNING: keystore.properties is missing.")
+            logger.warn("This beta build is signed with the DEBUG key. Do not distribute it.")
+            logger.warn("==================================================================")
+            logger.warn("")
+        }
+    }
+}

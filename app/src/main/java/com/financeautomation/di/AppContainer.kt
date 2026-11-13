@@ -178,7 +178,20 @@ class DefaultAppContainer(
             FinanceDatabase.getInstance(applicationContext)
         }
 
-    override suspend fun awaitDatabase(): FinanceDatabase = databaseReady.await()
+    private val databaseProvider = com.financeautomation.data.local.RetriableProvider<FinanceDatabase> {
+        // The first attempt reuses the pre-warm job. If that job failed, the failure is not remembered:
+        // every later call opens the database again, so a transient Keystore problem heals without a restart.
+        try {
+            databaseReady.await()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (providedDatabaseReady != null) throw e
+            FinanceDatabase.getInstanceAsync(applicationContext)
+        }
+    }
+
+    override suspend fun awaitDatabase(): FinanceDatabase = databaseProvider.get()
 
     override val googleDriveClient: GoogleDriveClient by lazy {
         GoogleDriveClient(

@@ -85,6 +85,15 @@ class FinanceApplication : Application() {
             }
         }
 
+        // 2b2. Remove stale CSV exports left in the cache
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                com.financeautomation.data.export.CsvExportWriter.purgeStaleExports(applicationContext.cacheDir)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+        }
+
         // 2c. Refresh launcher widgets on background dispatcher
         CoroutineScope(Dispatchers.IO).launch {
             try {

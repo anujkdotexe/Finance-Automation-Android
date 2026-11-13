@@ -48,6 +48,17 @@ class GoogleAuthTokenProvider(
 
     private val authClient = Identity.getAuthorizationClient(context)
 
+    /** Concurrent refreshes (several requests failing with 401 at once) share one refresh. */
+    private val refreshGate = TokenRefreshGate()
+
+    /** At most one reconnect notification per half hour, even if the user dismisses it. */
+    private val reconnectLimiter = MinIntervalLimiter(RECONNECT_NOTIFICATION_INTERVAL_MILLIS)
+
+    private fun isMainThread(): Boolean {
+        val main = android.os.Looper.getMainLooper()
+        return main != null && android.os.Looper.myLooper() == main
+    }
+
     /**
      * Executes asynchronous Google Identity authorization on [ioDispatcher].
      * Returns cached token if still valid (under 50 minutes).
@@ -113,10 +124,18 @@ class GoogleAuthTokenProvider(
         }
     }
 
+    /**
+     * Blocking by contract (the OkHttp interceptor API is synchronous). It is only valid on a background thread.
+     * On the main thread it never blocks: it returns the cached token, or null, and records a diagnostic.
+     */
     override fun getAccessToken(): String? {
         val now = System.currentTimeMillis()
         val existing = cachedToken
         if (!existing.isNullOrBlank() && now < tokenExpiresAt) {
+            return existing
+        }
+        if (isMainThread()) {
+            Diagnostics.record("GoogleAuthTokenProvider", "getAccessToken called on the main thread; not blocking")
             return existing
         }
         return runBlocking(ioDispatcher) {
@@ -127,11 +146,17 @@ class GoogleAuthTokenProvider(
         }
     }
 
+    /** Blocking by contract, background threads only (see [getAccessToken]). Concurrent calls share one refresh. */
     override fun refreshAccessToken(): String? {
         val staleToken = cachedToken
-        cachedToken = null
-        tokenExpiresAt = 0L
+        if (isMainThread()) {
+            Diagnostics.record("GoogleAuthTokenProvider", "refreshAccessToken called on the main thread; not blocking")
+            return null
+        }
         return runBlocking(ioDispatcher) {
+          refreshGate.refresh(staleToken, { cachedToken }) {
+            cachedToken = null
+            tokenExpiresAt = 0L
             if (!staleToken.isNullOrBlank()) {
                 try {
                     // GoogleAuthUtil.clearToken is used here because AuthorizationClient in the bundled Play Services Auth library
@@ -149,6 +174,7 @@ class GoogleAuthTokenProvider(
                     null
                 }
             }
+          }
         }
     }
 
@@ -158,6 +184,7 @@ class GoogleAuthTokenProvider(
     }
 
     private fun postReconnectNotification() {
+        if (!reconnectLimiter.tryAcquire()) return
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
 
@@ -182,6 +209,7 @@ class GoogleAuthTokenProvider(
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra("extra_route", "syncBackup")
+                com.financeautomation.presentation.ui.InternalIntentAuth.attach(context, this)
             } ?: return
 
             val pendingIntent = PendingIntent.getActivity(
@@ -212,5 +240,6 @@ class GoogleAuthTokenProvider(
         const val NOTIFICATION_ID_AUTH_RECONNECT: Int = 9001
         const val CHANNEL_AUTH_ALERTS: String = "channel_auth_alerts"
         const val TOKEN_TTL_MILLIS: Long = 50 * 60 * 1000L // 50 minutes
+        const val RECONNECT_NOTIFICATION_INTERVAL_MILLIS: Long = 30 * 60 * 1000L
     }
 }
