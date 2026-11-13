@@ -1,14 +1,46 @@
 package com.financeautomation.presentation.screens.drawer
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.financeautomation.R
+import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.screens.settings.SettingsSyncSection
+import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
 import com.financeautomation.presentation.viewmodel.SettingsViewModel
@@ -19,26 +51,247 @@ fun SyncBackupScreen(
     state: SettingsUiState,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
+
+    val accountEmail = state.googleAccountEmail
+    val accountDisplayName = remember(accountEmail) {
+        if (!accountEmail.isNullOrBlank()) {
+            if (accountEmail.contains("@")) {
+                accountEmail.substringBefore("@")
+            } else {
+                accountEmail
+            }
+        } else {
+            "Local offline storage"
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(FinanceTheme.spacing.l),
+            .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
     ) {
-        SettingsSyncSection(
-            state = state,
-            onSpreadsheetIdChanged = viewModel::onSpreadsheetIdChanged,
-            onSettleDelayChanged = viewModel::onSettleDelayChanged,
-            onSyncNow = viewModel::onSyncNow,
-            onMirrorConfigToCloud = viewModel::onMirrorConfigToCloud,
-            onRestoreConfigFromCloud = viewModel::onRestoreConfigFromCloud,
-            onRegenerateDashboard = viewModel::onRegenerateDashboard,
-            onRepairWorkbook = viewModel::autoProvisionMasterSheet,
-            onCreateFreshWorkbook = viewModel::onCreateFreshWorkbook
+        Text(
+            text = stringResource(R.string.sync_cloud_storage),
+            style = FinanceTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
         )
+
+        // Main Cloud Storage Card
+        Surface(
+            color = FinanceTheme.colors.surfaceContainerLowest,
+            shape = FinanceShapes.large,
+            shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // 1. Google Account
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(FinanceTheme.sizes.buttonHeightMedium)
+                            .clip(CircleShape)
+                            .background(FinanceTheme.colors.surfaceContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AccountCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.sync_google_account).uppercase(),
+                            style = FinanceTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = accountDisplayName,
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (!accountEmail.isNullOrBlank()) {
+                            Text(
+                                text = accountEmail,
+                                style = FinanceTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+
+                // 2. Workbook
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(FinanceTheme.sizes.buttonHeightMedium)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.TableChart,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.sync_workbook).uppercase(),
+                                style = FinanceTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (state.spreadsheetId.isNotBlank()) "Finance Ledger 2026" else "No workbook linked",
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (state.spreadsheetId.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                val url = "https://docs.google.com/spreadsheets/d/${state.spreadsheetId}"
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FinanceTheme.sizes.icon18)
+                                )
+                                Text(
+                                    text = stringResource(R.string.sync_open_in_sheets),
+                                    style = FinanceTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+
+                // 3. Last Sync
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(FinanceTheme.sizes.buttonHeightMedium)
+                            .clip(CircleShape)
+                            .background(FinanceTheme.colors.surfaceContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Schedule,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.sync_last_sync).uppercase(),
+                            style = FinanceTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (state.isSyncing) "Syncing..." else "Synced",
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+
+                // Action Buttons
+                Box(modifier = Modifier.padding(FinanceTheme.spacing.m)) {
+                    ButtonPair(
+                        outlinedText = stringResource(R.string.sync_btn_backup_now),
+                        onOutlinedClick = viewModel::onMirrorConfigToCloud,
+                        filledText = stringResource(R.string.sync_btn_sync_now),
+                        onFilledClick = viewModel::onSyncNow,
+                        outlinedEnabled = !state.isConfigSyncing,
+                        filledEnabled = !state.isSyncing,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // Developer Mode advanced tools
+        if (state.developerMode) {
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+            SettingsSyncSection(
+                state = state,
+                onSpreadsheetIdChanged = viewModel::onSpreadsheetIdChanged,
+                onSettleDelayChanged = viewModel::onSettleDelayChanged,
+                onSyncNow = viewModel::onSyncNow,
+                onMirrorConfigToCloud = viewModel::onMirrorConfigToCloud,
+                onRestoreConfigFromCloud = viewModel::onRestoreConfigFromCloud,
+                onRegenerateDashboard = viewModel::onRegenerateDashboard,
+                onRepairWorkbook = viewModel::autoProvisionMasterSheet,
+                onCreateFreshWorkbook = viewModel::onCreateFreshWorkbook
+            )
+        }
     }
 }
-

@@ -294,26 +294,14 @@ fun AppNavHost(
                     Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
                     DRAWER_ITEMS.forEach { item ->
-                        if (item.route == AppRoutes.SUBSCRIPTIONS && !isDebugOrBeta) {
-                            return@forEach
-                        }
                         if (!item.requiresDeveloperMode || settingsState.developerMode) {
                             val isSelected = currentRoute == item.route
                             NavigationDrawerItem(
                                 label = {
-                                    Column {
-                                        Text(
-                                            text = item.label,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                        )
-                                        if (item.route == AppRoutes.SUBSCRIPTIONS && isDebugOrBeta) {
-                                            Text(
-                                                text = "Coming in round 4",
-                                                style = FinanceTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
+                                    Text(
+                                        text = item.label,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
                                 },
                                 icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
                                 selected = isSelected,
