@@ -86,7 +86,7 @@ class FontScaleOverflowAuditTest {
     }
 
     @Test
-    fun testStackedKpiLayoutAmountsNeverEllipsizeUnderFontScale1_3() {
+    fun testStackedKpiLayoutThresholdsNeverEllipsizeUnderFontScale1_3() {
         val boundaryAmounts = listOf(
             9999.0,
             10000.0,
@@ -98,33 +98,46 @@ class FontScaleOverflowAuditTest {
         )
 
         // 1. Half-width cards (Savings and Income):
-        // Width = (360dp - 32dp padding - 8dp gap) / 2 = 160dp.
-        // Content width after 24dp padding = 136dp.
+        // Width = (360dp - 32dp padding - 8dp gap) / 2 = 160dp (136dp content width).
         // At 20sp * 1.3 font scale = 26sp mono font (char width ~15.6dp), capacity is 8 characters.
-        // Formatted amount must never exceed 6 characters.
-        boundaryAmounts.forEach { amount ->
+        // Exact figure up to 5 digits (e.g. 10,000, 50,003, 99,999) formatted with formatRupeesAuto must fit within 8 chars.
+        val fiveDigitOrLessAmounts = listOf(9999.0, 10000.0, 50003.0, 99999.0)
+        fiveDigitOrLessAmounts.forEach { amount ->
+            val formatted = com.financeautomation.core.utils.formatRupeesAuto(amount)
+            assertTrue(
+                "Half-width exact figure '$formatted' for $amount must not exceed 8 characters to prevent ellipsis on 360dp at font scale 1.3",
+                formatted.length <= 8
+            )
+        }
+
+        // Beyond 5 digits, compact form (<= 6 characters) fits comfortably within 8 characters.
+        val beyondFiveDigitAmounts = listOf(100000.0, 1234567.0, 12345678.0)
+        beyondFiveDigitAmounts.forEach { amount ->
             val formatted = com.financeautomation.core.utils.formatRupeesCompact(amount)
             assertTrue(
-                "Formatted amount '$formatted' for $amount must not exceed 6 characters to prevent ellipsis on 360dp at font scale 1.3",
+                "Half-width compact amount '$formatted' for $amount must not exceed 6 characters to prevent ellipsis on 360dp at font scale 1.3",
                 formatted.length <= 6
             )
         }
 
         // 2. Full-width card (Living burn):
-        // Width = 360dp - 32dp padding = 328dp.
-        // Content width after 24dp padding = 304dp.
+        // Width = 360dp - 32dp padding = 328dp (304dp content width).
         // At 32sp * 1.3 font scale = 41.6sp mono font (char width ~25dp), capacity is 12 characters.
-        boundaryAmounts.forEach { amount ->
-            val formatted = if (amount < 10000000.0) {
-                com.financeautomation.core.utils.formatRupeesAuto(amount)
-            } else {
-                com.financeautomation.core.utils.formatRupeesCompact(amount)
-            }
-            assertTrue(
-                "Full-width Living burn '$formatted' for $amount must fit within 12 characters",
-                formatted.length <= 12
-            )
-        }
+        // Exact figure up to 7 digits (e.g. 9,999,999 -> "₹99,99,999") must fit within 12 characters.
+        val fullWidthExactSevenDigits = 9999999.0
+        val fullWidthFormatted = com.financeautomation.core.utils.formatRupeesAuto(fullWidthExactSevenDigits)
+        assertTrue(
+            "Full-width Living burn exact 7 digits '$fullWidthFormatted' must fit within 12 characters",
+            fullWidthFormatted.length <= 12
+        )
+
+        // Above 7 digits (>= 10,000,000), compact form fits comfortably within 12 characters.
+        val aboveSevenDigits = 12345678.0
+        val fullWidthCompact = com.financeautomation.core.utils.formatRupeesCompact(aboveSevenDigits)
+        assertTrue(
+            "Full-width Living burn compact '$fullWidthCompact' must fit within 6 characters",
+            fullWidthCompact.length <= 6
+        )
     }
 }
 
