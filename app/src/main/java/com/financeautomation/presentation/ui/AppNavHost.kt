@@ -203,6 +203,7 @@ fun AppNavHost(
 
     val settingsState by settingsViewModel.uiState.collectAsState()
     val dashboardState by dashboardViewModel.uiState.collectAsState()
+    val reviewInboxState by reviewInboxViewModel.uiState.collectAsState()
 
     val isRootBottomBarRoute = baseRoute == AppRoutes.DASHBOARD || baseRoute == AppRoutes.NEEDS_REVIEW
     val showAvatarMenu = baseRoute == AppRoutes.DASHBOARD ||
@@ -518,10 +519,14 @@ fun AppNavHost(
                                     )
                                 },
                                 icon = {
-                                    if (dashboardState.needsReviewTotal > 0) {
+                                    val reviewBadgeCount = maxOf(
+                                        reviewInboxState.totalCount,
+                                        dashboardState.needsReviewTotal
+                                    )
+                                    if (reviewBadgeCount > 0) {
                                         BadgedBox(badge = {
                                             Badge {
-                                                Text(dashboardState.needsReviewTotal.toString())
+                                                Text(reviewBadgeCount.toString())
                                             }
                                         }) {
                                             Icon(

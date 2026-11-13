@@ -871,5 +871,51 @@ class ReviewInboxViewModelTest {
         assertEquals(SubscriptionCycleState.SKIPPED, updatedCycle3?.state)
         assertEquals(0, vm.subscriptionsDue.value.size)
     }
+
+    @Test
+    fun testReviewInboxUiState_totalCountCalculation() {
+        val emptyState = ReviewInboxUiState()
+        assertEquals(0, emptyState.totalCount)
+
+        val txn = Transaction(
+            id = "t1",
+            timestamp = 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "UPI",
+            merchant = "Store",
+            category = "Shopping",
+            totalAmount = 100.0,
+            companions = "Personal",
+            myShare = 100.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW
+        )
+        val capture = PendingCaptureEntity(
+            id = "c1",
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            amount = 100.0,
+            payee = "Store",
+            inferredAccount = "UPI",
+            timestamp = 1000L,
+            kind = PendingCaptureEntity.KIND_DEBIT,
+            flags = "",
+            state = PendingCaptureEntity.STATE_NEEDS_REVIEW,
+            notificationKey = null,
+            contentHash = null,
+            updatedAt = 1000L
+        )
+
+        val populatedState = ReviewInboxUiState(
+            items = listOf(txn),
+            captures = listOf(capture),
+            newAccountCaptures = listOf(capture.copy(id = "c2")),
+            failedQueueItems = listOf(
+                SyncQueueEntity(1L, "t1", SyncQueueEntity.OP_INSERT, "{}", status = SyncQueueEntity.STATUS_FAILED)
+            )
+        )
+        assertEquals(4, populatedState.totalCount)
+    }
 }
 
