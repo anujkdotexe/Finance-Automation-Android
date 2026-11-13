@@ -4,7 +4,9 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -63,6 +65,33 @@ class TransactionsViewModelTest {
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
+    }
+
+    private class FakeInflowRepo : InflowRepository {
+        val inflows = MutableStateFlow<List<Inflow>>(emptyList())
+        val voidCalls = mutableListOf<String>()
+
+        override fun getInflowsByRange(start: Long, end: Long): Flow<List<Inflow>> =
+            flowOf(inflows.value.filter { it.timestamp in start..end })
+
+        override fun getAllInflows(): Flow<List<Inflow>> = inflows
+
+        override suspend fun getInflowById(id: String): Inflow? =
+            inflows.value.find { it.id == id }
+
+        override suspend fun insertInflow(inflow: Inflow) {
+            inflows.value = inflows.value + inflow
+        }
+
+        override suspend fun updateStatus(id: String, status: String) {
+            inflows.value = inflows.value.map { if (it.id == id) it.copy(status = status) else it }
+        }
+
+        override suspend fun voidInflow(id: String): Result<Unit> {
+            voidCalls.add(id)
+            updateStatus(id, "VOID")
+            return Result.Success(Unit)
+        }
     }
 
     @Test
@@ -539,5 +568,190 @@ class TransactionsViewModelTest {
         advanceUntilIdle()
         assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
         assertEquals(4, vm.uiState.value.groupedTransactions.flatMap { it.transactions }.size)
+    }
+
+    @Test
+    fun testMergedList_ordersExpensesAndInflowsNewestFirstInterleaved() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val iRepo = FakeInflowRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val cal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 10)
+            set(Calendar.HOUR_OF_DAY, 10)
+        }
+        val t1 = cal.timeInMillis
+        val t2 = t1 + 3600_000L // 1 hour later
+        val t3 = t2 + 3600_000L // 2 hours later
+
+        val txnEarly = baseTxn("t_early").copy(timestamp = t1, totalAmount = 100.0)
+        val inflowMid = Inflow(
+            id = "inf_mid",
+            timestamp = t2,
+            amount = 500.0,
+            account = "HDFC",
+            inflowType = "Salary",
+            source = "Employer",
+            note = "Monthly salary"
+        )
+        val txnLate = baseTxn("t_late").copy(timestamp = t3, totalAmount = 200.0)
+
+        tRepo.insertTransaction(txnEarly)
+        tRepo.insertTransaction(txnLate)
+        iRepo.insertInflow(inflowMid)
+
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        val groups = vm.uiState.value.groupedTransactions
+        assertEquals(1, groups.size)
+        val items = groups[0].items
+        assertEquals(3, items.size)
+        // Should be ordered newest first: txnLate (t3), inflowMid (t2), txnEarly (t1)
+        assertEquals("t_late", items[0].id)
+        assertTrue(items[0] is TransactionListItem.ExpenseItem)
+        assertEquals("inf_mid", items[1].id)
+        assertTrue(items[1] is TransactionListItem.IncomeItem)
+        assertEquals("t_early", items[2].id)
+        assertTrue(items[2] is TransactionListItem.ExpenseItem)
+    }
+
+    @Test
+    fun testMonthAndSearchFiltering_appliesToInflows() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val iRepo = FakeInflowRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 15)
+            set(Calendar.HOUR_OF_DAY, 12)
+        }
+        val ts = nowCal.timeInMillis
+
+        val infSalary = Inflow(
+            id = "inf_sal",
+            timestamp = ts,
+            amount = 50000.0,
+            account = "HDFC",
+            inflowType = "Salary",
+            source = "Tech Corp",
+            note = "Monthly salary"
+        )
+        val infRefund = Inflow(
+            id = "inf_ref",
+            timestamp = ts + 1000L,
+            amount = 1200.0,
+            account = "GPay",
+            inflowType = "Refund",
+            source = "Amazon",
+            note = "Returned mouse"
+        )
+
+        iRepo.insertInflow(infSalary)
+        iRepo.insertInflow(infRefund)
+
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // Both in current month
+        val group = vm.uiState.value.groupedTransactions
+        assertEquals(2, group.flatMap { it.items }.size)
+
+        // Search for "Amazon"
+        vm.setSearchQuery("Amazon")
+        advanceUntilIdle()
+        val searchResults = vm.uiState.value.groupedTransactions.flatMap { it.items }
+        assertEquals(1, searchResults.size)
+        assertEquals("inf_ref", searchResults[0].id)
+
+        // Clear search
+        vm.setSearchQuery("")
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.groupedTransactions.flatMap { it.items }.size)
+
+        // Previous month offset - should be empty
+        vm.previousMonth()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.groupedTransactions.isEmpty())
+    }
+
+    @Test
+    fun testVoidInflow_callsRepositoryWithCorrectId() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val iRepo = FakeInflowRepo()
+        val inf = Inflow(
+            id = "inf_test_void",
+            timestamp = System.currentTimeMillis(),
+            amount = 1000.0,
+            account = "HDFC",
+            inflowType = "Income",
+            source = "Client",
+            note = "Consulting fee"
+        )
+        iRepo.insertInflow(inf)
+
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        var callbackCalled = false
+        var callbackSuccess = false
+        vm.voidInflow("inf_test_void") { success ->
+            callbackCalled = true
+            callbackSuccess = success
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackCalled)
+        assertTrue(callbackSuccess)
+        assertEquals(listOf("inf_test_void"), iRepo.voidCalls)
+    }
+
+    @Test
+    fun testVoidInflowsHiddenByDefault_shownWhenFilterIsVoid() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val iRepo = FakeInflowRepo()
+        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
+        val nowCal = Calendar.getInstance(kolkataTz).apply {
+            set(Calendar.DAY_OF_MONTH, 15)
+        }
+        val ts = nowCal.timeInMillis
+
+        val infActive = Inflow(
+            id = "inf_active",
+            timestamp = ts,
+            amount = 2000.0,
+            account = "HDFC",
+            inflowType = "Income",
+            source = "Freelance",
+            note = "Active project",
+            status = "CONFIRMED"
+        )
+        val infVoid = Inflow(
+            id = "inf_void",
+            timestamp = ts + 1000L,
+            amount = 1500.0,
+            account = "HDFC",
+            inflowType = "Refund",
+            source = "Vendor",
+            note = "Accidental refund",
+            status = "VOID"
+        )
+
+        iRepo.insertInflow(infActive)
+        iRepo.insertInflow(infVoid)
+
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+
+        // By default, VOID inflow should be hidden
+        val defaultItems = vm.uiState.value.groupedTransactions.flatMap { it.items }
+        assertEquals(1, defaultItems.size)
+        assertEquals("inf_active", defaultItems[0].id)
+
+        // Filter by Void status
+        vm.setFilter(TransactionFilter(status = "Void"))
+        advanceUntilIdle()
+
+        val voidItems = vm.uiState.value.groupedTransactions.flatMap { it.items }
+        assertEquals(1, voidItems.size)
+        assertEquals("inf_void", voidItems[0].id)
     }
 }

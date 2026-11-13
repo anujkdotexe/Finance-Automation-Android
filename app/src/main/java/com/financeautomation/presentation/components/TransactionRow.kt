@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.CallReceived
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -158,6 +162,116 @@ fun TransactionAccountChip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+/**
+ * Standard income / refund / settlement entry row for Transactions ledger.
+ * Layout:
+ * - Left: Inflow icon (CallReceived in positive color), source as title, type chip, account chip, time
+ * - Right: Positive mono amount (+₹Amount), optional VOID status chip
+ */
+@Composable
+fun InflowRow(
+    source: String,
+    amount: Double,
+    inflowType: String,
+    account: String,
+    time: String = "",
+    status: String = "",
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val displayTitle = source.ifBlank {
+        when (inflowType.uppercase()) {
+            "FRIEND_SETTLEMENT" -> "Friend settlement"
+            "SELF_TRANSFER" -> "Self transfer"
+            "REFUND" -> "Refund"
+            else -> "Income"
+        }
+    }
+    val typeLabel = when (inflowType.uppercase()) {
+        "FRIEND_SETTLEMENT" -> "Settlement"
+        "SELF_TRANSFER" -> "Transfer"
+        "REFUND" -> "Refund"
+        else -> "Income"
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minRowHeight)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else Modifier
+            )
+            .padding(vertical = FinanceTheme.spacing.xs),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = FinanceTheme.spacing.m),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.CallReceived,
+                contentDescription = "Income",
+                tint = FinanceTheme.colors.moneyIn,
+                modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
+                Text(
+                    text = displayTitle,
+                    style = FinanceTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                ) {
+                    TransactionAccountChip(text = typeLabel)
+
+                    if (account.isNotBlank()) {
+                        TransactionAccountChip(text = account)
+                    }
+
+                    if (time.isNotBlank()) {
+                        Text(
+                            text = time,
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)
+        ) {
+            Text(
+                text = "+${formatRupeesAuto(amount)}",
+                style = FinanceTheme.typography.numeric.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = FinanceTheme.colors.moneyIn
+            )
+
+            if (status.equals("VOID", ignoreCase = true)) {
+                StatusChip(status = "VOID")
+            }
         }
     }
 }

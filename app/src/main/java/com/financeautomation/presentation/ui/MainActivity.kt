@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
         TransactionsViewModel.provideFactory(
             transactionRepository = app.appContainer.transactionRepository,
             syncQueueDaoProvider = { app.appContainer.awaitDatabase().syncQueueDao() },
+            inflowRepository = app.appContainer.inflowRepository,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
@@ -202,18 +203,10 @@ class MainActivity : ComponentActivity() {
 
     private fun extractRouteFromIntent(intent: Intent?) {
         val extraRoute = intent?.getStringExtra("extra_route")
-        if (!extraRoute.isNullOrBlank()) {
-            pendingRoute = extraRoute
-            return
-        }
-        val dataUri = intent?.data
-        if (dataUri != null && dataUri.scheme == "financeautomation") {
-            val host = dataUri.host
-            val path = dataUri.path?.removePrefix("/")
-            val route = if (!path.isNullOrBlank()) path else host
-            if (!route.isNullOrBlank()) {
-                pendingRoute = route
-            }
+        val dataUriString = intent?.dataString
+        val validatedRoute = MainRouteValidator.resolveRoute(extraRoute, dataUriString)
+        if (validatedRoute != null) {
+            pendingRoute = validatedRoute
         }
     }
 }

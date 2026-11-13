@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -108,6 +109,30 @@ fun CapturePermissionsScreen(
         }
     }
 
+    val hasUsageAccess = remember(healthState) {
+        val check = healthState?.checks?.firstOrNull { it.id == HealthCheckId.USAGE_ACCESS }
+        if (check != null) {
+            check.status == HealthStatus.OK
+        } else {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appOps?.unsafeCheckOpNoThrow(
+                    android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    android.os.Process.myUid(),
+                    context.packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                appOps?.checkOpNoThrow(
+                    android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    android.os.Process.myUid(),
+                    context.packageName
+                )
+            }
+            mode == android.app.AppOpsManager.MODE_ALLOWED
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -187,6 +212,26 @@ fun CapturePermissionsScreen(
                                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                 Uri.parse("package:${context.packageName}")
                             ).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                        } catch (_: Exception) {}
+                    }
+                )
+
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+
+                // 4. Usage access
+                CapturePermissionRow(
+                    icon = Icons.Rounded.Schedule,
+                    title = stringResource(R.string.capture_usage_access_title),
+                    subtitle = stringResource(R.string.capture_usage_access_desc),
+                    statusText = if (hasUsageAccess) stringResource(R.string.status_on) else stringResource(R.string.status_off),
+                    onClick = {
+                        try {
+                            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             })
                         } catch (_: Exception) {}

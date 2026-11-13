@@ -8,6 +8,7 @@ import com.financeautomation.FinanceApplication
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.usecase.SubscriptionActionUseCase
 import com.financeautomation.domain.usecase.SubscriptionYesOutcome
+import com.financeautomation.presentation.ui.EntryActivity
 import com.financeautomation.service.worker.SyncTransactionsWorker
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -43,7 +44,7 @@ class SubscriptionActionReceiver : BroadcastReceiver() {
             try {
                 val actions = testActions ?: app?.appContainer?.subscriptionActionUseCase
                 if (actions != null) {
-                    val logged = handle(action, cycleId, actions)
+                    val logged = handle(action, cycleId, actions, context.applicationContext)
                     if (logged) {
                         try {
                             SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
@@ -69,9 +70,29 @@ class SubscriptionActionReceiver : BroadcastReceiver() {
         const val EXTRA_NOTIFICATION_ID: String = "com.financeautomation.extra.NOTIFICATION_ID"
 
         /** Applies the action. Returns true when an expense was logged (a sync should follow). */
-        suspend fun handle(action: String, cycleId: String, actions: SubscriptionActionUseCase): Boolean {
+        suspend fun handle(
+            action: String,
+            cycleId: String,
+            actions: SubscriptionActionUseCase,
+            context: Context? = null
+        ): Boolean {
             return when (action) {
-                ACTION_YES -> actions.yes(cycleId) is SubscriptionYesOutcome.Logged
+                ACTION_YES -> {
+                    when (val outcome = actions.yes(cycleId)) {
+                        is SubscriptionYesOutcome.Logged -> true
+                        is SubscriptionYesOutcome.NeedsAmount -> {
+                            if (context != null) {
+                                val intent = Intent(context, EntryActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                    putExtra(EntryActivity.EXTRA_CAPTURE_ID, outcome.captureId)
+                                }
+                                context.startActivity(intent)
+                            }
+                            false
+                        }
+                        else -> false
+                    }
+                }
                 ACTION_NOT_YET -> { actions.notYet(cycleId); false }
                 ACTION_SKIP -> { actions.skip(cycleId); false }
                 else -> false

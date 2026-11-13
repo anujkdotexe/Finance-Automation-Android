@@ -2,6 +2,7 @@ package com.financeautomation.service
 
 import android.content.Context
 import androidx.room.withTransaction
+import com.financeautomation.BuildConfig
 import com.financeautomation.FinanceApplication
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.PackageWhitelist
@@ -394,6 +395,16 @@ class NotificationProcessor(
             val app = context.applicationContext as FinanceApplication
             val container = app.appContainer
             val db = container.awaitDatabase()
+
+            val isDevMode = try {
+                container.preferencesRepository.getDeveloperModeSync()
+            } catch (e: Exception) {
+                false
+            }
+
+            if (!BuildConfig.ENABLE_SIMULATOR || !isDevMode) {
+                return NotificationProcessingOutcome.Ignored("Simulator is disabled in this build or developer mode is inactive")
+            }
             val processor = NotificationProcessor(
                 pendingCaptureDao = db.pendingCaptureDao(),
                 handledNotificationDao = db.handledNotificationDao(),
