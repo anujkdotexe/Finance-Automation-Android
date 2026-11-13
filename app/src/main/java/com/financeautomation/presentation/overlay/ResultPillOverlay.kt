@@ -41,7 +41,8 @@ import kotlinx.coroutines.launch
  * Displays a confirmation message and an optional Undo action active for 8 seconds.
  */
 class ResultPillOverlay(
-    private val context: Context
+    private val context: Context,
+    private val hidePreview: () -> Boolean = { false }
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -106,6 +107,7 @@ class ResultPillOverlay(
                     gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                     y = topMarginPx
                 }
+                com.financeautomation.presentation.security.SecureWindow.apply(layoutParams, hidePreview())
 
                 val owners = ComposeOverlayTreeOwners()
                 treeOwners = owners

@@ -19,6 +19,7 @@ import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.data.repository.AccountRepositoryImpl
 import com.financeautomation.data.repository.CategoryRepositoryImpl
 import com.financeautomation.data.repository.ConfigRepositoryImpl
+import com.financeautomation.data.repository.BudgetRepositoryImpl
 import com.financeautomation.data.repository.InflowRepositoryImpl
 import com.financeautomation.data.repository.PeopleListRebuilder
 import com.financeautomation.data.repository.PeopleRepositoryImpl
@@ -36,6 +37,7 @@ import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.ConfigRepository
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
+import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.PeopleRepository
 import com.financeautomation.domain.repository.PreferencesRepository
@@ -118,6 +120,12 @@ interface AppContainer {
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
     val subscriptionRepository: SubscriptionRepository
+    val budgetRepository: BudgetRepository
+    val appLockManager: com.financeautomation.domain.security.AppLockManager
+    val privacySettings: com.financeautomation.domain.security.PrivacySettings
+
+    /** Loads the saved lock and privacy settings once per process. Safe to call from every entry point. */
+    suspend fun ensureAppLockStarted()
     val inflowRepository: InflowRepository
     val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
     val subscriptionMatcher: SubscriptionMatcher
@@ -250,6 +258,29 @@ class DefaultAppContainer(
         )
     }
 
+    override val appLockManager: com.financeautomation.domain.security.AppLockManager by lazy {
+        com.financeautomation.domain.security.AppLockManager()
+    }
+
+    override val privacySettings: com.financeautomation.domain.security.PrivacySettings by lazy {
+        com.financeautomation.domain.security.PrivacySettings()
+    }
+
+    override suspend fun ensureAppLockStarted() {
+        if (appLockManager.isStarted) return
+        val prefs = preferencesRepository
+        privacySettings.set(prefs.getHideRecentsPreview())
+        appLockManager.onColdStart(prefs.getAppLockEnabled())
+    }
+
+    override val budgetRepository: BudgetRepository by lazy {
+        BudgetRepositoryImpl(
+            budgetDaoProvider = { awaitDatabase().budgetDao() },
+            configSyncCoordinatorProvider = { configSyncCoordinator },
+            ioDispatcher = ioDispatcher
+        )
+    }
+
     override val configSheetManager: ConfigSheetManager by lazy {
         ConfigSheetManager(
             googleSheetsClient = googleSheetsClient,
@@ -296,6 +327,9 @@ class DefaultAppContainer(
                 CoroutineScope(ioDispatcher).launch {
                     syncTransactionsUseCase.invoke()
                 }
+            }
+            impl.onSyncCompleted = {
+                com.financeautomation.service.MonthBurnWidgetProvider.requestUpdate(applicationContext)
             }
         }
     }
@@ -476,6 +510,11 @@ class DefaultAppContainer(
             payableDaoProvider = { awaitDatabase().payableDao() },
             ioDispatcher = ioDispatcher,
             mainDispatcher = mainDispatcher,
+            isLocked = {
+                ensureAppLockStarted()
+                appLockManager.isLockedNow()
+            },
+            hidePreview = { privacySettings.hideRecentsPreview.value },
             subscriptionRepository = subscriptionRepository
         )
     }

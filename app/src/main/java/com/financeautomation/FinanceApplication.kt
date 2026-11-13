@@ -89,6 +89,8 @@ class FinanceApplication : Application() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 QuickLogWidgetProvider.updateAllWidgets(applicationContext)
+                com.financeautomation.service.MonthBurnWidgetProvider.ensureScheduled(applicationContext)
+                com.financeautomation.service.MonthBurnWidgetProvider.refresh(applicationContext)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: updateAllWidgets startup")

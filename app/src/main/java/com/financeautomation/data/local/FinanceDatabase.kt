@@ -14,6 +14,7 @@ import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
+import com.financeautomation.data.local.dao.BudgetDao
 import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PayableDao
@@ -30,6 +31,7 @@ import com.financeautomation.data.local.entity.CategoryEntity
 import com.financeautomation.data.local.entity.CategoryStatEntity
 import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.HandledNotificationEntity
+import com.financeautomation.data.local.entity.BudgetEntity
 import com.financeautomation.data.local.entity.InflowEntity
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.PayableEntity
@@ -79,9 +81,10 @@ import java.io.File
         PayableEntity::class,
         SubscriptionEntity::class,
         SubscriptionCycleEntity::class,
-        InflowEntity::class
+        InflowEntity::class,
+        BudgetEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -104,6 +107,7 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun subscriptionDao(): SubscriptionDao
     abstract fun subscriptionCycleDao(): SubscriptionCycleDao
     abstract fun inflowDao(): InflowDao
+    abstract fun budgetDao(): BudgetDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -127,6 +131,7 @@ abstract class FinanceDatabase : RoomDatabase() {
         val MIGRATION_10_11 = DatabaseMigrations.MIGRATION_10_11
         val MIGRATION_11_12 = DatabaseMigrations.MIGRATION_11_12
         val MIGRATION_12_13 = DatabaseMigrations.MIGRATION_12_13
+        val MIGRATION_13_14 = DatabaseMigrations.MIGRATION_13_14
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {

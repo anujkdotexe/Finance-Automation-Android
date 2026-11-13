@@ -2,5 +2,13 @@
 <resources>
     <dimen name="app_widget_min_width">40dp</dimen>
     <dimen name="app_widget_min_height">40dp</dimen>
+    <dimen name="widget_month_min_width">110dp</dimen>
+    <dimen name="widget_month_min_height">40dp</dimen>
+    <dimen name="widget_month_padding_horizontal">12dp</dimen>
+    <dimen name="widget_month_padding_vertical">8dp</dimen>
+    <dimen name="widget_month_gap">6dp</dimen>
+    <dimen name="widget_month_corner">20dp</dimen>
+    <dimen name="widget_month_text_small">11sp</dimen>
+    <dimen name="widget_month_text_amount">20sp</dimen>
 </resources>
 

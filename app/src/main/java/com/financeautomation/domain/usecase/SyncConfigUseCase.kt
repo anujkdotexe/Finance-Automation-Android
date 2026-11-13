@@ -132,6 +132,24 @@ class SyncConfigUseCase(
                             )
                         }
                     }
+                    ConfigConstants.TYPE_BUDGET -> {
+                        val amount = row.value1.replace(",", "").trim().toDoubleOrNull()
+                        if (row.key.isNotBlank() && amount != null && amount > 0.0) {
+                            localGateway.applyRemoteBudget(
+                                category = row.key,
+                                monthlyAmount = amount,
+                                updatedAt = epochMilli,
+                                deleted = row.deleted
+                            )
+                        } else if (row.key.isNotBlank() && row.deleted) {
+                            localGateway.applyRemoteBudget(
+                                category = row.key,
+                                monthlyAmount = 0.0,
+                                updatedAt = epochMilli,
+                                deleted = true
+                            )
+                        }
+                    }
                     ConfigConstants.TYPE_PREF -> {
                         if (!ConfigConstants.isLocalOnlyPref(row.key)) {
                             localGateway.applyRemotePreference(
@@ -237,6 +255,19 @@ class SyncConfigUseCase(
                 )
             }
 
+            dirty.budgets.forEach {
+                dirtyRows.add(
+                    ConfigRow(
+                        type = ConfigConstants.TYPE_BUDGET,
+                        key = it.category,
+                        values = listOf(formatBudgetAmount(it.monthlyAmount)),
+                        updatedAt = Instant.ofEpochMilli(it.updatedAt),
+                        updatedBy = deviceId,
+                        deleted = it.deleted
+                    )
+                )
+            }
+
             dirty.preferences.forEach {
                 dirtyRows.add(
                     ConfigRow(
@@ -287,6 +318,7 @@ class SyncConfigUseCase(
             localGateway.markTripTagsClean(dirty.tripTags.map { it.id })
             localGateway.markPreferencesClean(dirty.preferences.map { it.key })
             localGateway.markSubscriptionsClean(dirty.subscriptions.map { it.id })
+            localGateway.markBudgetsClean(dirty.budgets.map { it.category })
         }
     }
 
@@ -302,6 +334,9 @@ class SyncConfigUseCase(
             }
         }
     }
+
+    private fun formatBudgetAmount(amount: Double): String =
+        java.math.BigDecimal.valueOf(amount).stripTrailingZeros().toPlainString()
 
     /**
      * Backward-compatible alias for setup/onboarding pull.
