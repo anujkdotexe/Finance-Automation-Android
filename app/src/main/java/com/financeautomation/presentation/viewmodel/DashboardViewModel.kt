@@ -15,8 +15,10 @@ import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.domain.model.Inflow
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.CategoryRepository
+import com.financeautomation.domain.repository.InflowRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +107,7 @@ class DashboardViewModel(
     private val categoryRepository: CategoryRepository? = null,
     private val directPendingCaptureDao: PendingCaptureDao? = null,
     private val pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
+    private val inflowRepository: InflowRepository? = null,
     private val onlineState: Flow<Boolean>? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
@@ -113,6 +116,7 @@ class DashboardViewModel(
         transactionRepository: TransactionRepository,
         syncQueueDao: SyncQueueDao,
         categoryRepository: CategoryRepository? = null,
+        inflowRepository: InflowRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         transactionRepository = transactionRepository,
@@ -123,6 +127,7 @@ class DashboardViewModel(
         categoryRepository = categoryRepository,
         directPendingCaptureDao = null,
         pendingCaptureDaoProvider = null,
+        inflowRepository = inflowRepository,
         ioDispatcher = ioDispatcher
     )
 
@@ -131,6 +136,7 @@ class DashboardViewModel(
         syncQueueDao: SyncQueueDao,
         payableDao: PayableDao?,
         categoryRepository: CategoryRepository? = null,
+        inflowRepository: InflowRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         transactionRepository = transactionRepository,
@@ -141,6 +147,7 @@ class DashboardViewModel(
         categoryRepository = categoryRepository,
         directPendingCaptureDao = null,
         pendingCaptureDaoProvider = null,
+        inflowRepository = inflowRepository,
         ioDispatcher = ioDispatcher
     )
 
@@ -150,6 +157,7 @@ class DashboardViewModel(
         payableDao: PayableDao?,
         pendingCaptureDao: PendingCaptureDao?,
         categoryRepository: CategoryRepository? = null,
+        inflowRepository: InflowRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         transactionRepository = transactionRepository,
@@ -160,6 +168,7 @@ class DashboardViewModel(
         categoryRepository = categoryRepository,
         directPendingCaptureDao = pendingCaptureDao,
         pendingCaptureDaoProvider = null,
+        inflowRepository = inflowRepository,
         ioDispatcher = ioDispatcher
     )
 
@@ -167,6 +176,7 @@ class DashboardViewModel(
         transactionRepository: TransactionRepository,
         syncQueueDaoProvider: suspend () -> SyncQueueDao,
         categoryRepository: CategoryRepository? = null,
+        inflowRepository: InflowRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         transactionRepository = transactionRepository,
@@ -177,6 +187,7 @@ class DashboardViewModel(
         categoryRepository = categoryRepository,
         directPendingCaptureDao = null,
         pendingCaptureDaoProvider = null,
+        inflowRepository = inflowRepository,
         ioDispatcher = ioDispatcher
     )
 
@@ -185,6 +196,7 @@ class DashboardViewModel(
         syncQueueDaoProvider: suspend () -> SyncQueueDao,
         payableDaoProvider: (suspend () -> PayableDao)?,
         categoryRepository: CategoryRepository? = null,
+        inflowRepository: InflowRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         transactionRepository = transactionRepository,
@@ -195,6 +207,7 @@ class DashboardViewModel(
         categoryRepository = categoryRepository,
         directPendingCaptureDao = null,
         pendingCaptureDaoProvider = null,
+        inflowRepository = inflowRepository,
         ioDispatcher = ioDispatcher
     )
 
@@ -204,6 +217,7 @@ class DashboardViewModel(
         payableDaoProvider: (suspend () -> PayableDao)?,
         pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)?,
         categoryRepository: CategoryRepository? = null,
+        inflowRepository: InflowRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         transactionRepository = transactionRepository,
@@ -214,6 +228,7 @@ class DashboardViewModel(
         categoryRepository = categoryRepository,
         directPendingCaptureDao = null,
         pendingCaptureDaoProvider = pendingCaptureDaoProvider,
+        inflowRepository = inflowRepository,
         ioDispatcher = ioDispatcher
     )
 
@@ -246,6 +261,7 @@ class DashboardViewModel(
             val payablesFlow = payableDao?.observePending() ?: flowOf(emptyList())
             val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
             val needsReviewCapturesFlow = pendingCaptureDao?.getNeedsReviewCapturesFlow() ?: flowOf(emptyList())
+            val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
 
             combine(
                 transactionRepository.getTransactions(),
@@ -254,7 +270,8 @@ class DashboardViewModel(
                 categoriesFlow,
                 needsReviewCapturesFlow,
                 monthOffsetFlow,
-                onlineState ?: flowOf(true)
+                onlineState ?: flowOf(true),
+                inflowsFlow
             ) { flows ->
                 @Suppress("UNCHECKED_CAST")
                 val transactions = flows[0] as List<Transaction>
@@ -268,6 +285,8 @@ class DashboardViewModel(
                 val needsReviewCaptures = flows[4] as List<PendingCaptureEntity>
                 val monthOffset = flows[5] as Int
                 val isOnline = flows[6] as Boolean
+                @Suppress("UNCHECKED_CAST")
+                val inflows = flows[7] as List<Inflow>
 
                 calculateDashboardMetrics(
                     transactions = transactions,
@@ -275,7 +294,8 @@ class DashboardViewModel(
                     pendingPayables = pendingPayables,
                     categories = categories,
                     needsReviewCaptures = needsReviewCaptures,
-                    monthOffset = monthOffset
+                    monthOffset = monthOffset,
+                    inflows = inflows
                 ).copy(
                     isOffline = !isOnline,
                     queuedItems = buildQueuedItems(transactions, queueItems)
@@ -324,7 +344,8 @@ class DashboardViewModel(
         pendingPayables: List<PayableEntity>,
         categories: List<com.financeautomation.domain.model.Category> = emptyList(),
         needsReviewCaptures: List<PendingCaptureEntity> = emptyList(),
-        monthOffset: Int
+        monthOffset: Int,
+        inflows: List<Inflow> = emptyList()
     ): DashboardUiState {
         val excludedCategoryNames: Set<String> = categories
             .filter { it.isExcludedFromLivingBurn }
@@ -385,6 +406,21 @@ class DashboardViewModel(
         var lastMonthSameDayBurn = 0.0
         var savings = 0.0
         var income = 0.0
+        for (inflow in inflows) {
+            if (inflow.timestamp in startOfMonth until endOfMonth && !inflow.status.equals("VOID", ignoreCase = true)) {
+                val type = inflow.inflowType.trim()
+                val isCounted = type.equals("Income / Salary", ignoreCase = true) ||
+                    type.equals("Refund / Return", ignoreCase = true) ||
+                    type.equals("Income", ignoreCase = true) ||
+                    type.equals("Refund", ignoreCase = true)
+                val isExcluded = type.equals("Friend Settlement", ignoreCase = true) ||
+                    type.equals("Self Transfer", ignoreCase = true) ||
+                    type.equals("Transfer", ignoreCase = true)
+                if (isCounted && !isExcluded) {
+                    income += inflow.amount
+                }
+            }
+        }
         var txnCount = 0
         var needsReviewCount = 0
         var needsReviewWithoutFailedSync = 0
@@ -555,6 +591,7 @@ class DashboardViewModel(
             payableDao: PayableDao? = null,
             pendingCaptureDao: PendingCaptureDao? = null,
             categoryRepository: CategoryRepository? = null,
+            inflowRepository: InflowRepository? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -565,6 +602,7 @@ class DashboardViewModel(
                     directPayableDao = payableDao,
                     directPendingCaptureDao = pendingCaptureDao,
                     categoryRepository = categoryRepository,
+                    inflowRepository = inflowRepository,
                     ioDispatcher = ioDispatcher
                 ) as T
             }
@@ -576,6 +614,7 @@ class DashboardViewModel(
             payableDaoProvider: (suspend () -> PayableDao)? = null,
             pendingCaptureDaoProvider: (suspend () -> PendingCaptureDao)? = null,
             categoryRepository: CategoryRepository? = null,
+            inflowRepository: InflowRepository? = null,
             onlineState: Flow<Boolean>? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -587,6 +626,7 @@ class DashboardViewModel(
                     payableDaoProvider = payableDaoProvider,
                     pendingCaptureDaoProvider = pendingCaptureDaoProvider,
                     categoryRepository = categoryRepository,
+                    inflowRepository = inflowRepository,
                     onlineState = onlineState,
                     ioDispatcher = ioDispatcher
                 ) as T

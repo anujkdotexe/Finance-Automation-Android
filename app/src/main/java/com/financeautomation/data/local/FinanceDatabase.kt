@@ -14,6 +14,7 @@ import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
+import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -29,6 +30,7 @@ import com.financeautomation.data.local.entity.CategoryEntity
 import com.financeautomation.data.local.entity.CategoryStatEntity
 import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.HandledNotificationEntity
+import com.financeautomation.data.local.entity.InflowEntity
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
@@ -76,9 +78,10 @@ import java.io.File
         PipelineEventEntity::class,
         PayableEntity::class,
         SubscriptionEntity::class,
-        SubscriptionCycleEntity::class
+        SubscriptionCycleEntity::class,
+        InflowEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -100,6 +103,7 @@ abstract class FinanceDatabase : RoomDatabase() {
     abstract fun payableDao(): PayableDao
     abstract fun subscriptionDao(): SubscriptionDao
     abstract fun subscriptionCycleDao(): SubscriptionCycleDao
+    abstract fun inflowDao(): InflowDao
 
     companion object {
         const val DATABASE_NAME: String = "finance_automation.db"
@@ -122,6 +126,7 @@ abstract class FinanceDatabase : RoomDatabase() {
         val MIGRATION_9_10 = DatabaseMigrations.MIGRATION_9_10
         val MIGRATION_10_11 = DatabaseMigrations.MIGRATION_10_11
         val MIGRATION_11_12 = DatabaseMigrations.MIGRATION_11_12
+        val MIGRATION_12_13 = DatabaseMigrations.MIGRATION_12_13
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {

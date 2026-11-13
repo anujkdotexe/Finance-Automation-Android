@@ -196,4 +196,51 @@ class DatabaseMigrationTest {
         assertTrue(v12.containsAll(v11))
         assertEquals(setOf("subscriptions", "subscription_cycles"), v12 - v11)
     }
+
+    @Test
+    fun testMigration12to13_matchesSchema13Json() {
+        assertEquals(12, DatabaseMigrations.MIGRATION_12_13.startVersion)
+        assertEquals(13, DatabaseMigrations.MIGRATION_12_13.endVersion)
+        assertTrue(DatabaseMigrations.ALL_MIGRATIONS.contains(DatabaseMigrations.MIGRATION_12_13))
+
+        val root = loadSchema(13)
+        val database = root["database"]!!.jsonObject
+        assertEquals("13", database["version"]!!.jsonPrimitive.content)
+        val entities = database["entities"]!!.jsonArray
+
+        val executed = mutableListOf<String>()
+        val db = java.lang.reflect.Proxy.newProxyInstance(
+            javaClass.classLoader, arrayOf(androidx.sqlite.db.SupportSQLiteDatabase::class.java)
+        ) { _, method, args ->
+            if (method.name == "execSQL") executed.add(args!![0] as String)
+            null
+        } as androidx.sqlite.db.SupportSQLiteDatabase
+        DatabaseMigrations.MIGRATION_12_13.migrate(db)
+
+        val expected = mutableListOf<String>()
+        val entity = entities.find { it.jsonObject["tableName"]?.jsonPrimitive?.content == "inflows" }?.jsonObject
+        assertNotNull("inflows must exist in schema 13.json", entity)
+        expected.add(entity!!["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", "inflows"))
+        entity["indices"]?.jsonArray?.forEach { idx ->
+            expected.add(idx.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", "inflows"))
+        }
+
+        assertEquals(expected.map(::normalizeSql).sorted(), executed.map(::normalizeSql).sorted())
+
+        val inflowSql = expected.filter { it.contains("inflows") }
+        assertTrue(inflowSql.any { it.contains("`index_inflows_timestamp`") })
+        assertTrue(inflowSql.any { it.contains("`index_inflows_inflowType`") })
+        assertTrue(inflowSql.any { it.contains("`index_inflows_account`") })
+        assertTrue(inflowSql.any { it.contains("`index_inflows_status`") })
+    }
+
+    @Test
+    fun testSchema13KeepsEverySchema12Table() {
+        fun tables(root: kotlinx.serialization.json.JsonObject) =
+            root["database"]!!.jsonObject["entities"]!!.jsonArray.map { it.jsonObject["tableName"]!!.jsonPrimitive.content }.toSet()
+        val v12 = tables(loadSchema(12))
+        val v13 = tables(loadSchema(13))
+        assertTrue(v13.containsAll(v12))
+        assertEquals(setOf("inflows"), v13 - v12)
+    }
 }

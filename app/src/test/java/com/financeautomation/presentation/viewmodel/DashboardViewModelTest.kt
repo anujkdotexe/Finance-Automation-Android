@@ -642,4 +642,101 @@ class DashboardViewModelTest {
             vm.uiState.value.queuedItems
         )
     }
+
+    private class FakeInflowRepo : com.financeautomation.domain.repository.InflowRepository {
+        val inflows = MutableStateFlow<List<com.financeautomation.domain.model.Inflow>>(emptyList())
+        override fun getInflowsByRange(start: Long, end: Long): Flow<List<com.financeautomation.domain.model.Inflow>> =
+            flowOf(inflows.value.filter { it.timestamp in start until end })
+        override fun getAllInflows(): Flow<List<com.financeautomation.domain.model.Inflow>> = inflows
+        override suspend fun getInflowById(id: String): com.financeautomation.domain.model.Inflow? =
+            inflows.value.find { it.id == id }
+        override suspend fun insertInflow(inflow: com.financeautomation.domain.model.Inflow) {
+            inflows.value = inflows.value + inflow
+        }
+        override suspend fun updateStatus(id: String, status: String) {
+            inflows.value = inflows.value.map { if (it.id == id) it.copy(status = status) else it }
+        }
+    }
+
+    @Test
+    fun testIncomeAggregation_countsIncomeAndRefund_excludesFriendSettlementTransferVoidAndOtherMonths() = runTest {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply {
+            timeInMillis = now
+            add(Calendar.MONTH, -2)
+        }
+        val twoMonthsAgo = cal.timeInMillis
+
+        val inflowRepo = FakeInflowRepo()
+        inflowRepo.inflows.value = listOf(
+            com.financeautomation.domain.model.Inflow("inf_1", now, 50000.0, "SBI", "Income / Salary", "Employer", "Salary"),
+            com.financeautomation.domain.model.Inflow("inf_2", now, 2500.0, "SBI", "Refund / Return", "Amazon", "Return"),
+            com.financeautomation.domain.model.Inflow("inf_3", now, 1200.0, "HDFC", "Friend Settlement", "Alice", "Lunch debt"),
+            com.financeautomation.domain.model.Inflow("inf_4", now, 10000.0, "HDFC", "Self Transfer", "Self", "Transfer"),
+            com.financeautomation.domain.model.Inflow("inf_5", now, 30000.0, "SBI", "Income / Salary", "Employer", "Voided", status = "VOID"),
+            com.financeautomation.domain.model.Inflow("inf_6", twoMonthsAgo, 45000.0, "SBI", "Income / Salary", "Employer", "Old salary")
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            inflowRepository = inflowRepo,
+            onlineState = kotlinx.coroutines.flow.MutableStateFlow(true),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(52500.0, vm.uiState.value.income, 0.001)
+    }
+
+    @Test
+    fun testRefundIncreasesIncome_doesNotReduceLivingBurn() = runTest {
+        val now = System.currentTimeMillis()
+        val tRepo = FakeTransactionRepo()
+        val inflowRepo = FakeInflowRepo()
+
+        // 1000.0 living expense in Groceries
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_grocery",
+                timestamp = now,
+                dateSerial = 45000,
+                timeSerial = 0.5,
+                account = "SBI",
+                merchant = "Supermarket",
+                category = "Groceries",
+                totalAmount = 1000.0,
+                companions = "Personal",
+                myShare = 1000.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.PERSONAL,
+                reviewState = ReviewState.CONFIRMED
+            )
+        )
+
+        // 200.0 refund to SBI
+        inflowRepo.inflows.value = listOf(
+            com.financeautomation.domain.model.Inflow("inf_refund", now, 200.0, "SBI", "Refund / Return", "Supermarket", "Item return")
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            inflowRepository = inflowRepo,
+            onlineState = kotlinx.coroutines.flow.MutableStateFlow(true),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        // Income reflects the refund
+        assertEquals(200.0, vm.uiState.value.income, 0.001)
+        // Living burn remains exactly 1000.0 (refunds do not reduce living burn in master ledger schema)
+        assertEquals(1000.0, vm.uiState.value.currentBurn, 0.001)
+    }
 }
