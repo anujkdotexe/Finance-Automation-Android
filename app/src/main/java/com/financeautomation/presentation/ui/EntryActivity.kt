@@ -46,6 +46,16 @@ object EntryIntentValidator {
         return if (normalized in ALLOWED_FLOWS) normalized else null
     }
 
+    /** The screen an Entry intent may open. */
+    data class EntryTarget(val captureId: String?, val flow: String?)
+
+    /**
+     * External callers (any app can start the exported EntryActivity) may only reach the default screen:
+     * the capture id and the flow name are dropped. Only intents marked by this app keep them.
+     */
+    fun restrictForCaller(isInternal: Boolean, validatedCaptureId: String?, validatedFlow: String?): EntryTarget =
+        if (isInternal) EntryTarget(validatedCaptureId, validatedFlow) else EntryTarget(null, null)
+
     /**
      * Checks if a pending capture exists and has an open state (not DONE or DISMISSED).
      */
@@ -101,12 +111,17 @@ class EntryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val rawCaptureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
+        val internal = InternalIntentAuth.isInternal(intent, packageName)
         val rawFlow = intent.getStringExtra(EXTRA_FLOW)
             ?: intent.getStringExtra(EXTRA_ACTION)
             ?: intent.getStringExtra("flow")
-
-        val validatedFlow = EntryIntentValidator.validateFlow(rawFlow)
+        val target = EntryIntentValidator.restrictForCaller(
+            isInternal = internal,
+            validatedCaptureId = intent.getStringExtra(EXTRA_CAPTURE_ID),
+            validatedFlow = EntryIntentValidator.validateFlow(rawFlow)
+        )
+        val rawCaptureId = target.captureId
+        val validatedFlow = target.flow
 
         if (rawCaptureId.isNullOrBlank()) {
             route(validatedCaptureId = null, validatedFlow = validatedFlow)
