@@ -169,6 +169,9 @@ object PipelineTrail {
 
     private fun getTodayKey(): String = todayProvider()
 
+    /** Snapshot of events not yet flushed to the database. For tests. */
+    internal fun bufferedEventsForTesting(): List<PipelineEventEntity> = buffer.toList()
+
     internal fun resetForTesting() {
         buffer.clear()
         heartbeatTime.set(0L)
