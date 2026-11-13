@@ -65,6 +65,7 @@ class DashboardStyleTest {
         @Suppress("UNCHECKED_CAST")
         val boxes = requests.mapNotNull { it["updateBorders"] as? Map<String, Any?> }
             .map { it["range"] as Map<*, *> }
+            .filter { it["startRowIndex"] == 3 }
             .map { (it["startColumnIndex"] as Int) to (it["endColumnIndex"] as Int) }
             .toSet()
         assertEquals(setOf(0 to 3, 3 to 6, 6 to 9, 9 to 12, 12 to 15, 15 to 18), boxes)
@@ -118,5 +119,32 @@ class DashboardStyleTest {
             }
         val fmt = (fill["cell"] as Map<*, *>)["userEnteredFormat"] as Map<*, *>
         assertEquals("EBEEF1", hex(fmt["backgroundColor"]))
+    }
+
+    @Test
+    fun testIOwePeopleHeaderRowHasPersonCountAmountOldestAndStatus() {
+        val headers = (7..11).map { col ->
+            @Suppress("UNCHECKED_CAST")
+            val cell = requests.mapNotNull { it["updateCells"] as? Map<String, Any?> }
+                .first {
+                    val r = it["range"] as Map<*, *>
+                    r["startRowIndex"] == 25 && r["startColumnIndex"] == col
+                }
+            @Suppress("UNCHECKED_CAST")
+            val value = ((cell["rows"] as List<Map<String, Any?>>).first()["values"] as List<Map<String, Any?>>).first()
+            (value["userEnteredValue"] as Map<*, *>)["stringValue"]
+        }
+        assertEquals(listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date", "Status"), headers)
+    }
+
+    @Test
+    fun testSettlementHeaderRowUsesTheLiveFillWrapAndBorders() {
+        assertEquals("1A237E", hex(cellFormat(25, 11)["backgroundColor"]))
+        assertEquals("WRAP", cellFormat(25, 11)["wrapStrategy"])
+        @Suppress("UNCHECKED_CAST")
+        val header = requests.mapNotNull { it["updateBorders"] as? Map<String, Any?> }
+            .first { (it["range"] as Map<*, *>).let { r -> r["startRowIndex"] == 25 && r["endColumnIndex"] == 12 } }
+        assertEquals(true, header.containsKey("innerVertical"))
+        assertEquals(false, header.containsKey("right"))
     }
 }
