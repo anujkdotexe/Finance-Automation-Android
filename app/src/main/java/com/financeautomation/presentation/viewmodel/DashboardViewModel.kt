@@ -468,7 +468,8 @@ class DashboardViewModel(
 
         val categorySums = mutableMapOf<String, Double>()
         val monthTransactions = mutableListOf<Transaction>()
-        val receivablesByFriend = mutableMapOf<String, Double>()
+        val receivablesByKey = mutableMapOf<String, Double>()
+        val displayNamesByKey = mutableMapOf<String, String>()
 
         for (txn in transactions) {
             if (txn.reviewState == ReviewState.NEEDS_REVIEW && txn.status != TransactionStatus.VOID) {
@@ -480,8 +481,12 @@ class DashboardViewModel(
             // Global unsettled receivables
             if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
                 val perPersonShares = com.financeautomation.domain.utils.AccountingUtils.calculateReceivablesForTransaction(txn)
-                for ((friend, amount) in perPersonShares) {
-                    receivablesByFriend[friend] = (receivablesByFriend[friend] ?: 0.0) + amount
+                for (share in perPersonShares) {
+                    receivablesByKey[share.key] = (receivablesByKey[share.key] ?: 0.0) + share.amount
+                    val existing = displayNamesByKey[share.key]
+                    if (existing == null || (existing.none { it.isUpperCase() } && share.displayName.any { it.isUpperCase() })) {
+                        displayNamesByKey[share.key] = share.displayName
+                    }
                 }
             }
 
@@ -537,9 +542,9 @@ class DashboardViewModel(
 
         val topCategories = allCategories.take(5)
 
-        val totalOwedToMe = receivablesByFriend.values.sum()
-        val topOwedToMe = receivablesByFriend.entries
-            .map { DebtSummary(name = it.key, amount = it.value) }
+        val totalOwedToMe = receivablesByKey.values.sum()
+        val topOwedToMe = receivablesByKey.entries
+            .map { DebtSummary(name = displayNamesByKey[it.key] ?: it.key, amount = it.value) }
             .sortedByDescending { it.amount }
             .take(3)
 

@@ -1057,5 +1057,14 @@ class DashboardViewModelTest {
         val charlieEntry = owedList.find { it.name.equals("Charlie", ignoreCase = true) }
         assertTrue("Custom split should not divide equally by head count for Bob", bobEntry == null || bobEntry.amount != 75.0)
         assertTrue("Custom split should not divide equally by head count for Charlie", charlieEntry == null || charlieEntry.amount != 75.0)
+
+        // Custom split gives one combined row labelled "Bob, Charlie" with full owed amount
+        val bobCharlieEntry = owedList.find { it.name == "Bob, Charlie" }
+        assertNotNull("Custom split should give one row labelled 'Bob, Charlie'", bobCharlieEntry)
+        assertEquals("Combined group row should have full owed amount 150.0", 150.0, bobCharlieEntry!!.amount, 0.001)
+
+        // No row should ever be named Others
+        val othersEntry = owedList.find { it.name.equals("Others", ignoreCase = true) }
+        assertNull("No row should ever be named Others", othersEntry)
     }
 }

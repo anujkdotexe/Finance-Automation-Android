@@ -59,23 +59,38 @@ object AccountingUtils {
 
     private val AMOUNT_PATTERN = Pattern.compile("^(.*?)(?:[:=\\-\\s]\\s*|\\s*\\(?)(?:[₹$€£])?\\s*(\\d+(?:\\.\\d+)?)\\)?$")
 
+    data class ReceivableShare(
+        val key: String,
+        val displayName: String,
+        val amount: Double
+    )
+
+    fun normalizePersonKey(name: String): String {
+        return name.trim().lowercase()
+    }
+
     /**
-     * Standardizes person names by trimming and capitalizing the first character
-     * so that mixed-case entries like "Alice" and "alice" merge cleanly across all screens.
+     * Standardizes person names by trimming and lowercasing so that
+     * mixed-case entries like "Alice" and "alice" merge cleanly across all screens.
      */
     fun normalizePersonName(name: String): String {
-        val trimmed = name.trim()
-        if (trimmed.isEmpty()) return ""
-        return trimmed.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        return normalizePersonKey(name)
+    }
+
+    fun formatReceivableLabel(tokens: List<String>): Pair<String, String> {
+        val cleanTokens = tokens.map { it.trim() }.filter { it.isNotEmpty() }
+        val key = cleanTokens.joinToString(", ") { normalizePersonKey(it) }
+        val displayName = cleanTokens.joinToString(", ")
+        return Pair(key, displayName)
     }
 
     /**
      * Attempts to parse explicit per-companion amounts from companion tokens.
      * Returns null if any token lacks an explicit numeric amount or total doesn't match.
      */
-    fun parseCompanionAmounts(tokens: List<String>): Map<String, Double>? {
+    fun parseCompanionAmountsWithDisplay(tokens: List<String>): List<ReceivableShare>? {
         if (tokens.isEmpty()) return null
-        val result = mutableMapOf<String, Double>()
+        val result = mutableListOf<ReceivableShare>()
         for (token in tokens) {
             val matcher = AMOUNT_PATTERN.matcher(token.trim())
             if (matcher.matches()) {
@@ -83,13 +98,18 @@ object AccountingUtils {
                 val amountStr = matcher.group(2) ?: return null
                 val amount = amountStr.toDoubleOrNull() ?: return null
                 if (name.isBlank() || amount <= 0.0) return null
-                val normalizedName = normalizePersonName(name)
-                result[normalizedName] = (result[normalizedName] ?: 0.0) + round2(amount)
+                val (key, display) = formatReceivableLabel(listOf(name))
+                result.add(ReceivableShare(key, display, round2(amount)))
             } else {
                 return null
             }
         }
         return if (result.isNotEmpty()) result else null
+    }
+
+    fun parseCompanionAmounts(tokens: List<String>): Map<String, Double>? {
+        val list = parseCompanionAmountsWithDisplay(tokens) ?: return null
+        return list.associate { it.key to it.amount }
     }
 
     /**
@@ -98,24 +118,28 @@ object AccountingUtils {
      * 2. If exactly one companion, attributes the full owed amount to that companion.
      * 3. For equal splits, divides owedToMe equally across all companions.
      * 4. For custom splits with multiple companions without stored shares, does NOT divide
-     *    equally by head count; attributes to "Others" so unverified equal shares are never assumed.
+     *    equally by head count; attributes to a combined group label made of the real display names
+     *    in the order stored (e.g. "Alice, Bob") with key as the normalized joined names ("alice, bob").
+     *    Never uses the placeholder word "Others".
+     * 5. The "Personal" case with owed above zero invents no person and returns an empty list.
      */
-    fun calculateReceivablesForTransaction(txn: Transaction): Map<String, Double> {
+    fun calculateReceivablesForTransaction(txn: Transaction): List<ReceivableShare> {
         if (txn.status != TransactionStatus.PENDING || txn.owedToMe <= Tolerances.MONEY_LEFT) {
-            return emptyMap()
+            return emptyList()
         }
         val rawTokens = tokens(txn.companions)
         if (rawTokens.isEmpty() || txn.companions.equals("Personal", ignoreCase = true)) {
-            return mapOf(normalizePersonName("Others") to txn.owedToMe)
+            return emptyList()
         }
 
-        val parsed = parseCompanionAmounts(rawTokens)
+        val parsed = parseCompanionAmountsWithDisplay(rawTokens)
         if (parsed != null && parsed.isNotEmpty()) {
             return parsed
         }
 
         if (rawTokens.size == 1) {
-            return mapOf(normalizePersonName(rawTokens[0]) to txn.owedToMe)
+            val (key, display) = formatReceivableLabel(rawTokens)
+            return listOf(ReceivableShare(key, display, txn.owedToMe))
         }
 
         val totalHeads = rawTokens.size + 1
@@ -124,11 +148,14 @@ object AccountingUtils {
 
         return if (isEqualSplit) {
             val sharePerPerson = round2(txn.owedToMe / rawTokens.size)
-            rawTokens.associate { normalizePersonName(it) to sharePerPerson }
+            rawTokens.map { token ->
+                val (key, display) = formatReceivableLabel(listOf(token))
+                ReceivableShare(key, display, sharePerPerson)
+            }
         } else {
-            // Multi-companion custom split where per-person shares are not stored.
-            // Equal division is kept only for equal splits.
-            mapOf(normalizePersonName("Others") to txn.owedToMe)
+            // Multi-companion custom split: attribute to combined label of real display names in order stored
+            val (key, display) = formatReceivableLabel(rawTokens)
+            listOf(ReceivableShare(key, display, txn.owedToMe))
         }
     }
 }
