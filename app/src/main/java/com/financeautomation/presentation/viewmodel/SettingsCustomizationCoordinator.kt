@@ -56,6 +56,7 @@ class SettingsCustomizationCoordinator(
                 payablesFlow
             ) { companions, transactions, pendingPayables ->
                 val receivablesByFriend = mutableMapOf<String, Double>()
+                val openItemsByFriend = mutableMapOf<String, Int>()
                 for (txn in transactions) {
                     if (txn.status == TransactionStatus.PENDING && txn.owedToMe > 0.0) {
                         val tokens = AccountingUtils.tokens(txn.companions)
@@ -64,6 +65,7 @@ class SettingsCustomizationCoordinator(
                             for (friend in tokens) {
                                 val key = friend.trim().lowercase()
                                 receivablesByFriend[key] = (receivablesByFriend[key] ?: 0.0) + sharePerPerson
+                                openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
                             }
                         }
                     }
@@ -73,6 +75,7 @@ class SettingsCustomizationCoordinator(
                 for (payable in pendingPayables) {
                     val key = payable.paidBy.trim().lowercase()
                     payablesByFriend[key] = (payablesByFriend[key] ?: 0.0) + payable.amountIOwe
+                    openItemsByFriend[key] = (openItemsByFriend[key] ?: 0) + 1
                 }
 
                 val updatedCompanions = companions.map { comp ->
@@ -103,9 +106,9 @@ class SettingsCustomizationCoordinator(
                     }
                 }
 
-                updatedCompanions
-            }.collect { list ->
-                uiState.update { it.copy(companions = list) }
+                updatedCompanions to openItemsByFriend
+            }.collect { (list, counts) ->
+                uiState.update { it.copy(companions = list, companionOpenItemCounts = counts) }
             }
         }
         accountRepository?.let { repo ->

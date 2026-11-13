@@ -44,6 +44,7 @@ data class SettingsUiState(
     val accountTransactionCounts: Map<String, Int> = emptyMap(),
     val categories: List<Category> = emptyList(),
     val companions: List<Companion> = emptyList(),
+    val companionOpenItemCounts: Map<String, Int> = emptyMap(),
     val tripTags: List<TripTag> = emptyList(),
     val isSyncing: Boolean = false,
     val isConfigSyncing: Boolean = false,
@@ -152,6 +153,11 @@ class SettingsViewModel(
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.getGoogleAccountEmail().collect { email ->
                 _uiState.update { it.copy(googleAccountEmail = email) }
+            }
+        }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getGoogleAccountDisplayName().collect { name ->
+                _uiState.update { it.copy(googleAccountDisplayName = name) }
             }
         }
         viewModelScope.launch(ioDispatcher) {
