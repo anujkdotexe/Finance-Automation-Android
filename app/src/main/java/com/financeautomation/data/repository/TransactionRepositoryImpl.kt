@@ -910,7 +910,8 @@ class TransactionRepositoryImpl(
 
                             // Check for orphan row (same date, time, amount with blank AC from interrupted prior run)
                             val orphanCheck = googleSheetsClient.findOrphanDebitRow(
-                                spreadsheetId, tabName, txn.dateSerial, txn.timeSerial, txn.totalAmount
+                                spreadsheetId, tabName, txn.dateSerial, txn.timeSerial, txn.totalAmount,
+                                account = txn.account, description = txn.merchant
                             )
                             if (orphanCheck is Result.Success && orphanCheck.data != null) {
                                 val orphanRow = orphanCheck.data

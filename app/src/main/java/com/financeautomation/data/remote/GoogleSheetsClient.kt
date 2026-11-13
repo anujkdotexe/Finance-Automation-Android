@@ -564,7 +564,9 @@ open class GoogleSheetsClient(
         tabName: String,
         dateSerial: Int,
         timeSerial: Double,
-        amount: Double
+        amount: Double,
+        account: String? = null,
+        description: String? = null
     ): Result<Int?> = withContext(Dispatchers.IO) {
         try {
             val dataResult = getRangeValuesRaw(spreadsheetId, "'$tabName'!A4:G")
@@ -590,7 +592,12 @@ open class GoogleSheetsClient(
                     val amountMatches = Math.abs(rowAmount - amount) < 0.01
                     val rowSeconds = Math.round(rowTime * 86400.0)
                     val timeMatches = targetSeconds == rowSeconds
-                    if (dateMatches && amountMatches && timeMatches) {
+                    // A row typed by hand can share date, time and amount; account and description tell them apart
+                    val accountMatches = account == null ||
+                        row.getOrNull(2)?.toString().orEmpty().trim().equals(account.trim(), ignoreCase = true)
+                    val descriptionMatches = description == null ||
+                        row.getOrNull(3)?.toString().orEmpty().trim().equals(description.trim(), ignoreCase = true)
+                    if (dateMatches && amountMatches && timeMatches && accountMatches && descriptionMatches) {
                         return@withContext Result.Success(i + 4)
                     }
                 }
