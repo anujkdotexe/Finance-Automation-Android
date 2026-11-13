@@ -60,6 +60,30 @@ object SheetProvisioner {
 
     private const val ROW3_LAST_BORDERED_COL = 24 // column Y
 
+    /** Row 2 border sides per column index, from the live workbook. */
+    val ROW2_BORDER_SIDES: Map<Int, Set<String>> = mapOf(
+        0 to setOf("top", "bottom", "left"),
+        11 to setOf("top", "bottom", "left"),
+        12 to setOf("bottom"),
+        20 to setOf("top", "bottom"),
+        21 to setOf("top", "bottom")
+    )
+
+    /** Thin borders on the named sides of a single cell. */
+    private fun cellBordersRequest(sheetId: Int, row: Int, col: Int, sides: Set<String>): Map<String, Any?> {
+        val request = mutableMapOf<String, Any?>(
+            "range" to mapOf(
+                "sheetId" to sheetId,
+                "startRowIndex" to row,
+                "endRowIndex" to row + 1,
+                "startColumnIndex" to col,
+                "endColumnIndex" to col + 1
+            )
+        )
+        sides.forEach { request[it] = thinBorder() }
+        return mapOf("updateBorders" to request)
+    }
+
     /** Debit table columns C, D, E, F, H, K (0-based) that are plain text in the iOS reference. */
     val DEBIT_TEXT_COLUMNS: List<Int> = listOf(2, 3, 4, 5, 7, 10)
 
@@ -1145,11 +1169,12 @@ object SheetProvisioner {
                                 "backgroundColor" to color,
                                 "horizontalAlignment" to "CENTER",
                                 "verticalAlignment" to "MIDDLE",
-                                "textFormat" to mapOf(
-                                    "foregroundColor" to whiteColor,
-                                    "bold" to true,
-                                    "fontSize" to 10
-                                )
+                                "textFormat" to buildMap {
+                                    put("foregroundColor", whiteColor)
+                                    put("bold", true)
+                                    // Live: the group titles inherit the default size, the blank spacer cells are size 11
+                                    if (title.isEmpty()) put("fontSize", 11)
+                                }
                             )
                         ),
                         "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
@@ -1158,11 +1183,10 @@ object SheetProvisioner {
             )
         }
 
-        // Thin borders around each row 2 block (A2:K2, L2, M2:T2, U2, V2:AB2), as in the iOS reference
-        sectionDefs.forEach { (startCol, endCol, _) ->
-            requests.add(
-                outerBordersRequest(sheetId, startRow = 1, endRow = 2, startCol = startCol, endCol = endCol)
-            )
+        // Row 2 borders exactly as in the live workbook: A2 and L2 top, bottom and left; M2 bottom only;
+        // U2 and V2 top and bottom. (The merged blocks carry their borders on the first cell.)
+        ROW2_BORDER_SIDES.forEach { (col, sides) ->
+            requests.add(cellBordersRequest(sheetId, row = 1, col = col, sides = sides))
         }
 
         // Fill Spacer columns L and U with #ECEFF1 across all rows (0 to 1000)
@@ -1255,9 +1279,9 @@ object SheetProvisioner {
                     "fontSize" to 9
                 )
             )
-            // The iOS reference has a vertical alignment and thin borders on A3:Y3 only; Z3:AB3 are plain
+            format["verticalAlignment"] = "MIDDLE"
+            // Thin borders on A3:Y3 only, as in the live workbook
             if (colIdx <= ROW3_LAST_BORDERED_COL) {
-                format["verticalAlignment"] = "MIDDLE"
                 format["borders"] = thinBorders()
             }
             mapOf(
@@ -1279,6 +1303,26 @@ object SheetProvisioner {
                         mapOf("values" to row3Values)
                     ),
                     "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy,borders)"
+                )
+            )
+        )
+
+        // Reaffirm the A3:Y3 grid through one range request so the shared edges (for example K3 and S3) are written
+        requests.add(
+            mapOf(
+                "updateBorders" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "startRowIndex" to 2,
+                        "endRowIndex" to 3,
+                        "startColumnIndex" to 0,
+                        "endColumnIndex" to ROW3_LAST_BORDERED_COL + 1
+                    ),
+                    "top" to thinBorder(),
+                    "bottom" to thinBorder(),
+                    "left" to thinBorder(),
+                    "right" to thinBorder(),
+                    "innerVertical" to thinBorder()
                 )
             )
         )
