@@ -23,7 +23,9 @@ class InflowRepositoryImpl(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val syncQueueDao: SyncQueueDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
-    private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { block -> block() }
+    private val transactionRunner: suspend (suspend () -> Unit) -> Unit = { block -> block() },
+    /** True when the income settled debts on the sheet; such an income cannot be voided. */
+    private val settledDebtsCheck: (suspend (String) -> Boolean)? = null
 ) : InflowRepository {
 
     constructor(
@@ -76,6 +78,9 @@ class InflowRepositoryImpl(
             val existing = dao.getById(id)
                 ?: return@withContext Result.Error(IllegalArgumentException("Inflow not found: $id"))
             if (existing.status == VOID_STATUS) return@withContext Result.Success(Unit)
+            if (settledDebtsCheck?.invoke(id) == true) {
+                return@withContext Result.Error(IllegalStateException(SettledInflowMarker.BLOCKED_MESSAGE))
+            }
 
             val queue = syncQueueDao ?: syncQueueDaoProvider?.invoke()
                 ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")

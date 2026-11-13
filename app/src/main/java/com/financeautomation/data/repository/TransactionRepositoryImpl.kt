@@ -471,6 +471,9 @@ class TransactionRepositoryImpl(
             iDao.updateStatus(id, "VOID")
             return Result.Success(Unit)
         }
+        if (preferencesRepository?.getPreference(SettledInflowMarker.key(id)) == "1") {
+            return Result.Error(IllegalStateException(SettledInflowMarker.BLOCKED_MESSAGE))
+        }
         val request = com.financeautomation.domain.model.VoidInflowRequest(inflowId = id, timestamp = inflow.timestamp)
         runInDbTransaction {
             iDao.updateStatus(id, "VOID")
@@ -793,6 +796,9 @@ class TransactionRepositoryImpl(
                     }
 
                     if (opResult is Result.Success) {
+                        if (item.operationType == SyncQueueEntity.OP_LOG_CREDIT) {
+                            rememberIfCreditSettledDebts(item.id, item.transactionId)
+                        }
                         syncQueueDao.deleteById(item.id)
                         syncedCount++
                     } else if (opResult is Result.Error) {
@@ -1346,6 +1352,20 @@ class TransactionRepositoryImpl(
         accountingSyncExecutor.applyPlanToLocalDatabase(plan)
 
         return Result.Success(debitRow ?: lastAppendedRow)
+    }
+
+    /** Called once a credit reached the sheet: notes whether it settled any debt, from the plan stored on its queue row. */
+    private suspend fun rememberIfCreditSettledDebts(queueId: Long, inflowId: String) {
+        try {
+            val planJson = resolveSyncQueueDao().getById(queueId)?.planJson ?: return
+            if (AccountingPlanJsonAdapter.fromJson(planJson).settled.isNotEmpty()) {
+                preferencesRepository?.setPreference(SettledInflowMarker.key(inflowId), "1", isDirty = false)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            com.financeautomation.core.utils.Diagnostics.record("TransactionRepositoryImpl", "${e.javaClass.simpleName}: settled marker")
+        }
     }
 
     private class RunState {

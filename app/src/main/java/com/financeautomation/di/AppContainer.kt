@@ -338,7 +338,10 @@ class DefaultAppContainer(
             inflowDaoProvider = { awaitDatabase().inflowDao() },
             ioDispatcher = ioDispatcher,
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
-            transactionRunner = { block -> awaitDatabase().withTransaction { block() } }
+            transactionRunner = { block -> awaitDatabase().withTransaction { block() } },
+            settledDebtsCheck = { id ->
+                preferencesRepository.getPreference(com.financeautomation.data.repository.SettledInflowMarker.key(id)) == "1"
+            }
         ).also { impl ->
             // WorkManager keeps the retry alive across process death, unlike a plain coroutine
             impl.onTriggerSync = {
