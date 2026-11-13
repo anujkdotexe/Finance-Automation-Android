@@ -150,10 +150,8 @@ fun CapturePermissionsScreen(
             Column(modifier = Modifier.fillMaxWidth()) {
                 // 1. Notification access
                 CapturePermissionRow(
-                    icon = Icons.Rounded.NotificationsActive,
-                    title = stringResource(R.string.capture_notification_title),
-                    subtitle = stringResource(R.string.capture_notification_desc),
-                    statusText = if (hasNotification) stringResource(R.string.status_on) else stringResource(R.string.status_off),
+                    issue = com.financeautomation.presentation.health.AttentionIssue.NOTIFICATION_ACCESS,
+                    ok = hasNotification,
                     onClick = {
                         try {
                             context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
@@ -174,10 +172,8 @@ fun CapturePermissionsScreen(
 
                 // 2. Battery optimisation
                 CapturePermissionRow(
-                    icon = Icons.Rounded.BatteryChargingFull,
-                    title = stringResource(R.string.capture_battery_title),
-                    subtitle = stringResource(R.string.capture_battery_desc),
-                    statusText = if (!isBatteryOptimized) stringResource(R.string.status_unrestricted) else stringResource(R.string.status_restricted),
+                    issue = com.financeautomation.presentation.health.AttentionIssue.BATTERY,
+                    ok = !isBatteryOptimized,
                     onClick = {
                         try {
                             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -202,10 +198,8 @@ fun CapturePermissionsScreen(
 
                 // 3. Overlay
                 CapturePermissionRow(
-                    icon = Icons.Rounded.Layers,
-                    title = stringResource(R.string.capture_overlay_title),
-                    subtitle = stringResource(R.string.capture_overlay_desc),
-                    statusText = if (hasOverlay) stringResource(R.string.status_on) else stringResource(R.string.status_off),
+                    issue = com.financeautomation.presentation.health.AttentionIssue.OVERLAY,
+                    ok = hasOverlay,
                     onClick = {
                         try {
                             context.startActivity(Intent(
@@ -225,10 +219,8 @@ fun CapturePermissionsScreen(
 
                 // 4. Usage access
                 CapturePermissionRow(
-                    icon = Icons.Rounded.Schedule,
-                    title = stringResource(R.string.capture_usage_access_title),
-                    subtitle = stringResource(R.string.capture_usage_access_desc),
-                    statusText = if (hasUsageAccess) stringResource(R.string.status_on) else stringResource(R.string.status_off),
+                    issue = com.financeautomation.presentation.health.AttentionIssue.USAGE_ACCESS,
+                    ok = hasUsageAccess,
                     onClick = {
                         try {
                             context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
@@ -304,63 +296,20 @@ fun CapturePermissionsScreen(
     }
 }
 
+/** One permission row, drawn by the shared attention card; the card's button runs [onClick] to open the fixing screen. */
 @Composable
 private fun CapturePermissionRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    statusText: String,
+    issue: com.financeautomation.presentation.health.AttentionIssue,
+    ok: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-            .clip(FinanceShapes.medium)
-            .clickable(onClick = onClick)
-            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = FinanceTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = subtitle,
-                    style = FinanceTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = FinanceShapes.pill,
-            modifier = Modifier.padding(start = FinanceTheme.spacing.s)
-        ) {
-            Text(
-                text = statusText,
-                style = FinanceTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs)
-            )
-        }
-    }
+    com.financeautomation.presentation.components.AttentionCard(
+        content = com.financeautomation.presentation.health.attentionContent(
+            issue,
+            com.financeautomation.presentation.health.attentionState(ok)
+        ),
+        onAction = onClick,
+        modifier = modifier.padding(FinanceTheme.spacing.s)
+    )
 }

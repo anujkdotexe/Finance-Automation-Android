@@ -786,4 +786,83 @@
     <!-- OnboardingViewModel -->
     <string name="onboarding_err_consent_denied">Consent was not granted. Please grant Google Drive access to continue.</string>
     <string name="onboarding_err_auth_failed">Authorization failed</string>
+
+    <!-- Remove a person or a trip -->
+    <string name="people_remove_action">Remove</string>
+    <string name="people_remove_cd">More options for %1$s</string>
+    <string name="people_remove_title">Remove %1$s?</string>
+    <string name="people_remove_message">%1$s leaves your people list. Past transactions keep the name.</string>
+    <string name="trips_remove_title">Remove %1$s?</string>
+    <string name="trips_remove_message">The trip leaves your list. Past transactions keep the trip name.</string>
+    <string name="trips_remove_cd">Remove trip %1$s</string>
+    <string name="settings_msg_trip_removed">Trip removed</string>
+    <string name="settings_err_trip_remove_failed">The trip could not be removed</string>
+
+    <!-- Setup page: the step that needs the user -->
+    <string name="onboarding_needs_attention">Needs attention</string>
+    <string name="onboarding_sign_in">Sign in</string>
+    <string name="onboarding_set_up_workbook">Set up workbook</string>
+
+    <!-- Rows waiting in review, not counted in the burn -->
+    <string name="dashboard_unconfirmed_one">1 unconfirmed row, %1$s not counted</string>
+    <string name="dashboard_unconfirmed_many">%1$d unconfirmed rows, %2$s not counted</string>
+
+    <!-- Attention cards: what is wrong, why, and the one fix -->
+    <string name="attn_needs_attention">Needs attention</string>
+    <string name="attn_in_progress">Working on it</string>
+    <string name="attn_done">Done</string>
+    <string name="attn_sign_in_title">Sign in to Google</string>
+    <string name="attn_sign_in_done">Signed in</string>
+    <string name="attn_sign_in_reason">You are signed out, so nothing can sync to your sheet.</string>
+    <string name="attn_sign_in_action">Sign in</string>
+    <string name="attn_auth_title">Google access</string>
+    <string name="attn_auth_done">Google access granted</string>
+    <string name="attn_auth_reason">Google access ran out, so new entries wait on this phone.</string>
+    <string name="attn_auth_action">Reconnect</string>
+    <string name="attn_workbook_title">Workbook</string>
+    <string name="attn_workbook_done">Workbook ready</string>
+    <string name="attn_workbook_reason">This year\'s workbook was not found, so entries have nowhere to go.</string>
+    <string name="attn_workbook_action">Set up workbook</string>
+    <string name="attn_notif_access_title">Notification access</string>
+    <string name="attn_notif_access_done">Notification access on</string>
+    <string name="attn_notif_access_reason">Without it the app cannot see payment alerts to log.</string>
+    <string name="attn_notif_access_action">Open settings</string>
+    <string name="attn_overlay_title">Show over other apps</string>
+    <string name="attn_overlay_done">Showing over other apps is on</string>
+    <string name="attn_overlay_reason">Without it the quick log sheet cannot appear over a payment app.</string>
+    <string name="attn_overlay_action">Open settings</string>
+    <string name="attn_usage_title">Usage access</string>
+    <string name="attn_usage_done">Usage access on</string>
+    <string name="attn_usage_reason">Without it the app cannot tell when you leave a payment app.</string>
+    <string name="attn_usage_action">Open settings</string>
+    <string name="attn_battery_title">Battery optimisation</string>
+    <string name="attn_battery_done">Battery optimisation is off for this app</string>
+    <string name="attn_battery_reason">The phone may stop the app in the background and miss payments.</string>
+    <string name="attn_battery_action">Open settings</string>
+    <string name="attn_post_notif_title">Notifications</string>
+    <string name="attn_post_notif_done">Notifications allowed</string>
+    <string name="attn_post_notif_reason">Without it the app cannot show reminders and capture prompts.</string>
+    <string name="attn_post_notif_action">Allow</string>
+    <string name="attn_accounts_title">Accounts</string>
+    <string name="attn_accounts_done">Accounts chosen</string>
+    <string name="attn_accounts_reason">No account is set up, so entries cannot be filed under one.</string>
+    <string name="attn_accounts_action">Add account</string>
+    <string name="attn_token_title">Sign in expired</string>
+    <string name="attn_token_done">Sign in is valid</string>
+    <string name="attn_token_reason">Your Google sign in expired, so syncing is paused.</string>
+    <string name="attn_token_action">Reconnect</string>
+    <string name="attn_sync_title">Sync</string>
+    <string name="attn_sync_done">Sync is working</string>
+    <string name="attn_sync_reason">Sync is failing, so new entries are waiting on this phone.</string>
+    <string name="attn_sync_action">Try again</string>
+    <string name="attn_rate_title">Google is busy</string>
+    <string name="attn_rate_done">Sync is working</string>
+    <string name="attn_rate_reason">Google asked the app to slow down, so sync is paused for a moment.</string>
+    <string name="attn_rate_action">Try again</string>
+    <string name="attn_lock_title">App lock</string>
+    <string name="attn_lock_done">App lock is on</string>
+    <string name="attn_lock_reason">App lock is on but this phone has no screen lock set, so it protects nothing.</string>
+    <string name="attn_lock_action">Set a screen lock</string>
+
+    <string name="dashboard_refunds_line">Refunds %1$s taken off the total</string>
 </resources>

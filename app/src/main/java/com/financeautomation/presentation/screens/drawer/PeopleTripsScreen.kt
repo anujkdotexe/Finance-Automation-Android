@@ -21,10 +21,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BeachAccess
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.FlightTakeoff
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +50,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,9 +82,28 @@ fun PeopleTripsScreen(
     fun summaryFor(name: String) =
         state.tripSummaries[name.trim().lowercase()] ?: tripUseCase.forTrip(name, emptyList())
     var selectedCompanionForEdit by remember { mutableStateOf<FriendCompanion?>(null) }
+    var personToRemove by remember { mutableStateOf<FriendCompanion?>(null) }
+    var tripToRemove by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
+    // Refusals and results of a removal are shown here, in a snackbar
+    LaunchedEffect(state.errorMessage) {
+        state.errorMessage?.let {
+            snackbarHostState.showSnackbar(it.asString(context))
+            viewModel.clearMessages()
+        }
+    }
+    LaunchedEffect(state.userMessage) {
+        state.userMessage?.let {
+            snackbarHostState.showSnackbar(it.asString(context))
+            viewModel.clearMessages()
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
@@ -146,7 +176,8 @@ fun PeopleTripsScreen(
                         FriendItemRow(
                             companion = companion,
                             openItemCount = openCount,
-                            onClick = { selectedCompanionForEdit = companion }
+                            onClick = { selectedCompanionForEdit = companion },
+                            onRemove = { personToRemove = companion }
                         )
                     }
                 }
@@ -210,7 +241,8 @@ fun PeopleTripsScreen(
                             totalSpend = formatRupees(summaryFor(trip.name).totalPaid),
                             onOpen = { openTripName = trip.name },
                             onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
-                            onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) }
+                            onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) },
+                            onRemove = { tripToRemove = trip.name }
                         )
                     }
                 }
@@ -276,6 +308,36 @@ fun PeopleTripsScreen(
         }
     }
 
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(FinanceTheme.spacing.m)
+    )
+    }
+
+    personToRemove?.let { person ->
+        ConfirmRemoveDialog(
+            title = stringResource(R.string.people_remove_title, person.name),
+            message = stringResource(R.string.people_remove_message, person.name),
+            onConfirm = {
+                viewModel.onRemoveCompanion(person.id)
+                personToRemove = null
+            },
+            onDismiss = { personToRemove = null }
+        )
+    }
+
+    tripToRemove?.let { name ->
+        ConfirmRemoveDialog(
+            title = stringResource(R.string.trips_remove_title, name),
+            message = stringResource(R.string.trips_remove_message),
+            onConfirm = {
+                viewModel.onRemoveTripTag(name)
+                tripToRemove = null
+            },
+            onDismiss = { tripToRemove = null }
+        )
+    }
+
     openTripName?.let { name ->
         TripDetailSheet(summary = summaryFor(name), onDismiss = { openTripName = null })
     }
@@ -313,8 +375,10 @@ private fun FriendItemRow(
     companion: FriendCompanion,
     openItemCount: Int = 0,
     onClick: () -> Unit = {},
+    onRemove: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     val initial = companion.name.firstOrNull()?.uppercase() ?: "F"
 
     val balance = companion.balance
@@ -408,6 +472,29 @@ private fun FriendItemRow(
                     color = textColor
                 )
             }
+
+            Box {
+                IconButton(
+                    onClick = { menuOpen = true },
+                    modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = stringResource(R.string.people_remove_cd, companion.name),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.people_remove_action)) },
+                        onClick = {
+                            menuOpen = false
+                            onRemove()
+                        },
+                        modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                }
+            }
         }
     }
 }
@@ -422,8 +509,10 @@ private fun TripCard(
     onOpen: () -> Unit = {},
     onEndTrip: () -> Unit = {},
     onReactivateTrip: () -> Unit = {},
+    onRemove: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val removeTripDescription = stringResource(R.string.trips_remove_cd, tripName)
     Surface(
         color = FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
@@ -513,11 +602,25 @@ private fun TripCard(
                         Text(stringResource(R.string.trips_end_trip), style = FinanceTheme.typography.labelMedium)
                     }
                 } else {
-                    Button(
-                        onClick = onReactivateTrip,
-                        shape = FinanceTheme.shapes.small
-                    ) {
-                        Text(stringResource(R.string.trips_reactivate), style = FinanceTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
+                        if (onRemove != null) {
+                            OutlinedButton(
+                                onClick = onRemove,
+                                shape = FinanceTheme.shapes.small,
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                                    .semantics { contentDescription = removeTripDescription }
+                            ) {
+                                Text(stringResource(R.string.people_remove_action), style = FinanceTheme.typography.labelMedium)
+                            }
+                        }
+                        Button(
+                            onClick = onReactivateTrip,
+                            shape = FinanceTheme.shapes.small,
+                            modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        ) {
+                            Text(stringResource(R.string.trips_reactivate), style = FinanceTheme.typography.labelMedium)
+                        }
                     }
                 }
 
@@ -675,4 +778,31 @@ private fun FriendDetailSheet(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
         }
     }
+}
+
+/** Confirms a removal. Component standard: a 48dp Outlined Cancel on the left and a 48dp Filled confirm on the right. */
+@Composable
+private fun ConfirmRemoveDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = title, style = FinanceTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+        text = { Text(text = message, style = FinanceTheme.typography.bodyMedium) },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+            ) { Text(stringResource(R.string.action_cancel)) }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+            ) { Text(stringResource(R.string.people_remove_action)) }
+        }
+    )
 }

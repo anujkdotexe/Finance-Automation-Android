@@ -23,6 +23,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.Text
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -231,6 +238,17 @@ fun DashboardContent(
                 )
             }
 
+            // Rows waiting in review are not part of the burn above; say so, and open Needs Review on tap
+            if (state.unconfirmedCount > 0) {
+                item {
+                    UnconfirmedCaption(
+                        count = state.unconfirmedCount,
+                        amount = state.unconfirmedAmount,
+                        onClick = onNavigateToReview
+                    )
+                }
+            }
+
             // 4. Needs Review Calm Banner (only when count above zero)
             val reviewCount = if (state.needsReviewTotal > 0) state.needsReviewTotal else state.needsReviewCount
             if (reviewCount > 0) {
@@ -267,6 +285,18 @@ fun DashboardContent(
                             onNavigateToTransactions(state.monthOffset, null, null)
                         },
                         onInsightsClick = onNavigateToInsights
+                    )
+                }
+            }
+
+            // Refunds are already taken off the burn above, so the rows above add up to the burn plus this line
+            if (state.refunds > 0.0) {
+                item {
+                    Text(
+                        text = stringResource(R.string.dashboard_refunds_line, formatRupees(state.refunds)),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = FinanceTheme.spacing.s)
                     )
                 }
             }
@@ -380,4 +410,25 @@ private fun DashboardPreviewDark() {
             onAddExpense = {}
         )
     }
+}
+
+/** Small caption under the Living burn card: how many rows are not counted yet and how much they are worth. */
+@Composable
+private fun UnconfirmedCaption(count: Int, amount: Double, onClick: () -> Unit) {
+    val text = if (count == 1) {
+        stringResource(R.string.dashboard_unconfirmed_one, formatRupees(amount))
+    } else {
+        stringResource(R.string.dashboard_unconfirmed_many, count, formatRupees(amount))
+    }
+    Text(
+        text = text,
+        style = FinanceTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+            .clickable(onClick = onClick)
+            .padding(vertical = FinanceTheme.spacing.s)
+            .semantics { role = Role.Button }
+    )
 }
