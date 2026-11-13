@@ -114,6 +114,7 @@ object ForegroundHeadsUpHelper {
         val amountStr = capture.amount?.let { formatRupees(it, includeDecimals = true) } ?: "Pending review"
         val titleText = if (capture.payee.isNotBlank()) capture.payee else context.getString(R.string.notif_payment_detected_title)
 
+        val appLockOn = NotificationPrivacy.isAppLockOn(context)
         val builder = NotificationCompat.Builder(context, NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS)
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(titleText)
@@ -125,6 +126,10 @@ object ForegroundHeadsUpHelper {
             .addAction(0, cat1, pendingCat1)
             .addAction(0, cat2, pendingCat2)
             .addAction(0, context.getString(R.string.label_details), pendingDetails)
+        NotificationPrivacy.apply(
+            builder, context, NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS, appLockOn,
+            publicTitle = context.getString(R.string.notif_public_payment_title)
+        )
 
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
             PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.HEADS_UP_BLOCKED_NOTIFICATIONS_OFF)

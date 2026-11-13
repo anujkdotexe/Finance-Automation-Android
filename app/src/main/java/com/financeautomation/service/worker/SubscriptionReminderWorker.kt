@@ -51,7 +51,7 @@ class SubscriptionReminderWorker(
             runCheck(
                 repository = container.subscriptionRepository,
                 scheduleUseCase = SubscriptionScheduleUseCase(),
-                notifier = SubscriptionNotifier(applicationContext),
+                notifier = SubscriptionNotifier(applicationContext, appLockOn = com.financeautomation.service.NotificationPrivacy.isAppLockOn(applicationContext)),
                 todayEpochDay = today
             )
             Result.success()
