@@ -30,7 +30,7 @@ class DashboardInsightsShortcutTest {
     fun appNavHostNavigatesToInsightsRoute() {
         val nav = read("ui/AppNavHost.kt")
         assertTrue(nav.contains("onNavigateToInsights = {"))
-        assertTrue(nav.contains("navController.navigate(AppRoutes.INSIGHTS)"))
+        assertTrue(nav.contains("navController.navigateTop(AppRoutes.INSIGHTS)"))
     }
 
     @Test

@@ -194,6 +194,40 @@ internal fun NavHostController.goToDashboard() {
     }
 }
 
+/** Opens [route] without stacking a second copy of it when it is already on top. */
+internal fun NavHostController.navigateTop(route: String) {
+    navigate(route) { launchSingleTop = true }
+}
+
+/**
+ * Back arrow for screens that can be entered from outside (a notification or a shortcut): when nothing is below the
+ * screen, go to the Dashboard instead of popping the host empty.
+ */
+internal fun NavHostController.goBackOrDashboard() {
+    if (previousBackStackEntry != null) popBackStack() else goToDashboard()
+}
+
+/** Opens a route that arrived from outside the app, keeping the Dashboard below it and never stacking duplicates. */
+internal fun NavHostController.navigateToRoute(route: String) {
+    when (route.substringBefore("?")) {
+        AppRoutes.DASHBOARD -> goToDashboard()
+        AppRoutes.NEEDS_REVIEW -> goToNeedsReview()
+        else -> navigate(route) {
+            popUpTo(AppRoutes.DASHBOARD)
+            launchSingleTop = true
+        }
+    }
+}
+
+/** The Transactions route with its arguments percent encoded, because category and type come from user text. */
+internal fun transactionsRoute(monthOffset: Int, category: String?, type: String?): String = buildString {
+    fun enc(v: String) = java.net.URLEncoder.encode(v.trim(), "UTF-8").replace("+", "%20")
+    append(AppRoutes.TRANSACTIONS)
+    append("?monthOffset=").append(monthOffset)
+    if (!category.isNullOrBlank()) append("&category=").append(enc(category))
+    if (!type.isNullOrBlank()) append("&type=").append(enc(type))
+}
+
 /** Opens the Needs Review tab on top of the Dashboard without restoring any saved back stack state. */
 internal fun NavHostController.goToNeedsReview() {
     navigate(AppRoutes.NEEDS_REVIEW) {
@@ -415,9 +449,7 @@ fun AppNavHost(
                                     }
                                 } else {
                                     IconButton(onClick = {
-                                        if (!navController.popBackStack()) {
-                                            navController.goToDashboard()
-                                        }
+                                        navController.goBackOrDashboard()
                                     }) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -461,7 +493,7 @@ fun AppNavHost(
                                                 text = { Text(stringResource(R.string.menu_sync_backup)) },
                                                 onClick = {
                                                     accountMenuExpanded = false
-                                                    navController.navigate(AppRoutes.SYNC_BACKUP)
+                                                    navController.navigateTop(AppRoutes.SYNC_BACKUP)
                                                 }
                                             )
                                             DropdownMenuItem(
@@ -600,30 +632,20 @@ fun AppNavHost(
                             viewModel = dashboardViewModel,
                             onNavigateToReview = { navController.goToNeedsReview() },
                             onNavigateToTransactions = { monthOffset, category, type ->
-                                val route = buildString {
-                                    append(AppRoutes.TRANSACTIONS)
-                                    append("?monthOffset=").append(monthOffset)
-                                    if (!category.isNullOrBlank()) {
-                                        append("&category=").append(category)
-                                    }
-                                    if (!type.isNullOrBlank()) {
-                                        append("&type=").append(type)
-                                    }
-                                }
-                                navController.navigate(route)
+                                navController.navigateTop(transactionsRoute(monthOffset, category, type))
                             },
                             onNavigateToSettlements = { personName, owedToMe ->
                                 val extras = FlowAuthGate.mapSettlementToExtras(personName, owedToMe)
                                 launchFlow(extras.flow, extras.preselectedFriend)
                             },
                             onNavigateToBalances = {
-                                navController.navigate(AppRoutes.PEOPLE_TRIPS)
+                                navController.navigateTop(AppRoutes.PEOPLE_TRIPS)
                             },
                             onNavigateToSync = {
-                                navController.navigate(AppRoutes.SYNC_BACKUP)
+                                navController.navigateTop(AppRoutes.SYNC_BACKUP)
                             },
                             onNavigateToInsights = {
-                                navController.navigate(AppRoutes.INSIGHTS)
+                                navController.navigateTop(AppRoutes.INSIGHTS)
                             },
                             onAddExpense = { launchFlow("EXPENSE") }
                         )
@@ -697,7 +719,7 @@ fun AppNavHost(
                                 })
                             },
                             onNavigateToSync = {
-                                navController.navigate(AppRoutes.SYNC_BACKUP)
+                                navController.navigateTop(AppRoutes.SYNC_BACKUP)
                             },
                             onAddExpense = { launchFlow("EXPENSE") }
                         )
@@ -820,28 +842,28 @@ fun AppNavHost(
 
                     composable(AppRoutes.NOTIFICATION_ACCESS) {
                         NotificationAccessScreen(
-                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateBack = { navController.goBackOrDashboard() },
                             onSkip = { navController.goToDashboard() }
                         )
                     }
 
                     composable(AppRoutes.ERROR_API_NOT_ENABLED) {
                         ErrorApiNotEnabledScreen(
-                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateBack = { navController.goBackOrDashboard() },
                             onRetry = { navController.goToDashboard() }
                         )
                     }
 
                     composable(AppRoutes.ERROR_PERMISSION_NOT_GRANTED) {
                         ErrorPermissionNotGrantedScreen(
-                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateBack = { navController.goBackOrDashboard() },
                             onContinueManually = { navController.goToDashboard() }
                         )
                     }
 
                     composable(AppRoutes.ERROR_RATE_LIMITED) {
                         ErrorRateLimitedScreen(
-                            onNavigateBack = { navController.popBackStack() },
+                            onNavigateBack = { navController.goBackOrDashboard() },
                             onRetry = { navController.goToDashboard() }
                         )
                     }
