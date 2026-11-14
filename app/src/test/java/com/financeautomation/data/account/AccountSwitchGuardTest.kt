@@ -99,6 +99,36 @@ class AccountSwitchGuardTest {
     }
 
     @Test
+    fun noOwnerButTheSameEmailAsBeforeSignOutDoesNotAskToWipe() = runBlocking {
+        h.repo.insertTransaction(h.expense("txn_a"))
+        h.preferences[AccountSwitchGuard.KEY_LAST_EMAIL] = "Me@Example.com"
+        assertEquals(SwitchDecision.PROCEED, guard.evaluate("me@example.com").decision)
+        guard.recordOwner("me@example.com")
+        assertEquals("me@example.com", owner())
+        assertEquals(0, store.wipes)
+    }
+
+    @Test
+    fun noOwnerAndADifferentEarlierEmailStillAsks() = runBlocking {
+        h.repo.insertTransaction(h.expense("txn_a"))
+        h.preferences[AccountSwitchGuard.KEY_LAST_EMAIL] = "me@example.com"
+        assertEquals(SwitchDecision.CONFIRM_SWITCH, guard.evaluate("other@example.com").decision)
+    }
+
+    @Test
+    fun noOwnerAndNoEarlierEmailAnywhereStillAsks() = runBlocking {
+        h.repo.insertTransaction(h.expense("txn_a"))
+        assertEquals(SwitchDecision.CONFIRM_SWITCH, guard.evaluate("me@example.com").decision)
+    }
+
+    @Test
+    fun theLastEmailIsRememberedAtSignInAndSignOutAndForgottenOnAWipe() {
+        val coordinator = File("src/main/java/com/financeautomation/presentation/viewmodel/SettingsSyncCoordinator.kt").readText()
+        assertTrue(coordinator.substringAfter("fun onGoogleSignOut").substringBefore("fun autoProvisionMasterSheet").contains("KEY_LAST_EMAIL"))
+        assertFalse(AccountSwitchGuard.KEY_LAST_EMAIL in RoomAccountDataStore.KEPT_PREFERENCE_KEYS)
+    }
+
+    @Test
     fun recordingTheOwnerNeverOverwritesAnotherAccount() = runBlocking {
         guard.recordOwner("a@example.com")
         assertEquals("a@example.com", owner())

@@ -37,7 +37,13 @@ class AccountSwitchGuard(
 
     suspend fun evaluate(newEmail: String): SwitchEvaluation {
         val owner = preferences.getPreference(KEY_LEDGER_OWNER)
-        val decision = decide(owner, newEmail, hasData = { store.hasLocalData() })
+        // Without an owner, the account that was signed in before the last sign out counts as the owner
+        val known = owner?.takeIf { it.isNotBlank() } ?: preferences.getPreference(KEY_LAST_EMAIL)
+        val decision = if (owner.isNullOrBlank() && !known.isNullOrBlank()) {
+            decide(known, newEmail, hasData = { store.hasLocalData() })
+        } else {
+            decide(owner, newEmail, hasData = { store.hasLocalData() })
+        }
         val pending = if (decision == SwitchDecision.CONFIRM_SWITCH) store.pendingCount() else 0
         return SwitchEvaluation(decision, pending)
     }
@@ -47,6 +53,7 @@ class AccountSwitchGuard(
         stopBackgroundWork()
         store.wipe()
         preferences.setPreference(KEY_LEDGER_OWNER, newEmail.trim(), isDirty = false)
+        preferences.setPreference(KEY_LAST_EMAIL, newEmail.trim(), isDirty = false)
         startBackgroundWork()
     }
 
@@ -55,6 +62,7 @@ class AccountSwitchGuard(
         val owner = preferences.getPreference(KEY_LEDGER_OWNER)
         if (owner.isNullOrBlank() || owner.equals(email.trim(), ignoreCase = true)) {
             preferences.setPreference(KEY_LEDGER_OWNER, email.trim(), isDirty = false)
+            preferences.setPreference(KEY_LAST_EMAIL, email.trim(), isDirty = false)
         }
     }
 
@@ -67,6 +75,9 @@ class AccountSwitchGuard(
 
     companion object {
         const val KEY_LEDGER_OWNER: String = "ledger_owner_email"
+
+        /** The account that was signed in before the last sign out; kept through sign out, forgotten by a wipe. */
+        const val KEY_LAST_EMAIL: String = "last_signed_in_email"
 
         /** Pure rule: no owner and no data is a first sign in; the same email is fine; anything else asks first. */
         suspend fun decide(owner: String?, newEmail: String, hasData: suspend () -> Boolean): SwitchDecision = when {
