@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,15 +71,15 @@ fun AddSubscriptionSheet(
     prefill: com.financeautomation.domain.usecase.RecurringSuggestion? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var name by remember { mutableStateOf(prefill?.name.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(prefill?.name.orEmpty()) }
     var amountText by remember {
         mutableStateOf(prefill?.let { com.financeautomation.core.utils.formatAmountInput(it.amount) } ?: "649.00")
     }
-    var isFixedAmount by remember { mutableStateOf(true) }
-    var selectedFrequency by remember { mutableStateOf(prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
+    var isFixedAmount by rememberSaveable { mutableStateOf(true) }
+    var selectedFrequency by rememberSaveable { mutableStateOf(prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
     val defaultAccount = prefill?.account?.takeIf { it in accounts } ?: accounts.firstOrNull() ?: "Primary"
-    var selectedAccount by remember { mutableStateOf(defaultAccount) }
-    var remindMe by remember { mutableStateOf(true) }
+    var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
+    var remindMe by rememberSaveable { mutableStateOf(true) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

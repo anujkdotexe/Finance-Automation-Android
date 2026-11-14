@@ -197,6 +197,13 @@ class QuickLogViewModel(
      * Initializes manual entry mode without a pending capture.
      */
     fun setManualMode() {
+        // The sheet is recreated on rotation, dark mode or font scale changes and asks for manual mode again:
+        // unfinished manual input must survive that. A saved or dismissed entry starts clean.
+        val current = _uiState.value
+        val unfinished = current.captureId == null && current.sourcePackage == "manual" &&
+            !current.isSaved && !current.isDismissed &&
+            (current.amountText.isNotEmpty() || current.payee.isNotEmpty())
+        if (unfinished) return
         _uiState.update {
             it.copy(
                 captureId = null,

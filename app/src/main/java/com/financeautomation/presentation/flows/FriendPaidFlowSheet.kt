@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,17 +91,17 @@ fun FriendPaidFlowSheet(
     onKeyboardFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var amountText by remember { mutableStateOf("") }
-    var creditorName by remember { mutableStateOf("") }
-    var whatForText by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(CategoryConstants.CATEGORY_FOOD_AND_DRINK) }
+    var amountText by rememberSaveable { mutableStateOf("") }
+    var creditorName by rememberSaveable { mutableStateOf("") }
+    var whatForText by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf(CategoryConstants.CATEGORY_FOOD_AND_DRINK) }
 
     val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DISPLAY_DATE_FORMATTER) }
-    var dateText by remember { mutableStateOf(todayFormatted) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var dateText by rememberSaveable { mutableStateOf(todayFormatted) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
-    var showAddFriendInput by remember { mutableStateOf(false) }
-    var newFriendName by remember { mutableStateOf("") }
+    var showAddFriendInput by rememberSaveable { mutableStateOf(false) }
+    var newFriendName by rememberSaveable { mutableStateOf("") }
 
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current

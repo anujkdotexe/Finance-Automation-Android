@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,7 +66,7 @@ fun MonthSwitcher(
     onSelectMonthOffset: ((Int) -> Unit)? = null
 ) {
     var accumulatedDrag by remember { mutableStateOf(0f) }
-    var showMonthPicker by remember { mutableStateOf(false) }
+    var showMonthPicker by rememberSaveable { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -177,7 +178,7 @@ fun MonthPickerDialog(
     val displayedYear = remember(monthLabel) {
         monthLabel.split(" ").lastOrNull()?.toIntOrNull() ?: currentYear
     }
-    var selectedYear by remember { mutableStateOf(displayedYear) }
+    var selectedYear by rememberSaveable { mutableStateOf(displayedYear) }
 
     val monthNames = remember {
         listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")

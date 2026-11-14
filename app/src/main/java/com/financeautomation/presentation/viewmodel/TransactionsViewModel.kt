@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.constants.CategoryConstants
@@ -250,6 +251,16 @@ class TransactionsViewModel(
 
     fun currentMonth() {
         monthOffsetFlow.value = 0
+    }
+
+    /** Keeps the month, the search text and its scope across process death. */
+    fun bindSavedState(handle: androidx.lifecycle.SavedStateHandle) {
+        handle.get<Int>(KEY_MONTH_OFFSET)?.let { monthOffsetFlow.value = it }
+        handle.get<String>(KEY_SEARCH_QUERY)?.let { searchQueryFlow.value = it }
+        handle.get<String>(KEY_SEARCH_SCOPE)?.let { raw -> SearchScope.values().firstOrNull { it.name == raw }?.let { searchScopeFlow.value = it } }
+        viewModelScope.launch(ioDispatcher) { monthOffsetFlow.collect { handle[KEY_MONTH_OFFSET] = it } }
+        viewModelScope.launch(ioDispatcher) { searchQueryFlow.collect { handle[KEY_SEARCH_QUERY] = it } }
+        viewModelScope.launch(ioDispatcher) { searchScopeFlow.collect { handle[KEY_SEARCH_SCOPE] = it.name } }
     }
 
     fun setSearchQuery(query: String) {
@@ -657,6 +668,9 @@ class TransactionsViewModel(
     }
 
     companion object {
+        const val KEY_MONTH_OFFSET = "month_offset"
+        const val KEY_SEARCH_QUERY = "search_query"
+        const val KEY_SEARCH_SCOPE = "search_scope"
         /**
          * Single source of truth for a row's sync/review status.
          * Priority: Failed, Needs review, Waiting to sync, Synced.
@@ -676,6 +690,12 @@ class TransactionsViewModel(
             budgetRepository: com.financeautomation.domain.repository.BudgetRepository? = null,
             categoryRepository: com.financeautomation.domain.repository.CategoryRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: androidx.lifecycle.viewmodel.CreationExtras): T {
+                val created = create(modelClass)
+                (created as TransactionsViewModel).bindSavedState(extras.createSavedStateHandle())
+                return created
+            }
+
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return TransactionsViewModel(

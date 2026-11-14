@@ -53,6 +53,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -279,8 +280,8 @@ fun TransactionsContent(
                 )
             }
 
-            var showMenu by remember { mutableStateOf(false) }
-            var showClearVoided by remember { mutableStateOf(false) }
+            var showMenu by rememberSaveable { mutableStateOf(false) }
+            var showClearVoided by rememberSaveable { mutableStateOf(false) }
             com.financeautomation.presentation.components.ClearVoidedHistoryHost(
                 show = showClearVoided,
                 onDismiss = { showClearVoided = false }
@@ -799,7 +800,7 @@ fun TransactionDetailSheet(
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showDetails by remember { mutableStateOf(false) }
+    var showDetails by rememberSaveable { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -924,7 +925,7 @@ fun IncomeDetailSheet(
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showConfirmVoid by remember { mutableStateOf(false) }
+    var showConfirmVoid by rememberSaveable { mutableStateOf(false) }
 
     val displayTitle = inflow.source.ifBlank {
         when (inflow.inflowType.uppercase()) {

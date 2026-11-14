@@ -864,6 +864,26 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun testMonthSelectionSurvivesProcessDeathThroughTheSavedStateHandle() = runTest {
+        val handle = androidx.lifecycle.SavedStateHandle(mapOf("month_offset" to -3))
+        val vm = DashboardViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        vm.bindSavedState(handle)
+        advanceUntilIdle()
+        assertEquals(-3, vm.uiState.value.monthOffset)
+
+        vm.setMonthOffset(-1)
+        advanceUntilIdle()
+        assertEquals(-1, handle.get<Int>("month_offset"))
+    }
+
+    @Test
     fun testSetMonthOffset_updatesMonthOffsetAndState() = runTest {
         val tRepo = FakeTransactionRepo()
         val vm = DashboardViewModel(

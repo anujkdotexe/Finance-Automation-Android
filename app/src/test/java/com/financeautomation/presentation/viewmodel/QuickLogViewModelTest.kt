@@ -305,6 +305,58 @@ class QuickLogViewModelTest {
     }
 
     @Test
+    fun testSetManualMode_keepsWhatWasTypedWhenTheScreenIsRecreated() = runTest {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        vm.setManualMode()
+        advanceUntilIdle()
+        vm.onAmountChanged("250")
+        vm.onPayeeChanged("Chai Point")
+        advanceUntilIdle()
+
+        // rotation, dark mode or font scale: the activity is recreated and asks for manual mode again
+        vm.setManualMode()
+        advanceUntilIdle()
+
+        assertEquals("250", vm.uiState.value.amountText)
+        assertEquals(250.0, vm.uiState.value.amount, 0.0)
+        assertEquals("Chai Point", vm.uiState.value.payee)
+    }
+
+    @Test
+    fun testSetManualMode_startsEmptyAfterTheLastEntryWasSaved() = runTest {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        vm.setManualMode()
+        vm.onAmountChanged("99")
+        vm.onPayeeChanged("Old")
+        vm.onDismiss()
+        advanceUntilIdle()
+        vm.setManualMode()
+        advanceUntilIdle()
+        assertEquals("", vm.uiState.value.amountText)
+        assertEquals("", vm.uiState.value.payee)
+    }
+
+    @Test
     fun testEditExpense_restoresAllFields_preselectsCategoryAndAccount() = runTest {
         val tRepo = FakeTransactionRepo()
         val peopleRepo = FakePeopleRepo()

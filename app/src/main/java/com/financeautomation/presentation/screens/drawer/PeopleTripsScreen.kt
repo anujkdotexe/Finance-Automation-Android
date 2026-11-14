@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,14 +77,14 @@ fun PeopleTripsScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    var showAddFriendSheet by remember { mutableStateOf(false) }
-    var openTripName by remember { mutableStateOf<String?>(null) }
+    var showAddFriendSheet by rememberSaveable { mutableStateOf(false) }
+    var openTripName by rememberSaveable { mutableStateOf<String?>(null) }
     val tripUseCase = remember { com.financeautomation.domain.usecase.TripSummaryUseCase() }
     fun summaryFor(name: String) =
         state.tripSummaries[name.trim().lowercase()] ?: tripUseCase.forTrip(name, emptyList())
     var selectedCompanionForEdit by remember { mutableStateOf<FriendCompanion?>(null) }
     var personToRemove by remember { mutableStateOf<FriendCompanion?>(null) }
-    var tripToRemove by remember { mutableStateOf<String?>(null) }
+    var tripToRemove by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -378,7 +379,7 @@ private fun FriendItemRow(
     onRemove: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
+    var menuOpen by rememberSaveable { mutableStateOf(false) }
     val initial = companion.name.firstOrNull()?.uppercase() ?: "F"
 
     val balance = companion.balance
@@ -652,8 +653,8 @@ private fun FriendDetailSheet(
     onRemove: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var renameInput by remember { mutableStateOf(companion.name) }
-    var showRemoveConfirm by remember { mutableStateOf(false) }
+    var renameInput by rememberSaveable { mutableStateOf(companion.name) }
+    var showRemoveConfirm by rememberSaveable { mutableStateOf(false) }
 
     val hasOpenBalance = kotlin.math.abs(companion.balance) > 0.001 || openItemCount > 0
 

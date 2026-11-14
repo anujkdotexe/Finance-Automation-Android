@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,14 +108,14 @@ fun RepaidFriendFlowSheet(
     val selectedCompanion = companions.firstOrNull { it.name.equals(personName, ignoreCase = true) }
 
     val defaultAccount = accounts.firstOrNull { it.isDefault }?.name ?: accounts.firstOrNull()?.name ?: "Cash"
-    var selectedAccount by remember { mutableStateOf(defaultAccount) }
+    var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
 
-    var amountText by remember { mutableStateOf("") }
-    var noteText by remember { mutableStateOf("") }
+    var amountText by rememberSaveable { mutableStateOf("") }
+    var noteText by rememberSaveable { mutableStateOf("") }
 
     val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DISPLAY_DATE_FORMATTER) }
-    var dateText by remember { mutableStateOf(todayFormatted) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var dateText by rememberSaveable { mutableStateOf(todayFormatted) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current

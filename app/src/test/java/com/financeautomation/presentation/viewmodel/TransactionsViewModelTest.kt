@@ -1157,6 +1157,24 @@ class TransactionsViewModelTest {
     }
 
     @Test
+    fun monthSearchAndScopeSurviveProcessDeathThroughTheSavedStateHandle() = runTest {
+        val handle = androidx.lifecycle.SavedStateHandle(
+            mapOf("month_offset" to -2, "search_query" to "cafe", "search_scope" to "ALL_MONTHS")
+        )
+        val vm = TransactionsViewModel(FakeTransactionRepo(), ioDispatcher = testDispatcher)
+        vm.bindSavedState(handle)
+        advanceUntilIdle()
+        assertEquals(-2, vm.uiState.value.monthOffset)
+        assertEquals("cafe", vm.uiState.value.searchQuery)
+
+        vm.setSearchQuery("tea")
+        vm.setMonthOffset(-1)
+        advanceUntilIdle()
+        assertEquals("tea", handle.get<String>("search_query"))
+        assertEquals(-1, handle.get<Int>("month_offset"))
+    }
+
+    @Test
     fun categoryBudgetAppearsOnlyWhenTheFilteredCategoryHasABudget() = runTest {
         val tRepo = FakeTransactionRepo()
         tRepo.insertTransaction(shoppingTxn("c1", 600.0))
