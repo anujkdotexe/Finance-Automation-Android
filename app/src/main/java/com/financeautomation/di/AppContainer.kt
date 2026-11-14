@@ -576,6 +576,9 @@ class DefaultAppContainer(
             startBackgroundWork = {
                 com.financeautomation.service.worker.SyncTransactionsWorker.enqueuePeriodic(applicationContext)
                 com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
+                com.financeautomation.service.worker.SubscriptionReminderWorker.schedule(
+                    applicationContext, preferencesRepository.getSubscriptionReminderTimeSync()
+                )
             }
         )
     }

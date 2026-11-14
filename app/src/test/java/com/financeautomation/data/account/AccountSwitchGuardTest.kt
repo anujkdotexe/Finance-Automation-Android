@@ -145,6 +145,50 @@ class AccountSwitchGuardTest {
         assertEquals("old@example.com", owner())
     }
 
+    @Test
+    fun aFailingWipeStillRestartsTheWorkAndDoesNotRecordTheNewOwner() = runBlocking {
+        accountAHasData()
+        val failing = object : AccountDataStore {
+            override suspend fun pendingCount() = 2
+            override suspend fun hasLocalData() = true
+            override suspend fun wipe() { events += "wipe"; throw IllegalStateException("disk full") }
+        }
+        val g = AccountSwitchGuard(h.prefs, failing, { events += "stop" }, { events += "start" })
+        val failure = runCatching { g.switchTo("b@example.com") }.exceptionOrNull()
+        assertTrue(failure is IllegalStateException)
+        assertEquals(listOf("stop", "wipe", "start"), events)
+        assertEquals("the owner is recorded only after a successful wipe", "a@example.com", owner())
+    }
+
+    @Test
+    fun theWipeSeedsDefaultsInsideItsTransactionAndStartupChecksThemAgain() {
+        val store = File("src/main/java/com/financeautomation/data/account/RoomAccountDataStore.kt").readText()
+        val wipe = store.substringAfter("override suspend fun wipe()").substringBefore("companion object")
+        val inside = wipe.substringAfter("db.withTransaction {").substringBefore("companion object")
+        assertTrue("seeding must be part of the same transaction", inside.contains("prepopulateDefaults(db)"))
+        assertTrue("nothing runs after the transaction closes", wipe.substringAfter("prepopulateDefaults(db)").trimStart().startsWith("}"))
+        val app = File("src/main/java/com/financeautomation/FinanceApplication.kt").readText()
+        assertTrue(app.contains("FinanceDatabase.prepopulateDefaults(db)"))
+    }
+
+    @Test
+    fun startAndStopCoverTheSameWorkers() {
+        val container = File("src/main/java/com/financeautomation/di/AppContainer.kt").readText()
+        val body = container.substringAfter("val accountSwitchGuard").substringBefore("override val peopleListRebuilder")
+        val stop = body.substringAfter("stopBackgroundWork = {").substringBefore("startBackgroundWork = {")
+        val start = body.substringAfter("startBackgroundWork = {")
+        assertTrue(stop.contains("SyncTransactionsWorker.WORK_NAME_PERIODIC") && start.contains("SyncTransactionsWorker.enqueuePeriodic"))
+        assertTrue(stop.contains("MonthlyRolloverWorker.WORK_NAME") && start.contains("MonthlyRolloverWorker.schedule"))
+        assertTrue(stop.contains("SubscriptionReminderWorker.WORK_NAME") && start.contains("SubscriptionReminderWorker.schedule"))
+    }
+
+    @Test
+    fun aFailedSwitchIsReportedNotContinuedAsASignIn() {
+        val coordinator = File("src/main/java/com/financeautomation/presentation/viewmodel/SettingsSyncCoordinator.kt").readText()
+        val confirm = coordinator.substringAfter("fun confirmAccountSwitch").substringBefore("fun cancelAccountSwitch")
+        assertTrue(confirm.contains("catch"))
+    }
+
     // what the real wipe covers
 
     @Test

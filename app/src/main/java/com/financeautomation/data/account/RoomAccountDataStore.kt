@@ -28,9 +28,9 @@ class RoomAccountDataStore(private val databaseProvider: suspend () -> FinanceDa
             // account, the Google profile) goes.
             val keep = KEPT_PREFERENCE_KEYS.joinToString(",") { "'$it'" }
             sql.execSQL("DELETE FROM preferences_table WHERE `key` NOT IN ($keep)")
+            // Defaults are seeded in the same transaction, so a kill can never leave no categories or accounts
+            FinanceDatabase.prepopulateDefaults(db)
         }
-        // Defaults are seeded again so the new account starts like a fresh install
-        FinanceDatabase.prepopulateDefaults(db)
     }
 
     companion object {
