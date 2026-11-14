@@ -573,6 +573,30 @@ class TransactionRepositoryImpl(
         }
     }
 
+    override suspend fun discardQueueItem(queueItemId: Long): Result<Unit> = withContext(ioDispatcher) {
+        syncMutex.withLock {
+            try {
+                val qDao = resolveSyncQueueDao()
+                val item = qDao.getById(queueItemId) ?: return@withLock Result.Success(Unit)
+                val copies = qDao.getAllQueueFlow().first()
+                    .filter { it.transactionId == item.transactionId && it.operationType == item.operationType }
+                runInDbTransaction {
+                    copies.forEach { qDao.deleteById(it.id) }
+                    qDao.deleteById(queueItemId)
+                }
+                // Requests such as a credit have no local transaction row; only rows that exist need their state set
+                if (resolveTransactionDao().getById(item.transactionId) != null || resolveInflowDao()?.getById(item.transactionId) != null) {
+                    discardLocalOnly(item.transactionId, voidIt = item.operationType == SyncQueueEntity.OP_INSERT)
+                }
+                Result.Success(Unit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.Error(e)
+            }
+        }
+    }
+
     override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = withContext(ioDispatcher) {
         try {
             val tDao = resolveTransactionDao()
@@ -607,7 +631,7 @@ class TransactionRepositoryImpl(
             } else {
                 existing.copy(
                     reviewState = ReviewState.CONFIRMED.name,
-                    syncState = SyncState.SYNCED.name
+                    syncState = if (existing.status.equals(TransactionStatus.VOID.value, ignoreCase = true)) SyncState.VOID.name else SyncState.SYNCED.name
                 )
             }
             tDao.update(updated)
@@ -1100,16 +1124,16 @@ class TransactionRepositoryImpl(
 
                             if (targetRow == null) {
                                 val scanRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AC", txn.id)
-                                if (scanRes is Result.Success && scanRes.data != null) {
-                                    targetRow = scanRes.data
+                                if (scanRes is Result.Error) {
+                                    if (failItem(item, txn, scanRes.exception, st)) break else continue
                                 }
+                                targetRow = (scanRes as Result.Success).data
                             }
 
                             if (targetRow == null) {
-                                markPermanentFailure(
-                                    item, com.financeautomation.data.remote.SheetNotFoundException("", "Sheet changed: the row was not found"),
-                                    "Sheet changed: the row was not found"
-                                )
+                                // The row is not on the sheet (for example a new workbook): there is nothing to void
+                                transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
+                                syncQueueDao.delete(item)
                                 continue
                             }
 

@@ -88,6 +88,16 @@ class ReviewInboxViewModelTest {
             }
             return Result.Success(Unit)
         }
+        var queueDao: SyncQueueDao? = null
+        override suspend fun discardQueueItem(queueItemId: Long): Result<Unit> {
+            val q = queueDao ?: return Result.Error(UnsupportedOperationException())
+            val item = q.getById(queueItemId) ?: return Result.Success(Unit)
+            q.deleteById(queueItemId)
+            if (getTransactionById(item.transactionId) != null) {
+                discardLocalOnly(item.transactionId, voidIt = item.operationType == SyncQueueEntity.OP_INSERT)
+            }
+            return Result.Success(Unit)
+        }
         override suspend fun undoRecentSave(id: String): Result<Unit> = voidTransaction(id)
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
@@ -612,6 +622,7 @@ class ReviewInboxViewModelTest {
     fun testDiscardQueueItem_insertVoidsLocally() = runTest {
         val tRepo = FakeTransactionRepo()
         val qDao = FakeSyncQueueDao()
+        tRepo.queueDao = qDao
         val cDao = FakePendingCaptureDao()
         val aRepo = FakeAccountRepo()
 
@@ -676,6 +687,7 @@ class ReviewInboxViewModelTest {
     fun testDiscardQueueItem_updateMarksSyncedWithoutNewQueueRow() = runTest {
         val tRepo = FakeTransactionRepo()
         val qDao = FakeSyncQueueDao()
+        tRepo.queueDao = qDao
         val cDao = FakePendingCaptureDao()
         val aRepo = FakeAccountRepo()
 

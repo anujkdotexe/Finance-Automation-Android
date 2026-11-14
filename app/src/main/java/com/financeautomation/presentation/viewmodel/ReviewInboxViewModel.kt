@@ -402,18 +402,10 @@ class ReviewInboxViewModel(
 
     fun discardQueueItem(id: Long) {
         viewModelScope.launch(ioDispatcher) {
-            val qDao = resolveSyncQueueDao() ?: return@launch
-            val queueItem = qDao.getById(id)
-            if (queueItem != null) {
-                if (transactionRepository.getTransactionById(queueItem.transactionId) != null) {
-                    transactionRepository.discardLocalOnly(
-                        queueItem.transactionId,
-                        voidIt = queueItem.operationType == SyncQueueEntity.OP_INSERT
-                    )
-                }
+            when (transactionRepository.discardQueueItem(id)) {
+                is Result.Error -> _uiState.update { it.copy(errorMessage = UiText.res(R.string.review_err_discard_failed)) }
+                else -> _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_operation_discarded)) }
             }
-            qDao.deleteById(id)
-            _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_operation_discarded)) }
         }
     }
 
