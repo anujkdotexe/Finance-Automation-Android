@@ -1,5 +1,6 @@
 package com.financeautomation.data.remote
 
+import android.accounts.Account
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -37,8 +38,16 @@ sealed class AuthResult {
  */
 class GoogleAuthTokenProvider(
     private val context: Context,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** The stored Google account email. Without one nothing is authorized. */
+    private val emailProvider: suspend () -> String? = { null }
 ) : TokenProvider {
+
+    private val accountPolicy = AuthAccountPolicy(emailProvider)
+
+    /** The account the cached token was issued to. */
+    @Volatile
+    private var cachedFor: String? = null
 
     @Volatile
     private var cachedToken: String? = null
@@ -67,14 +76,21 @@ class GoogleAuthTokenProvider(
      * returning [AuthResult.Failed].
      */
     suspend fun requestAuthorization(isForeground: Boolean = true): AuthResult = withContext(ioDispatcher) {
+        val email = when (val decision = accountPolicy.decide()) {
+            // Signed out: no prompt, no notification and no silent authorization with another account
+            AuthAccountPolicy.Decision.NoAccount ->
+                return@withContext AuthResult.Failed(AuthExpiredException("No Google account is signed in"))
+            is AuthAccountPolicy.Decision.Use -> decision.email
+        }
         val now = System.currentTimeMillis()
         val existing = cachedToken
-        if (!existing.isNullOrBlank() && now < tokenExpiresAt) {
+        if (!existing.isNullOrBlank() && now < tokenExpiresAt && AuthAccountPolicy.cacheMatches(cachedFor, email)) {
             return@withContext AuthResult.Token(existing)
         }
 
         val request = AuthorizationRequest.builder()
             .setRequestedScopes(listOf(Scope(SCOPE_DRIVE_FILE)))
+            .setAccount(Account(email, "com.google"))
             .build()
 
         try {
@@ -105,6 +121,7 @@ class GoogleAuthTokenProvider(
                 if (!freshToken.isNullOrBlank()) {
                     cachedToken = freshToken
                     tokenExpiresAt = System.currentTimeMillis() + TOKEN_TTL_MILLIS
+                    cachedFor = email
                     AuthResult.Token(freshToken)
                 } else {
                     val pendingIntent = result.pendingIntent
@@ -180,7 +197,35 @@ class GoogleAuthTokenProvider(
 
     fun clearCache() {
         cachedToken = null
+        cachedFor = null
         tokenExpiresAt = 0L
+    }
+
+    /**
+     * Really signs out: forgets the token, clears it in Play Services and signs the Google sign in client out, so the
+     * next request cannot pick up the previous account again. Access is not revoked, so signing back in is one tap.
+     */
+    suspend fun signOutGoogle() = withContext(ioDispatcher) {
+        val stale = cachedToken
+        clearCache()
+        if (!stale.isNullOrBlank()) {
+            try {
+                GoogleAuthUtil.clearToken(context, stale)
+            } catch (e: Exception) {
+                Diagnostics.record("GoogleAuthTokenProvider", "${e.javaClass.simpleName}: clearToken on sign out")
+            }
+        }
+        try {
+            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+                com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+            ).requestEmail().build()
+            suspendCancellableCoroutine { continuation ->
+                com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso).signOut()
+                    .addOnCompleteListener { if (continuation.isActive) continuation.resume(Unit) }
+            }
+        } catch (e: Exception) {
+            Diagnostics.record("GoogleAuthTokenProvider", "${e.javaClass.simpleName}: signOut")
+        }
     }
 
     private fun postReconnectNotification() {

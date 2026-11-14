@@ -84,6 +84,8 @@ class SettingsSyncCoordinator(
     /** The user cancelled: nothing changes and the app stays signed out. */
     fun cancelAccountSwitch() {
         uiState.update { it.copy(pendingAccountSwitch = null) }
+        // The picker already made the other account Play Services' last account; sign it out so it is not shown or used
+        scope.launch(ioDispatcher) { googleAuthTokenProvider?.signOutGoogle() }
     }
 
     private suspend fun continueSignIn(email: String, displayName: String?, photoUrl: String?) {
@@ -114,7 +116,7 @@ class SettingsSyncCoordinator(
 
     fun onGoogleSignOut(context: android.content.Context? = null) {
         scope.launch(ioDispatcher) {
-            googleAuthTokenProvider?.clearCache()
+            googleAuthTokenProvider?.signOutGoogle()
             // Remember who was signed in, so signing back in with the same account is not questioned
             preferencesRepository.getGoogleAccountEmailSync()?.takeIf { it.isNotBlank() }?.let {
                 preferencesRepository.setPreference(com.financeautomation.data.account.AccountSwitchGuard.KEY_LAST_EMAIL, it, isDirty = false)
