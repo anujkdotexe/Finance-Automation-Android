@@ -53,6 +53,7 @@ fun PreferencesScreen(
     var lockUnavailable by remember { mutableStateOf(false) }
     val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.fragment.app.FragmentActivity
     val promptTitle = stringResource(R.string.app_lock_prompt_enable_title)
+    var showClearVoided by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -336,6 +337,29 @@ fun PreferencesScreen(
                     Text(stringResource(R.string.action_cancel))
                 }
             }
+        )
+
+        // Data
+        Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
+            Text(
+                text = stringResource(R.string.pref_data_title),
+                style = FinanceTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(R.string.pref_data_subtitle),
+                style = FinanceTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            com.financeautomation.presentation.components.OutlinedButton(
+                text = stringResource(R.string.clear_voided_menu),
+                onClick = { showClearVoided = true }
+            )
+        }
+        com.financeautomation.presentation.components.ClearVoidedHistoryHost(
+            show = showClearVoided,
+            onDismiss = { showClearVoided = false }
         )
     }
 }

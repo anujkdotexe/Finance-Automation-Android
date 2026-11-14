@@ -78,6 +78,17 @@ interface TransactionRepository {
      */
     suspend fun syncPendingTransactions(): Result<Int>
 
+    /** Counts the voided rows that "Clear voided history" would delete, and those it would skip. Deletes nothing. */
+    suspend fun previewVoidedHistory(): com.financeautomation.domain.model.VoidedHistory =
+        com.financeautomation.domain.model.VoidedHistory(0, 0, 0)
+
+    /**
+     * Permanently deletes voided transactions and voided income from this phone, with the failed queue items that only
+     * concern them. Voids still waiting to reach the sheet are skipped. Never changes the sheet or a row that is not void.
+     */
+    suspend fun clearVoidedHistory(): Result<com.financeautomation.domain.model.VoidedHistory> =
+        Result.Error(UnsupportedOperationException("clearVoidedHistory is not supported"))
+
     /**
      * Throws a queue item away for good: removes it (and any copy of the same operation on the same row) and puts the
      * local row in a state nothing re-queues. A discarded insert voids the row here; a discarded void stays voided.

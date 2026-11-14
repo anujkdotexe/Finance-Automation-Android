@@ -872,4 +872,17 @@
 
     <string name="dashboard_refunds_line">Refunds %1$s taken off the total</string>
     <string name="review_err_discard_failed">Could not discard this item</string>
+
+    <!-- Clear voided history -->
+    <string name="clear_voided_menu">Clear voided history</string>
+    <string name="clear_voided_title">Clear voided history</string>
+    <string name="clear_voided_counts">%1$d voided transactions and %2$d voided income entries will be deleted.</string>
+    <string name="clear_voided_warning">This permanently deletes voided transactions and voided income from this phone. The Google Sheet is not changed. This cannot be undone.</string>
+    <string name="clear_voided_nothing">There is no voided history to clear.</string>
+    <string name="clear_voided_skipped">%1$d voided entries were kept because their void has not reached the Google Sheet yet. Clear again after the next sync.</string>
+    <string name="clear_voided_action">Delete</string>
+    <string name="clear_voided_done">Deleted %1$d voided transactions and %2$d voided income entries from this phone.</string>
+    <string name="clear_voided_failed">Could not clear the history. Nothing was changed.</string>
+    <string name="pref_data_title">Data</string>
+    <string name="pref_data_subtitle">Voided entries stay on this phone so the Google Sheet can be corrected. You can remove them here.</string>
 </resources>

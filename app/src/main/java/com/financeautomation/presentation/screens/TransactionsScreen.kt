@@ -280,6 +280,11 @@ fun TransactionsContent(
             }
 
             var showMenu by remember { mutableStateOf(false) }
+            var showClearVoided by remember { mutableStateOf(false) }
+            com.financeautomation.presentation.components.ClearVoidedHistoryHost(
+                show = showClearVoided,
+                onDismiss = { showClearVoided = false }
+            )
             Box {
                 IconButton(
                     onClick = { showMenu = true },
@@ -307,6 +312,13 @@ fun TransactionsContent(
                         onClick = {
                             showMenu = false
                             onExportThisMonth()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.clear_voided_menu)) },
+                        onClick = {
+                            showMenu = false
+                            showClearVoided = true
                         }
                     )
                 }
