@@ -74,7 +74,16 @@ class SettingsSyncCoordinator(
     fun confirmAccountSwitch() {
         val prompt = uiState.value.pendingAccountSwitch ?: return
         scope.launch(ioDispatcher) {
-            accountSwitchGuard?.switchTo(prompt.email)
+            try {
+                accountSwitchGuard?.switchTo(prompt.email)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                // Nothing was switched: stay with the previous account and say so
+                uiState.update {
+                    it.copy(pendingAccountSwitch = null, errorMessage = UiText.res(R.string.account_switch_failed))
+                }
+                return@launch
+            }
             profileAvatarManager?.deleteAvatar()
             uiState.update { it.copy(pendingAccountSwitch = null) }
             continueSignIn(prompt.email, prompt.displayName, prompt.photoUrl)

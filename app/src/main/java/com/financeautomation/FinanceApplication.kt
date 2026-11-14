@@ -55,6 +55,13 @@ class FinanceApplication : Application() {
                 PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
                 val db = appContainer.awaitDatabase()
                 try {
+                    // Idempotent: seeds categories and accounts only when none exist (for example after an interrupted wipe)
+                    com.financeautomation.data.local.FinanceDatabase.prepopulateDefaults(db)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: prepopulateDefaults")
+                }
+                try {
                     appContainer.accountSwitchGuard.adoptSignedInAccount()
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e

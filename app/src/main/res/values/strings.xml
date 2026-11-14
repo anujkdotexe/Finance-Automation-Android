@@ -891,4 +891,6 @@
     <string name="account_switch_message">Signing in with a different Google account removes the data kept on this phone for the previous account. It stays in that account\'s Google Sheet.</string>
     <string name="account_switch_pending">%1$d entries have not synced yet and would be lost.</string>
     <string name="account_switch_confirm">Switch account</string>
+
+    <string name="account_switch_failed">Could not switch accounts. Nothing was changed.</string>
 </resources>

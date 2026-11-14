@@ -32,7 +32,7 @@ class AccountSwitchGuard(
     private val preferences: PreferencesRepository,
     private val store: AccountDataStore,
     private val stopBackgroundWork: () -> Unit = {},
-    private val startBackgroundWork: () -> Unit = {}
+    private val startBackgroundWork: suspend () -> Unit = {}
 ) {
 
     suspend fun evaluate(newEmail: String): SwitchEvaluation {
@@ -51,10 +51,15 @@ class AccountSwitchGuard(
     /** Called after the user confirmed: nothing of the previous account may remain or be pushed with the new token. */
     suspend fun switchTo(newEmail: String) {
         stopBackgroundWork()
-        store.wipe()
-        preferences.setPreference(KEY_LEDGER_OWNER, newEmail.trim(), isDirty = false)
-        preferences.setPreference(KEY_LAST_EMAIL, newEmail.trim(), isDirty = false)
-        startBackgroundWork()
+        try {
+            store.wipe()
+            // Only after the wipe worked: a failed wipe leaves the previous owner in place
+            preferences.setPreference(KEY_LEDGER_OWNER, newEmail.trim(), isDirty = false)
+            preferences.setPreference(KEY_LAST_EMAIL, newEmail.trim(), isDirty = false)
+        } finally {
+            // The work stopped above always comes back, whether or not the wipe succeeded
+            startBackgroundWork()
+        }
     }
 
     /** Records the owner when sign in was allowed without a wipe (first account, or the same account again). */

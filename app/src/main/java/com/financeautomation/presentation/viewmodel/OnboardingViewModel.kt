@@ -217,7 +217,15 @@ class OnboardingViewModel(
     fun confirmAccountSwitch() {
         val prompt = _uiState.value.pendingAccountSwitch ?: return
         viewModelScope.launch(ioDispatcher) {
-            accountSwitchGuard?.switchTo(prompt.email)
+            try {
+                accountSwitchGuard?.switchTo(prompt.email)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.update {
+                    it.copy(pendingAccountSwitch = null, step1State = StepState.ERROR, step1Error = UiText.res(R.string.account_switch_failed))
+                }
+                return@launch
+            }
             profileAvatarManager?.deleteAvatar()
             _uiState.update { it.copy(pendingAccountSwitch = null) }
             saveAccountDetails(prompt.email, prompt.displayName, prompt.photoUrl)
