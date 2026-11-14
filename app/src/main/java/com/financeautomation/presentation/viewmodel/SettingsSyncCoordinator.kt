@@ -115,6 +115,10 @@ class SettingsSyncCoordinator(
     fun onGoogleSignOut(context: android.content.Context? = null) {
         scope.launch(ioDispatcher) {
             googleAuthTokenProvider?.clearCache()
+            // Remember who was signed in, so signing back in with the same account is not questioned
+            preferencesRepository.getGoogleAccountEmailSync()?.takeIf { it.isNotBlank() }?.let {
+                preferencesRepository.setPreference(com.financeautomation.data.account.AccountSwitchGuard.KEY_LAST_EMAIL, it, isDirty = false)
+            }
             preferencesRepository.setGoogleAccountEmail(null)
             preferencesRepository.setGoogleAccountDisplayName(null)
             preferencesRepository.setGoogleAccountPhotoUrl(null)
