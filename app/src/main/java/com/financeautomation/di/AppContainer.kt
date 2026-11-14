@@ -579,6 +579,11 @@ class DefaultAppContainer(
                 com.financeautomation.service.worker.SubscriptionReminderWorker.schedule(
                     applicationContext, preferencesRepository.getSubscriptionReminderTimeSync()
                 )
+            },
+            afterSwitch = {
+                // The widget and any posted notification still show the previous account's figures
+                com.financeautomation.service.MonthBurnWidgetProvider.requestUpdate(applicationContext)
+                androidx.core.app.NotificationManagerCompat.from(applicationContext).cancelAll()
             }
         )
     }

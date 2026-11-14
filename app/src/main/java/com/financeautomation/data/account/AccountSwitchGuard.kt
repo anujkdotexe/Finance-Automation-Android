@@ -32,7 +32,9 @@ class AccountSwitchGuard(
     private val preferences: PreferencesRepository,
     private val store: AccountDataStore,
     private val stopBackgroundWork: () -> Unit = {},
-    private val startBackgroundWork: suspend () -> Unit = {}
+    private val startBackgroundWork: suspend () -> Unit = {},
+    /** Runs after a successful switch: refresh widgets and clear notifications that show the old account's figures. */
+    private val afterSwitch: suspend () -> Unit = {}
 ) {
 
     suspend fun evaluate(newEmail: String): SwitchEvaluation {
@@ -60,6 +62,7 @@ class AccountSwitchGuard(
             // The work stopped above always comes back, whether or not the wipe succeeded
             startBackgroundWork()
         }
+        afterSwitch()
     }
 
     /** Records the owner when sign in was allowed without a wipe (first account, or the same account again). */

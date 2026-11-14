@@ -36,7 +36,7 @@ import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Standard AppChip: 32dp high, 8dp radius, same size for category, account, filter and friend chips.
+ * Standard AppChip: 32dp high to look at inside a 48dp touch target, 8dp radius, same size for category, account, filter and friend chips.
  * Selected = tonal primary fill (primaryContainer, onPrimaryContainer).
  * Unselected = outlined neutral (outlineVariant, transparent background, onSurface).
  */
@@ -69,14 +69,10 @@ fun AppChip(
 
     val view = LocalView.current
 
-    Surface(
-        shape = FinanceShapes.appChip,
-        border = border,
-        color = containerColor,
-        contentColor = contentColor,
+    // A 48dp touch target around the 32dp chip: the whole box is the button, the chip is only what is drawn
+    Box(
         modifier = modifier
-            .height(FinanceTheme.sizes.chipHeight)
-            .clip(FinanceShapes.appChip)
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
@@ -84,7 +80,17 @@ fun AppChip(
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onClick()
                 }
-            )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+    Surface(
+        shape = FinanceShapes.appChip,
+        border = border,
+        color = containerColor,
+        contentColor = contentColor,
+        modifier = Modifier
+            .height(FinanceTheme.sizes.chipHeight)
+            .clip(FinanceShapes.appChip)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m),
@@ -99,6 +105,7 @@ fun AppChip(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
     }
 }
 

@@ -40,7 +40,7 @@ import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 /**
- * Standard FilledButton: 48dp high, pill, primary background, onPrimary 14 Medium label, one line, max 20 chars.
+ * Standard FilledButton: at least 48dp high (grows with large fonts), pill, primary background, onPrimary 14 Medium label, up to two lines.
  * Used for primary actions: Confirm, Save, Save expense, Save income, Save subscription, Record debt,
  * Record inflow, Record repayment, Start new trip, Add expense, Sync now, Yes, Sign in with Google, etc.
  */
@@ -73,7 +73,6 @@ fun FilledButton(
         ),
         contentPadding = PaddingValues(horizontal = FinanceTheme.spacing.m),
         modifier = modifier
-            .height(FinanceTheme.sizes.buttonHeight)
             .defaultMinSize(minHeight = FinanceTheme.sizes.buttonHeight)
     ) {
         if (isLoading) {
@@ -86,9 +85,8 @@ fun FilledButton(
             Text(
                 text = text,
                 style = FinanceTheme.typography.titleSmall,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }
@@ -122,15 +120,13 @@ fun OutlinedButton(
         ),
         contentPadding = PaddingValues(horizontal = FinanceTheme.spacing.m),
         modifier = modifier
-            .height(FinanceTheme.sizes.buttonHeight)
             .defaultMinSize(minHeight = FinanceTheme.sizes.buttonHeight)
     ) {
         Text(
             text = text,
             style = FinanceTheme.typography.titleSmall,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis
+            maxLines = 2,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
