@@ -573,6 +573,57 @@ class TransactionRepositoryImpl(
         }
     }
 
+    private class VoidedScan(val transactionIds: List<String>, val inflowIds: List<String>, val skipped: Int)
+
+    /** Voided rows split into those safe to delete and those whose void is still queued for the sheet. */
+    private suspend fun scanVoided(): VoidedScan {
+        val queue = resolveSyncQueueDao().getAllQueueFlow().first()
+        val waiting = queue
+            .filter { it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS }
+            .map { it.transactionId }
+            .toSet()
+        val voidedTxns = resolveTransactionDao().getTransactionsFlow().first()
+            .filter { it.status.equals(TransactionStatus.VOID.value, ignoreCase = true) }
+        val voidedInflows = resolveInflowDao()?.getAllInflows()?.first().orEmpty()
+            .filter { it.status.equals("VOID", ignoreCase = true) }
+        return VoidedScan(
+            transactionIds = voidedTxns.map { it.id }.filter { it !in waiting },
+            inflowIds = voidedInflows.map { it.id }.filter { it !in waiting },
+            skipped = voidedTxns.count { it.id in waiting } + voidedInflows.count { it.id in waiting }
+        )
+    }
+
+    override suspend fun previewVoidedHistory(): com.financeautomation.domain.model.VoidedHistory = withContext(ioDispatcher) {
+        val scan = scanVoided()
+        com.financeautomation.domain.model.VoidedHistory(scan.transactionIds.size, scan.inflowIds.size, scan.skipped)
+    }
+
+    override suspend fun clearVoidedHistory(): Result<com.financeautomation.domain.model.VoidedHistory> = withContext(ioDispatcher) {
+        syncMutex.withLock {
+            try {
+                val scan = scanVoided()
+                val tDao = resolveTransactionDao()
+                val qDao = resolveSyncQueueDao()
+                val iDao = resolveInflowDao()
+                runInDbTransaction {
+                    scan.transactionIds.forEach { id ->
+                        qDao.deleteByTransactionId(id)
+                        tDao.deleteById(id)
+                    }
+                    scan.inflowIds.forEach { id ->
+                        qDao.deleteByTransactionId(id)
+                        iDao?.deleteById(id)
+                    }
+                }
+                Result.Success(com.financeautomation.domain.model.VoidedHistory(scan.transactionIds.size, scan.inflowIds.size, scan.skipped))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.Error(e)
+            }
+        }
+    }
+
     override suspend fun discardQueueItem(queueItemId: Long): Result<Unit> = withContext(ioDispatcher) {
         syncMutex.withLock {
             try {
@@ -1306,6 +1357,12 @@ class TransactionRepositoryImpl(
                                 reconciledCount++
                             }
                         } else {
+                            // A voided row on the sheet is history; never import it as a new local row
+                            if (sheetDebit.description.startsWith("[Void]", ignoreCase = true) ||
+                                sheetDebit.status.orEmpty().equals("Void", ignoreCase = true)
+                            ) {
+                                continue
+                            }
                             // 2.7: Sheet as source of truth: import debits by UUID into Room when local DB empty
                             val effectiveUuid = if (!uuid.isNullOrBlank()) uuid else "sheet_${month.tabName}_${sheetDebit.rowNumber}"
                             val existingByEffective = tDao.getById(effectiveUuid)
