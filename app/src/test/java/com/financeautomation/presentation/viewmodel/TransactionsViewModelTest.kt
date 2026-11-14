@@ -1203,6 +1203,73 @@ class TransactionsViewModelTest {
         assertEquals(s.myShare, s.groupedTransactions.sumOf { it.dayMyShare }, 0.001)
     }
 
+    private suspend fun kotlinx.coroutines.test.TestScope.handVm(): TransactionsViewModel {
+        val tRepo = FakeTransactionRepo()
+        com.financeautomation.testutil.HandFixture.transactions.forEach { tRepo.insertTransaction(it) }
+        val iRepo = FakeInflowRepo()
+        com.financeautomation.testutil.HandFixture.inflows.forEach { iRepo.insertInflow(it) }
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+        return vm
+    }
+
+    @Test
+    fun hand_unfilteredHeaderIsTheLivingBurnAndTheDayHeadersAddUpToItPlusTheRefund() = runTest {
+        val vm = handVm()
+        val s = vm.uiState.value
+        val f = com.financeautomation.testutil.HandFixture
+        assertEquals(f.LIVING_BURN, s.myShare, 0.001)
+        assertEquals(f.REFUNDS, s.refunds, 0.001)
+        assertEquals(f.DAY_SUM_GROSS, s.groupedTransactions.sumOf { it.dayMyShare }, 0.001)
+        assertEquals("the header and the day headers differ only by the refund", s.myShare + s.refunds, s.groupedTransactions.sumOf { it.dayMyShare }, 0.001)
+        assertEquals(null, s.headerLabel)
+    }
+
+    @Test
+    fun hand_theSavingsFilterShowsTheSavingsRowsAndTheirRealAmount() = runTest {
+        val vm = handVm()
+        vm.setFilter(TransactionFilter(category = "Savings"))
+        advanceUntilIdle()
+        val s = vm.uiState.value
+        val f = com.financeautomation.testutil.HandFixture
+        assertEquals(listOf("savings"), s.groupedTransactions.flatMap { it.transactions }.map { it.id })
+        assertEquals(f.SAVINGS, s.myShare, 0.001)
+        assertEquals(f.SAVINGS, s.groupedTransactions.sumOf { it.dayMyShare }, 0.001)
+        assertEquals("Savings", s.headerLabel)
+        assertEquals(0.0, s.refunds, 0.0)
+    }
+
+    @Test
+    fun hand_theReviewFilterShowsTheReviewRowsRealAmount() = runTest {
+        val vm = handVm()
+        vm.setFilter(status = "review")
+        advanceUntilIdle()
+        val s = vm.uiState.value
+        assertEquals(com.financeautomation.testutil.HandFixture.REVIEW, s.myShare, 0.001)
+        assertEquals(s.myShare, s.groupedTransactions.sumOf { it.dayMyShare }, 0.001)
+    }
+
+    @Test
+    fun hand_anAccountFilterUsesTheBurnRuleAndStaysEqualToItsDayHeaders() = runTest {
+        val vm = handVm()
+        vm.setFilter(TransactionFilter(account = "SBI"))
+        advanceUntilIdle()
+        val s = vm.uiState.value
+        assertEquals(com.financeautomation.testutil.HandFixture.DAY_SUM_GROSS, s.myShare, 0.001)
+        assertEquals(s.myShare, s.groupedTransactions.sumOf { it.dayMyShare }, 0.001)
+    }
+
+    @Test
+    fun hand_aStoredCategoryWithSpacesStillMatchesTheDrillDown() = runTest {
+        val tRepo = FakeTransactionRepo()
+        tRepo.insertTransaction(com.financeautomation.testutil.HandFixture.transactions.first().copy(id = "padded", category = " Food & Drink "))
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+        vm.setFilter(TransactionFilter(category = "food & drink"))
+        advanceUntilIdle()
+        assertEquals(listOf("padded"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
+    }
+
     @Test
     fun monthSearchAndScopeSurviveProcessDeathThroughTheSavedStateHandle() = runTest {
         val handle = androidx.lifecycle.SavedStateHandle(
