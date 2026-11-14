@@ -41,6 +41,8 @@ data class SettingsUiState(
     val activeTripTag: String = "",
     val settleDelaySeconds: Int = 120,
     val googleAccountEmail: String? = null,
+    /** Set while the user is asked to confirm switching to another Google account. */
+    val pendingAccountSwitch: com.financeautomation.data.account.AccountSwitchPrompt? = null,
     val googleAccountDisplayName: String? = null,
     val accounts: List<Account> = emptyList(),
     val accountTransactionCounts: Map<String, Int> = emptyMap(),
@@ -85,7 +87,8 @@ class SettingsViewModel(
     payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val appLockManager: com.financeautomation.domain.security.AppLockManager? = null,
-    private val privacySettings: com.financeautomation.domain.security.PrivacySettings? = null
+    private val privacySettings: com.financeautomation.domain.security.PrivacySettings? = null,
+    private val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -117,6 +120,7 @@ class SettingsViewModel(
         accountRepository = accountRepository,
         categoryRepository = categoryRepository,
         profileAvatarManager = profileAvatarManager,
+        accountSwitchGuard = accountSwitchGuard,
         scope = viewModelScope,
         uiState = _uiState,
         ioDispatcher = ioDispatcher
@@ -206,6 +210,8 @@ class SettingsViewModel(
         syncCoordinator.onGoogleSignInSuccess(email, displayName, photoUrl)
 
     fun onGoogleSignOut(context: android.content.Context? = null) = syncCoordinator.onGoogleSignOut(context)
+    fun confirmAccountSwitch() = syncCoordinator.confirmAccountSwitch()
+    fun cancelAccountSwitch() = syncCoordinator.cancelAccountSwitch()
 
     fun autoProvisionMasterSheet() = syncCoordinator.autoProvisionMasterSheet()
 
@@ -385,7 +391,8 @@ class SettingsViewModel(
             payableDaoProvider: (suspend () -> PayableDao)? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
             appLockManager: com.financeautomation.domain.security.AppLockManager? = null,
-            privacySettings: com.financeautomation.domain.security.PrivacySettings? = null
+            privacySettings: com.financeautomation.domain.security.PrivacySettings? = null,
+            accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -407,6 +414,7 @@ class SettingsViewModel(
                     payableDaoProvider = payableDaoProvider,
                     ioDispatcher = ioDispatcher,
                     appLockManager = appLockManager,
+                    accountSwitchGuard = accountSwitchGuard,
                     privacySettings = privacySettings
                 ) as T
             }

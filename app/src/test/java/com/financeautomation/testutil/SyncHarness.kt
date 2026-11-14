@@ -29,6 +29,7 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
     val sheets = server.client()
     var syncRequests = 0
     val preferences = mutableMapOf<String, String?>()
+    var googleEmail: String? = null
 
     @Suppress("UNCHECKED_CAST")
     val prefs: PreferencesRepository = Proxy.newProxyInstance(
@@ -36,6 +37,7 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
         arrayOf(PreferencesRepository::class.java)
     ) { _, method, args ->
         when {
+            method.name == "getGoogleAccountEmailSync" -> googleEmail
             method.name == "getPreference" -> preferences[args!![0] as String]
             method.name == "setPreference" -> { preferences[args!![0] as String] = args[1] as String?; null }
             method.name == "getSpreadsheetIdSync" || method.name == "getSpreadsheetIdForYearSync" -> "test_sheet_id"

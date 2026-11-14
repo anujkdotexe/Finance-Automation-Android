@@ -54,6 +54,12 @@ class FinanceApplication : Application() {
                 val (snapshotA, snapshotB) = DeviceSnapshot.capture(applicationContext)
                 PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
                 val db = appContainer.awaitDatabase()
+                try {
+                    appContainer.accountSwitchGuard.adoptSignedInAccount()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: adoptSignedInAccount")
+                }
                 db.openHelper.writableDatabase
                 DeviceSnapshot.updateCrashlyticsSummaries(applicationContext, snapshotA, db.pipelineEventDao())
                 // Reset incomplete SHOWN captures to WAITING

@@ -42,7 +42,9 @@ data class OnboardingUiState(
     val step4State: StepState = StepState.NOT_STARTED,
     val googleAccountEmail: String? = null,
     val workbookName: String = "",
-    val spreadsheetId: String = ""
+    val spreadsheetId: String = "",
+    /** Set while the user is asked to confirm switching to another Google account. */
+    val pendingAccountSwitch: com.financeautomation.data.account.AccountSwitchPrompt? = null
 ) {
     /** Signed in and the workbook exists: the Continue button is enabled. */
     val isReady: Boolean get() = step1State == StepState.COMPLETED && step2State == StepState.COMPLETED
@@ -81,8 +83,13 @@ class OnboardingViewModel(
     private val workbookResolver: WorkbookResolver,
     private val preferencesRepository: PreferencesRepository,
     private val profileAvatarManager: ProfileAvatarManager? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null
 ) : ViewModel() {
+
+    /** The account details chosen in the Google picker, kept until the guard has been asked. */
+    @Volatile
+    private var candidate: Triple<String?, String?, String?>? = null
 
     private val _uiState = MutableStateFlow(OnboardingUiState())
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
@@ -111,8 +118,22 @@ class OnboardingViewModel(
         }
     }
 
-    fun startSignIn() {
+    fun startSignIn(skipGuard: Boolean = false) {
         viewModelScope.launch(ioDispatcher) {
+            val guard = accountSwitchGuard
+            val picked = candidate?.first
+            if (guard != null && !skipGuard && !picked.isNullOrBlank()) {
+                val evaluation = guard.evaluate(picked)
+                if (evaluation.decision == com.financeautomation.data.account.SwitchDecision.CONFIRM_SWITCH) {
+                    val (email, name, photo) = candidate!!
+                    _uiState.update {
+                        it.copy(pendingAccountSwitch = com.financeautomation.data.account.AccountSwitchPrompt(email.orEmpty(), name, photo, evaluation.pendingCount))
+                    }
+                    return@launch
+                }
+                guard.recordOwner(picked)
+                saveAccountDetails(candidate!!.first, candidate!!.second, candidate!!.third)
+            }
             _uiState.update { it.copy(step1State = StepState.IN_PROGRESS, step1Error = null) }
             when (val res = googleAuthTokenProvider.requestAuthorization(isForeground = true)) {
                 is AuthResult.Token -> {
@@ -164,23 +185,50 @@ class OnboardingViewModel(
     }
 
     fun onGoogleAccountDetails(email: String?, displayName: String?, photoUrl: String?) {
-        viewModelScope.launch(ioDispatcher) {
-            if (!email.isNullOrBlank()) {
-                preferencesRepository.setGoogleAccountEmail(email)
-            }
-            if (!displayName.isNullOrBlank()) {
-                preferencesRepository.setGoogleAccountDisplayName(displayName)
-            }
-            if (!photoUrl.isNullOrBlank()) {
-                preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
-                profileAvatarManager?.downloadAndSaveAvatar(photoUrl)
-            }
-            _uiState.update {
-                it.copy(
-                    googleAccountEmail = email ?: it.googleAccountEmail
-                )
-            }
+        // Held, not saved: the email is only saved once the account switch guard has allowed this account
+        candidate = Triple(email, displayName, photoUrl)
+        if (accountSwitchGuard == null) saveCandidateNow()
+    }
+
+    private fun saveCandidateNow() {
+        val (email, displayName, photoUrl) = candidate ?: return
+        viewModelScope.launch(ioDispatcher) { saveAccountDetails(email, displayName, photoUrl) }
+    }
+
+    private suspend fun saveAccountDetails(email: String?, displayName: String?, photoUrl: String?) {
+        if (!email.isNullOrBlank()) {
+            preferencesRepository.setGoogleAccountEmail(email)
         }
+        if (!displayName.isNullOrBlank()) {
+            preferencesRepository.setGoogleAccountDisplayName(displayName)
+        }
+        if (!photoUrl.isNullOrBlank()) {
+            preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
+            profileAvatarManager?.downloadAndSaveAvatar(photoUrl)
+        }
+        _uiState.update {
+            it.copy(
+                googleAccountEmail = email ?: it.googleAccountEmail
+            )
+        }
+    }
+
+    /** The user confirmed the switch: wipe the previous account's data, then go on with the new one. */
+    fun confirmAccountSwitch() {
+        val prompt = _uiState.value.pendingAccountSwitch ?: return
+        viewModelScope.launch(ioDispatcher) {
+            accountSwitchGuard?.switchTo(prompt.email)
+            profileAvatarManager?.deleteAvatar()
+            _uiState.update { it.copy(pendingAccountSwitch = null) }
+            saveAccountDetails(prompt.email, prompt.displayName, prompt.photoUrl)
+            startSignIn(skipGuard = true)
+        }
+    }
+
+    /** The user cancelled: nothing is saved and the app stays signed out. */
+    fun cancelAccountSwitch() {
+        candidate = null
+        _uiState.update { it.copy(pendingAccountSwitch = null, step1State = StepState.NOT_STARTED, step1Error = null) }
     }
 
     private suspend fun onTokenAcquired() {
@@ -289,7 +337,8 @@ class OnboardingViewModel(
             workbookResolver: WorkbookResolver,
             preferencesRepository: PreferencesRepository,
             profileAvatarManager: ProfileAvatarManager? = null,
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -298,7 +347,8 @@ class OnboardingViewModel(
                     workbookResolver = workbookResolver,
                     preferencesRepository = preferencesRepository,
                     profileAvatarManager = profileAvatarManager,
-                    ioDispatcher = ioDispatcher
+                    ioDispatcher = ioDispatcher,
+                    accountSwitchGuard = accountSwitchGuard
                 ) as T
             }
         }

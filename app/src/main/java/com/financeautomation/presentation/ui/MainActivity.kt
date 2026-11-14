@@ -104,7 +104,8 @@ class MainActivity : FragmentActivity() {
             payableDaoProvider = { app.appContainer.awaitDatabase().payableDao() },
             ioDispatcher = app.appContainer.ioDispatcher,
             appLockManager = app.appContainer.appLockManager,
-            privacySettings = app.appContainer.privacySettings
+            privacySettings = app.appContainer.privacySettings,
+            accountSwitchGuard = app.appContainer.accountSwitchGuard
         )
     }
 
@@ -115,6 +116,7 @@ class MainActivity : FragmentActivity() {
             workbookResolver = app.appContainer.workbookResolver,
             preferencesRepository = app.appContainer.preferencesRepository,
             profileAvatarManager = app.appContainer.profileAvatarManager,
+            accountSwitchGuard = app.appContainer.accountSwitchGuard,
             ioDispatcher = app.appContainer.ioDispatcher
         )
     }
