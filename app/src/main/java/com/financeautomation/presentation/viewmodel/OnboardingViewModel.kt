@@ -79,7 +79,7 @@ fun OnboardingUiState.withPreferences(email: String?, sheetId: String?): Onboard
 }
 
 class OnboardingViewModel(
-    private val googleAuthTokenProvider: GoogleAuthTokenProvider,
+    private val googleAuthTokenProvider: com.financeautomation.data.remote.AuthorizationSource,
     private val workbookResolver: WorkbookResolver,
     private val preferencesRepository: PreferencesRepository,
     private val profileAvatarManager: ProfileAvatarManager? = null,
@@ -120,9 +120,13 @@ class OnboardingViewModel(
 
     fun startSignIn(skipGuard: Boolean = false) {
         viewModelScope.launch(ioDispatcher) {
+            val picked = candidate?.first?.takeIf { it.isNotBlank() }
+            val stored = preferencesRepository.getGoogleAccountEmailSync()?.takeIf { it.isNotBlank() }
+            // Nothing picked and nothing stored (for example the picker was cancelled): do nothing and stay on this step
+            if (picked == null && stored == null) return@launch
+
             val guard = accountSwitchGuard
-            val picked = candidate?.first
-            if (guard != null && !skipGuard && !picked.isNullOrBlank()) {
+            if (guard != null && !skipGuard && picked != null) {
                 val evaluation = guard.evaluate(picked)
                 if (evaluation.decision == com.financeautomation.data.account.SwitchDecision.CONFIRM_SWITCH) {
                     val (email, name, photo) = candidate!!
@@ -131,24 +135,27 @@ class OnboardingViewModel(
                     }
                     return@launch
                 }
-                guard.recordOwner(picked)
-                saveAccountDetails(candidate!!.first, candidate!!.second, candidate!!.third)
             }
-            _uiState.update { it.copy(step1State = StepState.IN_PROGRESS, step1Error = null) }
-            when (val res = googleAuthTokenProvider.requestAuthorization(isForeground = true)) {
-                is AuthResult.Token -> {
-                    onTokenAcquired()
-                }
-                is AuthResult.NeedsConsent -> {
-                    _consentRequests.emit(res.pendingIntent)
-                }
-                is AuthResult.Failed -> {
-                    _uiState.update {
-                        it.copy(
-                            step1State = StepState.ERROR,
-                            step1Error = res.exception.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.onboarding_err_auth_failed)
-                        )
-                    }
+            authorize(picked ?: stored)
+        }
+    }
+
+    /** Authorizes [email] explicitly. The account is stored only after this worked, never before. */
+    private suspend fun authorize(email: String?) {
+        _uiState.update { it.copy(step1State = StepState.IN_PROGRESS, step1Error = null) }
+        when (val res = googleAuthTokenProvider.requestAuthorization(isForeground = true, accountEmail = email)) {
+            is AuthResult.Token -> onTokenAcquired()
+            is AuthResult.NeedsConsent -> _consentRequests.emit(res.pendingIntent)
+            is AuthResult.Failed -> {
+                val signedOut = res.exception.message == GoogleAuthTokenProvider.NO_ACCOUNT_MESSAGE
+                _uiState.update {
+                    it.copy(
+                        step1State = if (signedOut) StepState.NOT_STARTED else StepState.ERROR,
+                        step1Error = when {
+                            signedOut -> null
+                            else -> res.exception.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.onboarding_err_auth_failed)
+                        }
+                    )
                 }
             }
         }
@@ -165,34 +172,13 @@ class OnboardingViewModel(
             return
         }
         viewModelScope.launch(ioDispatcher) {
-            when (val res = googleAuthTokenProvider.requestAuthorization(isForeground = true)) {
-                is AuthResult.Token -> {
-                    onTokenAcquired()
-                }
-                is AuthResult.NeedsConsent -> {
-                    _consentRequests.emit(res.pendingIntent)
-                }
-                is AuthResult.Failed -> {
-                    _uiState.update {
-                        it.copy(
-                            step1State = StepState.ERROR,
-                            step1Error = res.exception.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.onboarding_err_auth_failed)
-                        )
-                    }
-                }
-            }
+            authorize(candidate?.first?.takeIf { it.isNotBlank() } ?: preferencesRepository.getGoogleAccountEmailSync())
         }
     }
 
     fun onGoogleAccountDetails(email: String?, displayName: String?, photoUrl: String?) {
-        // Held, not saved: the email is only saved once the account switch guard has allowed this account
+        // Held, not saved: the account is stored only after the guard allowed it and Google authorized it
         candidate = Triple(email, displayName, photoUrl)
-        if (accountSwitchGuard == null) saveCandidateNow()
-    }
-
-    private fun saveCandidateNow() {
-        val (email, displayName, photoUrl) = candidate ?: return
-        viewModelScope.launch(ioDispatcher) { saveAccountDetails(email, displayName, photoUrl) }
     }
 
     private suspend fun saveAccountDetails(email: String?, displayName: String?, photoUrl: String?) {
@@ -228,8 +214,7 @@ class OnboardingViewModel(
             }
             profileAvatarManager?.deleteAvatar()
             _uiState.update { it.copy(pendingAccountSwitch = null) }
-            saveAccountDetails(prompt.email, prompt.displayName, prompt.photoUrl)
-            startSignIn(skipGuard = true)
+            authorize(prompt.email)
         }
     }
 
@@ -240,9 +225,12 @@ class OnboardingViewModel(
     }
 
     private suspend fun onTokenAcquired() {
-        val existingEmail = preferencesRepository.getGoogleAccountEmailSync()
-        val email = if (!existingEmail.isNullOrBlank()) existingEmail else "Authorized User"
-        preferencesRepository.setGoogleAccountEmail(email)
+        val picked = candidate
+        if (picked != null && !picked.first.isNullOrBlank()) {
+            accountSwitchGuard?.recordOwner(picked.first.orEmpty())
+            saveAccountDetails(picked.first, picked.second, picked.third)
+        }
+        val email = preferencesRepository.getGoogleAccountEmailSync()?.takeIf { it.isNotBlank() } ?: picked?.first.orEmpty()
         _uiState.update {
             it.copy(
                 step1State = StepState.COMPLETED,
@@ -341,7 +329,7 @@ class OnboardingViewModel(
         }
 
         fun provideFactory(
-            googleAuthTokenProvider: GoogleAuthTokenProvider,
+            googleAuthTokenProvider: com.financeautomation.data.remote.AuthorizationSource,
             workbookResolver: WorkbookResolver,
             preferencesRepository: PreferencesRepository,
             profileAvatarManager: ProfileAvatarManager? = null,

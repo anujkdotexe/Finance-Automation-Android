@@ -124,9 +124,11 @@ fun OnboardingScreen(
                     account.displayName,
                     account.photoUrl?.toString()
                 )
+                viewModel.startSignIn()
             }
-        } catch (_: Exception) {}
-        viewModel.startSignIn()
+        } catch (_: Exception) {
+            // The picker was cancelled or failed: stay on this step with the Sign in button and show nothing
+        }
     }
 
     LaunchedEffect(viewModel) {
@@ -300,6 +302,23 @@ fun OnboardingScreen(
                         content = attentionContent(AttentionIssue.WORKBOOK, attentionState(ok = isStep2Done, working = workbookWorking)),
                         detail = if (isStep2Done) state.workbookName.ifBlank { null } else state.step2Error?.asString(context),
                         onAction = { viewModel.startWorkspaceProvisioning(forceValidateTabs = state.step2State == StepState.ERROR) }
+                    )
+                }
+
+                // A revoked consent or an account removed from the phone: let the user pick another account
+                if (state.step1State == StepState.ERROR || state.step2State == StepState.ERROR) {
+                    com.financeautomation.presentation.components.OutlinedButton(
+                        text = stringResource(R.string.onboarding_use_other_account),
+                        onClick = {
+                            try {
+                                googleSignInClient.signOut().addOnCompleteListener {
+                                    googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                                }
+                            } catch (_: Exception) {
+                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 

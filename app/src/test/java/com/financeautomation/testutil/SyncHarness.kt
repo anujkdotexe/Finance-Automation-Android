@@ -38,6 +38,7 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
     ) { _, method, args ->
         when {
             method.name == "getGoogleAccountEmailSync" -> googleEmail
+            method.name == "setGoogleAccountEmail" -> { googleEmail = args!![0] as String?; null }
             method.name == "getPreference" -> preferences[args!![0] as String]
             method.name == "setPreference" -> { preferences[args!![0] as String] = args[1] as String?; null }
             method.name == "getSpreadsheetIdSync" || method.name == "getSpreadsheetIdForYearSync" -> "test_sheet_id"
