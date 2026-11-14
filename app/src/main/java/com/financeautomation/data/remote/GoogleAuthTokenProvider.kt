@@ -41,7 +41,7 @@ class GoogleAuthTokenProvider(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /** The stored Google account email. Without one nothing is authorized. */
     private val emailProvider: suspend () -> String? = { null }
-) : TokenProvider {
+) : TokenProvider, AuthorizationSource {
 
     private val accountPolicy = AuthAccountPolicy(emailProvider)
 
@@ -75,8 +75,9 @@ class GoogleAuthTokenProvider(
      * In background ([isForeground] = false), posts a single low-priority notification without launching UI,
      * returning [AuthResult.Failed].
      */
-    suspend fun requestAuthorization(isForeground: Boolean = true): AuthResult = withContext(ioDispatcher) {
-        val email = when (val decision = accountPolicy.decide()) {
+    override suspend fun requestAuthorization(isForeground: Boolean, accountEmail: String?): AuthResult = withContext(ioDispatcher) {
+        val explicit = accountEmail?.trim()?.takeIf { it.isNotEmpty() }
+        val email = when (val decision = if (explicit != null) AuthAccountPolicy.Decision.Use(explicit) else accountPolicy.decide()) {
             // Signed out: no prompt, no notification and no silent authorization with another account
             AuthAccountPolicy.Decision.NoAccount ->
                 return@withContext AuthResult.Failed(AuthExpiredException(NO_ACCOUNT_MESSAGE))

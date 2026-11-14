@@ -894,4 +894,5 @@
 
     <string name="account_switch_failed">Could not switch accounts. Nothing was changed.</string>
     <string name="review_msg_void_discarded_returns">Discarded. The sheet still has this entry, so it will come back after the next sync.</string>
+    <string name="onboarding_use_other_account">Use a different account</string>
 </resources>
