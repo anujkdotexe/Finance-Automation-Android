@@ -242,9 +242,7 @@ class MainActivity : FragmentActivity() {
 
                         LaunchedEffect(pendingRoute) {
                             pendingRoute?.let { route ->
-                                navController.navigate(route) {
-                                    launchSingleTop = true
-                                }
+                                navController.navigateToRoute(route)
                                 pendingRoute = null
                             }
                         }
