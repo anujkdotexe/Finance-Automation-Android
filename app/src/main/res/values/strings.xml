@@ -885,4 +885,10 @@
     <string name="clear_voided_failed">Could not clear the history. Nothing was changed.</string>
     <string name="pref_data_title">Data</string>
     <string name="pref_data_subtitle">Voided entries stay on this phone so the Google Sheet can be corrected. You can remove them here.</string>
+
+    <!-- Switching to another Google account -->
+    <string name="account_switch_title">Switch Google account?</string>
+    <string name="account_switch_message">Signing in with a different Google account removes the data kept on this phone for the previous account. It stays in that account\'s Google Sheet.</string>
+    <string name="account_switch_pending">%1$d entries have not synced yet and would be lost.</string>
+    <string name="account_switch_confirm">Switch account</string>
 </resources>

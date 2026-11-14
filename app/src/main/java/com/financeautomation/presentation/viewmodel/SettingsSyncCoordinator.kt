@@ -39,6 +39,7 @@ class SettingsSyncCoordinator(
     private val accountRepository: AccountRepository?,
     private val categoryRepository: CategoryRepository?,
     private val profileAvatarManager: ProfileAvatarManager? = null,
+    private val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null,
     private val scope: CoroutineScope,
     private val uiState: MutableStateFlow<SettingsUiState>,
     private val ioDispatcher: CoroutineDispatcher
@@ -49,29 +50,65 @@ class SettingsSyncCoordinator(
     fun onGoogleSignInSuccess(email: String, displayName: String? = null, photoUrl: String? = null) {
         if (email.isBlank()) return
         scope.launch(ioDispatcher) {
-            preferencesRepository.setGoogleAccountEmail(email)
-            if (!displayName.isNullOrBlank()) {
-                preferencesRepository.setGoogleAccountDisplayName(displayName)
+            // A different Google account must never inherit the previous account's ledger: ask before anything is synced
+            val guard = accountSwitchGuard
+            if (guard != null) {
+                val evaluation = guard.evaluate(email)
+                if (evaluation.decision == com.financeautomation.data.account.SwitchDecision.CONFIRM_SWITCH) {
+                    uiState.update {
+                        it.copy(
+                            pendingAccountSwitch = com.financeautomation.data.account.AccountSwitchPrompt(
+                                email, displayName, photoUrl, evaluation.pendingCount
+                            )
+                        )
+                    }
+                    return@launch
+                }
+                guard.recordOwner(email)
             }
-            if (!photoUrl.isNullOrBlank()) {
-                preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
-                profileAvatarManager?.downloadAndSaveAvatar(photoUrl)
-            }
-            uiState.update {
-                it.copy(
-                    googleAccountEmail = email,
-                    googleAccountDisplayName = displayName ?: it.googleAccountDisplayName,
-                    userMessage = UiText.res(R.string.settings_msg_signed_in, email)
-                )
-            }
-            syncConfigUseCase?.pull()
-            autoProvisionMasterSheet()
-            // A run paused by an expired sign-in left its items pending; resume them now
-            try {
-                transactionRepository?.syncPendingTransactions()
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-            }
+            continueSignIn(email, displayName, photoUrl)
+        }
+    }
+
+    /** The user confirmed the switch: wipe the previous account's data on this phone, then sign in as the new one. */
+    fun confirmAccountSwitch() {
+        val prompt = uiState.value.pendingAccountSwitch ?: return
+        scope.launch(ioDispatcher) {
+            accountSwitchGuard?.switchTo(prompt.email)
+            profileAvatarManager?.deleteAvatar()
+            uiState.update { it.copy(pendingAccountSwitch = null) }
+            continueSignIn(prompt.email, prompt.displayName, prompt.photoUrl)
+        }
+    }
+
+    /** The user cancelled: nothing changes and the app stays signed out. */
+    fun cancelAccountSwitch() {
+        uiState.update { it.copy(pendingAccountSwitch = null) }
+    }
+
+    private suspend fun continueSignIn(email: String, displayName: String?, photoUrl: String?) {
+        preferencesRepository.setGoogleAccountEmail(email)
+        if (!displayName.isNullOrBlank()) {
+            preferencesRepository.setGoogleAccountDisplayName(displayName)
+        }
+        if (!photoUrl.isNullOrBlank()) {
+            preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
+            profileAvatarManager?.downloadAndSaveAvatar(photoUrl)
+        }
+        uiState.update {
+            it.copy(
+                googleAccountEmail = email,
+                googleAccountDisplayName = displayName ?: it.googleAccountDisplayName,
+                userMessage = UiText.res(R.string.settings_msg_signed_in, email)
+            )
+        }
+        syncConfigUseCase?.pull()
+        autoProvisionMasterSheet()
+        // A run paused by an expired sign-in left its items pending; resume them now
+        try {
+            transactionRepository?.syncPendingTransactions()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
         }
     }
 

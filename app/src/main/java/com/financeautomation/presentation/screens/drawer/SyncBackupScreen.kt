@@ -136,6 +136,14 @@ fun SyncBackupScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    state.pendingAccountSwitch?.let { prompt ->
+        com.financeautomation.presentation.components.AccountSwitchDialog(
+            prompt = prompt,
+            onConfirm = viewModel::confirmAccountSwitch,
+            onCancel = viewModel::cancelAccountSwitch
+        )
+    }
+
     if (showSignOutDialog) {
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },

@@ -117,6 +117,7 @@ interface AppContainer {
     val foregroundWatcher: ForegroundWatcher
     val overlayController: OverlayController
     val peopleListRebuilder: PeopleListRebuilder
+    val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard
     val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
@@ -556,6 +557,26 @@ class DefaultAppContainer(
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
             predictCategoryUseCase = predictCategoryUseCase,
             overlayControllerProvider = { overlayController }
+        )
+    }
+
+    override val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard by lazy {
+        com.financeautomation.data.account.AccountSwitchGuard(
+            preferences = preferencesRepository,
+            store = com.financeautomation.data.account.RoomAccountDataStore { awaitDatabase() },
+            stopBackgroundWork = {
+                // Nothing of the previous account may be pushed once the user confirmed the switch
+                val wm = androidx.work.WorkManager.getInstance(applicationContext)
+                wm.cancelUniqueWork(com.financeautomation.service.worker.SyncTransactionsWorker.WORK_NAME_EXPEDITED)
+                wm.cancelUniqueWork(com.financeautomation.service.worker.SyncTransactionsWorker.WORK_NAME_PERIODIC)
+                wm.cancelUniqueWork(com.financeautomation.service.worker.MonthlyRolloverWorker.WORK_NAME)
+                wm.cancelUniqueWork(com.financeautomation.service.worker.SubscriptionReminderWorker.WORK_NAME)
+                wm.cancelUniqueWork(com.financeautomation.service.worker.SubscriptionReminderWorker.WORK_NAME_ONCE)
+            },
+            startBackgroundWork = {
+                com.financeautomation.service.worker.SyncTransactionsWorker.enqueuePeriodic(applicationContext)
+                com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
+            }
         )
     }
 

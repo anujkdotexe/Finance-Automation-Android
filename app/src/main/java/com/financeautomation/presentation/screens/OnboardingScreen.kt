@@ -148,6 +148,14 @@ fun OnboardingScreen(
         }
     }
 
+    state.pendingAccountSwitch?.let { prompt ->
+        com.financeautomation.presentation.components.AccountSwitchDialog(
+            prompt = prompt,
+            onConfirm = viewModel::confirmAccountSwitch,
+            onCancel = viewModel::cancelAccountSwitch
+        )
+    }
+
     val isStep1Done = state.step1State == StepState.COMPLETED
     val isStep2Done = state.step2State == StepState.COMPLETED
     val isStep3Done = state.step3State == StepState.COMPLETED
