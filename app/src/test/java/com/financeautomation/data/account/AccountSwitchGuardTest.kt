@@ -189,6 +189,22 @@ class AccountSwitchGuardTest {
         assertTrue(confirm.contains("catch"))
     }
 
+    @Test
+    fun widgetsAndNotificationsAreRefreshedOnlyAfterASuccessfulSwitch() = runBlocking {
+        accountAHasData()
+        val g = AccountSwitchGuard(h.prefs, store, { events += "stop" }, { events += "start" }, afterSwitch = { events += "refresh" })
+        g.switchTo("b@example.com")
+        assertEquals(listOf("stop", "wipe", "start", "refresh"), events)
+        events.clear()
+        val failing = object : AccountDataStore {
+            override suspend fun pendingCount() = 0
+            override suspend fun hasLocalData() = true
+            override suspend fun wipe() { throw IllegalStateException("x") }
+        }
+        runCatching { AccountSwitchGuard(h.prefs, failing, afterSwitch = { events += "refresh" }).switchTo("c@example.com") }
+        assertTrue("nothing is refreshed when the switch failed", "refresh" !in events)
+    }
+
     // what the real wipe covers
 
     @Test
