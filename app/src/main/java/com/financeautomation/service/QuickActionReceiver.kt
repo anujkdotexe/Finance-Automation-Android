@@ -75,49 +75,49 @@ class QuickActionReceiver : BroadcastReceiver() {
                 if (!captureId.isNullOrBlank() && container != null) {
                     val db = container.awaitDatabase()
                     val captureDao = db.pendingCaptureDao()
-                    val capture = captureDao.getById(captureId)
-                    if (capture != null) {
+                    var loggedCapture: com.financeautomation.data.local.entity.PendingCaptureEntity? = null
+                    var loggedCategory = category ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
+                    val outcome = CaptureClaim.logOnce(captureDao, captureId) { capture ->
                         val amount = capture.amount ?: 0.0
-                        val resolvedCategory = category ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
                         val account = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: CategoryConstants.ACCOUNT_OTHER
-
-                        if (amount > 0.0) {
-                            val subscriptionId = com.financeautomation.data.local.entity.PendingCaptureEntity.flagValue(
-                                capture.flags,
-                                com.financeautomation.data.local.entity.PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX
-                            )
-                            val captureEpochDay = java.time.Instant.ofEpochMilli(capture.timestamp)
-                                .atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay()
-                            val logResult = container.logExpenseUseCase(
-                                amount = amount,
-                                merchant = capture.payee.ifBlank { "Expense" },
-                                category = resolvedCategory,
-                                account = account,
-                                sourcePackage = capture.sourcePackage,
-                                timestamp = capture.timestamp,
-                                reviewState = ReviewState.CONFIRMED,
-                                afterInsert = if (subscriptionId != null) {
-                                    { txn ->
-                                        container.subscriptionRepository
-                                            .markCyclePaidForSubscription(subscriptionId, captureEpochDay, txn.id)
-                                    }
-                                } else null
-                            )
-                            if (logResult is com.financeautomation.core.model.Result.Success<*>) {
-                                captureDao.updateState(capture.id, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
-                                try {
-                                    val statDao = db.categoryStatDao()
-                                    val key = container.predictCategoryUseCase.computePayeeKey(capture.payee)
-                                    statDao.incrementStat(key, resolvedCategory, System.currentTimeMillis())
-                                } catch (statEx: Exception) {
-                                    Diagnostics.record("QuickActionReceiver", "${statEx.javaClass.simpleName}: incrementStat")
+                        val subscriptionId = com.financeautomation.data.local.entity.PendingCaptureEntity.flagValue(
+                            capture.flags,
+                            com.financeautomation.data.local.entity.PendingCaptureEntity.FLAG_SUBSCRIPTION_PREFIX
+                        )
+                        val captureEpochDay = java.time.Instant.ofEpochMilli(capture.timestamp)
+                            .atZone(java.time.ZoneId.of("Asia/Kolkata")).toLocalDate().toEpochDay()
+                        val logResult = container.logExpenseUseCase(
+                            amount = amount,
+                            merchant = capture.payee.ifBlank { "Expense" },
+                            category = loggedCategory,
+                            account = account,
+                            sourcePackage = capture.sourcePackage,
+                            timestamp = capture.timestamp,
+                            reviewState = ReviewState.CONFIRMED,
+                            afterInsert = if (subscriptionId != null) {
+                                { txn ->
+                                    container.subscriptionRepository
+                                        .markCyclePaidForSubscription(subscriptionId, captureEpochDay, txn.id)
                                 }
-                                try {
-                                    SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
-                                } catch (e: Exception) {
-                                    Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: enqueueExpedited")
-                                }
-                            }
+                            } else null
+                        )
+                        val ok = logResult is com.financeautomation.core.model.Result.Success<*>
+                        if (ok) loggedCapture = capture
+                        ok
+                    }
+                    val capture = loggedCapture
+                    if (outcome == CaptureClaim.Outcome.LOGGED && capture != null) {
+                        try {
+                            val statDao = db.categoryStatDao()
+                            val key = container.predictCategoryUseCase.computePayeeKey(capture.payee)
+                            statDao.incrementStat(key, loggedCategory, System.currentTimeMillis())
+                        } catch (statEx: Exception) {
+                            Diagnostics.record("QuickActionReceiver", "${statEx.javaClass.simpleName}: incrementStat")
+                        }
+                        try {
+                            SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
+                        } catch (e: Exception) {
+                            Diagnostics.record("QuickActionReceiver", "${e.javaClass.simpleName}: enqueueExpedited")
                         }
                     }
                 } else if (!txnId.isNullOrBlank()) {
