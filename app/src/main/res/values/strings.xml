@@ -659,7 +659,7 @@
     <string name="queue_op_expense_update">Expense Update</string>
     <string name="queue_op_expense_void">Expense Void</string>
     <string name="queue_op_income_void">Income Void</string>
-    <string name="review_failed_queue_desc">Failed after %1$d attempts. ID: %2$s</string>
+    <string name="review_failed_queue_desc">This entry could not be sent to your sheet and will not retry by itself. Tap Retry to try again, or Discard to drop it from the queue.</string>
     <string name="subscription_due_today">today</string>
 
     <!-- Onboarding -->
