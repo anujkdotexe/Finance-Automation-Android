@@ -144,10 +144,10 @@ class DefaultAppContainer(
 ) : AppContainer {
 
     override val tokenProvider: TokenProvider = providedTokenProvider
-        ?: GoogleAuthTokenProvider(applicationContext)
+        ?: GoogleAuthTokenProvider(applicationContext, emailProvider = { preferencesRepository.getGoogleAccountEmailSync() })
 
     override val googleAuthTokenProvider: GoogleAuthTokenProvider
-        get() = (tokenProvider as? GoogleAuthTokenProvider) ?: GoogleAuthTokenProvider(applicationContext)
+        get() = (tokenProvider as? GoogleAuthTokenProvider) ?: GoogleAuthTokenProvider(applicationContext, emailProvider = { preferencesRepository.getGoogleAccountEmailSync() })
 
     override val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     override val mainDispatcher: CoroutineDispatcher = Dispatchers.Main

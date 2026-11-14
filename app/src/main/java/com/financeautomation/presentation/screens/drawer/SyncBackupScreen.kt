@@ -75,19 +75,12 @@ fun SyncBackupScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    val signedInAccount = remember {
-        try {
-            com.google.android.gms.auth.api.signin.GoogleSignIn.getLastSignedInAccount(context)
-        } catch (_: Exception) {
-            null
-        }
-    }
-    val rawEmail = signedInAccount?.email ?: state.googleAccountEmail
+    // Only the stored account is shown; Play Services' last account may be one the app refused
+    val rawEmail = state.googleAccountEmail
     val isRealEmail = !rawEmail.isNullOrBlank() && rawEmail.contains("@")
     val accountEmail = if (isRealEmail) rawEmail else null
 
-    val rawDisplayName = signedInAccount?.displayName?.takeIf { it.isNotBlank() }
-        ?: state.googleAccountDisplayName?.takeIf { it.isNotBlank() }
+    val rawDisplayName = state.googleAccountDisplayName?.takeIf { it.isNotBlank() }
         ?: if (!isRealEmail && !rawEmail.isNullOrBlank()) rawEmail else null
     val accountDisplayName = rawDisplayName?.takeIf { it != accountEmail }
 
