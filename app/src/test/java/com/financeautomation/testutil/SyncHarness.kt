@@ -29,7 +29,7 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
     val sheets = server.client()
     var syncRequests = 0
     val preferences = mutableMapOf<String, String?>()
-    var googleEmail: String? = null
+    var googleEmail: String? = "me@example.com"
 
     @Suppress("UNCHECKED_CAST")
     val prefs: PreferencesRepository = Proxy.newProxyInstance(
