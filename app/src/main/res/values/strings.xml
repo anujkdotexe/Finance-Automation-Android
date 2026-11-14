@@ -871,4 +871,5 @@
     <string name="attn_lock_action">Set a screen lock</string>
 
     <string name="dashboard_refunds_line">Refunds %1$s taken off the total</string>
+    <string name="review_err_discard_failed">Could not discard this item</string>
 </resources>

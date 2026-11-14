@@ -79,6 +79,13 @@ interface TransactionRepository {
     suspend fun syncPendingTransactions(): Result<Int>
 
     /**
+     * Throws a queue item away for good: removes it (and any copy of the same operation on the same row) and puts the
+     * local row in a state nothing re-queues. A discarded insert voids the row here; a discarded void stays voided.
+     */
+    suspend fun discardQueueItem(queueItemId: Long): Result<Unit> =
+        Result.Error(UnsupportedOperationException("discardQueueItem is not supported"))
+
+    /**
      * Same as [syncPendingTransactions]; [userInitiated] marks a tap on Sync now or pull to refresh, which may bypass
      * the minimum interval between full ledger reads (at most once a minute).
      */
