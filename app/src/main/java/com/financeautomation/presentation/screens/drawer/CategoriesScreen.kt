@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,9 +54,9 @@ fun CategoriesScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    var showAddCategorySheet by remember { mutableStateOf(false) }
+    var showAddCategorySheet by rememberSaveable { mutableStateOf(false) }
     var selectedCategoryForEdit by remember { mutableStateOf<Category?>(null) }
-    var budgetCategory by remember { mutableStateOf<String?>(null) }
+    var budgetCategory by rememberSaveable { mutableStateOf<String?>(null) }
     val budgetRepository = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.financeautomation.FinanceApplication)
         .appContainer.budgetRepository
     val budgets by budgetRepository.observeBudgets().collectAsState(initial = emptyList())
@@ -142,7 +143,7 @@ fun CategoriesScreen(
     }
 
     selectedCategoryForEdit?.let { cat ->
-        var editName by remember { mutableStateOf(cat.name) }
+        var editName by rememberSaveable { mutableStateOf(cat.name) }
         AlertDialog(
             onDismissRequest = { selectedCategoryForEdit = null },
             title = {

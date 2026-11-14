@@ -83,7 +83,8 @@ class ModalBottomSheetActivity : ComponentActivity() {
             window, (application as FinanceApplication).appContainer.privacySettings, lifecycleScope
         )
 
-        handleIntent(intent)
+        // A recreated activity (rotation, theme, font scale) must not reload over what the user already typed
+        handleIntent(intent, restoring = savedInstanceState != null)
 
         setContent {
             FinanceAutomationTheme(transparentSystemBars = true) {
@@ -281,7 +282,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
     /** True until the saved lock state is known, and while the app lock is active. Hides friend names and balances. */
     private val lockedState = androidx.compose.runtime.mutableStateOf(true)
 
-    private fun handleIntent(intent: Intent) {
+    private fun handleIntent(intent: Intent, restoring: Boolean = false) {
         val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
         val txnId = intent.getStringExtra(EXTRA_TRANSACTION_ID)
             ?: intent.getStringExtra("txn_id")
@@ -292,6 +293,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
             withContext(Dispatchers.IO) { container.ensureAppLockStarted() }
             val locked = container.appLockManager.isLockedNow()
             lockedState.value = locked
+            if (restoring && !locked) return@launch
             when (ModalSheetLoadPolicy.decide(captureId, txnId, locked)) {
                 ModalSheetLoadPolicy.Action.LOAD_CAPTURE -> quickLogViewModel.loadCapture(captureId.orEmpty())
                 ModalSheetLoadPolicy.Action.LOAD_TRANSACTION -> quickLogViewModel.loadTransaction(txnId.orEmpty())

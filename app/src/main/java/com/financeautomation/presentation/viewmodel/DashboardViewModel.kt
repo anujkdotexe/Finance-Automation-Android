@@ -3,6 +3,7 @@ package com.financeautomation.presentation.viewmodel
 import com.financeautomation.R
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.core.constants.CategoryConstants
@@ -368,6 +369,12 @@ class DashboardViewModel(
         monthOffsetFlow.value = 0
     }
 
+    /** Keeps the selected month across process death: restores it, then writes every change back. */
+    fun bindSavedState(handle: androidx.lifecycle.SavedStateHandle) {
+        handle.get<Int>(KEY_MONTH_OFFSET)?.let { monthOffsetFlow.value = it }
+        viewModelScope.launch(ioDispatcher) { monthOffsetFlow.collect { handle[KEY_MONTH_OFFSET] = it } }
+    }
+
     fun setMonthOffset(offset: Int) {
         monthOffsetFlow.value = offset
     }
@@ -645,6 +652,7 @@ class DashboardViewModel(
     }
 
     companion object {
+        const val KEY_MONTH_OFFSET = "month_offset"
         fun provideFactory(
             transactionRepository: TransactionRepository,
             syncQueueDao: SyncQueueDao,
@@ -656,6 +664,12 @@ class DashboardViewModel(
             budgetProgressUseCase: BudgetProgressUseCase = BudgetProgressUseCase(),
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: androidx.lifecycle.viewmodel.CreationExtras): T {
+                val created = create(modelClass)
+                (created as DashboardViewModel).bindSavedState(extras.createSavedStateHandle())
+                return created
+            }
+
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return DashboardViewModel(
@@ -685,6 +699,12 @@ class DashboardViewModel(
             budgetProgressUseCase: BudgetProgressUseCase = BudgetProgressUseCase(),
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: androidx.lifecycle.viewmodel.CreationExtras): T {
+                val created = create(modelClass)
+                (created as DashboardViewModel).bindSavedState(extras.createSavedStateHandle())
+                return created
+            }
+
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return DashboardViewModel(

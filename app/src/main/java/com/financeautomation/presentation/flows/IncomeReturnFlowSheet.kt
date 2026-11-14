@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,9 +95,9 @@ fun IncomeReturnFlowSheet(
     onKeyboardFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var amountText by remember { mutableStateOf("") }
+    var amountText by rememberSaveable { mutableStateOf("") }
     val defaultAccount = accounts.firstOrNull { it.isDefault }?.name ?: accounts.firstOrNull()?.name ?: "Cash"
-    var selectedAccount by remember { mutableStateOf(defaultAccount) }
+    var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
 
     val incomeType = stringResource(R.string.inflow_type_income)
     val refundType = stringResource(R.string.inflow_type_return)
@@ -106,10 +107,10 @@ fun IncomeReturnFlowSheet(
     val inflowTypes = remember(incomeType, refundType, friendSettlementType, transferType) {
         listOf(incomeType, refundType, friendSettlementType, transferType)
     }
-    var selectedInflowType by remember { mutableStateOf(incomeType) }
+    var selectedInflowType by rememberSaveable { mutableStateOf(incomeType) }
 
     var settlerName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
-    var reasonText by remember { mutableStateOf("") }
+    var reasonText by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(preselectedFriend) {
         if (!preselectedFriend.isNullOrBlank()) {
@@ -119,7 +120,7 @@ fun IncomeReturnFlowSheet(
     }
 
     // Bill picker state for Friend Settlement
-    var autoSettleAll by remember { mutableStateOf(true) }
+    var autoSettleAll by rememberSaveable { mutableStateOf(true) }
     val selectedDebtIds = remember { mutableStateListOf<String>() }
 
     val scrollState = rememberScrollState()

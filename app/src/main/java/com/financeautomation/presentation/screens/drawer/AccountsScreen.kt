@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,10 +57,10 @@ fun AccountsScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    var showAddAccountDialog by remember { mutableStateOf(false) }
+    var showAddAccountDialog by rememberSaveable { mutableStateOf(false) }
     var selectedAccountForEdit by remember { mutableStateOf<Account?>(null) }
-    var newAccountName by remember { mutableStateOf("") }
-    var newAccountDigits by remember { mutableStateOf("") }
+    var newAccountName by rememberSaveable { mutableStateOf("") }
+    var newAccountDigits by rememberSaveable { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -127,8 +128,8 @@ fun AccountsScreen(
 
     selectedAccountForEdit?.let { account ->
         val isDefault = account.isDefault || account.name == state.defaultAccount
-        var editName by remember { mutableStateOf(account.name) }
-        var editDigits by remember { mutableStateOf(account.lastFourDigits.orEmpty()) }
+        var editName by rememberSaveable { mutableStateOf(account.name) }
+        var editDigits by rememberSaveable { mutableStateOf(account.lastFourDigits.orEmpty()) }
 
         AlertDialog(
             onDismissRequest = { selectedAccountForEdit = null },
