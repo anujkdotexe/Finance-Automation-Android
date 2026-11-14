@@ -930,6 +930,22 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun testParity_dashboardMatchesTheHandFixtureHeader() = runTest {
+        val tRepo = FakeTransactionRepo()
+        com.financeautomation.testutil.HandFixture.transactions.forEach { tRepo.insertTransaction(it) }
+        val inflowRepo = FakeInflowRepo()
+        inflowRepo.inflows.value = com.financeautomation.testutil.HandFixture.inflows
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo, directSyncQueueDao = FakeSyncQueueDao(), directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(), categoryRepository = FakeCategoryRepo(),
+            inflowRepository = inflowRepo, onlineState = kotlinx.coroutines.flow.MutableStateFlow(true), ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        assertEquals(com.financeautomation.testutil.HandFixture.LIVING_BURN, vm.uiState.value.currentBurn, 0.001)
+        assertEquals(com.financeautomation.testutil.HandFixture.SAVINGS, vm.uiState.value.savings, 0.001)
+    }
+
+    @Test
     fun testSetMonthOffset_updatesMonthOffsetAndState() = runTest {
         val tRepo = FakeTransactionRepo()
         val vm = DashboardViewModel(

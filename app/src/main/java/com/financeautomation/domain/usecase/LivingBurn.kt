@@ -113,6 +113,13 @@ object LivingBurn {
     fun sumOfCounted(rows: List<Transaction>, excludedNames: Set<String>): Double =
         rows.filter { counts(it, ALL_TIME, excludedNames) }.sumOf { it.myShare }
 
+    /**
+     * My share of exactly the rows shown when the user asked for one category or for the review rows: whatever those
+     * rows are (Savings, Transfer, an excluded category, rows in review), their real amount. Void rows are left out.
+     */
+    fun sumOfShown(rows: List<Transaction>): Double =
+        rows.filter { it.status != TransactionStatus.VOID }.sumOf { it.myShare }
+
     /** Money out of the rows: carried forward copies are the same money moved to a later month and are left out. */
     fun totalPaid(rows: List<Transaction>): Double =
         rows.filter { it.status != TransactionStatus.VOID && !CarriedCopies.isCopy(it) }.sumOf { it.totalAmount }

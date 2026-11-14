@@ -131,6 +131,10 @@ data class TransactionsUiState(
     val totalOut: Double = 0.0,
     val myShare: Double = 0.0,
     val searchQuery: String = "",
+    /** Refunds of the month taken off [myShare] when nothing is filtered; the day headers add up to myShare plus this. */
+    val refunds: Double = 0.0,
+    /** Names the figure when one category is shown, for example "Savings"; null for the living burn rule. */
+    val headerLabel: String? = null,
     val searchScope: SearchScope = SearchScope.THIS_MONTH,
     val activeFilter: TransactionFilter = TransactionFilter(),
     val groupedTransactions: List<DayTransactionGroup> = emptyList(),
@@ -419,7 +423,9 @@ class TransactionsViewModel(
             }
 
             if (!filter.category.isNullOrBlank()) {
-                if (!txn.category.equals(filter.category.trim(), ignoreCase = true)) {
+                if (com.financeautomation.domain.usecase.LivingBurn.categoryKey(txn.category) !=
+                    com.financeautomation.domain.usecase.LivingBurn.categoryKey(filter.category)
+                ) {
                     return@filter false
                 }
             }
@@ -534,18 +540,31 @@ class TransactionsViewModel(
             true
         }
 
-        // The header is the sum of the rows below it: the same filters as the day headers, the same counting rule as
-        // the Dashboard. With no search or filter that is exactly the Dashboard living burn, refunds included.
+        // The header and the day headers use ONE rule. Naming a category or the review rows shows those rows' real
+        // amount (Savings are not burn, but the Savings list should not say 0); everything else counts the living
+        // burn way. Unfiltered, the header also takes the month's refunds off, which the day headers cannot show.
         val unfiltered = !searchAllMonths && filter == TransactionFilter() && query.isBlank()
+        val namedView = !filter.category.isNullOrBlank() || filter.status.equals("review", ignoreCase = true)
+        val rule: (List<Transaction>) -> Double = if (namedView) {
+            { rows -> com.financeautomation.domain.usecase.LivingBurn.sumOfShown(rows) }
+        } else {
+            { rows -> com.financeautomation.domain.usecase.LivingBurn.sumOfCounted(rows, excludedNames) }
+        }
         val shownRows = filteredTransactions.filter { it.status != TransactionStatus.VOID }
         val totalOut = com.financeautomation.domain.usecase.LivingBurn.totalPaid(shownRows)
+        val refunds = if (unfiltered) {
+            com.financeautomation.domain.usecase.LivingBurn.refundTotal(monthInflows, startOfMonth until endOfMonth)
+        } else 0.0
         val myShare = if (unfiltered) {
             com.financeautomation.domain.usecase.LivingBurn.total(
                 monthTransactions, startOfMonth until endOfMonth, excludedNames, monthInflows
             )
         } else {
-            com.financeautomation.domain.usecase.LivingBurn.sumOfCounted(shownRows, excludedNames)
+            rule(shownRows)
         }
+        val headerLabel = if (!filter.category.isNullOrBlank()) {
+            shownRows.firstOrNull()?.category?.trim()?.takeIf { it.isNotEmpty() } ?: filter.category.trim()
+        } else null
 
         val dayFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US).apply {
             timeZone = kolkataTz
@@ -572,7 +591,7 @@ class TransactionsViewModel(
                 val dateLabel = dayFormat.format(dayStart)
                 val dayTxns = dayItems.filterIsInstance<TransactionListItem.ExpenseItem>().map { it.transaction }
                 val dayTotalOut = com.financeautomation.domain.usecase.LivingBurn.totalPaid(dayTxns)
-                val dayMyShare = com.financeautomation.domain.usecase.LivingBurn.sumOfCounted(dayTxns, excludedNames)
+                val dayMyShare = rule(dayTxns)
                 DayTransactionGroup(
                     dateLabel = dateLabel,
                     dayTimestamp = dayStart,
@@ -587,6 +606,8 @@ class TransactionsViewModel(
             selectedMonthLabel = selectedMonthLabel,
             totalOut = totalOut,
             myShare = myShare,
+            refunds = refunds,
+            headerLabel = headerLabel,
             searchQuery = query,
             searchScope = scope,
             activeFilter = filter,
