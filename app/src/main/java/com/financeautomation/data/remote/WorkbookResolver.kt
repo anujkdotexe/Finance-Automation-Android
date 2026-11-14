@@ -71,7 +71,10 @@ open class WorkbookResolver(
             }
 
             val candidateId = if (forceValidateTabs && !lockedStoredId.isNullOrBlank()) {
-                lockedStoredId
+                // A stored workbook this account cannot open (403 or 404, for example after another account signed
+                // in) is not repaired; fall through to the Drive search and, failing that, a fresh workbook
+                val probe = googleSheetsClient.getSheetTabsDetailed(lockedStoredId)
+                if (probe is Result.Error && isInaccessible(probe.exception)) null else lockedStoredId
             } else {
                 null
             }
@@ -260,6 +263,13 @@ open class WorkbookResolver(
 
             Result.Success(newId)
         }
+    }
+
+    /** True when the file is not reachable for this account: missing, or forbidden for a reason other than a rate limit. */
+    private fun isInaccessible(e: Throwable): Boolean = when (e) {
+        is SheetNotFoundException -> true
+        is GoogleSheetsApiException -> (e.statusCode == 403 || e.statusCode == 404) && !e.isRetryable()
+        else -> false
     }
 
     private suspend fun checkTabHasValidLayout(spreadsheetId: String, tabTitle: String): Boolean {
