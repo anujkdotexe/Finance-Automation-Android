@@ -283,7 +283,7 @@ fun FailedQueueItemCard(
                 color = MaterialTheme.colorScheme.error
             )
             Text(
-                text = stringResource(R.string.review_failed_queue_desc, item.retryCount, item.transactionId),
+                text = stringResource(R.string.review_failed_queue_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
