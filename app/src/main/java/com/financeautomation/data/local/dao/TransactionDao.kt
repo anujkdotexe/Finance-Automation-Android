@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.financeautomation.data.local.entity.TransactionEntity
 import kotlinx.coroutines.flow.Flow
@@ -77,6 +78,15 @@ interface TransactionDao {
 
     @Query("UPDATE transactions SET reviewState = :reviewState, category = COALESCE(:category, category) WHERE id = :id")
     suspend fun updateReviewState(id: String, reviewState: String, category: String? = null)
+
+    /** Deletes the row only if it is still void when the delete runs; false when it was not (for example undone). */
+    @Transaction
+    suspend fun deleteIfVoid(id: String): Boolean {
+        val row = getById(id) ?: return false
+        if (!row.status.equals("Void", ignoreCase = true)) return false
+        deleteById(id)
+        return true
+    }
 }
 
 suspend fun TransactionDao.getByTabAndSheetRowIndex(tab: String, rowIndex: Int): com.financeautomation.data.local.entity.TransactionEntity? {

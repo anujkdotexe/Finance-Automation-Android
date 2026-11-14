@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.financeautomation.data.local.entity.InflowEntity
 import kotlinx.coroutines.flow.Flow
@@ -34,5 +35,14 @@ interface InflowDao {
 
     @Query("DELETE FROM inflows WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    /** Deletes the entry only if it is still void when the delete runs. */
+    @Transaction
+    suspend fun deleteIfVoid(id: String): Boolean {
+        val row = getById(id) ?: return false
+        if (!row.status.equals("VOID", ignoreCase = true)) return false
+        deleteById(id)
+        return true
+    }
 }
 
