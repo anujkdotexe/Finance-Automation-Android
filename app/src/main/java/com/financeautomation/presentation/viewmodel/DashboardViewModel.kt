@@ -483,7 +483,6 @@ class DashboardViewModel(
             .map { it.transactionId }
             .toSet()
 
-        val categorySums = mutableMapOf<String, Double>()
         val monthTransactions = mutableListOf<Transaction>()
         val receivablesByKey = mutableMapOf<String, Double>()
         val displayNamesByKey = mutableMapOf<String, String>()
@@ -514,10 +513,9 @@ class DashboardViewModel(
 
                 val isSav = txn.category.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true)
 
-                if (isSav) {
+                // Savings are not burn, but a row still waiting in review is not counted anywhere yet
+                if (isSav && txn.reviewState != ReviewState.NEEDS_REVIEW) {
                     savings += txn.myShare
-                } else if (LivingBurn.counts(txn, selectedWindow, excludedCategoryNames)) {
-                    categorySums[txn.category] = (categorySums[txn.category] ?: 0.0) + txn.myShare
                 }
             }
         }
@@ -536,6 +534,7 @@ class DashboardViewModel(
             emptyMap()
         }
 
+        val categorySums = LivingBurn.byCategory(transactions, selectedWindow, excludedCategoryNames)
         val grossBurn = categorySums.values.sum()
         val allCategories = categorySums.entries
             .map { (cat, sum) ->

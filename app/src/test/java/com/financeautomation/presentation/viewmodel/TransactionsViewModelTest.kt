@@ -138,7 +138,8 @@ class TransactionsViewModelTest {
             myShare = 100.0,
             owedToMe = 100.0,
             status = TransactionStatus.PENDING
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val txn2 = Transaction(
             id = "t2",
             timestamp = day1Cal.timeInMillis + 3600_000L,
@@ -152,7 +153,8 @@ class TransactionsViewModelTest {
             myShare = 300.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val txn3 = Transaction(
             id = "t3",
             timestamp = day2Cal.timeInMillis,
@@ -166,7 +168,8 @@ class TransactionsViewModelTest {
             myShare = 500.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
         tRepo.insertTransaction(txn1)
         tRepo.insertTransaction(txn2)
@@ -210,7 +213,8 @@ class TransactionsViewModelTest {
             myShare = 600.0,
             owedToMe = 400.0,
             status = TransactionStatus.PENDING
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val voidTxn = Transaction(
             id = "t_void",
             timestamp = now,
@@ -224,7 +228,8 @@ class TransactionsViewModelTest {
             myShare = 5000.0,
             owedToMe = 0.0,
             status = TransactionStatus.VOID
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
         tRepo.insertTransaction(activeTxn)
         tRepo.insertTransaction(voidTxn)
@@ -262,7 +267,8 @@ class TransactionsViewModelTest {
                 myShare = 350.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
         tRepo.insertTransaction(
             Transaction(
@@ -278,7 +284,8 @@ class TransactionsViewModelTest {
                 myShare = 400.0,
                 owedToMe = 800.0,
                 status = TransactionStatus.PENDING
-            )
+            ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
         tRepo.insertTransaction(
             Transaction(
@@ -294,7 +301,8 @@ class TransactionsViewModelTest {
                 myShare = 800.0,
                 owedToMe = 0.0,
                 status = TransactionStatus.SETTLED
-            )
+            ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         )
 
         val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
@@ -559,25 +567,25 @@ class TransactionsViewModelTest {
         // 2. UPI filter chip
         vm.setFilter(TransactionFilter(account = "UPI"))
         advanceUntilIdle()
-        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(200.0, vm.uiState.value.totalOut, 0.001) // the header follows the filter
         assertEquals(listOf("t_upi"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
 
         // 3. Card filter chip
         vm.setFilter(TransactionFilter(account = "Card"))
         advanceUntilIdle()
-        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(500.0, vm.uiState.value.totalOut, 0.001) // the header follows the filter
         assertEquals(listOf("t_card"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
 
         // 4. Cash filter chip
         vm.setFilter(TransactionFilter(account = "Cash"))
         advanceUntilIdle()
-        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(100.0, vm.uiState.value.totalOut, 0.001) // the header follows the filter
         assertEquals(listOf("t_cash"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
 
         // 5. Needs Review filter chip
         vm.setFilter(TransactionFilter(status = "Needs Review"))
         advanceUntilIdle()
-        assertEquals(1200.0, vm.uiState.value.totalOut, 0.001)
+        assertEquals(400.0, vm.uiState.value.totalOut, 0.001) // the header follows the filter
         assertEquals(listOf("t_review"), vm.uiState.value.groupedTransactions.flatMap { it.transactions }.map { it.id })
 
         // 6. Clear filter back to All
@@ -794,7 +802,8 @@ class TransactionsViewModelTest {
             account = "UPI",
             merchant = "Store",
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val txnSavings = Transaction(
             id = "t_sav",
             timestamp = ts + 1000L,
@@ -807,7 +816,8 @@ class TransactionsViewModelTest {
             account = "Bank",
             merchant = "SIP",
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val txnTransfer = Transaction(
             id = "t_trans",
             timestamp = ts + 2000L,
@@ -820,7 +830,8 @@ class TransactionsViewModelTest {
             account = "Bank",
             merchant = "Self",
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
         tRepo.insertTransaction(txnGroceries)
         tRepo.insertTransaction(txnSavings)
@@ -885,7 +896,8 @@ class TransactionsViewModelTest {
             account = "UPI",
             merchant = "Cafe",
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val inf = Inflow(
             id = "inf_salary",
             timestamp = ts + 500L,
@@ -934,7 +946,8 @@ class TransactionsViewModelTest {
             myShare = 450.0,
             owedToMe = 450.0,
             status = TransactionStatus.PENDING
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         val personalTxn = Transaction(
             id = "t_personal",
             timestamp = ts + 1000L,
@@ -948,7 +961,8 @@ class TransactionsViewModelTest {
             myShare = 200.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
         tRepo.insertTransaction(splitTxn)
         tRepo.insertTransaction(personalTxn)
@@ -986,7 +1000,8 @@ class TransactionsViewModelTest {
             myShare = 300.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         tRepo.insertTransaction(txn)
 
         val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
@@ -1053,7 +1068,8 @@ class TransactionsViewModelTest {
             myShare = 500.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         // 2. Food & Drink with Card
         val txnFoodCard = Transaction(
             id = "t_food_card",
@@ -1068,7 +1084,8 @@ class TransactionsViewModelTest {
             myShare = 800.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         // 3. Groceries with UPI
         val txnGroceriesUpi = Transaction(
             id = "t_groceries_upi",
@@ -1083,7 +1100,8 @@ class TransactionsViewModelTest {
             myShare = 300.0,
             owedToMe = 0.0,
             status = TransactionStatus.SETTLED
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
         // 4. Food & Drink with UPI that is VOID
         val txnFoodUpiVoid = Transaction(
             id = "t_food_upi_void",
@@ -1098,7 +1116,8 @@ class TransactionsViewModelTest {
             myShare = 0.0,
             owedToMe = 0.0,
             status = TransactionStatus.VOID
-        )
+        ,
+            reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED)
 
         tRepo.insertTransaction(txnFoodUpi)
         tRepo.insertTransaction(txnFoodCard)
@@ -1154,6 +1173,34 @@ class TransactionsViewModelTest {
             status = com.financeautomation.core.model.TransactionStatus.SETTLED,
             reviewState = com.financeautomation.core.model.ReviewState.CONFIRMED
         )
+    }
+
+    @Test
+    fun parity_headerYourShareEqualsTheDashboardLivingBurnAndTotalPaidSkipsCarriedCopies() = runTest {
+        val tRepo = FakeTransactionRepo()
+        com.financeautomation.testutil.ParityFixture.transactions.forEach { tRepo.insertTransaction(it) }
+        val iRepo = FakeInflowRepo()
+        com.financeautomation.testutil.ParityFixture.inflows.forEach { iRepo.insertInflow(it) }
+        val vm = TransactionsViewModel(tRepo, inflowRepository = iRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+        val s = vm.uiState.value
+        val f = com.financeautomation.testutil.ParityFixture
+        assertEquals(f.LIVING_BURN, s.myShare, 0.001)
+        assertEquals(f.TOTAL_PAID, s.totalOut, 0.001)
+    }
+
+    @Test
+    fun parity_withAFilterTheHeaderIsTheSumOfTheShownRowsByTheSameRule() = runTest {
+        val tRepo = FakeTransactionRepo()
+        com.financeautomation.testutil.ParityFixture.transactions.forEach { tRepo.insertTransaction(it) }
+        val vm = TransactionsViewModel(tRepo, ioDispatcher = testDispatcher)
+        advanceUntilIdle()
+        vm.setFilter(TransactionFilter(person = "Asha"))
+        advanceUntilIdle()
+        val s = vm.uiState.value
+        val shown = s.groupedTransactions.flatMap { it.transactions }
+        assertEquals("header follows the same filters as the day headers", shown.sumOf { it.totalAmount }, s.totalOut + 200.0, 0.001)
+        assertEquals(s.myShare, s.groupedTransactions.sumOf { it.dayMyShare }, 0.001)
     }
 
     @Test

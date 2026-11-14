@@ -884,6 +884,52 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun testParity_dashboardReadsTheSharedFixtureByTheOwnerRules() = runTest {
+        val tRepo = FakeTransactionRepo()
+        com.financeautomation.testutil.ParityFixture.transactions.forEach { tRepo.insertTransaction(it) }
+        val inflowRepo = FakeInflowRepo()
+        inflowRepo.inflows.value = com.financeautomation.testutil.ParityFixture.inflows
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            inflowRepository = inflowRepo,
+            onlineState = kotlinx.coroutines.flow.MutableStateFlow(true),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        val s = vm.uiState.value
+        val f = com.financeautomation.testutil.ParityFixture
+        assertEquals(f.LIVING_BURN, s.currentBurn, 0.001)
+        assertEquals(f.UNCONFIRMED_COUNT, s.unconfirmedCount)
+        assertEquals(f.UNCONFIRMED_AMOUNT, s.unconfirmedAmount, 0.001)
+        assertEquals("a row in review is not Savings", f.SAVINGS, s.savings, 0.001)
+        assertEquals(f.INCOME, s.income, 0.001)
+    }
+
+    @Test
+    fun testParity_categoryNamesDifferingOnlyByCaseOrSpacesAreOneRow() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val base = com.financeautomation.testutil.ParityFixture.transactions.first { it.id == "plain" }
+        tRepo.insertTransaction(base.copy(id = "a", category = "Food & Drink", myShare = 10.0, totalAmount = 10.0))
+        tRepo.insertTransaction(base.copy(id = "b", category = " food & drink ", myShare = 5.0, totalAmount = 5.0))
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        val rows = vm.uiState.value.allCategories
+        assertEquals(1, rows.size)
+        assertEquals(15.0, rows.single().amount, 0.001)
+    }
+
+    @Test
     fun testSetMonthOffset_updatesMonthOffsetAndState() = runTest {
         val tRepo = FakeTransactionRepo()
         val vm = DashboardViewModel(
