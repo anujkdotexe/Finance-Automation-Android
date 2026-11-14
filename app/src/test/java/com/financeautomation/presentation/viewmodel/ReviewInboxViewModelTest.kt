@@ -684,6 +684,30 @@ class ReviewInboxViewModelTest {
     }
 
     @Test
+    fun testDiscardQueueItem_failedVoidSaysThePlainTruth() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        tRepo.queueDao = qDao
+        tRepo.insertTransaction(
+            Transaction(
+                id = "txn_v", timestamp = 1000L, dateSerial = 46330, timeSerial = 0.5, account = "HDFC", merchant = "[Void] Cafe",
+                category = "Food & Drink", totalAmount = 0.0, companions = "Personal", myShare = 0.0, owedToMe = 0.0,
+                status = TransactionStatus.VOID, reviewState = ReviewState.CONFIRMED
+            )
+        )
+        qDao.insert(SyncQueueEntity(id = 12L, transactionId = "txn_v", operationType = SyncQueueEntity.OP_VOID, payloadJson = "txn_v",
+            status = SyncQueueEntity.STATUS_FAILED, retryCount = 999))
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo, directSyncQueueDao = qDao, directPendingCaptureDao = FakePendingCaptureDao(),
+            accountRepository = FakeAccountRepo(), ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        vm.discardQueueItem(12L)
+        advanceUntilIdle()
+        assertEquals(UiText.res(com.financeautomation.R.string.review_msg_void_discarded_returns), vm.uiState.value.userMessage)
+    }
+
+    @Test
     fun testDiscardQueueItem_updateMarksSyncedWithoutNewQueueRow() = runTest {
         val tRepo = FakeTransactionRepo()
         val qDao = FakeSyncQueueDao()

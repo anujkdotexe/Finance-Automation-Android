@@ -49,7 +49,6 @@ class ClearVoidedHistoryTest {
     fun clearingDeletesVoidedRowsAndTheirFailedItemsAndNothingElse() = runBlocking {
         val h = SyncHarness()
         h.voided("v1"); h.voided("v2"); h.active("a1"); h.voidedIncome("i1")
-        h.qDao.insert(item("v1", SyncQueueEntity.OP_VOID, SyncQueueEntity.STATUS_FAILED))
         h.qDao.insert(item("a1", SyncQueueEntity.OP_INSERT, SyncQueueEntity.STATUS_PENDING))
         val res = h.repo.clearVoidedHistory()
         assertEquals(Result.Success(VoidedHistory(2, 1, 0)), res)

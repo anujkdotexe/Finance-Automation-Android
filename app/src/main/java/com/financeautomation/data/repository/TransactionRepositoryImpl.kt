@@ -578,10 +578,8 @@ class TransactionRepositoryImpl(
     /** Voided rows split into those safe to delete and those whose void is still queued for the sheet. */
     private suspend fun scanVoided(): VoidedScan {
         val queue = resolveSyncQueueDao().getAllQueueFlow().first()
-        val waiting = queue
-            .filter { it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS }
-            .map { it.transactionId }
-            .toSet()
+        // Any queue item, pending or failed, means the sheet may still show the row as live: keep it
+        val waiting = queue.map { it.transactionId }.toSet()
         val voidedTxns = resolveTransactionDao().getTransactionsFlow().first()
             .filter { it.status.equals(TransactionStatus.VOID.value, ignoreCase = true) }
         val voidedInflows = resolveInflowDao()?.getAllInflows()?.first().orEmpty()
@@ -606,13 +604,12 @@ class TransactionRepositoryImpl(
                 val qDao = resolveSyncQueueDao()
                 val iDao = resolveInflowDao()
                 runInDbTransaction {
+                    // Conditional: a row whose void was undone in the meantime is no longer void and is kept
                     scan.transactionIds.forEach { id ->
-                        qDao.deleteByTransactionId(id)
-                        tDao.deleteById(id)
+                        if (tDao.deleteIfVoid(id)) qDao.deleteByTransactionId(id)
                     }
                     scan.inflowIds.forEach { id ->
-                        qDao.deleteByTransactionId(id)
-                        iDao?.deleteById(id)
+                        if (iDao?.deleteIfVoid(id) == true) qDao.deleteByTransactionId(id)
                     }
                 }
                 Result.Success(com.financeautomation.domain.model.VoidedHistory(scan.transactionIds.size, scan.inflowIds.size, scan.skipped))
@@ -1173,6 +1170,7 @@ class TransactionRepositoryImpl(
                                 }
                             }
 
+                            var voidTab = tabName
                             if (targetRow == null) {
                                 val scanRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AC", txn.id)
                                 if (scanRes is Result.Error) {
@@ -1182,14 +1180,39 @@ class TransactionRepositoryImpl(
                             }
 
                             if (targetRow == null) {
-                                // The row is not on the sheet (for example a new workbook): there is nothing to void
+                                // Not in the computed month tab: the date may have been edited across a month. Look in every month tab.
+                                val tabsRes = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
+                                if (tabsRes is Result.Error) {
+                                    if (failItem(item, txn, tabsRes.exception, st)) break else continue
+                                }
+                                var failure: Throwable? = null
+                                for (other in (tabsRes as Result.Success).data.keys.filter { it != tabName && monthTabPattern.matches(it) }) {
+                                    val r = googleSheetsClient.findRowByUuid(spreadsheetId, other, "AC", txn.id)
+                                    if (r is Result.Error) {
+                                        failure = r.exception
+                                        break
+                                    }
+                                    val found = (r as Result.Success).data
+                                    if (found != null) {
+                                        voidTab = other
+                                        targetRow = found
+                                        break
+                                    }
+                                }
+                                if (failure != null) {
+                                    if (failItem(item, txn, failure, st)) break else continue
+                                }
+                            }
+
+                            if (targetRow == null) {
+                                // Found in no month tab (for example the old workbook was replaced): there is nothing to void
                                 transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
                                 syncQueueDao.delete(item)
                                 continue
                             }
 
                             val debit = LedgerDebit(
-                                tab = tabName,
+                                tab = voidTab,
                                 row = targetRow,
                                 uuid = txn.id,
                                 dateSerial = txn.dateSerial,
@@ -1574,6 +1597,8 @@ class TransactionRepositoryImpl(
         }
         requestSync()
     }
+
+    private val monthTabPattern = Regex("^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[0-9]{2}$", RegexOption.IGNORE_CASE)
 
     private class RunState {
         var transportFailure = false

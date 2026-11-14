@@ -402,9 +402,13 @@ class ReviewInboxViewModel(
 
     fun discardQueueItem(id: Long) {
         viewModelScope.launch(ioDispatcher) {
+            // A failed void never reached the sheet, which still shows the entry: say that it will come back
+            val wasVoid = resolveSyncQueueDao()?.getById(id)?.operationType == SyncQueueEntity.OP_VOID
             when (transactionRepository.discardQueueItem(id)) {
                 is Result.Error -> _uiState.update { it.copy(errorMessage = UiText.res(R.string.review_err_discard_failed)) }
-                else -> _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_operation_discarded)) }
+                else -> _uiState.update {
+                    it.copy(userMessage = UiText.res(if (wasVoid) R.string.review_msg_void_discarded_returns else R.string.review_msg_operation_discarded))
+                }
             }
         }
     }
