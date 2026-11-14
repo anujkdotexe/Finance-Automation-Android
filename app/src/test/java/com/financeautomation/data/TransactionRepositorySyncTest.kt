@@ -217,7 +217,7 @@ class TransactionRepositorySyncTest {
         override fun getActiveTrip(): Flow<String?> = flowOf(null)
         override suspend fun setActiveTrip(trip: String?) {}
         override fun getGoogleAccountEmail(): Flow<String?> = flowOf(null)
-        override suspend fun getGoogleAccountEmailSync(): String? = null
+        override suspend fun getGoogleAccountEmailSync(): String? = "test@example.com"
         override suspend fun setGoogleAccountEmail(email: String?) {}
         override fun getSettleDelaySeconds(): Flow<Int> = flowOf(5)
         override suspend fun getSettleDelaySecondsSync(): Int = 5

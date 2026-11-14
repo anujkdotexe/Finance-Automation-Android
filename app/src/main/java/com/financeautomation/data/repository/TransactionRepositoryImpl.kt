@@ -746,6 +746,10 @@ class TransactionRepositoryImpl(
                 if (googleSheetsClient == null || preferencesRepository == null) {
                     return@withLock Result.Success(0)
                 }
+                // Signed out on purpose: nothing to sync with, and nothing is marked failed. Items wait for the next sign in.
+                if (preferencesRepository.getGoogleAccountEmailSync().isNullOrBlank()) {
+                    return@withLock Result.Success(0)
+                }
                 // Google asked the app to wait: make no request at all until the cooldown is over
                 if (readGate.isCoolingDown()) {
                     return@withLock Result.Error(

@@ -79,7 +79,7 @@ class GoogleAuthTokenProvider(
         val email = when (val decision = accountPolicy.decide()) {
             // Signed out: no prompt, no notification and no silent authorization with another account
             AuthAccountPolicy.Decision.NoAccount ->
-                return@withContext AuthResult.Failed(AuthExpiredException("No Google account is signed in"))
+                return@withContext AuthResult.Failed(AuthExpiredException(NO_ACCOUNT_MESSAGE))
             is AuthAccountPolicy.Decision.Use -> decision.email
         }
         val now = System.currentTimeMillis()
@@ -187,7 +187,8 @@ class GoogleAuthTokenProvider(
             when (val res = requestAuthorization(isForeground = false)) {
                 is AuthResult.Token -> res.token
                 else -> {
-                    postReconnectNotification()
+                    // A deliberately signed out app has nothing to reconnect: stay quiet
+                    if (shouldNotifyReconnect(res)) postReconnectNotification()
                     null
                 }
             }
@@ -281,6 +282,13 @@ class GoogleAuthTokenProvider(
     }
 
     companion object {
+        const val NO_ACCOUNT_MESSAGE: String = "No Google account is signed in"
+
+        /** True when a failed authorization is worth a "reconnect Google" notification; false when signed out by choice. */
+        fun shouldNotifyReconnect(result: AuthResult): Boolean {
+            val failure = (result as? AuthResult.Failed)?.exception
+            return !(failure is AuthExpiredException && failure.message == NO_ACCOUNT_MESSAGE)
+        }
         const val SCOPE_DRIVE_FILE: String = "https://www.googleapis.com/auth/drive.file"
         const val NOTIFICATION_ID_AUTH_RECONNECT: Int = 9001
         const val CHANNEL_AUTH_ALERTS: String = "channel_auth_alerts"
