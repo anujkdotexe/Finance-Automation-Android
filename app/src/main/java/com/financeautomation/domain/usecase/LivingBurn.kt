@@ -86,14 +86,36 @@ object LivingBurn {
     fun dailyAverage(burn: Double, daysElapsed: Int): Double =
         if (daysElapsed > 0 && burn > 0.0) burn / daysElapsed else 0.0
 
-    /** Living burn per category inside [window]; keys are the category names as stored on the transactions. */
+    /** The one way category names are compared everywhere: trimmed and case folded. */
+    fun categoryKey(name: String): String = name.trim().lowercase()
+
+    /**
+     * Living burn per category inside [window]. Names that differ only by case or surrounding spaces are one category;
+     * the key shown is the first spelling met, trimmed.
+     */
     fun byCategory(transactions: List<Transaction>, window: LongRange, excludedNames: Set<String>): Map<String, Double> {
         val sums = LinkedHashMap<String, Double>()
+        val shown = HashMap<String, String>()
         for (txn in transactions) {
             if (counts(txn, window, excludedNames)) {
-                sums[txn.category] = (sums[txn.category] ?: 0.0) + txn.myShare
+                val key = categoryKey(txn.category)
+                val display = shown.getOrPut(key) { txn.category.trim() }
+                sums[display] = (sums[display] ?: 0.0) + txn.myShare
             }
         }
         return sums
     }
+
+    /**
+     * My share of exactly these rows under the same counting rule (no void, no review rows, no Savings, Transfer or
+     * excluded categories), with no month window. Used where the rows are already chosen, for example a filtered list.
+     */
+    fun sumOfCounted(rows: List<Transaction>, excludedNames: Set<String>): Double =
+        rows.filter { counts(it, ALL_TIME, excludedNames) }.sumOf { it.myShare }
+
+    /** Money out of the rows: carried forward copies are the same money moved to a later month and are left out. */
+    fun totalPaid(rows: List<Transaction>): Double =
+        rows.filter { it.status != TransactionStatus.VOID && !CarriedCopies.isCopy(it) }.sumOf { it.totalAmount }
+
+    private val ALL_TIME: LongRange = Long.MIN_VALUE..Long.MAX_VALUE
 }

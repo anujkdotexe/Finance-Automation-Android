@@ -210,7 +210,10 @@ class TransactionsViewModel(
                     filter = values[4] as TransactionFilter,
                     queueIds = values[5] as QueueTransactionIds,
                     scope = values[6] as SearchScope,
-                    isSyncing = values[7] as Boolean
+                    isSyncing = values[7] as Boolean,
+                    excludedNames = com.financeautomation.domain.usecase.LivingBurn.excludedNames(
+                        values[9] as List<com.financeautomation.domain.model.Category>
+                    )
                 )
                 @Suppress("UNCHECKED_CAST")
                 state.copy(
@@ -358,7 +361,8 @@ class TransactionsViewModel(
         filter: TransactionFilter,
         queueIds: QueueTransactionIds,
         scope: SearchScope = SearchScope.THIS_MONTH,
-        isSyncing: Boolean = false
+        isSyncing: Boolean = false,
+        excludedNames: Set<String> = emptySet()
     ): TransactionsUiState {
         val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
         val cal = Calendar.getInstance(kolkataTz).apply {
@@ -530,12 +534,18 @@ class TransactionsViewModel(
             true
         }
 
-        // Header totals cover the whole month normally, and exactly the results for an all-months search
-        // or when a category/burn/income filter is active (G5)
-        val hasCategoryOrBurnFilter = !filter.category.isNullOrBlank() || filter.excludeSavingsAndIgnored || filter.status.equals("income", ignoreCase = true)
-        val totalsSource = if (searchAllMonths || hasCategoryOrBurnFilter) filteredTransactions else monthTransactions.filter { it.status != TransactionStatus.VOID }
-        val totalOut = totalsSource.sumOf { it.totalAmount }
-        val myShare = totalsSource.sumOf { it.myShare }
+        // The header is the sum of the rows below it: the same filters as the day headers, the same counting rule as
+        // the Dashboard. With no search or filter that is exactly the Dashboard living burn, refunds included.
+        val unfiltered = !searchAllMonths && filter == TransactionFilter() && query.isBlank()
+        val shownRows = filteredTransactions.filter { it.status != TransactionStatus.VOID }
+        val totalOut = com.financeautomation.domain.usecase.LivingBurn.totalPaid(shownRows)
+        val myShare = if (unfiltered) {
+            com.financeautomation.domain.usecase.LivingBurn.total(
+                monthTransactions, startOfMonth until endOfMonth, excludedNames, monthInflows
+            )
+        } else {
+            com.financeautomation.domain.usecase.LivingBurn.sumOfCounted(shownRows, excludedNames)
+        }
 
         val dayFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US).apply {
             timeZone = kolkataTz
@@ -561,8 +571,8 @@ class TransactionsViewModel(
             .map { (dayStart, dayItems) ->
                 val dateLabel = dayFormat.format(dayStart)
                 val dayTxns = dayItems.filterIsInstance<TransactionListItem.ExpenseItem>().map { it.transaction }
-                val dayTotalOut = dayTxns.sumOf { it.totalAmount }
-                val dayMyShare = dayTxns.sumOf { it.myShare }
+                val dayTotalOut = com.financeautomation.domain.usecase.LivingBurn.totalPaid(dayTxns)
+                val dayMyShare = com.financeautomation.domain.usecase.LivingBurn.sumOfCounted(dayTxns, excludedNames)
                 DayTransactionGroup(
                     dateLabel = dateLabel,
                     dayTimestamp = dayStart,

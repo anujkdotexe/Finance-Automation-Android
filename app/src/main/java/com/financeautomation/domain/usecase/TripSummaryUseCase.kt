@@ -65,7 +65,7 @@ class TripSummaryUseCase {
         )
     }
 
-    private fun isCarriedCopy(t: Transaction): Boolean = t.merchant.trim().startsWith(CARRIED_PREFIX, ignoreCase = true)
+    private fun isCarriedCopy(t: Transaction): Boolean = CarriedCopies.isCopy(t)
 
     private fun copyTextOf(t: Transaction): String = t.merchant.trim().substringAfter("]", t.merchant).trim()
 
