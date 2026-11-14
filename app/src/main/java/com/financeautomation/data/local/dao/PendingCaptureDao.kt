@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +56,18 @@ interface PendingCaptureDao {
 
     @Query("UPDATE pending_captures SET state = 'WAITING', updatedAt = :updatedAt WHERE state = 'SHOWN'")
     suspend fun resetShownToWaiting(updatedAt: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Claims a capture that is still open by moving it to DONE inside one database transaction. Only the first caller
+     * gets true; a second tap on the same notification sees DONE and gets false.
+     */
+    @Transaction
+    suspend fun claimForLogging(id: String): Boolean {
+        val capture = getById(id) ?: return false
+        if (capture.state != "WAITING" && capture.state != "SHOWN" && capture.state != "NEEDS_REVIEW" && capture.state != "AWAITING_SUCCESS") return false
+        updateState(id, "DONE")
+        return true
+    }
 
     @Query("DELETE FROM pending_captures WHERE id = :id")
     suspend fun deleteById(id: String)
