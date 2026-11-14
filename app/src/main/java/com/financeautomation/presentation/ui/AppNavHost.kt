@@ -182,6 +182,26 @@ private data class SpeedDialItem(
     val preselectedFriend: String? = null
 )
 
+/**
+ * Goes to the Dashboard and clears everything above it. The back stack is reset to the Dashboard alone, with no saved
+ * state restored, so the action works from any screen and from any leftover back stack.
+ */
+internal fun NavHostController.goToDashboard() {
+    if (popBackStack(AppRoutes.DASHBOARD, false)) return
+    navigate(AppRoutes.DASHBOARD) {
+        popUpTo(0) { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
+/** Opens the Needs Review tab on top of the Dashboard without restoring any saved back stack state. */
+internal fun NavHostController.goToNeedsReview() {
+    navigate(AppRoutes.NEEDS_REVIEW) {
+        popUpTo(AppRoutes.DASHBOARD)
+        launchSingleTop = true
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavHost(
@@ -328,9 +348,8 @@ fun AppNavHost(
                                     scope.launch { drawerState.close() }
                                     if (baseRoute != item.route) {
                                         navController.navigate(item.route) {
-                                            popUpTo(AppRoutes.DASHBOARD) { saveState = true }
+                                            popUpTo(AppRoutes.DASHBOARD)
                                             launchSingleTop = true
-                                            restoreState = true
                                         }
                                     }
                                 },
@@ -397,7 +416,7 @@ fun AppNavHost(
                                 } else {
                                     IconButton(onClick = {
                                         if (!navController.popBackStack()) {
-                                            navController.navigate(AppRoutes.DASHBOARD)
+                                            navController.goToDashboard()
                                         }
                                     }) {
                                         Icon(
@@ -475,11 +494,7 @@ fun AppNavHost(
                                 selected = isDashboardSelected,
                                 onClick = {
                                     if (!isDashboardSelected) {
-                                        navController.navigate(AppRoutes.DASHBOARD) {
-                                            popUpTo(AppRoutes.DASHBOARD) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                                        navController.goToDashboard()
                                     }
                                 },
                                 label = {
@@ -509,11 +524,7 @@ fun AppNavHost(
                                 selected = isInboxSelected,
                                 onClick = {
                                     if (!isInboxSelected) {
-                                        navController.navigate(AppRoutes.NEEDS_REVIEW) {
-                                            popUpTo(AppRoutes.DASHBOARD) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                                        navController.goToNeedsReview()
                                     }
                                 },
                                 label = {
@@ -587,7 +598,7 @@ fun AppNavHost(
                     composable(AppRoutes.DASHBOARD) {
                         DashboardScreen(
                             viewModel = dashboardViewModel,
-                            onNavigateToReview = { navController.navigate(AppRoutes.NEEDS_REVIEW) },
+                            onNavigateToReview = { navController.goToNeedsReview() },
                             onNavigateToTransactions = { monthOffset, category, type ->
                                 val route = buildString {
                                     append(AppRoutes.TRANSACTIONS)
@@ -621,13 +632,7 @@ fun AppNavHost(
                     composable(AppRoutes.NEEDS_REVIEW) {
                         ReviewInboxScreen(
                             reviewInboxViewModel = reviewInboxViewModel,
-                            onNavigateToDashboard = {
-                                navController.navigate(AppRoutes.DASHBOARD) {
-                                    popUpTo(AppRoutes.DASHBOARD) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onNavigateToDashboard = { navController.goToDashboard() },
                             onEditTransaction = { txn ->
                                 val authIntent = PendingIntent.getActivity(
                                     context,
@@ -809,35 +814,35 @@ fun AppNavHost(
                     composable(AppRoutes.ONBOARDING) {
                         OnboardingScreen(
                             viewModel = onboardingViewModel,
-                            onOnboardingFinished = { navController.navigate(AppRoutes.DASHBOARD) }
+                            onOnboardingFinished = { navController.goToDashboard() }
                         )
                     }
 
                     composable(AppRoutes.NOTIFICATION_ACCESS) {
                         NotificationAccessScreen(
                             onNavigateBack = { navController.popBackStack() },
-                            onSkip = { navController.navigate(AppRoutes.DASHBOARD) }
+                            onSkip = { navController.goToDashboard() }
                         )
                     }
 
                     composable(AppRoutes.ERROR_API_NOT_ENABLED) {
                         ErrorApiNotEnabledScreen(
                             onNavigateBack = { navController.popBackStack() },
-                            onRetry = { navController.navigate(AppRoutes.DASHBOARD) }
+                            onRetry = { navController.goToDashboard() }
                         )
                     }
 
                     composable(AppRoutes.ERROR_PERMISSION_NOT_GRANTED) {
                         ErrorPermissionNotGrantedScreen(
                             onNavigateBack = { navController.popBackStack() },
-                            onContinueManually = { navController.navigate(AppRoutes.DASHBOARD) }
+                            onContinueManually = { navController.goToDashboard() }
                         )
                     }
 
                     composable(AppRoutes.ERROR_RATE_LIMITED) {
                         ErrorRateLimitedScreen(
                             onNavigateBack = { navController.popBackStack() },
-                            onRetry = { navController.navigate(AppRoutes.DASHBOARD) }
+                            onRetry = { navController.goToDashboard() }
                         )
                     }
                 }
