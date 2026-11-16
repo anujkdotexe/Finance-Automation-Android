@@ -129,7 +129,8 @@ class SyncErrorHandlingTest {
         h.repo.insertTransaction(h.expense("txn_a"))
         h.repo.insertTransaction(h.expense("txn_b", merchant = "Bus"))
         h.repo.syncPendingTransactions()
-        assertEquals(1, h.queueOf("txn_a").retryCount)
+        // Transient network failures are excluded from the retry cap and keep retryCount at 0
+        assertEquals(0, h.queueOf("txn_a").retryCount)
         assertEquals("the second item is not tried while offline", 0, h.queueOf("txn_b").retryCount)
     }
 

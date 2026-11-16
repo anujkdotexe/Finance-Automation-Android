@@ -39,9 +39,9 @@ object RegexPatterns {
         """\b([a-zA-Z0-9.\-_]+@[a-zA-Z0-9]+)\b(?!\.[a-zA-Z])"""
     )
 
-    // The amount tied to a debit or credit verb: "debited Rs 450", "spent INR 349", "Rs 200 paid"
+    // The amount tied to a debit or credit verb: "debited Rs 450", "spent INR 349", "Rs 200 paid", "debited by 30"
     private val AMOUNT_NEXT_TO_VERB_REGEX: Regex = Regex(
-        """(?i)\b(?:debit(?:ed)?|spent|paid|withdrawn|sent|deducted|purchase|credited|received|refunded)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""" +
+        """(?i)\b(?:debit(?:ed)?(?:\s+by|\s+for)?|spent|paid|withdrawn|sent|deducted|purchase|payment\s+of|credited|received|refunded)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)""" +
             """|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|credited|received|refunded)\b"""
     )
 
@@ -139,7 +139,14 @@ object RegexPatterns {
             val after = text.substring(afterStart, afterEnd)
             !BALANCE_BEFORE_REGEX.containsMatchIn(before) && !BALANCE_AFTER_REGEX.containsMatchIn(after)
         }
-        return preferred?.groupValues?.get(1)?.let { raw ->
+        val match = preferred ?: BANK_SMS_AMOUNT_REGEX.find(text)?.takeIf { m ->
+            val before = text.substring((m.range.first - 30).coerceAtLeast(0), m.range.first)
+            val afterStart = (m.range.last + 1).coerceAtMost(text.length)
+            val afterEnd = (afterStart + 30).coerceAtMost(text.length)
+            val after = text.substring(afterStart, afterEnd)
+            !BALANCE_BEFORE_REGEX.containsMatchIn(before) && !BALANCE_AFTER_REGEX.containsMatchIn(after)
+        }
+        return match?.groupValues?.get(1)?.let { raw ->
             val clean = raw.replace(",", "")
             clean.toDoubleOrNull()
         }

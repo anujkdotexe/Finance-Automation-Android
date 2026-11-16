@@ -96,7 +96,7 @@ class ParseNotificationUseCase(
 
         private val FAILURE_REGEX = Regex("""(?i)\b(failed|declined|unsuccessful|reversed)\b""")
         private val PROCESSING_REGEX = Regex("""(?i)\b(processing|pending|initiated|in\s+progress)\b""")
-        private val SUCCESS_REGEX = Regex("""(?i)\b(paid|successfully?|debited|sent|credited|received)\b""")
+        private val SUCCESS_REGEX = Regex("""(?i)\b(paid|successful(?:ly)?|debited|sent|credited|received)\b""")
 
         fun classifyWording(text: String): WordingClass {
             if (FAILURE_REGEX.containsMatchIn(text)) return WordingClass.FAILURE
