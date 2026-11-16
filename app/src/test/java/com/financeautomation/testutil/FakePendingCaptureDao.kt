@@ -17,9 +17,9 @@ class FakePendingCaptureDao : PendingCaptureDao {
     override fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>> =
         flowOf(captures.values.filter { it.state == "WAITING" })
     override fun getNeedsReviewCapturesFlow(): Flow<List<PendingCaptureEntity>> =
-        flowOf(captures.values.filter { it.state == "NEEDS_REVIEW" })
+        flowOf(captures.values.filter { it.state in listOf("NEEDS_REVIEW", "DISMISSED", "WAITING", "SHOWN") })
     override fun getNewAccountCapturesFlow(): Flow<List<PendingCaptureEntity>> =
-        flowOf(captures.values.filter { it.flags.contains("NEW_ACCOUNT") && it.state !in listOf("DONE", "DISMISSED") })
+        flowOf(captures.values.filter { it.flags.contains("NEW_ACCOUNT") && it.state != "DONE" })
     override suspend fun getWaitingCaptures(): List<PendingCaptureEntity> = captures.values.filter { it.state == "WAITING" }
     override suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity> =
         captures.values.filter { it.state == "WAITING" && it.timestamp < cutoffTime }

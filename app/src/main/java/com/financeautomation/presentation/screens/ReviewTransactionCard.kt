@@ -23,9 +23,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.core.utils.stripVoidPrefix
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.AppChip
@@ -54,6 +56,9 @@ fun ReviewTransactionCard(
     transaction: Transaction,
     onConfirm: () -> Unit,
     onEdit: () -> Unit,
+    onKeepBoth: (() -> Unit)? = null,
+    onKeepOne: (() -> Unit)? = null,
+    onDismissDuplicate: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     AppCard(
@@ -159,13 +164,199 @@ fun ReviewTransactionCard(
                 )
             }
 
-            // Button Pair: Outlined "Edit" on left, Filled "Confirm" on right (equal width, 48dp height)
+            // Action buttons: Keep both / Keep one / Dismiss for duplicates; Edit / Confirm for normal
+            if (transaction.isPossibleDuplicate && onKeepBoth != null && onKeepOne != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledButton(
+                        text = stringResource(R.string.action_keep_both),
+                        onClick = { onKeepBoth.invoke() },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_keep_one),
+                        onClick = { onKeepOne.invoke() },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_dismiss),
+                        onClick = { onDismissDuplicate?.invoke() ?: onConfirm() },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            } else {
+                ButtonPair(
+                    outlinedText = stringResource(R.string.action_edit),
+                    onOutlinedClick = onEdit,
+                    filledText = stringResource(R.string.action_confirm),
+                    onFilledClick = onConfirm
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Capture review card displaying incoming background alert captures in Needs Review:
+ * WAITING, SHOWN, or DISMISSED.
+ */
+@Composable
+fun ReviewCaptureCard(
+    capture: PendingCaptureEntity,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AppCard(
+        modifier = modifier.fillMaxWidth(),
+        containerColor = FinanceTheme.colors.surfaceContainerLowest
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            val stateLabel = when (capture.state) {
+                PendingCaptureEntity.STATE_DISMISSED -> stringResource(R.string.capture_state_dismissed)
+                PendingCaptureEntity.STATE_WAITING -> stringResource(R.string.capture_state_waiting)
+                PendingCaptureEntity.STATE_SHOWN -> stringResource(R.string.capture_state_shown)
+                else -> stringResource(R.string.capture_state_needs_review)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                ) {
+                    Text(
+                        text = capture.payee.ifBlank { "Notification capture" },
+                        style = FinanceTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        AppChip(
+                            text = capture.inferredAccount ?: CategoryConstants.ACCOUNT_OTHER,
+                            selected = false,
+                            onClick = {}
+                        )
+                        AppChip(
+                            text = stateLabel,
+                            selected = false,
+                            onClick = {}
+                        )
+                        Text(
+                            text = formatTransactionTime(capture.timestamp),
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                capture.amount?.let { amt ->
+                    Text(
+                        text = formatRupeesAuto(amt),
+                        style = FinanceTheme.typography.amountMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(start = FinanceTheme.spacing.m)
+                    )
+                }
+            }
+
             ButtonPair(
-                outlinedText = stringResource(R.string.action_edit),
-                onOutlinedClick = onEdit,
+                outlinedText = stringResource(R.string.action_dismiss),
+                onOutlinedClick = onDismiss,
                 filledText = stringResource(R.string.action_confirm),
                 onFilledClick = onConfirm
             )
+        }
+    }
+}
+
+/**
+ * Card for pending captures flagging a new account detected from notification.
+ */
+@Composable
+fun ReviewNewAccountCard(
+    capture: PendingCaptureEntity,
+    onAddAccount: (String, String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AppCard(
+        modifier = modifier.fillMaxWidth(),
+        containerColor = FinanceTheme.colors.surfaceContainerLowest
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xxs)) {
+                Text(
+                    text = stringResource(R.string.review_new_account_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                val hint = capture.detectedAccountHint ?: capture.inferredAccount ?: "Account"
+                Text(
+                    text = stringResource(R.string.review_new_account_desc, hint),
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = capture.payee.ifBlank { "Expense" },
+                    style = FinanceTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                capture.amount?.let { amt ->
+                    Text(
+                        text = formatRupeesAuto(amt),
+                        style = FinanceTheme.typography.amountMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val hint = capture.detectedAccountHint ?: capture.inferredAccount ?: ""
+                val digits = hint.filter { it.isDigit() }.takeLast(4)
+                FilledButton(
+                    text = stringResource(R.string.action_add_account),
+                    onClick = { onAddAccount(hint, digits) },
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(
+                    text = stringResource(R.string.action_confirm),
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(
+                    text = stringResource(R.string.action_dismiss),
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
