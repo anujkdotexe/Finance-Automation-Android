@@ -94,7 +94,9 @@ object QuickLogTransactionHelper {
 
         val repoCompanions = try {
             peopleRepository.getAllCompanions()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Diagnostics.record("QuickLogTransactionHelper", "${e.javaClass.simpleName}: getAllCompanions")
             currentState.availableCompanions
         }
         val allCompanions = (currentState.availableCompanions + repoCompanions).distinctBy { it.id }

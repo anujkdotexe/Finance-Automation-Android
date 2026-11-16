@@ -2,6 +2,7 @@ package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.R
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsApiException
@@ -78,6 +79,7 @@ class SettingsSyncCoordinator(
                 accountSwitchGuard?.switchTo(prompt.email)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("SettingsSyncCoordinator", "switchTo: ${e.javaClass.simpleName}")
                 // Nothing was switched: stay with the previous account and say so
                 uiState.update {
                     it.copy(pendingAccountSwitch = null, errorMessage = UiText.res(R.string.account_switch_failed))
@@ -120,6 +122,7 @@ class SettingsSyncCoordinator(
             transactionRepository?.syncPendingTransactions()
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
+            Diagnostics.record("SettingsSyncCoordinator", "syncPending: ${e.javaClass.simpleName}")
         }
     }
 
@@ -140,7 +143,9 @@ class SettingsSyncCoordinator(
                     if (avatarFile.exists()) {
                         avatarFile.delete()
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Diagnostics.record("SettingsSyncCoordinator", "deleteAvatar: ${e.javaClass.simpleName}")
+                }
             }
             uiState.update {
                 it.copy(
@@ -367,9 +372,11 @@ class SettingsSyncCoordinator(
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("SettingsSyncCoordinator", "onSyncNow: ${e.javaClass.simpleName}")
+                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
                 uiState.update {
                     it.copy(
-                        errorMessage = UiText.res(R.string.settings_err_sync_failed, e.message ?: "")
+                        errorMessage = UiText.res(R.string.settings_err_sync_failed, scrubbed)
                     )
                 }
             } finally {
@@ -394,15 +401,17 @@ class SettingsSyncCoordinator(
                         uiState.update { it.copy(userMessage = message) }
                     }
                     is Result.Error -> {
-                        val err = result.throwable.message ?: "Failed to check all months"
+                        val err = com.financeautomation.core.utils.PrivacyScrubber.scrub(result.throwable.message ?: "Failed to check all months")
                         uiState.update { it.copy(errorMessage = UiText.dynamic(err)) }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("SettingsSyncCoordinator", "onCheckAllMonths: ${e.javaClass.simpleName}")
+                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message ?: "Error checking all months")
                 uiState.update {
-                    it.copy(errorMessage = UiText.dynamic(e.message ?: "Error checking all months"))
+                    it.copy(errorMessage = UiText.dynamic(scrubbed))
                 }
             } finally {
                 uiState.update { it.copy(isCheckingAllMonths = false) }
@@ -424,9 +433,10 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
+                        val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(res.throwable.message.orEmpty())
                         uiState.update {
                             it.copy(
-                                errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, res.throwable.message ?: "")
+                                errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, scrubbed)
                             )
                         }
                     }
@@ -434,9 +444,11 @@ class SettingsSyncCoordinator(
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("SettingsSyncCoordinator", "onMirrorConfigToCloud: ${e.javaClass.simpleName}")
+                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
                 uiState.update {
                     it.copy(
-                        errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, e.message ?: "")
+                        errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, scrubbed)
                     )
                 }
             } finally {
@@ -459,9 +471,10 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
+                        val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(res.throwable.message.orEmpty())
                         uiState.update {
                             it.copy(
-                                errorMessage = UiText.res(R.string.settings_err_config_restore_failed, res.throwable.message ?: "")
+                                errorMessage = UiText.res(R.string.settings_err_config_restore_failed, scrubbed)
                             )
                         }
                     }
@@ -469,9 +482,11 @@ class SettingsSyncCoordinator(
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("SettingsSyncCoordinator", "onRestoreConfigFromCloud: ${e.javaClass.simpleName}")
+                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
                 uiState.update {
                     it.copy(
-                        errorMessage = UiText.res(R.string.settings_err_config_restore_failed, e.message ?: "")
+                        errorMessage = UiText.res(R.string.settings_err_config_restore_failed, scrubbed)
                     )
                 }
             } finally {
