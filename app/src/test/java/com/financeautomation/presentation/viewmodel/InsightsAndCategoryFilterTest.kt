@@ -53,6 +53,7 @@ class InsightsAndCategoryFilterTest {
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
+        override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
     }
 
     private class TestCategoryRepo(private val categories: List<Category>) : CategoryRepository {

@@ -1362,10 +1362,19 @@ class TransactionRepositoryImpl(
         if (reconcileWithSheet(id) is Result.Success && modified != null) lastSeenModified[id] = modified
     }
 
-    /** [tabs] limits the read; the default is the current and the previous month. */
+    override suspend fun reconcileAllMonths(): Result<Int> = withContext(ioDispatcher) {
+        if (!readGate.tryAcquire(CHECK_ALL_MONTHS_KEY, CHECK_ALL_MONTHS_COOLDOWN_MS, force = false)) {
+            return@withContext Result.Error("Please wait 10 minutes before checking all months again")
+        }
+        val spreadsheetId = reconcileSpreadsheetId() ?: return@withContext Result.Success(0)
+        reconcileWithSheet(spreadsheetId, allTabs = true)
+    }
+
+    /** [tabs] limits the read; the default is the current and the previous month. [allTabs] bypasses filtering. */
     suspend fun reconcileWithSheet(
         targetSpreadsheetId: String? = null,
-        tabs: Set<String>? = null
+        tabs: Set<String>? = null,
+        allTabs: Boolean = false
     ): Result<Int> = withContext(ioDispatcher) {
         try {
             val sheets = googleSheetsClient ?: return@withContext Result.Success(0)
@@ -1375,8 +1384,12 @@ class TransactionRepositoryImpl(
             val spreadsheetId = targetSpreadsheetId ?: reconcileSpreadsheetId()
                 ?: return@withContext Result.Success(0)
 
-            val readTabs = (tabs ?: recentTabs()).map { it.lowercase() }.toSet()
-            val snapRes = sheets.readLedgerSnapshot(spreadsheetId) { it.lowercase() in readTabs }
+            val snapRes = if (allTabs) {
+                sheets.readLedgerSnapshot(spreadsheetId)
+            } else {
+                val readTabs = (tabs ?: recentTabs()).map { it.lowercase() }.toSet()
+                sheets.readLedgerSnapshot(spreadsheetId) { it.lowercase() in readTabs }
+            }
             if (snapRes is Result.Error) {
                 return@withContext Result.Error(snapRes.exception)
             }
@@ -1741,6 +1754,8 @@ class TransactionRepositoryImpl(
     companion object {
         const val MAX_SYNC_RETRIES: Int = 8
         private const val RECONCILE_KEY = "reconcile"
+        private const val CHECK_ALL_MONTHS_KEY = "check_all_months"
+        const val CHECK_ALL_MONTHS_COOLDOWN_MS = 10 * 60 * 1000L
         const val AMOUNT_MESSAGE: String = "Enter an amount greater than zero"
     }
 }

@@ -41,6 +41,7 @@ class MonthlyRolloverWorkerTest {
         override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
+        override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
     }
 
     private val kolkataZone = ZoneId.of("Asia/Kolkata")
