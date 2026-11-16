@@ -99,7 +99,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
-import androidx.navigation.navDeepLink
 import com.financeautomation.R
 import com.financeautomation.presentation.components.AccountAvatar
 import com.financeautomation.presentation.overlay.FlowAuthGate
@@ -797,10 +796,7 @@ fun AppNavHost(
                         )
                     }
 
-                    composable(
-                        route = AppRoutes.CAPTURE_PERMISSIONS,
-                        deepLinks = listOf(navDeepLink { uriPattern = "financeautomation://route/capturePermissions" })
-                    ) {
+                    composable(AppRoutes.CAPTURE_PERMISSIONS) {
                         CapturePermissionsScreen(
                             state = settingsState,
                             setupHealthViewModel = setupHealthViewModel,
@@ -810,10 +806,7 @@ fun AppNavHost(
                         )
                     }
 
-                    composable(
-                        route = AppRoutes.SYNC_BACKUP,
-                        deepLinks = listOf(navDeepLink { uriPattern = "financeautomation://route/syncBackup" })
-                    ) {
+                    composable(AppRoutes.SYNC_BACKUP) {
                         SyncBackupScreen(
                             viewModel = settingsViewModel,
                             state = settingsState
