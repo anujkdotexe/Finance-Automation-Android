@@ -58,7 +58,7 @@ class SettingsSyncCoordinator(
                     uiState.update {
                         it.copy(
                             pendingAccountSwitch = com.financeautomation.data.account.AccountSwitchPrompt(
-                                email, displayName, photoUrl, evaluation.pendingCount
+                                email, displayName, photoUrl, evaluation.pendingCount, evaluation.hasLocalData
                             )
                         )
                     }

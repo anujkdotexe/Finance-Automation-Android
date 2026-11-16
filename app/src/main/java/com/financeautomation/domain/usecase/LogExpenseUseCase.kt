@@ -38,7 +38,9 @@ class LogExpenseUseCase(
         reviewState: ReviewState = ReviewState.CONFIRMED,
         isPossibleDuplicate: Boolean = false,
         duplicateOfId: String? = null,
-        afterInsert: (suspend (Transaction) -> Unit)? = null
+        afterInsert: (suspend (Transaction) -> Unit)? = null,
+        /** Fixes the id, so saving the same capture twice writes one row. */
+        transactionId: String? = null
     ): Result<Transaction> {
         try {
             if (isFuture(timestamp)) return Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
@@ -63,7 +65,7 @@ class LogExpenseUseCase(
 
             val dateSerial = DateSerialUtils.toDateSerial(timestamp)
             val timeSerial = DateSerialUtils.toTimeSerial(timestamp)
-            val txnId = "txn_${UUID.randomUUID().toString().replace("-", "")}"
+            val txnId = transactionId ?: "txn_${UUID.randomUUID().toString().replace("-", "")}"
 
             val transaction = Transaction(
                 id = txnId,

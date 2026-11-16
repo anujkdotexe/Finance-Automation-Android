@@ -33,6 +33,21 @@ object CaptureClaim {
             dao.updateState(captureId, capture.state)
             return Outcome.FAILED
         }
+        dao.updateState(captureId, PendingCaptureEntity.STATE_DONE)
         return Outcome.LOGGED
+    }
+
+    /** The expense id derived from the capture: a retry, or the other save path, writes the same row instead of a second one. */
+    fun expenseIdFor(captureId: String): String = "txn_" + captureId.replace("-", "")
+
+    /**
+     * At start: a capture left CLAIMED means the process died between the claim and the insert. If its expense exists it
+     * is DONE, otherwise it goes back to WAITING so the payment is not lost.
+     */
+    suspend fun recoverClaimed(dao: PendingCaptureDao, expenseExists: suspend (String) -> Boolean) {
+        for (capture in dao.getByState(PendingCaptureEntity.STATE_CLAIMED)) {
+            val next = if (expenseExists(expenseIdFor(capture.id))) PendingCaptureEntity.STATE_DONE else PendingCaptureEntity.STATE_WAITING
+            dao.updateState(capture.id, next)
+        }
     }
 }

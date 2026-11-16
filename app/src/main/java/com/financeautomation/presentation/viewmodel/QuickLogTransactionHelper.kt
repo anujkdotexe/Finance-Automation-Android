@@ -210,6 +210,15 @@ object QuickLogTransactionHelper {
             .filter { state.selectedCompanionIds.contains(it.id) }
             .map { it.name }
 
+        // The sheet shares the notification button's claim: a capture already being saved elsewhere is not saved twice
+        val captureDao = state.captureId?.let { pendingCaptureDaoProvider.invoke() }
+        val previousState = state.captureId?.let { captureDao?.getById(it)?.state }
+        if (state.captureId != null && captureDao != null && previousState != null) {
+            if (!captureDao.claimForLogging(state.captureId)) {
+                return Result.Error("This payment was already saved")
+            }
+        }
+
         val result = logExpenseUseCase(
             amount = state.amount,
             merchant = state.payee.ifBlank { "Expense" },
@@ -224,8 +233,14 @@ object QuickLogTransactionHelper {
             reviewState = ReviewState.CONFIRMED,
             isPossibleDuplicate = state.isPossibleDuplicate,
             duplicateOfId = state.duplicateOfId,
-            afterInsert = subscriptionPaidHook(state, subscriptionRepository)
+            afterInsert = subscriptionPaidHook(state, subscriptionRepository),
+            transactionId = state.captureId?.let { com.financeautomation.service.CaptureClaim.expenseIdFor(it) }
         )
+
+        if (result !is Result.Success && state.captureId != null && captureDao != null && previousState != null) {
+            // Put the capture back so it can be saved again
+            captureDao.updateState(state.captureId, previousState)
+        }
 
         if (result is Result.Success) {
             val loggedTxn = result.data

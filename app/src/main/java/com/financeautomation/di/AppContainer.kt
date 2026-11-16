@@ -563,7 +563,7 @@ class DefaultAppContainer(
     override val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard by lazy {
         com.financeautomation.data.account.AccountSwitchGuard(
             preferences = preferencesRepository,
-            store = com.financeautomation.data.account.RoomAccountDataStore { awaitDatabase() },
+            store = com.financeautomation.data.account.RoomAccountDataStore(applicationContext.cacheDir) { awaitDatabase() },
             stopBackgroundWork = {
                 // Nothing of the previous account may be pushed once the user confirmed the switch
                 val wm = androidx.work.WorkManager.getInstance(applicationContext)
@@ -583,7 +583,13 @@ class DefaultAppContainer(
             afterSwitch = {
                 // The widget and any posted notification still show the previous account's figures
                 com.financeautomation.service.MonthBurnWidgetProvider.requestUpdate(applicationContext)
-                androidx.core.app.NotificationManagerCompat.from(applicationContext).cancelAll()
+                // Cancel only the app's finance notifications; the persistent capture-off alert stays
+                val manager = androidx.core.app.NotificationManagerCompat.from(applicationContext)
+                val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                val posted = nm?.activeNotifications?.map { it.id }.orEmpty()
+                com.financeautomation.data.account.AccountNotifications
+                    .idsToCancel(posted, keep = setOf(com.financeautomation.service.NotificationAccessAlertManager.NOTIFICATION_ID_CAPTURE_OFF))
+                    .forEach { manager.cancel(it) }
             }
         )
     }

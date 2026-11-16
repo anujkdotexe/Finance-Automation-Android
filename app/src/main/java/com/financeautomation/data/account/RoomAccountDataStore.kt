@@ -6,7 +6,10 @@ import com.financeautomation.data.local.entity.SyncQueueEntity
 import kotlinx.coroutines.flow.first
 
 /** The Room implementation of [AccountDataStore]. */
-class RoomAccountDataStore(private val databaseProvider: suspend () -> FinanceDatabase) : AccountDataStore {
+class RoomAccountDataStore(
+    private val cacheDir: java.io.File? = null,
+    private val databaseProvider: suspend () -> FinanceDatabase
+) : AccountDataStore {
 
     override suspend fun pendingCount(): Int =
         databaseProvider().syncQueueDao().getAllQueueFlow().first()
@@ -20,6 +23,8 @@ class RoomAccountDataStore(private val databaseProvider: suspend () -> FinanceDa
     }
 
     override suspend fun wipe() {
+        // The previous account's CSV exports must not stay in the cache
+        AccountCacheCleaner.clearExports(cacheDir)
         val db = databaseProvider()
         db.withTransaction {
             val sql = db.openHelper.writableDatabase

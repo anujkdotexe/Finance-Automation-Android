@@ -131,7 +131,7 @@ class OnboardingViewModel(
                 if (evaluation.decision == com.financeautomation.data.account.SwitchDecision.CONFIRM_SWITCH) {
                     val (email, name, photo) = candidate!!
                     _uiState.update {
-                        it.copy(pendingAccountSwitch = com.financeautomation.data.account.AccountSwitchPrompt(email.orEmpty(), name, photo, evaluation.pendingCount))
+                        it.copy(pendingAccountSwitch = com.financeautomation.data.account.AccountSwitchPrompt(email.orEmpty(), name, photo, evaluation.pendingCount, evaluation.hasLocalData))
                     }
                     return@launch
                 }

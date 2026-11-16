@@ -221,9 +221,12 @@ class GoogleAuthTokenProvider(
             val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
                 com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
             ).requestEmail().build()
-            suspendCancellableCoroutine { continuation ->
-                com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso).signOut()
-                    .addOnCompleteListener { if (continuation.isActive) continuation.resume(Unit) }
+            // A task that never completes must not keep the stored email from being cleared
+            kotlinx.coroutines.withTimeoutOrNull(SIGN_OUT_TIMEOUT_MILLIS) {
+                suspendCancellableCoroutine { continuation ->
+                    com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso).signOut()
+                        .addOnCompleteListener { if (continuation.isActive) continuation.resume(Unit) }
+                }
             }
         } catch (e: Exception) {
             Diagnostics.record("GoogleAuthTokenProvider", "${e.javaClass.simpleName}: signOut")
@@ -284,6 +287,7 @@ class GoogleAuthTokenProvider(
 
     companion object {
         const val NO_ACCOUNT_MESSAGE: String = "No Google account is signed in"
+        private const val SIGN_OUT_TIMEOUT_MILLIS: Long = 5_000L
 
         /** True when a failed authorization is worth a "reconnect Google" notification; false when signed out by choice. */
         fun shouldNotifyReconnect(result: AuthResult): Boolean {
