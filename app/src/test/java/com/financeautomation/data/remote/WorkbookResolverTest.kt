@@ -22,6 +22,11 @@ class WorkbookResolverTest {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
+    private val fixedClock: java.time.Clock = java.time.Clock.fixed(
+        java.time.Instant.parse("2026-11-15T12:00:00Z"),
+        java.time.ZoneId.of("Asia/Kolkata")
+    )
+
     private val fakeTokenProvider = object : TokenProvider {
         override fun getAccessToken(): String = "test_token"
         override fun refreshAccessToken(): String = "test_token"
@@ -166,7 +171,8 @@ class WorkbookResolverTest {
             googleDriveClient = driveClient,
             googleSheetsClient = sheetsClient,
             preferencesRepository = prefs,
-            ioDispatcher = Dispatchers.IO
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock
         )
 
         val result = resolver.resolveForYear(2026)
@@ -298,7 +304,8 @@ class WorkbookResolverTest {
             googleDriveClient = driveClient,
             googleSheetsClient = sheetsClient,
             preferencesRepository = prefs,
-            ioDispatcher = Dispatchers.IO
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock
         )
 
         val result = resolver.resolveForYear(2026)
@@ -434,7 +441,8 @@ class WorkbookResolverTest {
             googleDriveClient = driveClient,
             googleSheetsClient = sheetsClient,
             preferencesRepository = prefs,
-            ioDispatcher = Dispatchers.IO
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock
         )
 
         val result = resolver.resolveForYear(2026)
@@ -567,7 +575,8 @@ class WorkbookResolverTest {
             googleDriveClient = driveClient,
             googleSheetsClient = sheetsClient,
             preferencesRepository = prefs,
-            ioDispatcher = Dispatchers.IO
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock
         )
 
         val result = resolver.resolveForYear(2026)
@@ -617,7 +626,7 @@ class WorkbookResolverTest {
         val drive = FreshDriveClient(fakeTokenProvider)
         val sheets = FreshSheetsClient(fakeTokenProvider)
         val prefs = prefsWithOldId()
-        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined)
+        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined, clock = fixedClock)
 
         val result = resolver.createFreshWorkbook(2026)
 
@@ -640,7 +649,7 @@ class WorkbookResolverTest {
         }
         val sheets = FreshSheetsClient(fakeTokenProvider)
         val prefs = prefsWithOldId()
-        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined)
+        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined, clock = fixedClock)
 
         val result = resolver.createFreshWorkbook(2026)
 
@@ -657,7 +666,7 @@ class WorkbookResolverTest {
             provisionResult = Result.Error(GoogleSheetsApiException(500, "boom"))
         }
         val prefs = prefsWithOldId()
-        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined)
+        val resolver = WorkbookResolver(drive, sheets, prefs, ioDispatcher = Dispatchers.Unconfined, clock = fixedClock)
 
         val result = resolver.createFreshWorkbook(2026)
 
@@ -779,7 +788,8 @@ class WorkbookResolverTest {
             googleDriveClient = driveClient,
             googleSheetsClient = sheetsClient,
             preferencesRepository = prefs,
-            ioDispatcher = Dispatchers.IO
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock
         )
 
         val result = resolver.resolveForYear(2026)
@@ -905,7 +915,8 @@ class WorkbookResolverTest {
             googleDriveClient = driveClient,
             googleSheetsClient = sheetsClient,
             preferencesRepository = prefs,
-            ioDispatcher = Dispatchers.IO
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock
         )
 
         val res = resolver.resolveForYear(2026, forceValidateTabs = true)
@@ -1019,7 +1030,8 @@ class WorkbookResolverTest {
             googleDriveClient = driveClient,
             googleSheetsClient = sheetsClient,
             preferencesRepository = prefs,
-            ioDispatcher = Dispatchers.IO
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock
         )
 
         val res = resolver.resolveForYear(2026, forceValidateTabs = true)
