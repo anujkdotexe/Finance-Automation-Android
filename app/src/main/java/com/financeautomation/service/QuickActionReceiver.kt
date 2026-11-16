@@ -11,6 +11,7 @@ import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.service.worker.SyncTransactionsWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,7 @@ class QuickActionReceiver : BroadcastReceiver() {
         if (context == null || intent == null) return
 
         val action = intent.action ?: return
-        if (action != ACTION_QUICK_CATEGORIZE && action != ACTION_QUICK_CONFIRM) {
+        if (action != ACTION_QUICK_CATEGORIZE && action != ACTION_QUICK_CONFIRM && action != ACTION_DISMISS_CAPTURE) {
             return
         }
 
@@ -68,6 +69,23 @@ class QuickActionReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         val app = context.applicationContext as? FinanceApplication
         val dispatcher = testDispatcher ?: Dispatchers.IO
+
+        if (action == ACTION_DISMISS_CAPTURE) {
+            CoroutineScope(SupervisorJob() + dispatcher).launch {
+                try {
+                    val container = app?.appContainer
+                    if (!captureId.isNullOrBlank() && container != null) {
+                        val db = container.awaitDatabase()
+                        db.pendingCaptureDao().updateState(captureId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DISMISSED)
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                } finally {
+                    pendingResult.finish()
+                }
+            }
+            return
+        }
 
         CoroutineScope(SupervisorJob() + dispatcher).launch {
             try {
@@ -152,6 +170,7 @@ class QuickActionReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_QUICK_CATEGORIZE: String = "com.financeautomation.ACTION_QUICK_CATEGORIZE"
         const val ACTION_QUICK_CONFIRM: String = "com.financeautomation.ACTION_QUICK_CONFIRM"
+        const val ACTION_DISMISS_CAPTURE: String = "com.financeautomation.ACTION_DISMISS_CAPTURE"
 
         const val EXTRA_TRANSACTION_ID: String = "com.financeautomation.extra.TRANSACTION_ID"
         const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
