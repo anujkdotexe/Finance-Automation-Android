@@ -55,6 +55,7 @@ data class SettingsUiState(
     val tripSummaries: Map<String, com.financeautomation.domain.usecase.TripSummary> = emptyMap(),
     val isSyncing: Boolean = false,
     val isConfigSyncing: Boolean = false,
+    val isCheckingAllMonths: Boolean = false,
     val isRegeneratingDashboard: Boolean = false,
     val isProvisioning: Boolean = false,
     val syncResult: String? = null,
@@ -243,6 +244,7 @@ class SettingsViewModel(
     fun onCreateFreshWorkbook() = syncCoordinator.onCreateFreshWorkbook()
 
     fun onSyncNow() = syncCoordinator.onSyncNow()
+    fun onCheckAllMonths() = syncCoordinator.onCheckAllMonths()
 
     // --- Bank & Funding Accounts ---
 

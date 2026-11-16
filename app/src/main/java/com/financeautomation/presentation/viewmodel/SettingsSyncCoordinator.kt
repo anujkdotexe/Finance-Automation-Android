@@ -378,6 +378,38 @@ class SettingsSyncCoordinator(
         }
     }
 
+    fun onCheckAllMonths() {
+        val repo = transactionRepository ?: return
+        scope.launch(ioDispatcher) {
+            uiState.update { it.copy(isCheckingAllMonths = true, errorMessage = null) }
+            try {
+                when (val result = repo.reconcileAllMonths()) {
+                    is Result.Success -> {
+                        val count = result.data
+                        val message = if (count > 0) {
+                            UiText.res(R.string.settings_msg_reconciled_all_months, count)
+                        } else {
+                            UiText.res(R.string.settings_msg_all_months_up_to_date)
+                        }
+                        uiState.update { it.copy(userMessage = message) }
+                    }
+                    is Result.Error -> {
+                        val err = result.throwable.message ?: "Failed to check all months"
+                        uiState.update { it.copy(errorMessage = UiText.dynamic(err)) }
+                    }
+                    is Result.Loading -> {}
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                uiState.update {
+                    it.copy(errorMessage = UiText.dynamic(e.message ?: "Error checking all months"))
+                }
+            } finally {
+                uiState.update { it.copy(isCheckingAllMonths = false) }
+            }
+        }
+    }
+
     fun onMirrorConfigToCloud() {
         val useCase = syncConfigUseCase ?: return
         scope.launch(ioDispatcher) {

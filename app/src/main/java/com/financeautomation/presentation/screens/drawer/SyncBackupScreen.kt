@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -449,6 +450,33 @@ fun SyncBackupScreen(
                         filledEnabled = !state.isSyncing,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+
+                OutlinedButton(
+                    onClick = viewModel::onCheckAllMonths,
+                    enabled = !state.isCheckingAllMonths && !state.isSyncing,
+                    shape = FinanceTheme.shapes.medium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = FinanceTheme.spacing.m)
+                        .padding(bottom = FinanceTheme.spacing.m)
+                ) {
+                    if (state.isCheckingAllMonths) {
+                        CircularProgressIndicator(
+                            strokeWidth = FinanceTheme.sizes.strokeThick,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.s))
+                        Text(stringResource(R.string.sync_checking_all_months))
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Sync,
+                            contentDescription = null,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                        Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                        Text(stringResource(R.string.sync_btn_check_all_months))
+                    }
                 }
             }
         }

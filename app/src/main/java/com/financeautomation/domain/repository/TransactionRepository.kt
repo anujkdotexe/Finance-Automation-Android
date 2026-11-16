@@ -153,4 +153,10 @@ interface TransactionRepository {
      * Enqueues year-end closing statement and JSON backup creation.
      */
     suspend fun closeYear(year: Int): Result<Unit>
+
+    /**
+     * Reconciles all tabs across the workbook, bypassing the two-month window,
+     * subject to a 10-minute cooldown.
+     */
+    suspend fun reconcileAllMonths(): Result<Int>
 }

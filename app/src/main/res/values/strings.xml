@@ -359,6 +359,8 @@
     <string name="sync_last_sync">Last sync</string>
     <string name="sync_btn_sync_now">Sync now</string>
     <string name="sync_btn_backup_now">Back up now</string>
+    <string name="sync_btn_check_all_months">Check all months</string>
+    <string name="sync_checking_all_months">Checking all months…</string>
 
     <!-- Preferences Screen -->
     <string name="pref_section_title">App settings</string>
@@ -752,6 +754,8 @@
     <string name="settings_msg_fresh_workbook_switched">Created a fresh Finance%1$d workbook and switched to it</string>
     <string name="settings_err_fresh_workbook_failed">Failed to create a fresh workbook: %1$s</string>
     <string name="settings_msg_sync_completed">Sync completed successfully</string>
+    <string name="settings_msg_reconciled_all_months">Reconciled %1$d change(s) across all months</string>
+    <string name="settings_msg_all_months_up_to_date">All months up to date (nothing changed)</string>
     <string name="settings_err_sync_failed">Sync failed with error: %1$s</string>
     <string name="settings_msg_config_mirrored">Configuration successfully mirrored to Google Sheets Config tab</string>
     <string name="settings_err_config_mirror_failed">Failed to mirror config: %1$s</string>
