@@ -520,7 +520,8 @@ class DefaultAppContainer(
             repaymentWaterfallUseCase = repaymentWaterfallUseCase,
             carryForwardUseCase = carryForwardUseCase,
             nettingUseCase = nettingUseCase,
-            yearCloseUseCase = yearCloseUseCase
+            yearCloseUseCase = yearCloseUseCase,
+            previousWorkbookIdProvider = { year -> preferencesRepository.getSpreadsheetIdForYearSync(year) }
         )
     }
 

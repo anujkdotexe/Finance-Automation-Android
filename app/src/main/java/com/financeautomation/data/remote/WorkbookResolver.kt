@@ -38,7 +38,8 @@ open class WorkbookResolver(
     private val categoryRepository: CategoryRepository? = null,
     private val syncConfigUseCase: SyncConfigUseCase? = null,
     private val regenerateDashboardUseCase: RegenerateDashboardUseCase? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: java.time.Clock = java.time.Clock.system(ZoneId.of("Asia/Kolkata"))
 ) {
     private val mutex = Mutex()
 
@@ -97,7 +98,7 @@ open class WorkbookResolver(
                     }
                 }
 
-                val repairRes = ensureWorkbookTabs(candidateId)
+                val repairRes = ensureWorkbookTabs(candidateId, year)
                 if (repairRes is Result.Error) {
                     return@withContext Result.Error(repairRes.exception)
                 }
@@ -135,13 +136,13 @@ open class WorkbookResolver(
                 is Result.Success -> {
                     val foundId = driveSearch.data
                     if (!foundId.isNullOrBlank()) {
-                        val repairRes = ensureWorkbookTabs(foundId)
+                        val repairRes = ensureWorkbookTabs(foundId, year)
                         if (repairRes is Result.Error) {
                             return@withContext Result.Error(repairRes.exception)
                         }
 
                         preferencesRepository.setSpreadsheetIdForYear(year, foundId)
-                        val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+                        val currentYear = ZonedDateTime.now(clock).year
                         if (year == currentYear) {
                             preferencesRepository.setSpreadsheetId(foundId)
                         }
@@ -213,7 +214,7 @@ open class WorkbookResolver(
             }
 
             preferencesRepository.setSpreadsheetIdForYear(year, newSpreadsheetId)
-            val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+            val currentYear = ZonedDateTime.now(clock).year
             if (year == currentYear) {
                 preferencesRepository.setSpreadsheetId(newSpreadsheetId)
             }
@@ -256,7 +257,10 @@ open class WorkbookResolver(
             }
 
             preferencesRepository.setSpreadsheetIdForYear(year, newId)
-            preferencesRepository.setSpreadsheetId(newId)
+            val currentYear = ZonedDateTime.now(clock).year
+            if (year == currentYear) {
+                preferencesRepository.setSpreadsheetId(newId)
+            }
 
             syncConfigUseCase?.mirrorToCloud(newId)
             regenerateDashboardUseCase?.invoke()
@@ -286,7 +290,7 @@ open class WorkbookResolver(
                 rowValues.size >= SheetSchemaConstants.TOTAL_COLUMN_COUNT
     }
 
-    private suspend fun ensureWorkbookTabs(spreadsheetId: String): Result<Unit> {
+    private suspend fun ensureWorkbookTabs(spreadsheetId: String, forYear: Int = ZonedDateTime.now(clock).year): Result<Unit> {
         val tabsResult = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
         if (tabsResult is Result.Error) {
             return Result.Error(tabsResult.exception)
@@ -294,8 +298,13 @@ open class WorkbookResolver(
         val tabsMap = (tabsResult as Result.Success).data
         val hasDashboard = tabsMap.containsKey("Dashboard")
 
-        val currentMonthTab = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
-            .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
+        val currentYear = ZonedDateTime.now(clock).year
+        val expectedMonthTab = if (forYear == currentYear) {
+            ZonedDateTime.now(clock).format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
+        } else {
+            val yy = (forYear % 100).toString().padStart(2, '0')
+            "Jan$yy"
+        }
 
         val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
         val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
@@ -309,10 +318,10 @@ open class WorkbookResolver(
             if (provRes is Result.Error) {
                 return Result.Error(provRes.exception)
             }
-        } else if (!tabsMap.containsKey(currentMonthTab) || !checkTabHasValidLayout(spreadsheetId, currentMonthTab)) {
+        } else if (!tabsMap.containsKey(expectedMonthTab) || !checkTabHasValidLayout(spreadsheetId, expectedMonthTab)) {
             val monthRes = googleSheetsClient.provisionMonthTab(
                 spreadsheetId = spreadsheetId,
-                tabName = currentMonthTab,
+                tabName = expectedMonthTab,
                 accounts = accounts,
                 categories = categories
             )

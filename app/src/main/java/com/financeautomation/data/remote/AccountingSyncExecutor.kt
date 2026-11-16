@@ -50,7 +50,8 @@ class AccountingSyncExecutor(
     private val carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
     private val nettingUseCase: NettingUseCase = NettingUseCase(),
     private val yearCloseUseCase: YearCloseUseCase = YearCloseUseCase(),
-    private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase()
+    private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
+    private val previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null
 ) {
     constructor(
         googleSheetsClient: GoogleSheetsClient,
@@ -295,13 +296,40 @@ class AccountingSyncExecutor(
         if (snapRes is Result.Error) return Result.Error(snapRes.exception)
         val snapshot = (snapRes as Result.Success).data
 
-        val sourceTab = req.sourceTab ?: findPrecedingTab(targetTab, snapshot.monthTabs.map { it.tabName })
+        var sourceTab = req.sourceTab ?: findPrecedingTab(targetTab, snapshot.monthTabs.map { it.tabName })
+        var sourceSnapshot: LedgerWorkbookSnapshot = snapshot
+        var sourceSpreadsheetId: String = spreadsheetId
+
+        if (sourceTab == null) {
+            val targetKey = parseMonthKey(targetTab)
+            // Month 1 is January (e.g. Jan27 -> preceding is Dec26 in Finance2026)
+            if (targetKey != null && (targetKey % 12 == 1)) {
+                val targetYear = targetKey / 12
+                val prevYear = targetYear - 1
+                val prevSpreadsheetId = previousWorkbookIdProvider?.invoke(prevYear)
+                if (!prevSpreadsheetId.isNullOrBlank()) {
+                    val prevSnapRes = googleSheetsClient.readLedgerSnapshot(prevSpreadsheetId)
+                    if (prevSnapRes is Result.Success) {
+                        val prevSnap = prevSnapRes.data
+                        val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
+                        val foundDecTab = prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
+                            ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
+                        if (foundDecTab != null) {
+                            sourceTab = foundDecTab.tabName
+                            sourceSnapshot = prevSnap
+                            sourceSpreadsheetId = prevSpreadsheetId
+                        }
+                    }
+                }
+            }
+        }
+
         if (sourceTab == null) {
             return Result.Success(Unit)
         }
 
         val targetMonth = snapshot.monthTabs.find { it.tabName.equals(targetTab, ignoreCase = true) }
-        val sourceMonth = snapshot.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
+        val sourceMonth = sourceSnapshot.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
 
         val targetDebits = targetMonth?.debits?.map { it.toDomain(targetTab) }.orEmpty()
         val targetPayables = targetMonth?.payables?.map { it.toDomain(targetTab) }.orEmpty()
@@ -322,8 +350,12 @@ class AccountingSyncExecutor(
             return Result.Success(Unit)
         }
 
-        // Apply plan: appends first, then source status edits
-        val applyResult = applyAccountingPlan(spreadsheetId, rolloverResult.plan)
+        // Apply plan: appends to target, source status edits to source (or target) workbook
+        val applyResult = applyAccountingPlan(
+            spreadsheetId = spreadsheetId,
+            plan = rolloverResult.plan,
+            sourceSpreadsheetId = sourceSpreadsheetId
+        )
         if (applyResult is Result.Success) {
             // Persist lineage records into Room in one transaction
             if (rolloverResult.lineageRecords.isNotEmpty()) {
@@ -380,7 +412,8 @@ class AccountingSyncExecutor(
 
     private suspend fun applyAccountingPlan(
         spreadsheetId: String,
-        plan: AccountingPlan
+        plan: AccountingPlan,
+        sourceSpreadsheetId: String? = null
     ): Result<Unit> {
         // Appends first
         for (append in plan.appends) {
@@ -407,13 +440,22 @@ class AccountingSyncExecutor(
             }
         }
 
-        // Edits second
+        // Edits second (partitioned by spreadsheet if cross-workbook rollover)
         if (plan.edits.isNotEmpty()) {
-            val rangesWithValues = plan.edits.associate { edit ->
-                "'${edit.tab}'!${edit.column}${edit.row}" to listOf(listOf(edit.value))
+            val editsByTarget = plan.edits.groupBy { edit ->
+                if (sourceSpreadsheetId != null && sourceSpreadsheetId != spreadsheetId) {
+                    sourceSpreadsheetId
+                } else {
+                    spreadsheetId
+                }
             }
-            val editRes = googleSheetsClient.batchUpdateValues(spreadsheetId, rangesWithValues)
-            if (editRes is Result.Error) return Result.Error(editRes.exception)
+            for ((targetId, edits) in editsByTarget) {
+                val rangesWithValues = edits.associate { edit ->
+                    "'${edit.tab}'!${edit.column}${edit.row}" to listOf(listOf(edit.value))
+                }
+                val editRes = googleSheetsClient.batchUpdateValues(targetId, rangesWithValues)
+                if (editRes is Result.Error) return Result.Error(editRes.exception)
+            }
         }
 
         // Apply plan edits and settled references locally to Room database

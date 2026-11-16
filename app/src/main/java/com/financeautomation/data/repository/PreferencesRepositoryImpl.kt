@@ -29,7 +29,8 @@ class PreferencesRepositoryImpl(
     private val preferenceDao: PreferenceDao? = null,
     private val preferenceDaoProvider: (suspend () -> PreferenceDao)? = null,
     private var configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: java.time.Clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Kolkata"))
 ) : PreferencesRepository {
 
     /**
@@ -40,12 +41,14 @@ class PreferencesRepositoryImpl(
      */
     constructor(
         isTestHeadless: Boolean = true,
-        ioDispatcher: CoroutineDispatcher = Dispatchers.Unconfined
+        ioDispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
+        clock: java.time.Clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Kolkata"))
     ) : this(
         preferenceDao = null,
         preferenceDaoProvider = null,
         configSyncCoordinatorProvider = null,
-        ioDispatcher = ioDispatcher
+        ioDispatcher = ioDispatcher,
+        clock = clock
     )
 
     private suspend fun resolveDao(): PreferenceDao? {
@@ -55,6 +58,7 @@ class PreferencesRepositoryImpl(
 
     // In-memory fallbacks when running headless without Room database
     private val memSpreadsheetId = MutableStateFlow<String?>(null)
+    private val memYearSpreadsheetIds = ConcurrentHashMap<Int, String>()
     private val memDefaultAccount = MutableStateFlow(CategoryConstants.ACCOUNT_OTHER)
     private val memActiveTrip = MutableStateFlow<String?>(null)
     private val memGoogleEmail = MutableStateFlow<String?>(null)
@@ -96,36 +100,41 @@ class PreferencesRepositoryImpl(
         }
     }
 
+    private fun currentYear(): Int = java.time.ZonedDateTime.now(clock).year
+
     override fun getSpreadsheetIdForYear(year: Int): Flow<String?> = flow {
         val dao = resolveDao()
         if (dao == null) {
-            emitAll(memSpreadsheetId.asStateFlow())
+            emit(memYearSpreadsheetIds[year])
         } else {
-            emitAll(dao.getPreferenceFlow(keySpreadsheetIdForYear(year)).map { yearSpecificId ->
-                yearSpecificId ?: dao.getPreference(KEY_SPREADSHEET_ID)
-            })
+            emitAll(dao.getPreferenceFlow(keySpreadsheetIdForYear(year)))
         }
     }.flowOn(ioDispatcher)
 
     override suspend fun getSpreadsheetIdForYearSync(year: Int): String? = withContext(ioDispatcher) {
-        val dao = resolveDao() ?: return@withContext memSpreadsheetId.value
-        val yearSpecific = dao.getPreference(keySpreadsheetIdForYear(year))
-        if (!yearSpecific.isNullOrBlank()) {
-            yearSpecific
+        val dao = resolveDao()
+        if (dao == null) {
+            memYearSpreadsheetIds[year]
         } else {
-            dao.getPreference(KEY_SPREADSHEET_ID)
+            dao.getPreference(keySpreadsheetIdForYear(year))
         }
     }
 
     override suspend fun setSpreadsheetIdForYear(year: Int, id: String): Unit = withContext(ioDispatcher) {
         val trimmed = id.trim()
         val dao = resolveDao()
+        val curYear = currentYear()
         if (dao != null) {
             val now = System.currentTimeMillis()
             dao.setPreference(PreferenceEntity(keySpreadsheetIdForYear(year), trimmed, updatedAt = now, dirty = 0))
-            dao.setPreference(PreferenceEntity(KEY_SPREADSHEET_ID, trimmed, updatedAt = now, dirty = 0))
+            if (year == curYear) {
+                dao.setPreference(PreferenceEntity(KEY_SPREADSHEET_ID, trimmed, updatedAt = now, dirty = 0))
+            }
         } else {
-            memSpreadsheetId.value = trimmed
+            memYearSpreadsheetIds[year] = trimmed
+            if (year == curYear) {
+                memSpreadsheetId.value = trimmed
+            }
         }
     }
 
