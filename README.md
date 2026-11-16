@@ -4,16 +4,14 @@ Finance Automation Android is the native Android companion and standalone client
 
 ---
 
-## Current Status by Phase
+## Current Status
 
-- **Phase 0 (Foundation & Fixes):** Complete. Enforces `RAW` value input option for sheet writes, raw unformatted date/time reads, durable transport retry logic with Needs Review cap, per-year workbook resolution (`WorkbookResolver.resolveForYear`), and safe multi-table sync.
-- **Phase 1 (Authentication & Onboarding):** Complete. Uses Google Identity Authorization API with minimal `drive.file` scope, automated folder and workbook provisioning, configuration pull before dashboard regeneration, and debug-only notification simulator.
-- **Phase 1.5 - 1.7 (Database Encryption):** Complete. Implements SQLCipher AES-256 local database encryption with Keystore-wrapped key in raw hex form, one-time plaintext SQLite migration with table verification, transient Keystore retry guard, and non-crashing canary check.
-- **Phase 2 (Sheet Gateway, Layout & Config Sync):** Complete. Ported iOS master template layout, clustered column and doughnut charts with deduplication, workbook properties (`locale = "en_IN"`, `timeZone = "Asia/Kolkata"`), and durable two-way configuration synchronization (`ConfigSyncCoordinator`, `SyncQueueEntity.OP_CONFIG_PUSH`).
-- **Phase 3 (Accounting Engine & Room v4):** Complete. Implemented 3-mode split math, netting, settlement waterfall, repayment waterfall, 12-hop debt carry-forward, non-destructive voiding, cross-month debt rollover lineage tracking, two-phase idempotent planJson execution, monthly rollover triggers, and year-close workbook statement generation.
-- **Phase 4 (Capture Pipeline & Room v5):** Complete. Interception pipeline with `NotificationListenerServiceImpl`, in-memory `ForegroundWatcher` with screen/keyguard broadcast wake channel, and Room schema version 5.
-- **Phase 5 (Overlay & User Flows):** Planned.
-- **Phase 6+ (Integration & Verification):** Planned.
+The app is feature complete for its first release and is in hardening and on-device verification. It is not distributed yet.
+
+- **Implemented:** Google sign in with the minimal `drive.file` scope, one workbook per calendar year (`Finance2026`, `Finance2027`, and so on) with carry-forward between years, an encrypted local database (SQLCipher, Room schema version 14), the notification and SMS capture pipeline with a floating add sheet and quick settings tile, the full accounting engine (equal, custom and just-me splits, netting, settlement and repayment waterfalls, non-destructive voiding, carry-forward), income tracking, trips, subscriptions with reminders, budgets, Insights, CSV export, app lock, a Dashboard with Living burn that nets refunds, and two home screen widgets (quick add and month burn).
+- **Source of truth:** the Google Sheet. The app is offline first: every change is saved locally and queued, then synced with retries and a read quota guard.
+- **Verification state:** the unit test suite runs on the JVM (about a thousand tests). Room migrations, Google account flows and real notification capture are verified by hand on a physical phone, because there is no instrumented test source set yet.
+- **Known open items:** see the independent review in `docs/reviews/` and the audit notes next to it for the full list of findings and their status.
 
 ---
 
@@ -60,8 +58,8 @@ The application operates offline-first: transactions and configuration changes a
 
 - **Strict Package Whitelist:** Interception is restricted to financial packages: Google Pay (`com.google.android.apps.nbu.paisa.user`), BHIM (`in.org.npci.upiapp`), Supermoney (`com.supermoney.app`), PhonePe (`com.phonepe.app`), Paytm (`net.one97.paytm`), and default SMS clients.
 - **Privacy Package Blacklist:** Personal messaging apps (WhatsApp, Telegram, Signal, Messenger, Instagram, Discord) and OTP/2FA verification codes are immediately dropped.
-- **Zero Raw Alert Text Stored:** Alerts are parsed in memory. Raw title and body text are never stored in the database, logged, or transmitted off-device.
-- **Minimal OAuth Scope:** Requests only `https://www.googleapis.com/auth/drive.file`, restricting app access strictly to workbooks and files created by the application itself.
+- **Zero Raw Alert Text Stored:** Alerts are parsed in memory. Raw title and body text are never stored in the database, logged, or transmitted off-device. SMS from personal numbers and contact names is rejected on the sender alone.
+- **Minimal Google access:** Drive and Sheets access uses only `https://www.googleapis.com/auth/drive.file`, restricting the app to workbooks and files it created itself. Sign in also reads the account email, name and photo to show which account is connected.
 - **Encrypted Local Storage:** Database is protected by SQLCipher AES-256 encryption. The database key is generated on the device and wrapped by an Android Keystore AES-GCM key.
 - **Zero Secret Commits:** No API keys, client secrets, tokens, or keystores are stored in source code.
 
@@ -77,21 +75,14 @@ The application operates offline-first: transactions and configuration changes a
 
 ### Configuration
 
-Copy `.env.example` to `.env` and configure environment variables as needed:
+The app reads no environment variables at build or run time. The files below are the only configuration, and none of them is committed:
 
-- `GOOGLE_CLIENT_ID`: OAuth client id for optional backend verification.
-- `GOOGLE_DRIVE_FOLDER_NAME`: Drive folder name (default: `Personal Finance`).
-- `GOOGLE_SHEET_TITLE_PREFIX`: Sheet title prefix (default: `Finance`).
-- `GOOGLE_OAUTH_SCOPES`: OAuth scope (default: `https://www.googleapis.com/auth/drive.file`).
-- `DEFAULT_ACCOUNT`: Default funding account name.
-- `SETTLE_WINDOW_MILLIS`: Settle delay window in milliseconds.
-- `MAX_SYNC_RETRY_COUNT`: Maximum sync retry count before Needs Review.
+- `local.properties`: the Android SDK location (`sdk.dir=...`), created by Android Studio.
+- `keystore.properties`: release and beta signing (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`). A release build refuses to run without it. A beta build without it is signed with the debug key and must never be distributed.
+- `app/google-services.json`: optional Firebase configuration for crash reports.
+- Google Cloud Console: an Android OAuth client for package `com.financeautomation` with the SHA-1 of each signing key, the Drive and Sheets APIs enabled, and every tester added as a test user while the consent screen is in testing.
 
-Specify the Android SDK path in `local.properties`:
-
-```properties
-sdk.dir=/path/to/android-sdk
-```
+The `.env.example` file is a leftover from an earlier design. The app does not read it.
 
 ### Build Commands
 
@@ -112,7 +103,6 @@ Finance Automation Android/
 ├── app/
 │   ├── schemas/                            # Versioned Room database schema contracts
 │   ├── src/
-│   │   ├── debug/                          # Debug-only notification simulator receiver
 │   │   └── main/
 │   │       ├── java/com/financeautomation/
 │   │       │   ├── core/                   # Shared models, constants, and date utilities
@@ -173,3 +163,19 @@ The agents collaborate asynchronously through a zero-dependency Model Context Pr
 3. The build agent submits a structured report via `post_report` citing modified files, verification evidence, and edge case handling.
 4. The reviewer reviews the implementation directly in the code, issues any required corrections, and authorizes progression to the next phase.
 
+---
+
+## Licence
+
+This project is open source under the MIT License. See the [LICENSE](LICENSE) file. Third party libraries keep their own licences, which are listed inside the app on the Open source licences screen.
+
+---
+
+## Developer
+
+Anuj Kondawar
+
+- Email: kondawaranuj2@gmail.com
+- GitHub: https://github.com/anujkdotexe
+- Portfolio: https://www.anujkdotexe.in/
+- LinkedIn: https://www.linkedin.com/in/anujkondawar/
