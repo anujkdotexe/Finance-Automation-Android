@@ -97,7 +97,11 @@ class MonthlyRolloverWorkerTest {
     @Test
     fun testDay4_doesNothing() = runBlocking {
         val repo = FakeTestTransactionRepository()
-        val result = MonthlyRolloverWorker.executeRollover(ZonedDateTime.of(2026, 12, 4, 9, 0, 0, 0, kolkataZone), repo) { Result.Success(0) }
+        val result = MonthlyRolloverWorker.executeRollover(
+            ZonedDateTime.of(2026, 12, 4, 9, 0, 0, 0, kolkataZone),
+            repo,
+            { Result.Success(0) }
+        )
         assertEquals(ListenableWorker.Result.success(), result)
         assertEquals(null, repo.carryForwardCalledWith)
     }
@@ -148,6 +152,55 @@ class MonthlyRolloverWorkerTest {
 
         assertEquals(ListenableWorker.Result.retry(), result)
         assertEquals("Dec26", repo.carryForwardCalledWith)
+    }
+
+    @Test
+    fun testCarryForwardError_retriesUnderMaxRetriesAndFailsAtOrAboveCap() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        repo.carryForwardResult = Result.Error(IOException("Disk error"))
+        val dateDay25 = ZonedDateTime.of(2026, 11, 25, 10, 0, 0, 0, kolkataZone)
+        val dummySync: suspend () -> Result<Int> = { Result.Success(0) }
+
+        for (attempt in 0..4) {
+            val result = MonthlyRolloverWorker.executeRollover(dateDay25, repo, dummySync, runAttemptCount = attempt)
+            assertEquals("Attempt $attempt below MAX_RETRIES must return retry", ListenableWorker.Result.retry(), result)
+        }
+
+        val cappedResult = MonthlyRolloverWorker.executeRollover(dateDay25, repo, dummySync, runAttemptCount = 5)
+        assertEquals("Attempt 5 at MAX_RETRIES must return failure", ListenableWorker.Result.failure(), cappedResult)
+
+        val beyondCappedResult = MonthlyRolloverWorker.executeRollover(dateDay25, repo, dummySync, runAttemptCount = 6)
+        assertEquals("Attempt beyond MAX_RETRIES must return failure", ListenableWorker.Result.failure(), beyondCappedResult)
+    }
+
+    @Test
+    fun testSyncError_retriesUnderMaxRetriesAndFailsAtOrAboveCap() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        val dateDay25 = ZonedDateTime.of(2026, 11, 25, 10, 0, 0, 0, kolkataZone)
+        val failingSync: suspend () -> Result<Int> = { Result.Error(IOException("Sync failure")) }
+
+        for (attempt in 0..4) {
+            val result = MonthlyRolloverWorker.executeRollover(dateDay25, repo, failingSync, runAttemptCount = attempt)
+            assertEquals("Attempt $attempt below MAX_RETRIES must return retry", ListenableWorker.Result.retry(), result)
+        }
+
+        val cappedResult = MonthlyRolloverWorker.executeRollover(dateDay25, repo, failingSync, runAttemptCount = 5)
+        assertEquals("Attempt 5 at MAX_RETRIES must return failure", ListenableWorker.Result.failure(), cappedResult)
+
+        val beyondCappedResult = MonthlyRolloverWorker.executeRollover(dateDay25, repo, failingSync, runAttemptCount = 6)
+        assertEquals("Attempt beyond MAX_RETRIES must return failure", ListenableWorker.Result.failure(), beyondCappedResult)
+    }
+
+    @Test
+    fun testSuccess_returnsSuccessRegardlessOfAttemptCount() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        val dateDay25 = ZonedDateTime.of(2026, 11, 25, 10, 0, 0, 0, kolkataZone)
+        val successfulSync: suspend () -> Result<Int> = { Result.Success(1) }
+
+        for (attempt in listOf(0, 4, 5, 10)) {
+            val result = MonthlyRolloverWorker.executeRollover(dateDay25, repo, successfulSync, runAttemptCount = attempt)
+            assertEquals("Successful run at attempt $attempt must return success", ListenableWorker.Result.success(), result)
+        }
     }
 }
 
