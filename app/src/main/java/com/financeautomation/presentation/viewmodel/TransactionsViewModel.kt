@@ -308,12 +308,10 @@ class TransactionsViewModel(
             return
         }
         val trimmed = category.trim()
-        val match = CategoryConstants.DEFAULT_CATEGORIES
+        val defaultMatch = CategoryConstants.DEFAULT_CATEGORIES
             .firstOrNull { it.equals(trimmed, ignoreCase = true) }
-        if (match != null) {
-            filterFlow.update { it.copy(category = match, excludeSavingsAndIgnored = false, status = null) }
-        }
-        // Unknown category is ignored
+        val finalCategory = defaultMatch ?: trimmed
+        filterFlow.update { it.copy(category = finalCategory, excludeSavingsAndIgnored = false, status = null) }
     }
 
     fun setTypeFilter(type: String?) {

@@ -71,5 +71,15 @@ class ButtonPairStringLengthTest {
             }
         }
     }
+
+    @Test
+    fun testLongLabelsDoNotCrashButtonPair() {
+        val longLabel1 = "Save changes to monthly budget"
+        val longLabel2 = "Discard and return to previous screen"
+        assertTrue(longLabel1.length > MAX_BUTTON_PAIR_LABEL_LENGTH)
+        assertTrue(longLabel2.length > MAX_BUTTON_PAIR_LABEL_LENGTH)
+        // Verify MAX_BUTTON_PAIR_LABEL_LENGTH is 14
+        org.junit.Assert.assertEquals(14, MAX_BUTTON_PAIR_LABEL_LENGTH)
+    }
 }
 

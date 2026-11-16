@@ -160,7 +160,7 @@
     <string name="speed_dial_income_refund">Income or refund</string>
 
     <string name="menu_sync_backup">Sync and backup</string>
-    <string name="nav_subscriptions_placeholder">Coming in round 4</string>
+    <string name="nav_subscriptions_placeholder">No subscriptions available</string>
 
     <!-- Sheet Flow Prompts and Labels -->
     <string name="inflow_type_income">Income / Salary</string>
