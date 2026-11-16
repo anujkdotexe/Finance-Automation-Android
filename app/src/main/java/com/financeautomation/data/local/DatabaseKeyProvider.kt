@@ -8,9 +8,9 @@ import android.util.Log
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.security.SecureRandom
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -44,6 +44,27 @@ class DatabaseKeyProvider(private val context: Context) {
         private const val GCM_IV_LENGTH = 12
         private const val PASSPHRASE_BYTE_COUNT = 32
         private const val KEY_FILE_NAME = "database_passphrase.enc"
+
+        /**
+         * True only when the stored passphrase can never be read again: the master key was invalidated, is gone from
+         * the Keystore, the file is damaged, or the key does not match the file (authentication tag mismatch).
+         * Any other failure, including a Keystore that cannot answer right now, is treated as transient so the
+         * passphrase file is kept and the caller retries. Regenerating the key makes the encrypted database
+         * unreadable, so it must not happen on a glitch.
+         */
+        internal fun isPermanentKeyFailure(error: Exception, aliasPresent: () -> Boolean): Boolean {
+            if (error is KeyPermanentlyInvalidatedException ||
+                error is CorruptKeyFileException ||
+                error is AEADBadTagException
+            ) {
+                return true
+            }
+            return try {
+                !aliasPresent()
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     private val keyStore: KeyStore by lazy {
@@ -65,10 +86,7 @@ class DatabaseKeyProvider(private val context: Context) {
             try {
                 return decryptPassphrase(file)
             } catch (e: Exception) {
-                val isPermanent = e is KeyPermanentlyInvalidatedException ||
-                    e is CorruptKeyFileException ||
-                    e is GeneralSecurityException ||
-                    !keyStore.containsAlias(KEY_ALIAS)
+                val isPermanent = isPermanentKeyFailure(e) { keyStore.containsAlias(KEY_ALIAS) }
                 if (isPermanent) {
                     Log.e(TAG, "Keystore master key invalidated or key file corrupt: ${e.javaClass.simpleName}. Regenerating key.")
                     file.delete()
