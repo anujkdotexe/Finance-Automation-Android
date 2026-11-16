@@ -15,4 +15,7 @@ interface BudgetRepository {
 
     /** Removes the budget of [category]; removing a missing budget succeeds. */
     suspend fun removeBudget(category: String): Result<Unit>
+
+    /** Renames a budget category from [oldCategory] to [newCategory]. */
+    suspend fun renameCategory(oldCategory: String, newCategory: String): Result<Unit> = Result.Success(Unit)
 }

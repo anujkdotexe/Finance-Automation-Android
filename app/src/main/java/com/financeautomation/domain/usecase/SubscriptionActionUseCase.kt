@@ -4,6 +4,8 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.repository.SubscriptionRepository
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -45,16 +47,18 @@ class SubscriptionActionUseCase(
         return minOf(nowMillis, dueNoon)
     }
 
+    private val yesMutex = Mutex()
+
     /** True when the cycle belongs to a subscription whose amount varies, so Yes must open the expense sheet. */
     suspend fun amountVaries(cycleId: String): Boolean =
         repository.getCycleWithSubscription(cycleId)?.subscription?.amount == null
 
-    suspend fun yes(cycleId: String, nowMillis: Long = System.currentTimeMillis()): SubscriptionYesOutcome {
-        val item = repository.getCycleWithSubscription(cycleId) ?: return SubscriptionYesOutcome.NotFound
+    suspend fun yes(cycleId: String, nowMillis: Long = System.currentTimeMillis()): SubscriptionYesOutcome = yesMutex.withLock {
+        val item = repository.getCycleWithSubscription(cycleId) ?: return@withLock SubscriptionYesOutcome.NotFound
         val cycle = item.cycle
         val sub = item.subscription
-        if (cycle.state == SubscriptionCycleState.PAID || cycle.state == SubscriptionCycleState.SKIPPED) {
-            return SubscriptionYesOutcome.AlreadyResolved
+        if (cycle.state == SubscriptionCycleState.PAID || cycle.state == SubscriptionCycleState.SKIPPED || cycle.transactionId != null) {
+            return@withLock SubscriptionYesOutcome.AlreadyResolved
         }
         val currentMonthStart = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
             .withDayOfMonth(1).toEpochDay()
@@ -62,12 +66,12 @@ class SubscriptionActionUseCase(
             if (cycle.state != SubscriptionCycleState.NEEDS_REVIEW) {
                 repository.setCycleState(cycle.id, SubscriptionCycleState.NEEDS_REVIEW)
             }
-            return SubscriptionYesOutcome.PastMonth
+            return@withLock SubscriptionYesOutcome.PastMonth
         }
         val timestamp = expenseTimestamp(cycle.dueEpochDay, nowMillis)
         val amount = sub.amount
         if (amount == null) {
-            return try {
+            return@withLock try {
                 SubscriptionYesOutcome.NeedsAmount(createCapture(sub, timestamp))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -83,7 +87,7 @@ class SubscriptionActionUseCase(
             timestamp = timestamp,
             afterInsert = { txn -> repository.markCyclePaid(cycle.id, txn.id) }
         )
-        return when (result) {
+        return@withLock when (result) {
             is Result.Success -> SubscriptionYesOutcome.Logged(result.data.id)
             is Result.Error -> SubscriptionYesOutcome.Failed(result.message ?: "Could not log the expense")
             is Result.Loading -> SubscriptionYesOutcome.Failed("Still saving")

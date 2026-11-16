@@ -88,7 +88,8 @@ class SettingsViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val appLockManager: com.financeautomation.domain.security.AppLockManager? = null,
     private val privacySettings: com.financeautomation.domain.security.PrivacySettings? = null,
-    private val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null
+    private val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null,
+    private val budgetRepository: com.financeautomation.domain.repository.BudgetRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -103,6 +104,7 @@ class SettingsViewModel(
         accountRepository = accountRepository,
         categoryRepository = categoryRepository,
         tripTagRepository = tripTagRepository,
+        budgetRepository = budgetRepository,
         scope = viewModelScope,
         uiState = _uiState,
         ioDispatcher = ioDispatcher

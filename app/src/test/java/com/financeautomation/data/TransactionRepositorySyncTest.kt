@@ -94,6 +94,9 @@ class TransactionRepositorySyncTest {
         override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {
             transactions[id]?.let { transactions[id] = it.copy(reviewState = reviewState) }
         }
+        override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
+        override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
+        override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
     }
 
     private class FakeSyncQueueDao : SyncQueueDao {
@@ -137,6 +140,7 @@ class TransactionRepositorySyncTest {
         override suspend fun resetQueueItem(id: Long) {
             queue[id]?.let { queue[id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0, lastErrorKind = null, lastErrorDetail = null) }
         }
+        override suspend fun recoverRetryableFailedItems(): Int = 0
         override suspend fun countPendingOperations(opType: String): Int =
             queue.values.count { it.operationType == opType && it.status == SyncQueueEntity.STATUS_PENDING }
         override suspend fun updatePlanJson(id: Long, planJson: String?) {
@@ -176,6 +180,7 @@ class TransactionRepositorySyncTest {
         }
         override suspend fun deleteByUuid(uuid: String) { payables.remove(uuid) }
         override suspend fun deleteAll() { payables.clear() }
+        override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
     }
 
     private class FakeLineageDao : LineageDao {

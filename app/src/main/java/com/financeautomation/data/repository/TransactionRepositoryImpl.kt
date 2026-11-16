@@ -719,6 +719,50 @@ class TransactionRepositoryImpl(
         else -> false
     }
 
+    private fun isTransientNetworkFailure(throwable: Throwable?): Boolean = when (throwable) {
+        is java.net.SocketTimeoutException,
+        is java.net.UnknownHostException,
+        is java.net.ConnectException,
+        is java.net.NoRouteToHostException,
+        is java.net.SocketException -> true
+        else -> {
+            val msg = throwable?.message?.lowercase().orEmpty()
+            msg.contains("unknownhost") ||
+            msg.contains("unable to resolve host") ||
+            msg.contains("failed to connect") ||
+            msg.contains("network unreachable") ||
+            msg.contains("connection refused") ||
+            msg.contains("socket closed")
+        }
+    }
+
+    override suspend fun updateAccountName(oldName: String, newName: String): Result<Int> = withContext(ioDispatcher) {
+        try {
+            val count = resolveTransactionDao().updateAccountName(oldName, newName)
+            Result.Success(count)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    override suspend fun updateCategoryName(oldName: String, newName: String): Result<Int> = withContext(ioDispatcher) {
+        try {
+            val count = resolveTransactionDao().updateCategoryName(oldName, newName)
+            Result.Success(count)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    override suspend fun updateCompanionName(oldName: String, newName: String): Result<Int> = withContext(ioDispatcher) {
+        try {
+            val count = resolveTransactionDao().updateCompanionName(oldName, newName)
+            Result.Success(count)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
     private suspend fun markTransportFailure(item: SyncQueueEntity, txn: Transaction, throwable: Throwable? = null) {
         // The transaction keeps its review state: a retryable failure is not a reason to ask the user again
         handleItemTransportFailure(item, throwable)
@@ -763,6 +807,8 @@ class TransactionRepositoryImpl(
             val transactionDao = resolveTransactionDao()
             val syncQueueDao = resolveSyncQueueDao()
 
+            syncQueueDao.recoverRetryableFailedItems()
+
             val pendingItems = syncQueueDao.getPendingQueueFifo(maxRetries = MAX_SYNC_RETRIES)
             if (pendingItems.isEmpty()) {
                 reconcileIfDue(userInitiated, queueHadWork = false)
@@ -790,7 +836,8 @@ class TransactionRepositoryImpl(
                     } else if (configRes is Result.Error) {
                         val err = configRes.exception
                         if (isTransportOrServerError(err)) {
-                            val newRetries = item.retryCount + 1
+                            val isTransient = isTransientNetworkFailure(err)
+                            val newRetries = if (isTransient) item.retryCount else item.retryCount + 1
                             if (newRetries >= MAX_SYNC_RETRIES) {
                                 syncQueueDao.setStatusAndRetryCount(item.id, SyncQueueEntity.STATUS_FAILED, newRetries)
                             } else {
@@ -892,8 +939,15 @@ class TransactionRepositoryImpl(
                             }
                         }
                         if (knownTabs != null && !knownTabs.contains(opTabName)) {
-                            googleSheetsClient.ensureMonthTabExists(spreadsheetId, opTabName, accounts, categories)
-                            knownTabs.add(opTabName)
+                            val ensureRes = googleSheetsClient.ensureMonthTabExists(spreadsheetId, opTabName, accounts, categories)
+                            if (ensureRes is Result.Success) {
+                                knownTabs.add(opTabName)
+                            } else if (ensureRes is Result.Error) {
+                                val err = ensureRes.exception
+                                handleItemTransportFailure(item, err)
+                                st.transportFailure = true
+                                if (isRunWideFailure(err)) break else continue
+                            }
                         }
                     }
 
@@ -1634,7 +1688,9 @@ class TransactionRepositoryImpl(
             qDao.setStatusError(item.id, item.status, item.retryCount, SyncErrorKind.AUTH_EXPIRED.name, err.message)
             return true
         }
-        if (isTransportOrServerError(err)) {
+        val isMissingTab = err is com.financeautomation.data.remote.SheetNotFoundException ||
+            err.message?.contains("unable to parse range", ignoreCase = true) == true
+        if (isTransportOrServerError(err) || isMissingTab) {
             st.transportFailure = true
             st.failedIds.add(item.transactionId)
             if (txn != null) markTransportFailure(item, txn, err) else handleItemTransportFailure(item, err)
@@ -1665,7 +1721,8 @@ class TransactionRepositoryImpl(
 
     private suspend fun handleItemTransportFailure(item: SyncQueueEntity, throwable: Throwable? = null) {
         val qDao = resolveSyncQueueDao()
-        val newRetries = item.retryCount + 1
+        val isTransient = isTransientNetworkFailure(throwable)
+        val newRetries = if (isTransient) item.retryCount else item.retryCount + 1
         val kind = SyncErrorKind.fromThrowable(throwable).name
         val detail = throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure"
         if (newRetries >= MAX_SYNC_RETRIES) {

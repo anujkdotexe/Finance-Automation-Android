@@ -41,6 +41,14 @@ class BudgetRepositoryImplTest {
         override suspend fun markClean(categories: List<String>) {
             rows.value = rows.value.mapValues { (k, v) -> if (k in categories) v.copy(dirty = 0) else v }
         }
+        override suspend fun updateCategoryName(oldCategory: String, newCategory: String, updatedAt: Long): Int {
+            val existing = rows.value[oldCategory] ?: return 0
+            val updatedMap = rows.value.toMutableMap()
+            updatedMap.remove(oldCategory)
+            updatedMap[newCategory] = existing.copy(category = newCategory, dirty = 1, updatedAt = updatedAt)
+            rows.value = updatedMap
+            return 1
+        }
     }
 
     private var now = 1_000L

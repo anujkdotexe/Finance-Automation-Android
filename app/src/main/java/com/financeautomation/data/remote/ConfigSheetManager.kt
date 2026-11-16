@@ -166,7 +166,9 @@ class ConfigSheetManager(
             if (rangeResult is Result.Error) {
                 val err = rangeResult.exception
                 val msg = err.message.orEmpty()
-                if (err is SheetNotFoundException || msg.contains("Unable to parse range") || msg.contains("Config")) {
+                val isTabMissing = err is SheetNotFoundException ||
+                    (err is GoogleSheetsApiException && err.statusCode == 400 && (msg.contains("unable to parse range", ignoreCase = true) || msg.contains("range not found", ignoreCase = true)))
+                if (isTabMissing) {
                     return@withContext Result.Error(EmptyOrMissingConfigTabException("Config tab not present in spreadsheet", err))
                 }
                 return@withContext Result.Error(err)

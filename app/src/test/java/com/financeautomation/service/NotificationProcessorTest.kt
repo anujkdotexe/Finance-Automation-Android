@@ -77,6 +77,9 @@ class NotificationProcessorTest {
         override suspend fun voidTransaction(id: String, voidTitle: String) {}
         override suspend fun updateSyncState(id: String, syncState: String, sheetRowIndex: Int?) {}
         override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {}
+        override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
+        override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
+        override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
     }
 
     @Test

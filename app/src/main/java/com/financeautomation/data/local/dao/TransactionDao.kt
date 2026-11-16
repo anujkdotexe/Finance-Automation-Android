@@ -79,6 +79,15 @@ interface TransactionDao {
     @Query("UPDATE transactions SET reviewState = :reviewState, category = COALESCE(:category, category) WHERE id = :id")
     suspend fun updateReviewState(id: String, reviewState: String, category: String? = null)
 
+    @Query("UPDATE transactions SET account = :newName WHERE account = :oldName")
+    suspend fun updateAccountName(oldName: String, newName: String): Int
+
+    @Query("UPDATE transactions SET category = :newName WHERE category = :oldName")
+    suspend fun updateCategoryName(oldName: String, newName: String): Int
+
+    @Query("UPDATE transactions SET companions = REPLACE(companions, :oldName, :newName) WHERE companions LIKE '%' || :oldName || '%'")
+    suspend fun updateCompanionName(oldName: String, newName: String): Int
+
     /** Deletes the row only if it is still void when the delete runs; false when it was not (for example undone). */
     @Transaction
     suspend fun deleteIfVoid(id: String): Boolean {

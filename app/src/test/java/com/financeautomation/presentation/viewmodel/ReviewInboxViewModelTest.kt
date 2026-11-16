@@ -146,6 +146,7 @@ class ReviewInboxViewModelTest {
         override suspend fun resetQueueItem(id: Long) {
             queue[id]?.let { queue[id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0, lastErrorKind = null, lastErrorDetail = null); refreshFlow() }
         }
+        override suspend fun recoverRetryableFailedItems(): Int = 0
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) {}
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}

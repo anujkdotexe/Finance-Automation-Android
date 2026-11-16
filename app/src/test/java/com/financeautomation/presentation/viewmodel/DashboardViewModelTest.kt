@@ -119,6 +119,7 @@ class DashboardViewModelTest {
         override suspend fun resetQueueItem(id: Long) {
             queue[id]?.let { queue[id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0, lastErrorKind = null, lastErrorDetail = null); refreshFlow() }
         }
+        override suspend fun recoverRetryableFailedItems(): Int = 0
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) {}
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
@@ -142,6 +143,7 @@ class DashboardViewModelTest {
         }
         override suspend fun deleteByUuid(uuid: String) { payables.value = payables.value.filter { it.uuid != uuid } }
         override suspend fun deleteAll() { payables.value = emptyList() }
+        override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
     }
 
     private class FakePendingCaptureDao : PendingCaptureDao {

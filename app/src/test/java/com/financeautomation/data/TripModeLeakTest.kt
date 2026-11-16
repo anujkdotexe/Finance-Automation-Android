@@ -140,6 +140,9 @@ class TripModeLeakTest {
         override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {
             txns[id]?.let { txns[id] = it.copy(reviewState = reviewState) }
         }
+        override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
+        override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
+        override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
     }
 
     private class SimpleSyncQueueDao : SyncQueueDao {
@@ -158,6 +161,7 @@ class TripModeLeakTest {
         override suspend fun deleteByTransactionId(transactionId: String) { items.values.removeIf { it.transactionId == transactionId } }
         override suspend fun getNextPending(maxRetries: Int): SyncQueueEntity? = items.values.firstOrNull { it.status == SyncQueueEntity.STATUS_PENDING }
         override suspend fun getAllPending(maxRetries: Int): List<SyncQueueEntity> = items.values.filter { it.status == SyncQueueEntity.STATUS_PENDING }
+        override suspend fun recoverRetryableFailedItems(): Int = 0
         override suspend fun getPendingQueueFifo(maxRetries: Int): List<SyncQueueEntity> = items.values.filter { it.status == SyncQueueEntity.STATUS_PENDING }
         override suspend fun updateStatus(id: Long, status: String, retryIncrement: Int) {
             items[id]?.let { items[id] = it.copy(status = status, retryCount = it.retryCount + retryIncrement) }

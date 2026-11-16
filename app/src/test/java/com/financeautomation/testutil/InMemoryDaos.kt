@@ -47,6 +47,30 @@ class InMemoryTransactionDao : TransactionDao {
     override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {
         rows[id]?.let { rows[id] = it.copy(reviewState = reviewState) }
     }
+    override suspend fun updateAccountName(oldName: String, newName: String): Int {
+        var count = 0
+        rows.values.filter { it.account.equals(oldName, ignoreCase = true) }.forEach {
+            rows[it.id] = it.copy(account = newName)
+            count++
+        }
+        return count
+    }
+    override suspend fun updateCategoryName(oldName: String, newName: String): Int {
+        var count = 0
+        rows.values.filter { it.category.equals(oldName, ignoreCase = true) }.forEach {
+            rows[it.id] = it.copy(category = newName)
+            count++
+        }
+        return count
+    }
+    override suspend fun updateCompanionName(oldName: String, newName: String): Int {
+        var count = 0
+        rows.values.filter { it.companions.contains(oldName) }.forEach {
+            rows[it.id] = it.copy(companions = it.companions.replace(oldName, newName))
+            count++
+        }
+        return count
+    }
 }
 
 /** In-memory inflow table. */
@@ -107,6 +131,15 @@ class InMemoryQueueDao : SyncQueueDao {
     }
     override suspend fun resetQueueItem(id: Long) {
         queue[id]?.let { queue[id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0, lastErrorKind = null, lastErrorDetail = null) }
+    }
+    override suspend fun recoverRetryableFailedItems(): Int {
+        var count = 0
+        queue.values.filter { it.status == SyncQueueEntity.STATUS_FAILED && (it.lastErrorKind in listOf("NO_NETWORK", "RATE_LIMITED", "SERVER_BUSY") || (it.retryCount < 999 && it.lastErrorKind != "SHEET_CHANGED" && it.lastErrorKind != "AUTH_EXPIRED")) }
+            .forEach {
+                queue[it.id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0)
+                count++
+            }
+        return count
     }
     override suspend fun countPendingOperations(opType: String): Int = queue.values.count { it.operationType == opType && it.status == SyncQueueEntity.STATUS_PENDING }
     override suspend fun updatePlanJson(id: Long, planJson: String?) { queue[id]?.let { queue[id] = it.copy(planJson = planJson) } }
