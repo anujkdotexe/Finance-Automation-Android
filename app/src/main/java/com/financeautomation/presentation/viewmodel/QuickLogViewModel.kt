@@ -364,15 +364,15 @@ class QuickLogViewModel(
                             onSaved(msg, txnId)
                         }
                         is Result.Error -> {
-                            _uiState.update { it.copy(isSaving = false, errorMessage = res.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.quicklog_err_update_failed, "")) }
+                            Diagnostics.record("QuickLogViewModel", "update_error: ${res.message}")
+                            _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_update_failed_generic)) }
                         }
                         is Result.Loading -> Unit
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: updateTransaction")
-                    val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
-                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_update_failed, scrubbed)) }
+                    Diagnostics.record("QuickLogViewModel", "update_exception: ${e.javaClass.simpleName}")
+                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_update_failed_generic)) }
                 }
             }
             return
@@ -397,15 +397,15 @@ class QuickLogViewModel(
                         onSaved(message, loggedTxn.id)
                     }
                     is Result.Error -> {
-                        _uiState.update { it.copy(isSaving = false, errorMessage = result.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.quicklog_err_save_failed, "")) }
+                        Diagnostics.record("QuickLogViewModel", "save_error: ${result.message}")
+                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_save_failed_generic)) }
                     }
                     is Result.Loading -> Unit
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onConfirmAndSave")
-                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
-                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_save_failed, scrubbed)) }
+                Diagnostics.record("QuickLogViewModel", "save_exception: ${e.javaClass.simpleName}")
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_save_failed_generic)) }
             }
         }
     }
@@ -451,15 +451,15 @@ class QuickLogViewModel(
                         onVoided()
                     }
                     is Result.Error -> {
-                        _uiState.update { it.copy(isSaving = false, errorMessage = res.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.quicklog_err_void_failed, "")) }
+                        Diagnostics.record("QuickLogViewModel", "void_error: ${res.message}")
+                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_void_failed_generic)) }
                     }
                     is Result.Loading -> Unit
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onVoid")
-                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
-                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_void_failed, scrubbed)) }
+                Diagnostics.record("QuickLogViewModel", "void_exception: ${e.javaClass.simpleName}")
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_void_failed_generic)) }
             }
         }
     }

@@ -825,6 +825,12 @@
     <string name="dashboard_msg_synced_sheets">Synced %1$d transaction(s) to Google Sheets</string>
     <string name="dashboard_msg_all_up_to_date">All transactions up to date</string>
     <string name="dashboard_err_sync_failed">Sync failed with error: %1$s</string>
+    <string name="err_sync_failed_generic">Sync failed. Details are in Diagnostics.</string>
+    <string name="err_save_failed_generic">Failed to save. Details are in Diagnostics.</string>
+    <string name="err_update_failed_generic">Failed to update. Details are in Diagnostics.</string>
+    <string name="err_void_failed_generic">Failed to void entry. Details are in Diagnostics.</string>
+    <string name="err_check_all_months_failed">Failed to check all months. Details are in Diagnostics.</string>
+    <string name="err_config_sync_failed">Configuration sync failed. Details are in Diagnostics.</string>
 
     <!-- OnboardingViewModel -->
     <string name="onboarding_err_consent_denied">Consent was not granted. Please grant Google Drive access to continue.</string>

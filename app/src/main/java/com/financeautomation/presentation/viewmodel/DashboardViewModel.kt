@@ -632,27 +632,23 @@ class DashboardViewModel(
                         }
                     }
                     is Result.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                errorMessage = res.message?.let { msg -> UiText.dynamic(msg) }
-                                    ?: UiText.res(R.string.dashboard_err_sync_failed, res.throwable.message ?: "")
-                            )
-                        }
+                        handleSyncFailure("sync_error", res.throwable)
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("DashboardViewModel", "sync: ${e.javaClass.simpleName}")
-                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
-                _uiState.update {
-                    it.copy(
-                        errorMessage = UiText.res(R.string.dashboard_err_sync_failed, scrubbed)
-                    )
-                }
+                handleSyncFailure("sync_exception", e)
             } finally {
                 _uiState.update { it.copy(isSyncing = false) }
             }
+        }
+    }
+
+    private fun handleSyncFailure(stageCode: String, throwable: Throwable) {
+        Diagnostics.record("DashboardViewModel", "$stageCode: ${throwable.javaClass.simpleName}")
+        _uiState.update {
+            it.copy(errorMessage = UiText.res(R.string.err_sync_failed_generic))
         }
     }
 

@@ -169,8 +169,10 @@ class ReviewInboxViewModel(
                     _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_subscription_saved)) }
                 is SubscriptionYesOutcome.NeedsAmount ->
                     _uiState.update { it.copy(openQuickLogCaptureId = outcome.captureId) }
-                is SubscriptionYesOutcome.Failed ->
-                    _uiState.update { it.copy(errorMessage = UiText.dynamic(outcome.message)) }
+                is SubscriptionYesOutcome.Failed -> {
+                    Diagnostics.record("ReviewInboxViewModel", "subscription_failed: ${outcome.message}")
+                    _uiState.update { it.copy(errorMessage = UiText.res(R.string.err_save_failed_generic)) }
+                }
                 SubscriptionYesOutcome.PastMonth ->
                     _uiState.update {
                         it.copy(errorMessage = UiText.res(R.string.review_err_previous_month))
