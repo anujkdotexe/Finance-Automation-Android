@@ -32,11 +32,8 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HealthAndSafety
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
@@ -93,8 +90,6 @@ fun SetupHealthCard(
     val coroutineScope = rememberCoroutineScope()
     val state by viewModel.uiState.collectAsState()
 
-    var selfTestResultText by remember { mutableStateOf<String?>(null) }
-    var selfTestSucceeded by remember { mutableStateOf<Boolean?>(null) }
     var fallbackInstructionText by remember { mutableStateOf<String?>(null) }
     var postNotificationRequestedOnce by remember { mutableStateOf(false) }
     var reportDialogMode by remember { mutableStateOf<Boolean?>(null) }
@@ -231,55 +226,19 @@ fun SetupHealthCard(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
 
-        // 3. Self-Test Simulation & Reporting Section
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-            verticalAlignment = Alignment.CenterVertically
+        // 3. Reporting Section
+        OutlinedButton(
+            onClick = { reportDialogMode = false },
+            shape = FinanceTheme.shapes.card,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Button(
-                onClick = {
-                    val controller = overlayControllerProvider?.invoke()
-                    if (controller == null) {
-                        selfTestResultText = context.getString(R.string.health_self_test_failed)
-                        selfTestSucceeded = false
-                        return@Button
-                    }
-                    coroutineScope.launch {
-                        val passed = controller.showSelfTest()
-                        selfTestSucceeded = passed
-                        selfTestResultText = if (passed) {
-                            context.getString(R.string.health_self_test_success)
-                        } else {
-                            context.getString(R.string.health_self_test_failed)
-                        }
-                    }
-                },
-                shape = FinanceTheme.shapes.card,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                )
-                Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
-                Text(stringResource(R.string.health_self_test_button))
-            }
-
-            OutlinedButton(
-                onClick = { reportDialogMode = false },
-                shape = FinanceTheme.shapes.card,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Share,
-                    contentDescription = null,
-                    modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                )
-                Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
-                Text(stringResource(R.string.health_generate_report_button))
-            }
+            Icon(
+                imageVector = Icons.Rounded.Share,
+                contentDescription = null,
+                modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+            )
+            Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
+            Text(stringResource(R.string.health_generate_report_button))
         }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
@@ -296,24 +255,6 @@ fun SetupHealthCard(
             )
             Spacer(modifier = Modifier.width(FinanceTheme.sizes.badgeOffset))
             Text(stringResource(R.string.report_missed_payment_button))
-        }
-
-        AnimatedVisibility(visible = selfTestResultText != null) {
-            selfTestResultText?.let { text ->
-                val isSuccess = selfTestSucceeded == true
-                Surface(
-                    color = if (isSuccess) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.errorContainer,
-                    shape = FinanceTheme.shapes.small,
-                    modifier = Modifier.fillMaxWidth().padding(top = FinanceTheme.spacing.s)
-                ) {
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isSuccess) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(FinanceTheme.spacing.s)
-                    )
-                }
-            }
         }
     }
 

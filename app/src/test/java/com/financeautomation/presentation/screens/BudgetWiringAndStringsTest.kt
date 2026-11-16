@@ -61,7 +61,7 @@ class BudgetWiringAndStringsTest {
     @Test
     fun job4MovedTextsAreNoLongerLiteralsAndLiveInStringsXml() {
         val moved = mapOf(
-            "screens/drawer/DiagnosticsScreen.kt" to listOf("\"Share Diagnostics\"", "\"Simulation Mode\"", "\"SMS simulation completed\""),
+            "screens/drawer/DiagnosticsScreen.kt" to listOf("\"Share Diagnostics\""),
             "components/QuickLogSheet.kt" to listOf("\"DATE\"", "\"Today\"", "\"Yesterday\"", "\"Pick date\""),
             "screens/DashboardBurnCards.kt" to listOf("\"to review\""),
             "screens/ReviewInboxScreen.kt" to listOf("\"today\"", "\"Synced\""),
@@ -78,7 +78,6 @@ class BudgetWiringAndStringsTest {
         }
         val expectedResourceKeys = listOf(
             "diag_share_chooser_title",
-            "diag_sim_card_title",
             "quick_log_date_label",
             "dashboard_key_figures_cd",
             "onboarding_setup_title",

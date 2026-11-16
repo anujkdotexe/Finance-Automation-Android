@@ -76,7 +76,6 @@ fun OverlayContentHost(
     onEndTrip: () -> Unit,
     onDismiss: () -> Unit,
     onKeyboardFocusChanged: (Boolean) -> Unit,
-    isTestMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var currentScreen by remember { mutableStateOf(initialScreen) }
@@ -124,23 +123,6 @@ fun OverlayContentHost(
             .heightIn(max = FinanceTheme.sizes.maxOverlayHeight)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            if (isTestMode) {
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = FinanceTheme.shapes.sheet,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = stringResource(R.string.health_self_test_banner),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = FinanceTheme.spacing.s)
-                    )
-                }
-            }
-
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },

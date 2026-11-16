@@ -222,15 +222,6 @@ class QuickLogViewModel(
         refreshPredictedCategories("")
     }
 
-    /**
-     * Initializes self-test mode with sample expense data and no pending capture (Spec 7.4).
-     * Does not reference any whitelisted package or write to persistent storage.
-     */
-    fun setSelfTestMode(samplePayee: String? = null) {
-        _uiState.update { SelfTestSampleData.createSelfTestState(it, samplePayee) }
-        recalculateSplit()
-    }
-
     fun onAmountChanged(text: String) {
         if (!AmountInputSanitizer.isValidExpressionInput(text)) return
         val parsed = expressionEvaluator.evaluate(text) ?: 0.0
