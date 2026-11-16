@@ -48,6 +48,7 @@ class InsightsViewModel(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository? = null,
     private val inflowRepository: InflowRepository? = null,
+    private val savedStateHandle: androidx.lifecycle.SavedStateHandle? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val zone: ZoneId = LivingBurn.KOLKATA,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -56,12 +57,19 @@ class InsightsViewModel(
 ) : ViewModel() {
 
     private val currentMonth: YearMonth = YearMonth.from(Instant.ofEpochMilli(clock()).atZone(zone))
-    private val selectedMonth = MutableStateFlow(currentMonth)
+    private val selectedMonth: MutableStateFlow<YearMonth>
 
-    private val _uiState = MutableStateFlow(InsightsUiState(selectedMonth = currentMonth, currentMonth = currentMonth))
-    val uiState: StateFlow<InsightsUiState> = _uiState.asStateFlow()
+    private val _uiState: MutableStateFlow<InsightsUiState>
+    val uiState: StateFlow<InsightsUiState> get() = _uiState.asStateFlow()
 
     init {
+        val restoredMonth = savedStateHandle?.get<String>(KEY_SAVED_MONTH)?.let {
+            try { YearMonth.parse(it) } catch (_: Exception) { null }
+        }
+        val initial = if (restoredMonth != null && restoredMonth <= currentMonth) restoredMonth else currentMonth
+        selectedMonth = MutableStateFlow(initial)
+        _uiState = MutableStateFlow(InsightsUiState(selectedMonth = initial, currentMonth = currentMonth))
+
         viewModelScope.launch(ioDispatcher) {
             combine(
                 transactionRepository.getTransactions(),
@@ -89,12 +97,24 @@ class InsightsViewModel(
         )
 
     fun previousMonth() {
-        selectedMonth.value = selectedMonth.value.minusMonths(1)
+        val next = selectedMonth.value.minusMonths(1)
+        selectedMonth.value = next
+        savedStateHandle?.set(KEY_SAVED_MONTH, next.toString())
     }
 
     /** Moves the donut forward, never past the current month. */
     fun nextMonth() {
-        if (selectedMonth.value < currentMonth) selectedMonth.value = selectedMonth.value.plusMonths(1)
+        if (selectedMonth.value < currentMonth) {
+            val next = selectedMonth.value.plusMonths(1)
+            selectedMonth.value = next
+            savedStateHandle?.set(KEY_SAVED_MONTH, next.toString())
+        }
+    }
+
+    fun setSelectedMonth(month: YearMonth) {
+        val target = if (month <= currentMonth) month else currentMonth
+        selectedMonth.value = target
+        savedStateHandle?.set(KEY_SAVED_MONTH, target.toString())
     }
 
     /** How many months before the current month [month] is, for opening Transactions on that month. */
@@ -102,10 +122,13 @@ class InsightsViewModel(
         (currentMonth.year - month.year) * 12 + (currentMonth.monthValue - month.monthValue)
 
     companion object {
+        const val KEY_SAVED_MONTH = "insights_saved_month"
+
         fun provideFactory(
             transactionRepository: TransactionRepository,
             categoryRepository: CategoryRepository? = null,
             inflowRepository: InflowRepository? = null,
+            savedStateHandle: androidx.lifecycle.SavedStateHandle? = null,
             otherLabel: String = InsightsCalculator.OTHER_LABEL,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
@@ -115,6 +138,7 @@ class InsightsViewModel(
                     transactionRepository = transactionRepository,
                     categoryRepository = categoryRepository,
                     inflowRepository = inflowRepository,
+                    savedStateHandle = savedStateHandle,
                     ioDispatcher = ioDispatcher,
                     otherLabel = otherLabel
                 ) as T

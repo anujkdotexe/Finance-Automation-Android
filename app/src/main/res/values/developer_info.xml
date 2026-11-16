@@ -9,5 +9,6 @@
     <string name="developer_portfolio_url" translatable="false">https://www.anujkdotexe.in/</string>
     <string name="developer_linkedin_label" translatable="false">LinkedIn</string>
     <string name="developer_linkedin_url" translatable="false">https://www.linkedin.com/in/anujkondawar/</string>
-    <string name="developer_copyright" translatable="false">Copyright 2026 Anuj Kondawar. All rights reserved.</string>
+    <string name="developer_credit" translatable="false">Open source project developed by Anuj Kondawar</string>
+    <string name="developer_license" translatable="false">Released under the MIT License. See the LICENSE file in the source repository.</string>
 </resources>

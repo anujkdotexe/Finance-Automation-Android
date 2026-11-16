@@ -216,30 +216,47 @@ fun ButtonPair(
     filledEnabled: Boolean = true,
     isFilledLoading: Boolean = false
 ) {
-    require(outlinedText.length <= MAX_BUTTON_PAIR_LABEL_LENGTH) {
-        "OutlinedButton text '$outlinedText' exceeds maximum length of $MAX_BUTTON_PAIR_LABEL_LENGTH characters"
-    }
-    require(filledText.length <= MAX_BUTTON_PAIR_LABEL_LENGTH) {
-        "FilledButton text '$filledText' exceeds maximum length of $MAX_BUTTON_PAIR_LABEL_LENGTH characters"
-    }
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        OutlinedButton(
-            text = outlinedText,
-            onClick = onOutlinedClick,
-            enabled = outlinedEnabled,
-            modifier = Modifier.weight(1f)
-        )
-        FilledButton(
-            text = filledText,
-            onClick = onFilledClick,
-            enabled = filledEnabled,
-            isLoading = isFilledLoading,
-            modifier = Modifier.weight(1f)
-        )
+    val isLong = outlinedText.length > MAX_BUTTON_PAIR_LABEL_LENGTH || filledText.length > MAX_BUTTON_PAIR_LABEL_LENGTH
+    if (isLong) {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            FilledButton(
+                text = filledText,
+                onClick = onFilledClick,
+                enabled = filledEnabled,
+                isLoading = isFilledLoading,
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedButton(
+                text = outlinedText,
+                onClick = onOutlinedClick,
+                enabled = outlinedEnabled,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    } else {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.sizes.cardGap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                text = outlinedText,
+                onClick = onOutlinedClick,
+                enabled = outlinedEnabled,
+                modifier = Modifier.weight(1f)
+            )
+            FilledButton(
+                text = filledText,
+                onClick = onFilledClick,
+                enabled = filledEnabled,
+                isLoading = isFilledLoading,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
