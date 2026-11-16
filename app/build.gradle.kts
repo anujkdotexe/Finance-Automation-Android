@@ -51,7 +51,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("releaseSigning")
+            // A release build is never signed with the debug key: without keystore.properties it stays unsigned, so it
+            // cannot be installed by mistake. Beta below keeps the debug fallback for local builds.
+            signingConfig = if (keystorePropsFile.exists()) signingConfigs.getByName("releaseSigning") else null
             ndk {
                 abiFilters += listOf("arm64-v8a", "armeabi-v7a")
             }
