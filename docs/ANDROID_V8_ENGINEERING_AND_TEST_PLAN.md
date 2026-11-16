@@ -1,6 +1,8 @@
 # Finance Automation Android - Engineering and Test Plan
 
-Status: Draft v8.0.0. Companion to
+Status: Draft v8.0.0, kept as the design reference. Updated 2026-11-16: the sections marked HISTORICAL below describe
+the early rounds and no longer match the code. `AGENTS.md` and `README.md` are authoritative where they differ (the
+rules for tests, builds and commits changed after this plan was written). Companion to
 [ANDROID_V8_PRODUCT_AND_ARCHITECTURE_SPEC.md](./ANDROID_V8_PRODUCT_AND_ARCHITECTURE_SPEC.md). Read that first; it
 defines what the app does. This document defines how it is built across Android brands and how it is proven on a
 real device.
@@ -138,9 +140,10 @@ Milestones M1 to M4 of the earlier plan are history. New sequence:
 | H | **OEM hardening and live matrix** | Setup health screen, OEM intents, run of the full live test plan on each available device. |
 | I | **Documentation closure** | Old documents given a pointer to this pair, test report written. |
 
-Testing is deferred until the MVP is in place (see section 8). Until then a milestone is closed when the app builds
-(`assembleDebug`) and the milestone's behaviour has been exercised by hand, with no automated or live-test gate.
-The MVP is milestones A to G working together; the test phase starts after that.
+HISTORICAL: this plan first deferred testing until the MVP existed. That is no longer the rule. Unit tests run on the
+JVM at any time (`testBetaUnitTest`, over a thousand tests at the time of writing), a fix needs a test that fails
+before and passes after, and the live-device checks in section 8 are done by hand on a physical phone. Builds,
+lint and installs run only when the owner asks (`AGENTS.md`, rule 9).
 
 ---
 
@@ -289,6 +292,11 @@ recorded in the test report.
 ---
 
 ## 12. Milestone A audit (existing code)
+
+HISTORICAL: this is the first audit, written on 2026-11-10 against the code of that day. Many findings below were
+fixed in later rounds (for example the simulator receiver was removed, appends use `RAW`, the OAuth scope is
+`drive.file` only, month tabs and the yearly workbook are created by the sync). Do not read this table as the current
+state. Later reviews and their open findings are in `docs/reviews/`.
 
 Date: 2026-11-10. Method: code reading of the Android source against this plan. **Nothing here was verified on a
 device**: no phone was attached over ADB, and the Gradle build could not run in the audit session (it failed with
