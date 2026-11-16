@@ -107,6 +107,8 @@ fun OpenSourceLicencesScreen(
                     }
                 }
             }
+
+            com.financeautomation.presentation.components.DeveloperFooter()
         }
     }
 }

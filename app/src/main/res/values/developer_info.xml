@@ -2,6 +2,7 @@
 <!-- Developer contact details shown on the About, Privacy and Open source licences screens. Public details given by the owner. -->
 <resources>
     <string name="developer_name" translatable="false">Anuj Kondawar</string>
+    <string name="developer_email_label" translatable="false">Email</string>
     <string name="developer_email" translatable="false">kondawaranuj2@gmail.com</string>
     <string name="developer_github_label" translatable="false">GitHub</string>
     <string name="developer_github_url" translatable="false">https://github.com/anujkdotexe</string>

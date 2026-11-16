@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.screens.drawer
 
 import android.content.ActivityNotFoundException
+import com.financeautomation.presentation.components.launchEmailIntent
 import com.financeautomation.presentation.ui.AppRoutes
 import com.financeautomation.presentation.ui.MainRouteValidator
 import org.junit.Assert.assertEquals
@@ -37,5 +38,27 @@ class AboutPrivacyAndLicencesRoutesTest {
             onError = {}
         )
         assertTrue("startActivity must be invoked for valid URL", launched)
+    }
+
+    @Test
+    fun testEmailIntentHelperTriggersOnErrorWhenNoEmailActivity() {
+        var errorTriggered = false
+        launchEmailIntent(
+            email = "dev@example.com",
+            startActivity = { throw ActivityNotFoundException("No mail app found") },
+            onError = { errorTriggered = true }
+        )
+        assertTrue("onError callback must be executed when email app cannot be launched", errorTriggered)
+    }
+
+    @Test
+    fun testEmailIntentHelperLaunchesIntentSuccessfully() {
+        var launched = false
+        launchEmailIntent(
+            email = "dev@example.com",
+            startActivity = { launched = true },
+            onError = {}
+        )
+        assertTrue("startActivity must be invoked for valid email intent", launched)
     }
 }

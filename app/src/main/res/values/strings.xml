@@ -460,6 +460,7 @@
     <string name="licences_title">Open source licences</string>
     <string name="licences_intro">This application is built with open source software:</string>
     <string name="err_open_link_failed">Could not open link in a web browser</string>
+    <string name="err_open_email_failed">Could not open an email app</string>
 
     <!-- Error Screens (U12) -->
     <string name="error_53_top_bar">Sync failure</string>
