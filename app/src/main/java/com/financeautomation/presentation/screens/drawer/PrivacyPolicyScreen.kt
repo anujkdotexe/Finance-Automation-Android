@@ -107,6 +107,8 @@ fun PrivacyPolicyScreen(
                 }
             }
 
+            com.financeautomation.presentation.components.DeveloperFooter()
+
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.l))
         }
     }

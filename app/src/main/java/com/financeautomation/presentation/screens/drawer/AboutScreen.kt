@@ -381,5 +381,8 @@ fun AboutScreen(
                 .fillMaxWidth()
                 .padding(top = FinanceTheme.spacing.m)
         )
+
+        // Developer attribution, MIT license, and verified contacts
+        com.financeautomation.presentation.components.DeveloperFooter()
     }
 }
