@@ -407,64 +407,6 @@ class NotificationProcessor(
         }
 
         /**
-         * Developer-mode entry point for simulating financial payment notifications (X5).
-         * Runs through the real production NotificationProcessor pipeline.
-         */
-        suspend fun simulate(
-            context: Context,
-            sourcePackage: String,
-            title: String,
-            text: String
-        ): NotificationProcessingOutcome {
-            val app = context.applicationContext as FinanceApplication
-            val container = app.appContainer
-            val db = container.awaitDatabase()
-
-            val isDevMode = try {
-                container.preferencesRepository.getDeveloperModeSync()
-            } catch (e: Exception) {
-                false
-            }
-
-            if (!BuildConfig.ENABLE_SIMULATOR || !isDevMode) {
-                return NotificationProcessingOutcome.Ignored("Simulator is disabled in this build or developer mode is inactive")
-            }
-            val processor = NotificationProcessor(
-                pendingCaptureDao = db.pendingCaptureDao(),
-                handledNotificationDao = db.handledNotificationDao(),
-                accountDao = db.accountDao(),
-                preferenceDao = db.preferenceDao(),
-                transactionDao = db.transactionDao(),
-                subscriptionMatcher = container.subscriptionMatcher,
-                parseUseCase = container.parseNotificationUseCase,
-                runInTransaction = { block -> db.withTransaction { block() } },
-                ownPackageName = context.packageName
-            )
-            val sbnKey = "sim_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
-            val outcome = processor.process(
-                sourcePackage = sourcePackage,
-                title = title,
-                text = text,
-                postTime = System.currentTimeMillis(),
-                sbnKey = sbnKey
-            )
-            when (outcome) {
-                is NotificationProcessingOutcome.Captured -> {
-                    if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
-                        container.foregroundWatcher.notifyCaptureWaiting(CoroutineScope(Dispatchers.IO))
-                    }
-                }
-                is NotificationProcessingOutcome.Updated -> {
-                    if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
-                        container.foregroundWatcher.notifyCaptureWaiting(CoroutineScope(Dispatchers.IO))
-                    }
-                }
-                else -> {}
-            }
-            return outcome
-        }
-
-        /**
          * Computes memory-only SHA-256 hash of lower-cased title and text, truncated to 16 hex characters.
          */
         fun computeContentHash(title: String, text: String): String {

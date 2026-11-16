@@ -20,11 +20,6 @@ sealed interface OverlayRequest {
     data object ManualExpense : OverlayRequest
 
     /**
-     * Self-test simulation of the Quick Log sheet with sample data.
-     */
-    data object SelfTest : OverlayRequest
-
-    /**
      * Direct launch of a specific flow from the Choose Action suite.
      */
     data class SpecificFlow(val flowType: String) : OverlayRequest

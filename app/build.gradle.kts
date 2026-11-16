@@ -55,14 +55,12 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "false")
-            buildConfigField("Boolean", "ENABLE_SIMULATOR", "false")
         }
         create("beta") {
             initWith(buildTypes.getByName("release"))
             matchingFallbacks += listOf("release")
             signingConfig = signingConfigs.getByName("releaseSigning")
             buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "true")
-            buildConfigField("Boolean", "ENABLE_SIMULATOR", "true")
             if (project.hasProperty("devFast")) {
                 // Development builds only (-PdevFast): one ABI. Never used for the final proof or for friends.
                 ndk {
@@ -75,7 +73,6 @@ android {
             isMinifyEnabled = false
             isDebuggable = true
             buildConfigField("Boolean", "ENABLE_DISCOVERY_SCAN", "true")
-            buildConfigField("Boolean", "ENABLE_SIMULATOR", "true")
         }
     }
 

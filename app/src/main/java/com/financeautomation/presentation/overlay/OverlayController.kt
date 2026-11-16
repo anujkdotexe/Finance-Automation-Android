@@ -45,8 +45,6 @@ import com.financeautomation.domain.repository.TripTagRepository
 import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.flows.OpenDebtItem
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.withTimeoutOrNull
 import com.financeautomation.presentation.theme.DefaultOverlayScrim
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
@@ -114,25 +112,15 @@ class OverlayController(
     private var currentView: ComposeView? = null
     private var currentTreeOwners: ComposeOverlayTreeOwners? = null
     private var currentLayoutParams: WindowManager.LayoutParams? = null
-    private var pendingSelfTestCompletion: CompletableDeferred<Boolean>? = null
 
     /**
      * Shows an overlay window for the given request.
      * Returns true if displayed or queued, false if blocked by missing permissions or active presentation.
      */
     fun show(request: OverlayRequest): Boolean {
-        return showInternal(request, null)
-    }
-
-    private fun showInternal(request: OverlayRequest, completion: CompletableDeferred<Boolean>?): Boolean {
-        pendingSelfTestCompletion?.complete(false)
-        pendingSelfTestCompletion = completion
-
         if (!Settings.canDrawOverlays(appContext)) {
             PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_PERMISSION_MISSING)
             Diagnostics.record("OverlayController", "show: SYSTEM_ALERT_WINDOW permission missing")
-            completion?.complete(false)
-            if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
             return false
         }
 
@@ -140,8 +128,6 @@ class OverlayController(
         if (request is OverlayRequest.Capture) {
             if (currentView != null || !showRequested.compareAndSet(false, true)) {
                 PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_DEFERRED_BUSY)
-                completion?.complete(false)
-                if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
                 return false
             }
         } else {
@@ -235,7 +221,6 @@ class OverlayController(
                         }
                     }
                     is OverlayRequest.ManualExpense -> { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE }
-                    is OverlayRequest.SelfTest -> { viewModel.setSelfTestMode(); OverlayFlowScreen.EXPENSE }
                     is OverlayRequest.SpecificFlow -> if (locked) { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE } else when (request.flowType.uppercase()) {
                         "INCOME_RETURN" -> OverlayFlowScreen.INCOME_RETURN
                         "FRIEND_PAID" -> OverlayFlowScreen.FRIEND_PAID
@@ -295,25 +280,20 @@ class OverlayController(
                                         openDebts = openDebtsState.value,
                                         onPersonChanged = ::loadOpenDebtsForPerson,
                                         onConfirmExpense = {
-                                            if (request is OverlayRequest.SelfTest) {
+                                            viewModel.onConfirmAndSave { message, txnId ->
+                                                PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
                                                 dismiss()
-                                                resultPill.show(appContext.getString(R.string.self_test_completed_pill))
-                                            } else {
-                                                viewModel.onConfirmAndSave { message, txnId ->
-                                                    PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
-                                                    dismiss()
-                                                    resultPill.show(
-                                                        message = message.asString(appContext),
-                                                        transactionId = txnId,
-                                                        onUndo = if (txnId != null) {
-                                                            { id ->
-                                                                mainScope.launch(ioDispatcher) {
-                                                                    transactionRepository.undoRecentSave(id)
-                                                                }
+                                                resultPill.show(
+                                                    message = message.asString(appContext),
+                                                    transactionId = txnId,
+                                                    onUndo = if (txnId != null) {
+                                                        { id ->
+                                                            mainScope.launch(ioDispatcher) {
+                                                                transactionRepository.undoRecentSave(id)
                                                             }
-                                                        } else null
-                                                    )
-                                                }
+                                                        }
+                                                    } else null
+                                                )
                                             }
                                         },
                                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
@@ -350,8 +330,7 @@ class OverlayController(
                                         },
                                         onKeyboardFocusChanged = { hasFocus ->
                                             setKeyboardFocus(hasFocus)
-                                        },
-                                        isTestMode = (request is OverlayRequest.SelfTest)
+                                        }
                                     )
                                 }
                             }
@@ -364,13 +343,9 @@ class OverlayController(
                 currentView = composeView
                 _isShowingFlow.value = true
                 PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_SHOWN)
-                completion?.complete(true)
-                if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
             } catch (e: Exception) {
                 PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.OVERLAY_ADD_FAILED)
                 showRequested.set(false)
-                completion?.complete(false)
-                if (pendingSelfTestCompletion == completion) pendingSelfTestCompletion = null
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: show failed")
                 val failedCaptureId = currentCaptureId
@@ -455,8 +430,6 @@ class OverlayController(
      * Dismisses the currently displayed overlay window and recycles resources.
      */
     fun dismiss() {
-        pendingSelfTestCompletion?.complete(false)
-        pendingSelfTestCompletion = null
         clearCurrentWindow()
         currentCaptureId = null
         showRequested.set(false)
@@ -468,25 +441,6 @@ class OverlayController(
      */
     fun showPill(message: String) {
         resultPill.show(message)
-    }
-
-    /**
-     * Self-test simulation of the Quick Log sheet (Spec 7.4).
-     * Awaits addView completion and returns true if window was successfully added.
-     */
-    suspend fun showSelfTest(): Boolean {
-        if (!Settings.canDrawOverlays(appContext)) return false
-        val deferred = CompletableDeferred<Boolean>()
-        val initiated = showInternal(OverlayRequest.SelfTest, deferred)
-        if (!initiated) return false
-        return try {
-            withTimeoutOrNull(5000L) {
-                deferred.await()
-            } ?: false
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            false
-        }
     }
 
     companion object {

@@ -120,11 +120,6 @@
     <string name="health_force_stop_warning">If you force-stop the app, Android turns capture off until you open the app</string>
     <string name="health_persistent_notification_title">Capture is off - tap to fix</string>
     <string name="health_persistent_notification_text">Notification access is disabled. Tap to enable transaction interception.</string>
-    <string name="health_self_test_button">Run self-test</string>
-    <string name="health_self_test_banner">TEST MODE - Verification Prompt (Not Saved)</string>
-    <string name="health_self_test_success">Self-test passed: Expense sheet rendered successfully</string>
-    <string name="health_self_test_failed">Self-test failed: Overlay permission missing or window failed to attach</string>
-    <string name="self_test_completed_pill">Self-test completed (not saved)</string>
     <string name="health_channel_name">Health &amp; Setup Alerts</string>
     <string name="health_channel_desc">Alerts regarding required background permissions and listener status</string>
     <string name="health_advanced_title">Advanced Diagnostics</string>
@@ -640,9 +635,6 @@
     <!-- Screen text literals moved from code -->
     <!-- Diagnostics -->
     <string name="diag_share_chooser_title">Share Diagnostics Log</string>
-    <string name="diag_sim_card_title">Simulate payment notification</string>
-    <string name="diag_sim_card_subtitle">Inject test financial notification into local pipeline</string>
-    <string name="diag_sim_toast">Simulated %1$s: %2$s</string>
 
     <!-- Quick log sheet -->
     <string name="quick_log_date_label">DATE</string>

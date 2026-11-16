@@ -6,14 +6,6 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
-    <application>
-        <receiver
-            android:name=".service.NotificationSimulatorReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.financeautomation.ACTION_SIMULATE_NOTIFICATION" />
-            </intent-filter>
-        </receiver>
-    </application>
+    <application />
 </manifest>
 
