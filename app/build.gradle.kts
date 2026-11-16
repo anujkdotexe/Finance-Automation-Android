@@ -12,11 +12,16 @@ android {
     namespace = "com.financeautomation"
     compileSdk = 36
 
+    val gitCommitCount: Int = providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.map { it.trim().toIntOrNull() ?: 1 }.orElse(1).get()
+
     defaultConfig {
         applicationId = "com.financeautomation"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
+        versionCode = gitCommitCount
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
