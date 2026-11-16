@@ -17,14 +17,20 @@ object PersonBalance {
     fun hasOpenBalance(name: String, transactions: List<Transaction>, payables: List<OpenPayable>): Boolean {
         val key = AccountingUtils.normalizePersonName(name)
         if (key.isBlank()) return false
-        val owedToYou = transactions
-            .filter { it.status == TransactionStatus.PENDING && it.owedToMe > 0.0 }
-            .flatMap { AccountingUtils.calculateReceivablesForTransaction(it) }
-            .filter { it.key == key }
-            .sumOf { it.amount }
+        val hasPendingReceivable = transactions.any { txn ->
+            if (txn.status != TransactionStatus.PENDING || txn.owedToMe <= 0.001) return@any false
+            if (txn.companions.equals("Personal", ignoreCase = true)) return@any false
+            val parsed = AccountingUtils.parseCompanionAmountsWithDisplay(AccountingUtils.tokens(txn.companions))
+            if (parsed != null && parsed.isNotEmpty()) {
+                parsed.any { it.key == key && it.amount > 0.001 }
+            } else {
+                val tokens = AccountingUtils.tokens(txn.companions).map { AccountingUtils.normalizePersonName(it) }
+                tokens.contains(key)
+            }
+        }
         val youOwe = payables
             .filter { AccountingUtils.normalizePersonName(it.paidBy) == key }
             .sumOf { it.amount }
-        return kotlin.math.abs(owedToYou) > 0.001 || kotlin.math.abs(youOwe) > 0.001
+        return hasPendingReceivable || kotlin.math.abs(youOwe) > 0.001
     }
 }

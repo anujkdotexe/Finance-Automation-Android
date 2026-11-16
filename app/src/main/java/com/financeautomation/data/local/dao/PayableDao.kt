@@ -36,6 +36,9 @@ interface PayableDao {
     @Query("DELETE FROM payables WHERE uuid = :uuid")
     suspend fun deleteByUuid(uuid: String)
 
+    @Query("UPDATE payables SET paidBy = :newName WHERE paidBy = :oldName")
+    suspend fun updatePaidByName(oldName: String, newName: String): Int
+
     @Query("DELETE FROM payables")
     suspend fun deleteAll()
 }

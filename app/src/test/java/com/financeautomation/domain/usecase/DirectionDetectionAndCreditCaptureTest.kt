@@ -210,6 +210,7 @@ class DirectionDetectionAndCreditCaptureTest {
         override suspend fun setStatusError(id: Long, status: String, retryCount: Int, kind: String?, detail: String?) {}
         override suspend fun updateStatusError(id: Long, status: String, retryIncrement: Int, kind: String?, detail: String?) {}
         override suspend fun resetQueueItem(id: Long) {}
+        override suspend fun recoverRetryableFailedItems(): Int = 0
         override suspend fun countPendingOperations(opType: String): Int = 0
         override suspend fun updatePlanJson(id: Long, planJson: String?) {}
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}

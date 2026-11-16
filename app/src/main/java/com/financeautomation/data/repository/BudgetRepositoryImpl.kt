@@ -56,6 +56,23 @@ class BudgetRepositoryImpl(
         }
     }
 
+    override suspend fun renameCategory(oldCategory: String, newCategory: String): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val from = oldCategory.trim()
+            val to = newCategory.trim()
+            if (from.isBlank() || to.isBlank() || from.equals(to, ignoreCase = true)) {
+                return@withContext Result.Success(Unit)
+            }
+            val dao = budgetDaoProvider()
+            dao.updateCategoryName(from, to, clock())
+            configSyncCoordinatorProvider?.invoke()?.schedulePush()
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Result.Error(e)
+        }
+    }
+
     override suspend fun removeBudget(category: String): Result<Unit> = withContext(ioDispatcher) {
         try {
             val dao = budgetDaoProvider()

@@ -36,6 +36,7 @@ class SettingsCustomizationCoordinator(
     private val accountRepository: AccountRepository?,
     private val categoryRepository: CategoryRepository?,
     private val tripTagRepository: TripTagRepository?,
+    private val budgetRepository: com.financeautomation.domain.repository.BudgetRepository? = null,
     private val scope: CoroutineScope,
     private val uiState: MutableStateFlow<SettingsUiState>,
     private val ioDispatcher: CoroutineDispatcher
@@ -310,7 +311,13 @@ class SettingsCustomizationCoordinator(
         }
 
         scope.launch(ioDispatcher) {
+            val companion = peopleRepository.getCompanionById(companionId)
+            val oldName = companion?.name
             peopleRepository.updateCompanionName(companionId, trimmed)
+            if (oldName != null && !oldName.equals(trimmed, ignoreCase = true)) {
+                transactionRepository?.updateCompanionName(oldName, trimmed)
+                resolvePayableDao()?.updatePaidByName(oldName, trimmed)
+            }
             uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_companion, trimmed)) }
         }
     }
@@ -324,7 +331,11 @@ class SettingsCustomizationCoordinator(
         scope.launch(ioDispatcher) {
             val repo = accountRepository ?: return@launch
             val acc = repo.getAccountById(accountId) ?: return@launch
+            val oldName = acc.name
             repo.updateAccount(acc.copy(name = trimmed, lastFourDigits = lastFourDigits?.trim()?.ifEmpty { null }))
+            if (!oldName.equals(trimmed, ignoreCase = true)) {
+                transactionRepository?.updateAccountName(oldName, trimmed)
+            }
             uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_account, trimmed)) }
         }
     }
@@ -338,7 +349,12 @@ class SettingsCustomizationCoordinator(
         scope.launch(ioDispatcher) {
             val repo = categoryRepository ?: return@launch
             val cat = repo.getCategoryById(categoryId) ?: return@launch
+            val oldName = cat.name
             repo.updateCategory(cat.copy(name = trimmed))
+            if (!oldName.equals(trimmed, ignoreCase = true)) {
+                transactionRepository?.updateCategoryName(oldName, trimmed)
+                budgetRepository?.renameCategory(oldName, trimmed)
+            }
             uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_category, trimmed)) }
         }
     }

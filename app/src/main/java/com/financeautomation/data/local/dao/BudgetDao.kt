@@ -36,4 +36,7 @@ interface BudgetDao {
 
     @Query("UPDATE budgets SET dirty = 0 WHERE category IN (:categories)")
     suspend fun markClean(categories: List<String>)
+
+    @Query("UPDATE budgets SET category = :newCategory, dirty = 1, updatedAt = :updatedAt WHERE category = :oldCategory")
+    suspend fun updateCategoryName(oldCategory: String, newCategory: String, updatedAt: Long = System.currentTimeMillis()): Int
 }

@@ -49,6 +49,12 @@ interface TransactionRepository {
      */
     suspend fun updateTransaction(transaction: Transaction): Result<Unit>
 
+    suspend fun updateAccountName(oldName: String, newName: String): Result<Int> = Result.Success(0)
+
+    suspend fun updateCategoryName(oldName: String, newName: String): Result<Int> = Result.Success(0)
+
+    suspend fun updateCompanionName(oldName: String, newName: String): Result<Int> = Result.Success(0)
+
     /**
      * Non-destructively voids a transaction by setting shares to 0.00 and status to Void.
      */

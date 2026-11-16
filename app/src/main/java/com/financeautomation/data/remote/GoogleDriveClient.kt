@@ -141,14 +141,18 @@ open class GoogleDriveClient(
             val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
             okHttpClient.newCall(searchRequest).execute().use { response ->
                 val bodyString = response.body?.string().orEmpty()
-                if (response.isSuccessful) {
-                    val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
-                    val files = jsonResponse["files"]?.jsonArray
-                    if (!files.isNullOrEmpty()) {
-                        val fileId = files[0].jsonObject["id"]?.jsonPrimitive?.content
-                        if (!fileId.isNullOrBlank()) {
-                            return@withContext Result.Success(fileId)
-                        }
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to search spreadsheet in folder '$folderId'"), apiError)
+                    )
+                }
+                val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
+                val files = jsonResponse["files"]?.jsonArray
+                if (!files.isNullOrEmpty()) {
+                    val fileId = files[0].jsonObject["id"]?.jsonPrimitive?.content
+                    if (!fileId.isNullOrBlank()) {
+                        return@withContext Result.Success(fileId)
                     }
                 }
             }
@@ -166,14 +170,18 @@ open class GoogleDriveClient(
                 val nameRequest = newRequestBuilder(nameSearchUrl.toString()).get().build()
                 okHttpClient.newCall(nameRequest).execute().use { response ->
                     val bodyString = response.body?.string().orEmpty()
-                    if (response.isSuccessful) {
-                        val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
-                        val files = jsonResponse["files"]?.jsonArray
-                        if (!files.isNullOrEmpty()) {
-                            val fileId = files[0].jsonObject["id"]?.jsonPrimitive?.content
-                            if (!fileId.isNullOrBlank()) {
-                                return@withContext Result.Success(fileId)
-                            }
+                    if (!response.isSuccessful) {
+                        val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
+                        return@withContext Result.Error(
+                            GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to search spreadsheet by name in folder '$folderId'"), apiError)
+                        )
+                    }
+                    val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
+                    val files = jsonResponse["files"]?.jsonArray
+                    if (!files.isNullOrEmpty()) {
+                        val fileId = files[0].jsonObject["id"]?.jsonPrimitive?.content
+                        if (!fileId.isNullOrBlank()) {
+                            return@withContext Result.Success(fileId)
                         }
                     }
                 }
@@ -366,8 +374,13 @@ open class GoogleDriveClient(
 
             val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
             val existingFileId = okHttpClient.newCall(searchRequest).execute().use { response ->
-                if (!response.isSuccessful) return@use null
                 val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, body)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to search file '$fileName' in folder '$folderId'"), apiError)
+                    )
+                }
                 val jsonResponse = json.parseToJsonElement(body).jsonObject
                 val files = jsonResponse["files"]?.jsonArray
                 files?.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.content

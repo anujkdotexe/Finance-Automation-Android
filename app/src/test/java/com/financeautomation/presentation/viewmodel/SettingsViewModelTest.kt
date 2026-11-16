@@ -325,6 +325,7 @@ class SettingsViewModelTest {
         override suspend fun upsertAll(payables: List<PayableEntity>) {}
         override suspend fun deleteByUuid(uuid: String) {}
         override suspend fun deleteAll() {}
+        override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
     }
 
     private class FakeTransactionRepo : TransactionRepository {
