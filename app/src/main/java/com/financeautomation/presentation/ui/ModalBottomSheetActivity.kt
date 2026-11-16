@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -31,6 +32,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.financeautomation.FinanceApplication
+import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion as FriendCompanion
 import com.financeautomation.domain.model.TripTag
@@ -41,6 +44,7 @@ import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -168,6 +172,8 @@ class ModalBottomSheetActivity : ComponentActivity() {
                 }
 
                 // Transparent clickable backdrop for 1-tap outside dismiss
+                val isSubmitting = remember { AtomicBoolean(false) }
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -194,62 +200,134 @@ class ModalBottomSheetActivity : ComponentActivity() {
                             }
                         },
                         onConfirmExpense = {
-                            quickLogViewModel.onConfirmAndSave { msg ->
-                                Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
-                                dismissSafely()
+                            if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
+                            quickLogViewModel.onConfirmAndSave { msg, txnId ->
+                                if (txnId != null) {
+                                    Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
+                                    dismissSafely()
+                                } else {
+                                    isSubmitting.set(false)
+                                    Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
+                                }
                             }
                         },
                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
+                            if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
                             lifecycleScope.launch(Dispatchers.IO) {
-                                if (!captureId.isNullOrBlank()) {
-                                    val db = app.appContainer.awaitDatabase()
-                                    db.pendingCaptureDao().updateState(captureId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
-                                }
-                                app.appContainer.transactionRepository.logCredit(
-                                    settler = settler,
-                                    amount = amount,
-                                    explicitRefs = explicitRefs,
-                                    account = account,
-                                    inflowType = inflowType,
-                                    reason = reason
-                                )
-                                withContext(Dispatchers.Main) {
-                                    val formatted = String.format(Locale.US, "%.2f", amount)
-                                    val msg = if (settler.isNotBlank()) "Recorded $formatted from $settler" else "Recorded $formatted"
-                                    Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
-                                    dismissSafely()
+                                try {
+                                    val res = app.appContainer.transactionRepository.logCredit(
+                                        settler = settler,
+                                        amount = amount,
+                                        explicitRefs = explicitRefs,
+                                        account = account,
+                                        inflowType = inflowType,
+                                        reason = reason
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        when (res) {
+                                            is Result.Success -> {
+                                                if (!captureId.isNullOrBlank()) {
+                                                    launch(Dispatchers.IO) {
+                                                        try {
+                                                            val db = app.appContainer.awaitDatabase()
+                                                            db.pendingCaptureDao().updateState(captureId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+                                                        } catch (e: Exception) {
+                                                            if (e is CancellationException) throw e
+                                                        }
+                                                    }
+                                                }
+                                                val formatted = String.format(Locale.US, "%.2f", amount)
+                                                val msg = if (settler.isNotBlank()) "Recorded $formatted from $settler" else "Recorded $formatted"
+                                                Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                                dismissSafely()
+                                            }
+                                            is Result.Error -> {
+                                                isSubmitting.set(false)
+                                                val errMsg = res.message?.ifBlank { null } ?: "Failed to record income"
+                                                Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
+                                            }
+                                            is Result.Loading -> Unit
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    isSubmitting.set(false)
+                                    if (e is CancellationException) throw e
+                                    Diagnostics.record("ModalBottomSheetActivity", "${e.javaClass.simpleName}: logCredit failed")
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ModalBottomSheetActivity, "Failed to record income: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         },
                         onConfirmFriendPaid = { amount, creditor, whatFor ->
+                            if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             lifecycleScope.launch(Dispatchers.IO) {
-                                app.appContainer.transactionRepository.logPayable(
-                                    creditor = creditor,
-                                    amount = amount,
-                                    whatFor = whatFor
-                                )
-                                withContext(Dispatchers.Main) {
-                                    val formatted = String.format(Locale.US, "%.2f", amount)
-                                    val msg = if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
-                                    Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
-                                    dismissSafely()
+                                try {
+                                    val res = app.appContainer.transactionRepository.logPayable(
+                                        creditor = creditor,
+                                        amount = amount,
+                                        whatFor = whatFor
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        when (res) {
+                                            is Result.Success -> {
+                                                val formatted = String.format(Locale.US, "%.2f", amount)
+                                                val msg = if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
+                                                Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                                dismissSafely()
+                                            }
+                                            is Result.Error -> {
+                                                isSubmitting.set(false)
+                                                val errMsg = res.message?.ifBlank { null } ?: "Failed to record payable"
+                                                Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
+                                            }
+                                            is Result.Loading -> Unit
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    isSubmitting.set(false)
+                                    if (e is CancellationException) throw e
+                                    Diagnostics.record("ModalBottomSheetActivity", "${e.javaClass.simpleName}: logPayable failed")
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ModalBottomSheetActivity, "Failed to record payable: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         },
                         onConfirmRepaid = { amount, person, timestamp ->
+                            if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             lifecycleScope.launch(Dispatchers.IO) {
-                                app.appContainer.transactionRepository.logRepayment(
-                                    creditor = person,
-                                    amount = amount,
-                                    explicitRef = null,
-                                    timestamp = timestamp
-                                )
-                                withContext(Dispatchers.Main) {
-                                    val formatted = String.format(Locale.US, "%.2f", amount)
-                                    val msg = if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
-                                    Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
-                                    dismissSafely()
+                                try {
+                                    val res = app.appContainer.transactionRepository.logRepayment(
+                                        creditor = person,
+                                        amount = amount,
+                                        explicitRef = null,
+                                        timestamp = timestamp
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        when (res) {
+                                            is Result.Success -> {
+                                                val formatted = String.format(Locale.US, "%.2f", amount)
+                                                val msg = if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
+                                                Toast.makeText(this@ModalBottomSheetActivity, msg, Toast.LENGTH_SHORT).show()
+                                                dismissSafely()
+                                            }
+                                            is Result.Error -> {
+                                                isSubmitting.set(false)
+                                                val errMsg = res.message?.ifBlank { null } ?: "Failed to record repayment"
+                                                Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
+                                            }
+                                            is Result.Loading -> Unit
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    isSubmitting.set(false)
+                                    if (e is CancellationException) throw e
+                                    Diagnostics.record("ModalBottomSheetActivity", "${e.javaClass.simpleName}: logRepayment failed")
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(this@ModalBottomSheetActivity, "Failed to record repayment: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         },
