@@ -89,6 +89,11 @@ class SubscriptionRepositoryImpl(
         configSyncCoordinatorProvider?.invoke()?.schedulePush()
     }
 
+    override suspend fun deleteSubscription(id: String): Unit = withContext(ioDispatcher) {
+        subscriptionDaoProvider().deleteById(id)
+        configSyncCoordinatorProvider?.invoke()?.schedulePush()
+    }
+
     override suspend fun getCycle(id: String): SubscriptionCycle? = withContext(ioDispatcher) {
         cycleDaoProvider().getById(id)?.toDomain()
     }

@@ -29,6 +29,9 @@ interface SubscriptionDao {
     @Update
     suspend fun update(subscription: SubscriptionEntity)
 
+    @Query("DELETE FROM subscriptions WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("SELECT * FROM subscriptions WHERE dirty = 1")
     suspend fun getDirtySubscriptions(): List<SubscriptionEntity>
 

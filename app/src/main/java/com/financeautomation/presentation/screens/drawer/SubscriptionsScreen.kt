@@ -21,10 +21,15 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Subscriptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,6 +67,9 @@ fun SubscriptionsScreen(
     val scrollState = rememberScrollState()
     var showAddSubscriptionSheet by rememberSaveable { mutableStateOf(false) }
     var trackingSuggestion by remember { mutableStateOf<RecurringSuggestion?>(null) }
+    var selectedSubscriptionForAction by remember { mutableStateOf<Subscription?>(null) }
+    var editingSubscription by remember { mutableStateOf<Subscription?>(null) }
+    var deletingSubscription by remember { mutableStateOf<Subscription?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -244,45 +252,181 @@ fun SubscriptionsScreen(
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
                     state.activeSubscriptions.forEach { subscription ->
-                        SubscriptionItemCard(subscription = subscription, nextDueDay = state.nextDueByDay[subscription.id])
+                        SubscriptionItemCard(
+                            subscription = subscription,
+                            nextDueDay = state.nextDueByDay[subscription.id],
+                            onClick = { selectedSubscriptionForAction = subscription }
+                        )
                     }
                 }
             }
 
             // Paused Subscriptions Section
-            Surface(
-                color = FinanceTheme.colors.surfaceContainerLowest,
-                shape = FinanceShapes.large,
-                shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(FinanceTheme.spacing.m),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            if (state.pausedSubscriptions.isNotEmpty()) {
+                Surface(
+                    color = FinanceTheme.colors.surfaceContainerLowest,
+                    shape = FinanceShapes.large,
+                    shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = stringResource(R.string.sub_paused_title),
-                        style = FinanceTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Surface(
-                        color = FinanceTheme.colors.surfaceContainer,
-                        shape = FinanceShapes.small
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(FinanceTheme.spacing.m),
+                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                     ) {
-                        Text(
-                            text = state.pausedSubscriptions.size.toString(),
-                            style = FinanceTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.sub_paused_title),
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Surface(
+                                color = FinanceTheme.colors.surfaceContainer,
+                                shape = FinanceShapes.small
+                            ) {
+                                Text(
+                                    text = state.pausedSubscriptions.size.toString(),
+                                    style = FinanceTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
+                                )
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                        ) {
+                            state.pausedSubscriptions.forEach { subscription ->
+                                SubscriptionItemCard(
+                                    subscription = subscription,
+                                    nextDueDay = null,
+                                    onClick = { selectedSubscriptionForAction = subscription }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    selectedSubscriptionForAction?.let { sub ->
+        AlertDialog(
+            onDismissRequest = { selectedSubscriptionForAction = null },
+            title = {
+                Text(
+                    text = sub.name,
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            editingSubscription = sub
+                            selectedSubscriptionForAction = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.sub_action_edit))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            if (sub.active) viewModel.pauseSubscription(sub.id) else viewModel.resumeSubscription(sub.id)
+                            selectedSubscriptionForAction = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (sub.active) stringResource(R.string.sub_action_pause) else stringResource(R.string.sub_action_resume))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            deletingSubscription = sub
+                            selectedSubscriptionForAction = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.sub_action_delete), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { selectedSubscriptionForAction = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    deletingSubscription?.let { sub ->
+        AlertDialog(
+            onDismissRequest = { deletingSubscription = null },
+            title = {
+                Text(
+                    text = stringResource(R.string.sub_delete_confirm_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.sub_delete_confirm_desc, sub.name),
+                    style = FinanceTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteSubscription(sub.id)
+                        deletingSubscription = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(stringResource(R.string.sub_action_delete))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { deletingSubscription = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    editingSubscription?.let { sub ->
+        AddSubscriptionSheet(
+            accounts = accounts,
+            existing = sub,
+            onDismiss = { editingSubscription = null },
+            onSave = { name, amount, frequency, account, remind ->
+                viewModel.updateSubscription(
+                    sub.copy(
+                        name = name,
+                        amount = amount,
+                        frequency = frequency,
+                        account = account,
+                        remind = remind
+                    )
+                )
+                editingSubscription = null
+            }
+        )
     }
 
     trackingSuggestion?.let { suggestion ->
@@ -328,6 +472,7 @@ private fun formatDueDay(epochDay: Long): String = LocalDate.ofEpochDay(epochDay
 private fun SubscriptionItemCard(
     subscription: Subscription,
     nextDueDay: Long?,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val icon = remember(subscription.name) {
@@ -341,6 +486,7 @@ private fun SubscriptionItemCard(
     }
 
     Surface(
+        onClick = onClick,
         color = FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
         shadowElevation = FinanceTheme.sizes.shadowElevationSmall,

@@ -150,6 +150,26 @@ class SubscriptionsViewModel(
         }
     }
 
+    fun pauseSubscription(id: String) {
+        toggleSubscriptionActive(id, false)
+    }
+
+    fun resumeSubscription(id: String) {
+        toggleSubscriptionActive(id, true)
+    }
+
+    fun deleteSubscription(id: String) {
+        viewModelScope.launch {
+            subscriptionRepository.deleteSubscription(id)
+        }
+    }
+
+    fun updateSubscription(subscription: Subscription) {
+        viewModelScope.launch {
+            subscriptionRepository.upsertSubscription(subscription)
+        }
+    }
+
     companion object {
         const val MAX_SUGGESTIONS = 2
 
