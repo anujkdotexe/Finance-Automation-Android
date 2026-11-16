@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 
-from tests.test_tier4_real_world import TestTier4RealWorldScenarios
+from test_tier4_real_world import TestTier4RealWorldScenarios
 
 TestTier4Workloads = TestTier4RealWorldScenarios
 

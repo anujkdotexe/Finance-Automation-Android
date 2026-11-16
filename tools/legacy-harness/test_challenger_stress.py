@@ -20,7 +20,7 @@ import unittest
 
 ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
-from tests.domain_harness import (
+from domain_harness import (
     AMOUNT_REGEX,
     CREDIT_FLAG_REGEX,
     DEBIT_FLAG_REGEX,

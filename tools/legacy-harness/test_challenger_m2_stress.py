@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 import unittest
 
-from tests.domain_harness import (
+from domain_harness import (
     RolloverEngine,
     SplitCalculationEngine,
     SyncState,

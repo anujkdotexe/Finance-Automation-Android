@@ -22,7 +22,7 @@ import unittest
 
 ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
-from tests.domain_harness import (
+from domain_harness import (
     Account,
     AppConfigSnapshot,
     Category,

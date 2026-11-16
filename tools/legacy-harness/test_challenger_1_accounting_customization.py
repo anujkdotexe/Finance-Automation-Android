@@ -23,7 +23,7 @@ import re
 import unittest
 from typing import Any, ClassVar
 
-from tests.domain_harness import (
+from domain_harness import (
     Account,
     AppConfigSnapshot,
     Category,
