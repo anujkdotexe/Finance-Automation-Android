@@ -99,4 +99,65 @@ class SyncErrorKindTest {
     fun testUnknownHostIsNoNetwork() {
         assertEquals(SyncErrorKind.NO_NETWORK, SyncErrorKind.fromThrowable(UnknownHostException("no host")))
     }
+
+    @Test
+    fun testExtractHttpCode() {
+        assertEquals(403, SyncErrorKind.extractHttpCode(GoogleSheetsApiException(403, "Forbidden")))
+        assertEquals(429, SyncErrorKind.extractHttpCode(IOException("HTTP 429 quotaExceeded")))
+        assertEquals(503, SyncErrorKind.extractHttpCode(IOException("Server error status: 503")))
+        assertEquals(null, SyncErrorKind.extractHttpCode(UnknownHostException("no host")))
+    }
+
+    @Test
+    fun testSafeCodeAndFormatUserMessage() {
+        val stage = "dashboard sync"
+
+        // 1. RATE_LIMITED with HTTP code
+        val rateLimited = GoogleSheetsApiException(429, "Too many requests to https://sheets.googleapis.com")
+        assertEquals("dashboard sync, HTTP 429", SyncErrorKind.safeCode(stage, rateLimited))
+        assertEquals(
+            "Google is busy. This will retry on its own. (dashboard sync, HTTP 429)",
+            SyncErrorKind.formatUserMessage(stage, rateLimited)
+        )
+
+        // 2. AUTH_EXPIRED with HTTP code
+        val authExpired = GoogleSheetsApiException(401, "Bearer token expired")
+        assertEquals("dashboard sync, HTTP 401", SyncErrorKind.safeCode(stage, authExpired))
+        assertEquals(
+            "Sign-in expired. Reconnect to continue. (dashboard sync, HTTP 401)",
+            SyncErrorKind.formatUserMessage(stage, authExpired)
+        )
+
+        // 3. NO_NETWORK with exception class name
+        val noNet = UnknownHostException("unable to resolve host")
+        assertEquals("dashboard sync, UnknownHostException", SyncErrorKind.safeCode(stage, noNet))
+        assertEquals(
+            "No internet. This will sync when you are back online. (dashboard sync, UnknownHostException)",
+            SyncErrorKind.formatUserMessage(stage, noNet)
+        )
+
+        // 4. SERVER_BUSY with HTTP code
+        val serverBusy = GoogleSheetsApiException(500, "Internal Server Error")
+        assertEquals("dashboard sync, HTTP 500", SyncErrorKind.safeCode(stage, serverBusy))
+        assertEquals(
+            "Google had a problem. This will retry on its own. (dashboard sync, HTTP 500)",
+            SyncErrorKind.formatUserMessage(stage, serverBusy)
+        )
+
+        // 5. SHEET_CHANGED with HTTP code
+        val sheetChanged = GoogleSheetsApiException(403, "The caller does not have permission")
+        assertEquals("dashboard sync, HTTP 403", SyncErrorKind.safeCode(stage, sheetChanged))
+        assertEquals(
+            "The sheet was changed. Open Sync and Backup to repair. (dashboard sync, HTTP 403)",
+            SyncErrorKind.formatUserMessage(stage, sheetChanged)
+        )
+
+        // 6. UNKNOWN with generic exception class name
+        val unknownEx = IllegalArgumentException("Something invalid")
+        assertEquals("dashboard sync, IllegalArgumentException", SyncErrorKind.safeCode(stage, unknownEx))
+        assertEquals(
+            "Something went wrong. Tap Details. (dashboard sync, IllegalArgumentException)",
+            SyncErrorKind.formatUserMessage(stage, unknownEx)
+        )
+    }
 }

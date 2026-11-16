@@ -1174,43 +1174,88 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun testSyncNow_whenRepositoryReturnsResultError_recordsDiagnosticsAndShowsFixedFriendlyMessage() = runTest {
-        Diagnostics.clear()
-        val errorRepo = object : FakeTransactionRepo() {
-            override suspend fun syncPendingTransactions(): Result<Int> {
-                return Result.Error(java.io.IOException("Connection refused: 192.168.1.100:8080"))
-            }
-        }
-        val vm = DashboardViewModel(
-            transactionRepository = errorRepo,
-            directSyncQueueDao = FakeSyncQueueDao(),
-            directPayableDao = null,
-            directPendingCaptureDao = FakePendingCaptureDao(),
-            categoryRepository = FakeCategoryRepo(),
-            budgetRepository = null,
-            ioDispatcher = testDispatcher
+    fun testSyncNow_allSyncErrorKinds_producePlainSentenceAndSafeCodeWithoutLeakingRawMessage() = runTest {
+        val testCases = listOf(
+            Triple(
+                com.financeautomation.data.remote.GoogleSheetsApiException(429, "Rate limit exceeded at /v4/spreadsheets/secretId"),
+                "Google is busy. This will retry on its own.",
+                "dashboard sync, HTTP 429"
+            ),
+            Triple(
+                com.financeautomation.data.remote.GoogleSheetsApiException(401, "Bearer token secretToken expired"),
+                "Sign-in expired. Reconnect to continue.",
+                "dashboard sync, HTTP 401"
+            ),
+            Triple(
+                java.net.UnknownHostException("sheets.googleapis.com failed"),
+                "No internet. This will sync when you are back online.",
+                "dashboard sync, UnknownHostException"
+            ),
+            Triple(
+                com.financeautomation.data.remote.GoogleSheetsApiException(503, "Backend server error on cluster-99"),
+                "Google had a problem. This will retry on its own.",
+                "dashboard sync, HTTP 503"
+            ),
+            Triple(
+                com.financeautomation.data.remote.GoogleSheetsApiException(403, "The caller does not have permission for private sheet"),
+                "The sheet was changed. Open Sync and Backup to repair.",
+                "dashboard sync, HTTP 403"
+            ),
+            Triple(
+                RuntimeException("Sensitive SQL syntax error near DROP TABLE"),
+                "Something went wrong. Tap Details.",
+                "dashboard sync, RuntimeException"
+            )
         )
-        advanceUntilIdle()
 
-        vm.syncNow()
-        advanceUntilIdle()
+        for ((throwable, expectedSentence, expectedCode) in testCases) {
+            Diagnostics.clear()
+            val failingRepo = object : FakeTransactionRepo() {
+                override suspend fun syncPendingTransactions(): Result<Int> {
+                    return Result.Error(throwable)
+                }
+            }
+            val vm = DashboardViewModel(
+                transactionRepository = failingRepo,
+                directSyncQueueDao = FakeSyncQueueDao(),
+                directPayableDao = null,
+                directPendingCaptureDao = FakePendingCaptureDao(),
+                categoryRepository = FakeCategoryRepo(),
+                budgetRepository = null,
+                ioDispatcher = testDispatcher
+            )
+            advanceUntilIdle()
 
-        val error = vm.uiState.value.errorMessage
-        assertNotNull("Error message should be set on failure", error)
-        assertTrue("Error message must use fixed resource text", error is UiText.StringResource)
-        assertEquals(R.string.err_sync_failed_generic, (error as UiText.StringResource).resId)
-        assertTrue("No raw message arguments should be passed to generic error string", error.args.isEmpty())
+            vm.syncNow()
+            advanceUntilIdle()
 
-        val diagRecord = Diagnostics.getRecords().find { it.tag == "DashboardViewModel" && it.reason.contains("sync_error: IOException") }
-        assertNotNull("Diagnostics should record the stage and exception class", diagRecord)
+            val error = vm.uiState.value.errorMessage
+            assertNotNull("Error message should be set for $expectedCode", error)
+            assertTrue("Error message must be dynamic text", error is UiText.DynamicString)
+            val msgText = (error as UiText.DynamicString).value
+
+            assertTrue(
+                "Message must contain expected plain sentence: $expectedSentence, got: $msgText",
+                msgText.contains(expectedSentence)
+            )
+            assertTrue(
+                "Message must contain safe code: $expectedCode, got: $msgText",
+                msgText.contains(expectedCode)
+            )
+            assertFalse(
+                "Raw exception text must NEVER be leaked in user message: ${throwable.message}",
+                msgText.contains(throwable.message.orEmpty())
+            )
+        }
     }
 
     @Test
-    fun testSyncNow_whenRepositoryThrowsException_recordsDiagnosticsAndShowsFixedFriendlyMessage() = runTest {
+    fun testSyncNow_whenRepositoryThrowsException_recordsDiagnosticsAndShowsSafeCodeWithoutRawText() = runTest {
         Diagnostics.clear()
+        val rawSecret = "Secret token expired at endpoint /auth/token with key=xyz123"
         val throwingRepo = object : FakeTransactionRepo() {
             override suspend fun syncPendingTransactions(): Result<Int> {
-                throw IllegalStateException("Secret token expired at endpoint /auth/token")
+                throw IllegalStateException(rawSecret)
             }
         }
         val vm = DashboardViewModel(
@@ -1229,11 +1274,19 @@ class DashboardViewModelTest {
 
         val error = vm.uiState.value.errorMessage
         assertNotNull("Error message should be set on exception", error)
-        assertTrue("Error message must use fixed resource text", error is UiText.StringResource)
-        assertEquals(R.string.err_sync_failed_generic, (error as UiText.StringResource).resId)
-        assertTrue("No raw message arguments should be passed to generic error string", error.args.isEmpty())
+        assertTrue("Error message must be dynamic text", error is UiText.DynamicString)
+        val msgText = (error as UiText.DynamicString).value
 
-        val diagRecord = Diagnostics.getRecords().find { it.tag == "DashboardViewModel" && it.reason.contains("sync_exception: IllegalStateException") }
-        assertNotNull("Diagnostics should record the stage and exception class", diagRecord)
+        assertTrue(
+            "Must contain safe code: dashboard sync, IllegalStateException",
+            msgText.contains("dashboard sync, IllegalStateException")
+        )
+        assertFalse(
+            "Raw secret must NEVER appear in user message",
+            msgText.contains(rawSecret)
+        )
+
+        val diagRecord = Diagnostics.getRecords().find { it.tag == "DashboardViewModel" && it.reason.contains("sync_exception: dashboard sync, IllegalStateException") }
+        assertNotNull("Diagnostics should record the stage and safe code", diagRecord)
     }
 }

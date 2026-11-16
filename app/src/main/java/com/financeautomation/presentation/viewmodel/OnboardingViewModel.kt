@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.data.remote.AuthResult
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveApiException
@@ -154,7 +156,10 @@ class OnboardingViewModel(
                         step1State = if (signedOut) StepState.NOT_STARTED else StepState.ERROR,
                         step1Error = when {
                             signedOut -> null
-                            else -> res.exception.message?.let { msg -> UiText.dynamic(msg) } ?: UiText.res(R.string.onboarding_err_auth_failed)
+                            else -> {
+                                Diagnostics.record("OnboardingViewModel", "auth_failed: ${SyncErrorKind.safeCode("onboarding auth", res.exception)} ${PrivacyScrubber.scrub(res.exception.message.orEmpty())}")
+                                UiText.dynamic(SyncErrorKind.formatUserMessage("onboarding auth", res.exception))
+                            }
                         }
                     )
                 }
@@ -309,7 +314,7 @@ class OnboardingViewModel(
                     apiError.httpStatus == 429 || r == "RATE_LIMIT_EXCEEDED" || r == "rateLimitExceeded" || r == "userRateLimitExceeded" ->
                         UiText(R.string.onboarding_error_rate_limited)
                     else -> {
-                        val messagePart = if (apiError.message.isNotBlank()) ": ${apiError.message.take(300)}" else ""
+                        val messagePart = if (apiError.message.isNotBlank()) ": ${PrivacyScrubber.scrub(apiError.message.take(300))}" else ""
                         UiText(
                             R.string.onboarding_error_generic,
                             listOf(
@@ -322,7 +327,7 @@ class OnboardingViewModel(
                     }
                 }
             }
-            val detail = e.message
+            val detail = e.message?.let { PrivacyScrubber.scrub(it) }
             return if (detail.isNullOrBlank()) {
                 UiText(R.string.onboarding_error_unknown)
             } else {

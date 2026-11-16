@@ -67,6 +67,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import com.financeautomation.R
+import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.core.utils.DisplayDateTime
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.formatRupeesAuto
@@ -173,8 +176,9 @@ fun TransactionsScreen(
                     coroutineScope.launch {
                         MonthCsvExporter.exportMonth(context, state.monthOffset)
                             .onFailure { e ->
+                                Diagnostics.record("TransactionsScreen", "export_failed: ${SyncErrorKind.safeCode("export", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                                 snackbarHostState.showSnackbar(
-                                    context.getString(R.string.export_failed, e.message ?: "Unknown error")
+                                    context.getString(R.string.export_failed, SyncErrorKind.safeCode("export", e))
                                 )
                             }
                     }

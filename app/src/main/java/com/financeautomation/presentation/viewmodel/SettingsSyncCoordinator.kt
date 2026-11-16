@@ -3,6 +3,8 @@ package com.financeautomation.presentation.viewmodel
 import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsApiException
@@ -180,10 +182,11 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
+                        Diagnostics.record("SettingsSyncCoordinator", "provision_workbook: ${SyncErrorKind.safeCode("provision workbook", res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
                         uiState.update {
                             it.copy(
                                 isProvisioning = false,
-                                errorMessage = UiText.res(R.string.settings_err_provision_workbook, res.throwable.message ?: "")
+                                errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("provision workbook", res.throwable))
                             )
                         }
                     }
@@ -221,10 +224,11 @@ class SettingsSyncCoordinator(
                     } else {
                         val folderResult = driveClient.findOrCreateFolder("Personal Finance")
                         if (folderResult is Result.Error) {
+                            Diagnostics.record("SettingsSyncCoordinator", "create_folder: ${SyncErrorKind.safeCode("create folder", folderResult.throwable)} ${PrivacyScrubber.scrub(folderResult.throwable.message.orEmpty())}")
                             uiState.update {
                                 it.copy(
                                     isProvisioning = false,
-                                    errorMessage = UiText.res(R.string.settings_err_create_folder, folderResult.throwable.message ?: "")
+                                    errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("create folder", folderResult.throwable))
                                 )
                             }
                             return@launch
@@ -233,10 +237,11 @@ class SettingsSyncCoordinator(
 
                         val createResult = driveClient.findOrCreateSpreadsheet(folderId, workbookName, currentYear)
                         if (createResult is Result.Error) {
+                            Diagnostics.record("SettingsSyncCoordinator", "create_spreadsheet: ${SyncErrorKind.safeCode("create spreadsheet", createResult.throwable)} ${PrivacyScrubber.scrub(createResult.throwable.message.orEmpty())}")
                             uiState.update {
                                 it.copy(
                                     isProvisioning = false,
-                                    errorMessage = UiText.res(R.string.settings_err_create_spreadsheet, workbookName, createResult.throwable.message ?: "")
+                                    errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("create spreadsheet", createResult.throwable))
                                 )
                             }
                             return@launch
@@ -259,10 +264,11 @@ class SettingsSyncCoordinator(
                                 }
                             }
                             is Result.Error -> {
+                                Diagnostics.record("SettingsSyncCoordinator", "provision_tabs: ${SyncErrorKind.safeCode("provision tabs", provResult.throwable)} ${PrivacyScrubber.scrub(provResult.throwable.message.orEmpty())}")
                                 uiState.update {
                                     it.copy(
                                         isProvisioning = false,
-                                        errorMessage = UiText.res(R.string.settings_err_provision_tabs, provResult.throwable.message ?: "")
+                                        errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("provision tabs", provResult.throwable))
                                     )
                                 }
                             }
@@ -271,10 +277,11 @@ class SettingsSyncCoordinator(
                     }
                 }
                 is Result.Error -> {
+                    Diagnostics.record("SettingsSyncCoordinator", "drive_search: ${SyncErrorKind.safeCode("drive search", searchResult.throwable)} ${PrivacyScrubber.scrub(searchResult.throwable.message.orEmpty())}")
                     uiState.update {
                         it.copy(
                             isProvisioning = false,
-                            errorMessage = UiText.res(R.string.settings_err_drive_search, searchResult.throwable.message ?: "")
+                            errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("drive search", searchResult.throwable))
                         )
                     }
                 }
@@ -334,10 +341,11 @@ class SettingsSyncCoordinator(
                     }
                 }
                 is Result.Error -> {
+                    Diagnostics.record("SettingsSyncCoordinator", "fresh_workbook: ${SyncErrorKind.safeCode("fresh workbook", res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
                     uiState.update {
                         it.copy(
                             isProvisioning = false,
-                            errorMessage = UiText.res(R.string.settings_err_fresh_workbook_failed, res.throwable.message ?: "")
+                            errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("fresh workbook", res.throwable))
                         )
                     }
                 }
@@ -362,18 +370,18 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
-                        Diagnostics.record("SettingsSyncCoordinator", "sync_error: ${result.throwable.javaClass.simpleName}")
+                        Diagnostics.record("SettingsSyncCoordinator", "sync_error: ${SyncErrorKind.safeCode("settings sync", result.throwable)} ${PrivacyScrubber.scrub(result.throwable.message.orEmpty())}")
                         uiState.update {
-                            it.copy(errorMessage = UiText.res(R.string.err_sync_failed_generic))
+                            it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("settings sync", result.throwable)))
                         }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("SettingsSyncCoordinator", "sync_exception: ${e.javaClass.simpleName}")
+                Diagnostics.record("SettingsSyncCoordinator", "sync_exception: ${SyncErrorKind.safeCode("settings sync", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                 uiState.update {
-                    it.copy(errorMessage = UiText.res(R.string.err_sync_failed_generic))
+                    it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("settings sync", e)))
                 }
             } finally {
                 uiState.update { it.copy(isSyncing = false) }
@@ -434,18 +442,18 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
-                        Diagnostics.record("SettingsSyncCoordinator", "mirror_config_error: ${res.throwable.javaClass.simpleName}")
+                        Diagnostics.record("SettingsSyncCoordinator", "mirror_config_error: ${SyncErrorKind.safeCode("config mirror", res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
                         uiState.update {
-                            it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
+                            it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("config mirror", res.throwable)))
                         }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("SettingsSyncCoordinator", "mirror_config_exception: ${e.javaClass.simpleName}")
+                Diagnostics.record("SettingsSyncCoordinator", "mirror_config_exception: ${SyncErrorKind.safeCode("config mirror", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                 uiState.update {
-                    it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
+                    it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("config mirror", e)))
                 }
             } finally {
                 uiState.update { it.copy(isConfigSyncing = false) }
@@ -467,18 +475,18 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
-                        Diagnostics.record("SettingsSyncCoordinator", "restore_config_error: ${res.throwable.javaClass.simpleName}")
+                        Diagnostics.record("SettingsSyncCoordinator", "restore_config_error: ${SyncErrorKind.safeCode("config restore", res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
                         uiState.update {
-                            it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
+                            it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("config restore", res.throwable)))
                         }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("SettingsSyncCoordinator", "restore_config_exception: ${e.javaClass.simpleName}")
+                Diagnostics.record("SettingsSyncCoordinator", "restore_config_exception: ${SyncErrorKind.safeCode("config restore", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                 uiState.update {
-                    it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
+                    it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("config restore", e)))
                 }
             } finally {
                 uiState.update { it.copy(isConfigSyncing = false) }

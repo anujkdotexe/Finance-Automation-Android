@@ -19,6 +19,7 @@ import com.financeautomation.core.model.Result as DomainResult
 import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -87,7 +88,7 @@ class SyncTransactionsWorker(
                         } else {
                             PipelineTrail.record(PipelineStage.SYNC, PipelineCode.NEEDS_REVIEW)
                             androidx.work.ListenableWorker.Result.failure(
-                                workDataOf(KEY_ERROR_MESSAGE to (result.exception.message ?: "Unknown sync error"))
+                                workDataOf(KEY_ERROR_MESSAGE to SyncErrorKind.formatUserMessage("sync worker", result.exception))
                             )
                         }
                     }
@@ -101,7 +102,7 @@ class SyncTransactionsWorker(
                     androidx.work.ListenableWorker.Result.retry()
                 } else {
                     androidx.work.ListenableWorker.Result.failure(
-                        workDataOf(KEY_ERROR_MESSAGE to (e.message ?: "Sync execution failed"))
+                        workDataOf(KEY_ERROR_MESSAGE to SyncErrorKind.formatUserMessage("sync worker", e))
                     )
                 }
             }

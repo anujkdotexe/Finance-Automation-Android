@@ -10,6 +10,8 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
@@ -487,8 +489,9 @@ class ReviewInboxViewModel(
                     }
                 }
                 is Result.Error -> {
+                    Diagnostics.record("ReviewInboxViewModel", "confirm_failed: ${SyncErrorKind.safeCode("review confirm", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
                     _uiState.update {
-                        it.copy(errorMessage = result.message?.let { UiText.dynamic(it) } ?: UiText.res(R.string.review_err_confirm_failed))
+                        it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("review confirm", result.throwable)))
                     }
                 }
                 is Result.Loading -> {}
@@ -508,8 +511,9 @@ class ReviewInboxViewModel(
                     }
                 }
                 is Result.Error -> {
+                    Diagnostics.record("ReviewInboxViewModel", "void_failed: ${SyncErrorKind.safeCode("review void", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
                     _uiState.update {
-                        it.copy(errorMessage = result.message?.let { UiText.dynamic(it) } ?: UiText.res(R.string.review_err_void_failed))
+                        it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("review void", result.throwable)))
                     }
                 }
                 is Result.Loading -> {}
