@@ -21,7 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Flight
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,6 +77,8 @@ fun TripModeFlowSheet(
 ) {
     var tagNameText by rememberSaveable { mutableStateOf("") }
     var placeText by rememberSaveable { mutableStateOf("") }
+    var selectedCompanionNames by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var showEndTripConfirm by rememberSaveable { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
@@ -327,10 +334,27 @@ fun TripModeFlowSheet(
                 )
 
                 companions.forEach { companion ->
+                    val isSelected = companion.name in selectedCompanionNames
                     AppChip(
                         text = companion.name,
-                        selected = false,
-                        onClick = {}
+                        selected = isSelected,
+                        onClick = {
+                            selectedCompanionNames = if (isSelected) {
+                                selectedCompanionNames - companion.name
+                            } else {
+                                selectedCompanionNames + companion.name
+                            }
+                        },
+                        leadingIcon = if (isSelected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = FinanceTheme.colors.primary,
+                                    modifier = Modifier.size(FinanceTheme.sizes.iconXs)
+                                )
+                            }
+                        } else null
                     )
                 }
             }
@@ -343,7 +367,7 @@ fun TripModeFlowSheet(
         if (activeTag != null) {
             ButtonPair(
                 outlinedText = stringResource(R.string.action_end_trip),
-                onOutlinedClick = onEndTrip,
+                onOutlinedClick = { showEndTripConfirm = true },
                 filledText = stringResource(R.string.btn_start_new_trip),
                 onFilledClick = {
                     if (tagNameText.isNotBlank()) {
@@ -375,5 +399,110 @@ fun TripModeFlowSheet(
                 filledEnabled = tagNameText.isNotBlank()
             )
         }
+    }
+
+    if (showEndTripConfirm) {
+        AlertDialog(
+            onDismissRequest = { showEndTripConfirm = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.trip_end_confirm_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    Text(
+                        text = stringResource(R.string.trip_end_confirm_desc, activeTag?.name.orEmpty()),
+                        style = FinanceTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (tripSummary != null) {
+                        Surface(
+                            shape = FinanceShapes.small,
+                            color = FinanceTheme.colors.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(FinanceTheme.spacing.m),
+                                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.trip_summary_total_spend),
+                                        style = FinanceTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = com.financeautomation.core.utils.formatRupees(tripSummary.totalPaid),
+                                        style = FinanceTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.label_my_share_uppercase),
+                                        style = FinanceTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = com.financeautomation.core.utils.formatRupees(tripSummary.netExpenditure),
+                                        style = FinanceTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                if (tripSummary.givenPending > 0.0) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.people_owes_you),
+                                            style = FinanceTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = com.financeautomation.core.utils.formatRupees(tripSummary.givenPending),
+                                            style = FinanceTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showEndTripConfirm = false
+                        onEndTrip()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(stringResource(R.string.action_end_trip))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showEndTripConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
