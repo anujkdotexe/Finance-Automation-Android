@@ -225,7 +225,15 @@ class OverlayController(
 
                 val initialScreen = when (request) {
                     is OverlayRequest.ChooseAction -> if (locked) { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE } else OverlayFlowScreen.MENU
-                    is OverlayRequest.Capture -> { viewModel.loadCapture(request.captureId); OverlayFlowScreen.EXPENSE }
+                    is OverlayRequest.Capture -> {
+                        val capture = pendingCaptureDaoProvider().getById(request.captureId)
+                        if (capture?.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
+                            OverlayFlowScreen.INCOME_RETURN
+                        } else {
+                            viewModel.loadCapture(request.captureId)
+                            OverlayFlowScreen.EXPENSE
+                        }
+                    }
                     is OverlayRequest.ManualExpense -> { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE }
                     is OverlayRequest.SelfTest -> { viewModel.setSelfTestMode(); OverlayFlowScreen.EXPENSE }
                     is OverlayRequest.SpecificFlow -> if (locked) { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE } else when (request.flowType.uppercase()) {
@@ -297,7 +305,19 @@ class OverlayController(
                                                 }
                                             }
                                         },
-                                        onConfirmIncome = actionDispatcher::confirmIncome,
+                                        onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
+                                            val capId = currentCaptureId
+                                            if (capId != null) {
+                                                mainScope.launch(ioDispatcher) {
+                                                    try {
+                                                        pendingCaptureDaoProvider().updateState(capId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+                                                    } catch (e: Exception) {
+                                                        if (e is CancellationException) throw e
+                                                    }
+                                                }
+                                            }
+                                            actionDispatcher.confirmIncome(amount, account, inflowType, settler, reason, explicitRefs)
+                                        },
                                         onConfirmFriendPaid = actionDispatcher::confirmPayable,
                                         onConfirmRepaid = actionDispatcher::confirmRepaid,
                                         onStartTrip = actionDispatcher::startTrip,

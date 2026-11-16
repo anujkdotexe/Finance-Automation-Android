@@ -78,6 +78,10 @@ class QuickActionReceiver : BroadcastReceiver() {
                     var loggedCapture: com.financeautomation.data.local.entity.PendingCaptureEntity? = null
                     var loggedCategory = category ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
                     val outcome = CaptureClaim.logOnce(captureDao, captureId) { capture ->
+                        if (capture.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
+                            // Credit captures must never be saved as a debit expense
+                            return@logOnce false
+                        }
                         val amount = capture.amount ?: 0.0
                         val account = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: CategoryConstants.ACCOUNT_OTHER
                         val subscriptionId = com.financeautomation.data.local.entity.PendingCaptureEntity.flagValue(

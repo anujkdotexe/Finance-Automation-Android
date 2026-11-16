@@ -15,6 +15,7 @@ data class QuickLogUiState(
     val captureTimestamp: Long? = null,
     val transactionId: String? = null,
     val sourcePackage: String = "manual",
+    val kind: String = com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_DEBIT,
     val amountText: String = "",
     val amount: Double = 0.0,
     val payee: String = "",
@@ -44,7 +45,7 @@ data class QuickLogUiState(
 ) {
     val isSaveEnabled: Boolean
         get() {
-            if (isSaving || amount <= 0.0) return false
+            if (isSaving || amount <= 0.0 || kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) return false
             if (splitMode == SplitMode.CUSTOM) {
                 val share = customShare ?: amount
                 val owed = amount - share

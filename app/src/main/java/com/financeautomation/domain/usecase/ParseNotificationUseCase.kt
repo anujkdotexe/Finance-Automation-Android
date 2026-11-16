@@ -94,11 +94,14 @@ class ParseNotificationUseCase(
         val SUCCESS_WORDS: List<String> = listOf("paid", "successful", "debited", "sent", "credited", "received")
         val FAILURE_WORDS: List<String> = listOf("failed", "declined", "unsuccessful", "reversed")
 
+        private val FAILURE_REGEX = Regex("""(?i)\b(failed|declined|unsuccessful|reversed)\b""")
+        private val PROCESSING_REGEX = Regex("""(?i)\b(processing|pending|initiated|in\s+progress)\b""")
+        private val SUCCESS_REGEX = Regex("""(?i)\b(paid|successfully?|debited|sent|credited|received)\b""")
+
         fun classifyWording(text: String): WordingClass {
-            val lower = text.lowercase()
-            if (FAILURE_WORDS.any { lower.contains(it) }) return WordingClass.FAILURE
-            if (PROCESSING_WORDS.any { lower.contains(it) }) return WordingClass.PROCESSING
-            if (SUCCESS_WORDS.any { lower.contains(it) }) return WordingClass.SUCCESS
+            if (FAILURE_REGEX.containsMatchIn(text)) return WordingClass.FAILURE
+            if (PROCESSING_REGEX.containsMatchIn(text)) return WordingClass.PROCESSING
+            if (SUCCESS_REGEX.containsMatchIn(text)) return WordingClass.SUCCESS
             return WordingClass.UNKNOWN
         }
 
@@ -247,10 +250,18 @@ class ParseNotificationUseCase(
             }
         }
 
-        // 7. Direction discrimination. A paid or debited amount wins over an advertised cashback or "added" wording.
-        // (SMS keep the older rule: fixture 24 in sms_fixtures.json expects an ATM withdrawal to read as credit)
-        val isCredit = RegexPatterns.isCredit(fullContent) && (isSms || !RegexPatterns.hasDebitConfirmation(fullContent))
-        val isDebit = RegexPatterns.isDebit(fullContent) || !isCredit
+        // 7. Direction discrimination: check verb attached to the amount first (C-2)
+        val hasDebitAmount = RegexPatterns.hasDebitConfirmation(fullContent)
+        val hasCreditAmount = RegexPatterns.hasCreditConfirmation(fullContent)
+
+        val isCredit = when {
+            hasDebitAmount -> false
+            hasCreditAmount -> true
+            RegexPatterns.isDebit(fullContent) -> false
+            RegexPatterns.isCredit(fullContent) -> true
+            else -> false
+        }
+        val isDebit = !isCredit
         val kind = if (isCredit) "CREDIT" else "DEBIT"
 
         // 8. Funding account inference

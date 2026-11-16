@@ -95,8 +95,13 @@ fun ReviewInboxScreen(
             android.content.Intent(),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
         )
+        val cap = state.captures.firstOrNull { it.id == capId }
+        val isCredit = cap?.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)
         context.startActivity(android.content.Intent(context, com.financeautomation.presentation.ui.ModalBottomSheetActivity::class.java).apply {
             putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_CAPTURE_ID, capId)
+            if (isCredit) {
+                putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_FLOW, "INCOME_RETURN")
+            }
             putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
         })
         reviewInboxViewModel.clearOpenQuickLogCaptureId()

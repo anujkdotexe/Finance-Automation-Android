@@ -379,12 +379,12 @@
   "body": "Dear Customer, Rs.1000 withdrawn at SBI ATM S1BB##### from A/cX#### on 16Aug25 Transaction Number 2717. Available Balance Rs.7922.00. If not withdrawn by you, forward this SMS to ########## / call ########## or ########## to block your card. Call ##### if cash not received.",
   "expected": {
    "shouldPrompt": true,
-   "direction": "CREDIT",
+   "direction": "DEBIT",
    "amount": 1000
   },
   "currentParserSays": {
    "prompt": true,
-   "direction": "CREDIT",
+   "direction": "DEBIT",
    "amount": 1000,
    "merchant": "<a name>"
   }
@@ -630,6 +630,46 @@
   "currentParserSays": {
    "prompt": true,
    "result": "FALLBACK_NO_AMOUNT"
+  }
+ },
+ {
+  "sender": "AX-HDFCBK-S",
+  "body": "Your A/c ending 1234 is debited for Rs 450.00 on 12-Nov-26 and credited to merchant Swiggy. Avl bal Rs 5400.00.",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "DEBIT",
+   "amount": 450
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "DEBIT",
+   "amount": 450
+  }
+ },
+ {
+  "sender": "VM-CANBNK-S",
+  "body": "Dear Customer, by giving your consent for e-mandate on your Card XX4321, no deduction has been made yet.",
+  "expected": {
+   "shouldPrompt": false,
+   "outcome": "IGNORED"
+  },
+  "currentParserSays": {
+   "prompt": false,
+   "result": "DROPPED"
+  }
+ },
+ {
+  "sender": "AX-ICICIB-S",
+  "body": "Dear Customer, your A/c XX7890 has been credited with Rs 2,500.00 on 16-Nov-26 by UPI/Ref 123456789. Avl Bal Rs 15,200.00.",
+  "expected": {
+   "shouldPrompt": true,
+   "direction": "CREDIT",
+   "amount": 2500
+  },
+  "currentParserSays": {
+   "prompt": true,
+   "direction": "CREDIT",
+   "amount": 2500
   }
  }
 ]
