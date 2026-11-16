@@ -256,7 +256,7 @@ fun SyncBackupScreen(
                         )
                         if (showNameAndEmail) {
                             Text(
-                                text = accountDisplayName!!,
+                                text = accountDisplayName.orEmpty(),
                                 style = FinanceTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -264,7 +264,7 @@ fun SyncBackupScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = accountEmail!!,
+                                text = accountEmail.orEmpty(),
                                 style = FinanceTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,

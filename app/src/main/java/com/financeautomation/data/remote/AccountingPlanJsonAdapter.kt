@@ -115,14 +115,14 @@ object AccountingPlanJsonAdapter {
             val cells = mutableListOf<Any?>()
             obj["cells"]?.jsonArray?.forEach { cEl ->
                 val cPrim = cEl.jsonPrimitive
+                val number = cPrim.doubleOrNull
                 val v: Any? = when {
                     cPrim is JsonNull -> null
                     cPrim.isString -> cPrim.content
-                    cPrim.doubleOrNull != null -> {
-                        val d = cPrim.doubleOrNull!!
-                        if (d % 1.0 == 0.0 && d in Int.MIN_VALUE.toDouble()..Int.MAX_VALUE.toDouble()) {
-                            d.toInt()
-                        } else d
+                    number != null -> {
+                        if (number % 1.0 == 0.0 && number in Int.MIN_VALUE.toDouble()..Int.MAX_VALUE.toDouble()) {
+                            number.toInt()
+                        } else number
                     }
                     cPrim.booleanOrNull != null -> cPrim.booleanOrNull
                     else -> cPrim.content
