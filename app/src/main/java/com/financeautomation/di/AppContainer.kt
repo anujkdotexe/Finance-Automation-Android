@@ -233,6 +233,7 @@ class DefaultAppContainer(
         PeopleRepositoryImpl(
             companionDaoProvider = { awaitDatabase().companionDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
+            localGatewayProvider = { configSyncLocalGateway },
             ioDispatcher = ioDispatcher,
             openBalanceChecker = { name ->
                 val db = awaitDatabase()
@@ -249,6 +250,7 @@ class DefaultAppContainer(
         AccountRepositoryImpl(
             accountDaoProvider = { awaitDatabase().accountDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
+            localGatewayProvider = { configSyncLocalGateway },
             transactionDaoProvider = { awaitDatabase().transactionDao() },
             ioDispatcher = ioDispatcher
         )
@@ -258,6 +260,7 @@ class DefaultAppContainer(
         CategoryRepositoryImpl(
             categoryDaoProvider = { awaitDatabase().categoryDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
+            localGatewayProvider = { configSyncLocalGateway },
             ioDispatcher = ioDispatcher
         )
     }
@@ -266,6 +269,7 @@ class DefaultAppContainer(
         TripTagRepositoryImpl(
             tripTagDaoProvider = { awaitDatabase().tripTagDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
+            localGatewayProvider = { configSyncLocalGateway },
             preferencesRepositoryProvider = { preferencesRepository },
             ioDispatcher = ioDispatcher
         )
@@ -386,6 +390,7 @@ class DefaultAppContainer(
             subscriptionDaoProvider = { awaitDatabase().subscriptionDao() },
             cycleDaoProvider = { awaitDatabase().subscriptionCycleDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
+            localGatewayProvider = { configSyncLocalGateway },
             ioDispatcher = ioDispatcher
         )
     }

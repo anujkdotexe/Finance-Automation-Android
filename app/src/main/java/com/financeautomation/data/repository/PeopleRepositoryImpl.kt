@@ -1,9 +1,11 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.CompanionDao
 import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
 import com.financeautomation.domain.model.Companion
+import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.PeopleRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +25,7 @@ class PeopleRepositoryImpl(
     private val companionDao: CompanionDao? = null,
     private val companionDaoProvider: (suspend () -> CompanionDao)? = null,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
+    private val localGatewayProvider: (() -> ConfigSyncLocalGateway)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /** True when the named person still has an open balance. Null means balances are not checked. */
     private val openBalanceChecker: (suspend (String) -> Boolean)? = null
@@ -31,16 +34,21 @@ class PeopleRepositoryImpl(
     constructor(
         companionDao: CompanionDao,
         configSyncCoordinator: ConfigSyncCoordinator? = null,
+        localGateway: ConfigSyncLocalGateway? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         companionDao = companionDao,
         companionDaoProvider = null,
         configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
+        localGatewayProvider = localGateway?.let { { it } },
         ioDispatcher = ioDispatcher
     )
 
     private val configSyncCoordinator: ConfigSyncCoordinator?
         get() = configSyncCoordinatorProvider?.invoke()
+
+    private val localGateway: ConfigSyncLocalGateway?
+        get() = localGatewayProvider?.invoke() ?: configSyncCoordinator?.localGateway
 
     private suspend fun resolveDao(): CompanionDao =
         companionDao ?: companionDaoProvider?.invoke()
@@ -114,30 +122,38 @@ class PeopleRepositoryImpl(
     }
 
     override suspend fun deleteCompanion(companion: Companion): Unit = withContext(ioDispatcher) {
-        val coordinator = configSyncCoordinator
+        val gateway = localGateway
         val now = System.currentTimeMillis()
-        coordinator?.localGateway?.recordTombstone(
-            com.financeautomation.core.constants.ConfigConstants.TYPE_PERSON,
-            companion.name,
-            now
-        )
+        if (gateway != null) {
+            gateway.recordTombstone(
+                com.financeautomation.core.constants.ConfigConstants.TYPE_PERSON,
+                companion.name,
+                now
+            )
+        } else {
+            Diagnostics.record("PeopleRepositoryImpl", "tombstone_skipped: no gateway or coordinator")
+        }
         resolveDao().delete(CompanionEntity.fromDomain(companion))
-        coordinator?.schedulePush()
+        configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun deleteCompanionById(id: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val comp = dao.getById(id)
-        val coordinator = configSyncCoordinator
+        val gateway = localGateway
         val now = System.currentTimeMillis()
         if (comp != null) {
-            coordinator?.localGateway?.recordTombstone(
-                com.financeautomation.core.constants.ConfigConstants.TYPE_PERSON,
-                comp.name,
-                now
-            )
+            if (gateway != null) {
+                gateway.recordTombstone(
+                    com.financeautomation.core.constants.ConfigConstants.TYPE_PERSON,
+                    comp.name,
+                    now
+                )
+            } else {
+                Diagnostics.record("PeopleRepositoryImpl", "tombstone_skipped: no gateway or coordinator")
+            }
         }
         dao.deleteById(id)
-        coordinator?.schedulePush()
+        configSyncCoordinator?.schedulePush()
     }
 }

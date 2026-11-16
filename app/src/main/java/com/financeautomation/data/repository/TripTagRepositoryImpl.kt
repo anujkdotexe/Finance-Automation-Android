@@ -1,9 +1,11 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.TripTagDao
 import com.financeautomation.data.local.entity.TripTagEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
 import com.financeautomation.domain.model.TripTag
+import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TripTagRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -24,6 +26,7 @@ class TripTagRepositoryImpl(
     private val tripTagDao: TripTagDao? = null,
     private val tripTagDaoProvider: (suspend () -> TripTagDao)? = null,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
+    private val localGatewayProvider: (() -> ConfigSyncLocalGateway)? = null,
     private val preferencesRepositoryProvider: (() -> PreferencesRepository)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : TripTagRepository {
@@ -31,18 +34,23 @@ class TripTagRepositoryImpl(
     constructor(
         tripTagDao: TripTagDao,
         configSyncCoordinator: ConfigSyncCoordinator? = null,
+        localGateway: ConfigSyncLocalGateway? = null,
         preferencesRepository: PreferencesRepository? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         tripTagDao = tripTagDao,
         tripTagDaoProvider = null,
         configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
+        localGatewayProvider = localGateway?.let { { it } },
         preferencesRepositoryProvider = preferencesRepository?.let { { it } },
         ioDispatcher = ioDispatcher
     )
 
     private val configSyncCoordinator: ConfigSyncCoordinator?
         get() = configSyncCoordinatorProvider?.invoke()
+
+    private val localGateway: ConfigSyncLocalGateway?
+        get() = localGatewayProvider?.invoke() ?: configSyncCoordinator?.localGateway
 
     private suspend fun resolveDao(): TripTagDao =
         tripTagDao ?: tripTagDaoProvider?.invoke()
@@ -151,16 +159,20 @@ class TripTagRepositoryImpl(
     override suspend fun deleteTripTag(id: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val tag = dao.getById(id)
-        val coordinator = configSyncCoordinator
+        val gateway = localGateway
         val now = System.currentTimeMillis()
         if (tag != null) {
-            coordinator?.localGateway?.recordTombstone(
-                com.financeautomation.core.constants.ConfigConstants.TYPE_TRIP,
-                tag.name,
-                now
-            )
+            if (gateway != null) {
+                gateway.recordTombstone(
+                    com.financeautomation.core.constants.ConfigConstants.TYPE_TRIP,
+                    tag.name,
+                    now
+                )
+            } else {
+                Diagnostics.record("TripTagRepositoryImpl", "tombstone_skipped: no gateway or coordinator")
+            }
         }
         dao.deleteById(id)
-        coordinator?.schedulePush()
+        configSyncCoordinator?.schedulePush()
     }
 }
