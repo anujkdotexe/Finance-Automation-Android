@@ -133,6 +133,16 @@ class FinanceApplication : Application() {
             }
         }
 
+        // 2d. Coalesce ledger changes from transactions and inflows and refresh MonthBurnWidgetProvider
+        val ledgerDebouncer = com.financeautomation.service.LedgerChangeDebouncer(debounceMs = 1000L)
+        ledgerDebouncer.bind(
+            scope = CoroutineScope(Dispatchers.IO),
+            transactionsFlow = appContainer.transactionRepository.getTransactions(),
+            inflowsFlow = appContainer.inflowRepository.getAllInflows()
+        ) {
+            com.financeautomation.service.MonthBurnWidgetProvider.requestUpdate(applicationContext)
+        }
+
         // 3. Schedule daily periodic monthly rollover check and 6-hour listener health worker
         com.financeautomation.service.worker.MonthlyRolloverWorker.schedule(applicationContext)
         com.financeautomation.service.worker.NotificationListenerHealthWorker.schedule(applicationContext)
