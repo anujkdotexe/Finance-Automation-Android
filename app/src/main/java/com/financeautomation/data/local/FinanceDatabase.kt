@@ -247,6 +247,13 @@ abstract class FinanceDatabase : RoomDatabase() {
                 .addCallback(DatabasePrepopulateCallback())
                 .build()
 
+            // Open database so Room initializes the encrypted schema on disk before any restoration
+            try {
+                db.openHelper.writableDatabase
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize writable database: ${e.javaClass.simpleName}")
+            }
+
             // Step 5: If a plain migration had failed, copy plain backup rows table by table
             if (failedPlainBackup != null && failedPlainBackup.exists()) {
                 DatabaseEncryptionMigrator.restorePlainBackupIntoEncryptedDb(

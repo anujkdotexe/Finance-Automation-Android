@@ -8,12 +8,15 @@ import android.util.Log
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+class CorruptKeyFileException(message: String) : Exception(message)
 
 /**
  * Manages the generation, secure storage, and retrieval of the 256-bit
@@ -62,9 +65,16 @@ class DatabaseKeyProvider(private val context: Context) {
             try {
                 return decryptPassphrase(file)
             } catch (e: Exception) {
-                if (e is KeyPermanentlyInvalidatedException || !keyStore.containsAlias(KEY_ALIAS)) {
-                    Log.e(TAG, "Keystore master key permanently invalidated: ${e.javaClass.simpleName}. Regenerating key.")
+                val isPermanent = e is KeyPermanentlyInvalidatedException ||
+                    e is CorruptKeyFileException ||
+                    e is GeneralSecurityException ||
+                    !keyStore.containsAlias(KEY_ALIAS)
+                if (isPermanent) {
+                    Log.e(TAG, "Keystore master key invalidated or key file corrupt: ${e.javaClass.simpleName}. Regenerating key.")
                     file.delete()
+                    try {
+                        keyStore.deleteEntry(KEY_ALIAS)
+                    } catch (ignored: Exception) {}
                 } else {
                     Log.e(TAG, "Transient Keystore error during passphrase decryption: ${e.javaClass.simpleName}. Preserving key file.")
                     throw e
@@ -94,6 +104,15 @@ class DatabaseKeyProvider(private val context: Context) {
     @Synchronized
     fun getOrCreatePassphrase(): ByteArray {
         return getDatabaseHexKey().toByteArray(Charsets.UTF_8)
+    }
+
+    private fun getExistingMasterKey(): SecretKey {
+        if (!keyStore.containsAlias(KEY_ALIAS)) {
+            throw KeyPermanentlyInvalidatedException("Keystore does not contain alias $KEY_ALIAS")
+        }
+        val entry = keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry
+            ?: throw KeyPermanentlyInvalidatedException("Keystore does not contain a SecretKeyEntry for alias $KEY_ALIAS")
+        return entry.secretKey
     }
 
     private fun getOrCreateMasterKey(): SecretKey {
@@ -132,11 +151,23 @@ class DatabaseKeyProvider(private val context: Context) {
         val iv = cipher.iv
         val ciphertext = cipher.doFinal(rawPassphrase)
 
-        FileOutputStream(targetFile).use { fos ->
-            fos.write(iv.size)
-            fos.write(iv)
-            fos.write(ciphertext)
-            fos.flush()
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp_${System.currentTimeMillis()}")
+        try {
+            FileOutputStream(tempFile).use { fos ->
+                fos.write(iv.size)
+                fos.write(iv)
+                fos.write(ciphertext)
+                fos.flush()
+                try {
+                    fos.fd.sync()
+                } catch (ignored: Exception) {}
+            }
+            if (!tempFile.renameTo(targetFile)) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+            }
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
         }
 
         return rawPassphrase
@@ -145,18 +176,18 @@ class DatabaseKeyProvider(private val context: Context) {
     private fun decryptPassphrase(sourceFile: File): ByteArray {
         val fileBytes = FileInputStream(sourceFile).use { it.readBytes() }
         if (fileBytes.isEmpty()) {
-            throw IllegalStateException("Passphrase file is empty")
+            throw CorruptKeyFileException("Passphrase file is empty")
         }
 
         val ivSize = fileBytes[0].toInt() and 0xFF
         if (ivSize <= 0 || fileBytes.size <= 1 + ivSize) {
-            throw IllegalStateException("Invalid passphrase file structure")
+            throw CorruptKeyFileException("Invalid passphrase file structure")
         }
 
         val iv = fileBytes.copyOfRange(1, 1 + ivSize)
         val ciphertext = fileBytes.copyOfRange(1 + ivSize, fileBytes.size)
 
-        val masterKey = getOrCreateMasterKey()
+        val masterKey = getExistingMasterKey()
         val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
         val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
         cipher.init(Cipher.DECRYPT_MODE, masterKey, spec)

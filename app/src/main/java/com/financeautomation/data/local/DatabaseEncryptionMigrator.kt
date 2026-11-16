@@ -134,15 +134,13 @@ object DatabaseEncryptionMigrator {
                 encDb.close()
             }
 
-            // 5. Swap files: delete plain database and companion files, rename encrypted copy
+            // 5. Swap files: securely delete plain database and companion files, rename encrypted copy
             val walFile = File(dbFile.parentFile, "$dbName-wal")
             val shmFile = File(dbFile.parentFile, "$dbName-shm")
-            if (walFile.exists()) walFile.delete()
-            if (shmFile.exists()) shmFile.delete()
+            if (walFile.exists()) securelyDeleteFile(walFile)
+            if (shmFile.exists()) securelyDeleteFile(shmFile)
 
-            if (!dbFile.delete()) {
-                throw IllegalStateException("Failed to delete plaintext database file")
-            }
+            securelyDeleteFile(dbFile)
             if (!encFile.renameTo(dbFile)) {
                 throw IllegalStateException("Failed to rename encrypted database to target name")
             }
@@ -225,10 +223,33 @@ object DatabaseEncryptionMigrator {
             }
 
             Log.i(TAG, "Plain backup fallback restoration completed table-by-table.")
+            securelyDeleteFile(plainBackupFile)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to attach plain backup for recovery: ${e.javaClass.simpleName}")
         } finally {
             encDb?.close()
+        }
+    }
+
+    fun securelyDeleteFile(file: File) {
+        if (!file.exists()) return
+        try {
+            val length = file.length()
+            if (length > 0) {
+                java.io.RandomAccessFile(file, "rws").use { raf ->
+                    val zeroBuffer = ByteArray(4096)
+                    var written = 0L
+                    while (written < length) {
+                        val toWrite = minOf(zeroBuffer.size.toLong(), length - written).toInt()
+                        raf.write(zeroBuffer, 0, toWrite)
+                        written += toWrite
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Secure wipe failed before deletion: ${e.javaClass.simpleName}")
+        } finally {
+            file.delete()
         }
     }
 
