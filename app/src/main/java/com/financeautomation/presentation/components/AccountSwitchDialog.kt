@@ -24,7 +24,11 @@ fun AccountSwitchDialog(prompt: AccountSwitchPrompt, onConfirm: () -> Unit, onCa
         title = { Text(stringResource(R.string.account_switch_title), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-                Text(stringResource(R.string.account_switch_message))
+                Text(
+                    stringResource(
+                        if (prompt.warnsAboutRemovedData) R.string.account_switch_message else R.string.account_switch_message_plain
+                    )
+                )
                 if (prompt.pendingCount > 0) {
                     Text(
                         text = stringResource(R.string.account_switch_pending, prompt.pendingCount),

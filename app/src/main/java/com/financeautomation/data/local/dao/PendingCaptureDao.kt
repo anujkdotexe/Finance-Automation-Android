@@ -65,7 +65,7 @@ interface PendingCaptureDao {
     suspend fun claimForLogging(id: String): Boolean {
         val capture = getById(id) ?: return false
         if (capture.state != "WAITING" && capture.state != "SHOWN" && capture.state != "NEEDS_REVIEW" && capture.state != "AWAITING_SUCCESS") return false
-        updateState(id, "DONE")
+        updateState(id, "CLAIMED")
         return true
     }
 

@@ -19,7 +19,7 @@ interface AccountDataStore {
 
 enum class SwitchDecision { PROCEED, CONFIRM_SWITCH }
 
-data class SwitchEvaluation(val decision: SwitchDecision, val pendingCount: Int)
+data class SwitchEvaluation(val decision: SwitchDecision, val pendingCount: Int, val hasLocalData: Boolean = true)
 
 /**
  * Keeps one account's ledger from leaking into another's.
@@ -47,7 +47,8 @@ class AccountSwitchGuard(
             decide(owner, newEmail, hasData = { store.hasLocalData() })
         }
         val pending = if (decision == SwitchDecision.CONFIRM_SWITCH) store.pendingCount() else 0
-        return SwitchEvaluation(decision, pending)
+        val hasData = decision != SwitchDecision.CONFIRM_SWITCH || store.hasLocalData()
+        return SwitchEvaluation(decision, pending, hasData)
     }
 
     /** Called after the user confirmed: nothing of the previous account may remain or be pushed with the new token. */

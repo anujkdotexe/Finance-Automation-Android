@@ -94,6 +94,7 @@ class QuickActionReceiver : BroadcastReceiver() {
                             sourcePackage = capture.sourcePackage,
                             timestamp = capture.timestamp,
                             reviewState = ReviewState.CONFIRMED,
+                            transactionId = CaptureClaim.expenseIdFor(capture.id),
                             afterInsert = if (subscriptionId != null) {
                                 { txn ->
                                     container.subscriptionRepository

@@ -58,6 +58,9 @@ data class PendingCaptureEntity(
         const val STATE_AWAITING_SUCCESS: String = "AWAITING_SUCCESS"
         const val STATE_SHOWN: String = "SHOWN"
         const val STATE_DONE: String = "DONE"
+
+        /** Held while the expense is being inserted; recovered at start if the process died in between. */
+        const val STATE_CLAIMED: String = "CLAIMED"
         const val STATE_DISMISSED: String = "DISMISSED"
         const val STATE_NEEDS_REVIEW: String = "NEEDS_REVIEW"
 

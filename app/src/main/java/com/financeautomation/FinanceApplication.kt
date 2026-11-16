@@ -55,6 +55,14 @@ class FinanceApplication : Application() {
                 PipelineTrail.record(PipelineStage.DEVICE, PipelineCode.SNAPSHOT, snapshotA, snapshotB)
                 val db = appContainer.awaitDatabase()
                 try {
+                    com.financeautomation.service.CaptureClaim.recoverClaimed(db.pendingCaptureDao()) { id ->
+                        db.transactionDao().getById(id) != null
+                    }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("FinanceApplication", "${e.javaClass.simpleName}: recoverClaimed")
+                }
+                try {
                     // Idempotent: seeds categories and accounts only when none exist (for example after an interrupted wipe)
                     com.financeautomation.data.local.FinanceDatabase.prepopulateDefaults(db)
                 } catch (e: Exception) {
