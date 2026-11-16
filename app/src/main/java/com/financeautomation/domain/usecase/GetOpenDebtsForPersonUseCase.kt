@@ -2,11 +2,10 @@ package com.financeautomation.domain.usecase
 
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.Diagnostics
-import com.financeautomation.data.remote.GoogleSheetsClient
-import com.financeautomation.data.remote.LedgerSnapshotMapper
+import com.financeautomation.domain.model.OpenDebtItem
+import com.financeautomation.domain.repository.LedgerSnapshotGateway
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.utils.AccountingUtils
-import com.financeautomation.presentation.flows.OpenDebtItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +19,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 class GetOpenDebtsForPersonUseCase(
     private val preferencesRepository: PreferencesRepository,
-    private val googleSheetsClient: GoogleSheetsClient,
+    private val ledgerSnapshotGateway: LedgerSnapshotGateway,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val timeoutMillis: Long = 4000L
 ) {
@@ -33,12 +32,12 @@ class GetOpenDebtsForPersonUseCase(
             val spreadsheetId = preferencesRepository.getSpreadsheetIdSync() ?: return@withContext emptyList()
 
             val snapshotResult = withTimeoutOrNull(timeoutMillis) {
-                googleSheetsClient.readLedgerSnapshot(spreadsheetId)
+                ledgerSnapshotGateway.readLedgerSnapshot(spreadsheetId)
             } ?: return@withContext emptyList()
 
             if (snapshotResult !is Result.Success) return@withContext emptyList()
 
-            val domainSnapshot = LedgerSnapshotMapper.mapToDomain(snapshotResult.data)
+            val domainSnapshot = snapshotResult.data
 
             domainSnapshot.debits
                 .filter { debit ->
@@ -63,4 +62,3 @@ class GetOpenDebtsForPersonUseCase(
         }
     }
 }
-

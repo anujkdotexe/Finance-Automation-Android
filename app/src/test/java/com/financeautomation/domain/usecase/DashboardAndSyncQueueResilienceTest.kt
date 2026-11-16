@@ -130,13 +130,17 @@ class DashboardAndSyncQueueResilienceTest {
     @Test
     fun regenerateDashboardReturnsErrorWhenHttpClientIsNullWithoutFallingBackToSheet0() = runTest(testDispatcher) {
         val fakeSheetsClient = GoogleSheetsClient(okHttpClient = okhttp3.OkHttpClient(), tokenProvider = null)
-        val useCase = RegenerateDashboardUseCase(
+        val gateway = com.financeautomation.data.remote.DashboardRemoteGatewayImpl(
             googleSheetsClient = fakeSheetsClient,
+            okHttpClient = null,
+            tokenProvider = null,
+            ioDispatcher = testDispatcher
+        )
+        val useCase = RegenerateDashboardUseCase(
+            dashboardRemoteGateway = gateway,
             preferencesRepository = FakePrefRepo(),
             accountRepository = FakeAccRepo(),
             categoryRepository = FakeCatRepo(),
-            okHttpClient = null,
-            tokenProvider = null,
             ioDispatcher = testDispatcher
         )
 

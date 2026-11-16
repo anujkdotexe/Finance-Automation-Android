@@ -56,23 +56,9 @@ import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
-/**
- * Open debit row representation for the Friend Settlement bill picker.
- */
-data class OpenDebtItem(
-    val uuid: String,
-    val description: String,
-    val amountOwed: Double,
-    val tabName: String,
-    val person: String = ""
-) {
-    val displayLabel: String
-        get() = if (person.isNotBlank()) {
-            "$description (₹${amountOwed.toInt()} - $person) [$tabName]"
-        } else {
-            "$description (₹${amountOwed.toInt()}) [$tabName]"
-        }
-}
+typealias OpenDebtItem = com.financeautomation.domain.model.OpenDebtItem
+
+
 
 /**
  * Rebuilt Add Income flow sheet following the frozen design specification:
