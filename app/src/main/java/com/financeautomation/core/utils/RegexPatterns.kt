@@ -79,8 +79,14 @@ object RegexPatterns {
 
     // A completed outgoing payment: a debit verb tied to an amount
     val DEBIT_CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
-            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn)\b"""
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|purchased?)\b"""
+    )
+
+    // A completed incoming payment: a credit verb tied to an amount
+    val CREDIT_CONFIRMATION_REGEX: Regex = Regex(
+        """(?i)\b(?:credited|received|deposited|refunded)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:credited|received|deposited|refunded)\b"""
     )
 
     // Advertising wording. It marks a message as a promotion even next to an amount, unless a purchase was paid.
@@ -109,6 +115,9 @@ object RegexPatterns {
 
     /** True when the text states a completed outgoing payment (debit verb tied to an amount). */
     fun hasDebitConfirmation(text: String): Boolean = DEBIT_CONFIRMATION_REGEX.containsMatchIn(text)
+
+    /** True when the text states a completed incoming payment (credit verb tied to an amount). */
+    fun hasCreditConfirmation(text: String): Boolean = CREDIT_CONFIRMATION_REGEX.containsMatchIn(text)
 
     /**
      * Extracts parsed currency amount from arbitrary notification text.

@@ -47,11 +47,15 @@ object ForegroundHeadsUpHelper {
         val notificationId = capture.id.hashCode()
 
         // Details button opens EntryActivity
+        val isCredit = capture.kind.equals(PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)
         val detailsIntent = com.financeautomation.presentation.ui.InternalIntentAuth.attach(
             context,
             Intent(context, EntryActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra(EntryActivity.EXTRA_CAPTURE_ID, capture.id)
+                if (isCredit) {
+                    putExtra(EntryActivity.EXTRA_FLOW, "INCOME_RETURN")
+                }
             }
         )
         val pendingDetails = PendingIntent.getActivity(
@@ -123,9 +127,13 @@ object ForegroundHeadsUpHelper {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
             .setContentIntent(pendingDetails)
-            .addAction(0, cat1, pendingCat1)
-            .addAction(0, cat2, pendingCat2)
-            .addAction(0, context.getString(R.string.label_details), pendingDetails)
+        if (isCredit) {
+            builder.addAction(0, context.getString(R.string.action_menu_income_title), pendingDetails)
+        } else {
+            builder.addAction(0, cat1, pendingCat1)
+            builder.addAction(0, cat2, pendingCat2)
+            builder.addAction(0, context.getString(R.string.label_details), pendingDetails)
+        }
         NotificationPrivacy.apply(
             builder, context, NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS, appLockOn,
             publicTitle = context.getString(R.string.notif_public_payment_title)

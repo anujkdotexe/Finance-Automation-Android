@@ -120,6 +120,7 @@ class QuickLogViewModel(
                         captureId = capture.id,
                         captureTimestamp = capture.timestamp,
                         sourcePackage = capture.sourcePackage,
+                        kind = capture.kind,
                         amountText = amountStr,
                         amount = amountVal,
                         payee = capture.payee,
@@ -330,6 +331,10 @@ class QuickLogViewModel(
         val state = _uiState.value
         if (state.amount <= 0.0) {
             _uiState.update { it.copy(errorMessage = UiText.res(R.string.quicklog_err_amount_zero)) }
+            return
+        }
+        if (state.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
+            _uiState.update { it.copy(errorMessage = UiText.dynamic("Credit transactions cannot be saved as debit expenses.")) }
             return
         }
         if (!state.isSaveEnabled) {

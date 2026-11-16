@@ -145,9 +145,20 @@ class ModalBottomSheetActivity : ComponentActivity() {
                     }
                 }
 
+                val isCreditCapture by produceState(initialValue = false) {
+                    val cid = intent.getStringExtra(EXTRA_CAPTURE_ID)
+                    if (!cid.isNullOrBlank()) {
+                        val db = withContext(Dispatchers.IO) { app.appContainer.awaitDatabase() }
+                        val cap = withContext(Dispatchers.IO) { db.pendingCaptureDao().getById(cid) }
+                        value = cap?.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)
+                    }
+                }
+
                 // While the app lock is active only the plain expense form is offered: the friend flows list names and balances
                 val initialScreen = if (lockedNow) {
                     OverlayFlowScreen.EXPENSE
+                } else if (isCreditCapture) {
+                    OverlayFlowScreen.INCOME_RETURN
                 } else {
                     resolveInitialScreen(
                         intent = intent,
@@ -189,7 +200,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
                             }
                         },
                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
+                            val captureId = intent.getStringExtra(EXTRA_CAPTURE_ID)
                             lifecycleScope.launch(Dispatchers.IO) {
+                                if (!captureId.isNullOrBlank()) {
+                                    val db = app.appContainer.awaitDatabase()
+                                    db.pendingCaptureDao().updateState(captureId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+                                }
                                 app.appContainer.transactionRepository.logCredit(
                                     settler = settler,
                                     amount = amount,
