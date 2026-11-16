@@ -23,8 +23,43 @@ import com.financeautomation.FinanceApplication
 import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.domain.model.VoidedHistory
+import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.presentation.theme.FinanceTheme
 import kotlinx.coroutines.launch
+
+/**
+ * Pure state holder managing the "Clear voided history" state transitions without Compose dependencies.
+ */
+class ClearVoidedHistoryStateHolder(
+    private val repository: TransactionRepository
+) {
+    var history: VoidedHistory? = null
+        private set
+    var result: VoidedHistory? = null
+        private set
+    var failed: Boolean = false
+        private set
+
+    suspend fun load(): VoidedHistory {
+        val h = repository.previewVoidedHistory()
+        history = h
+        return h
+    }
+
+    suspend fun confirmClear(): Boolean {
+        return when (val r = repository.clearVoidedHistory()) {
+            is Result.Success -> {
+                result = r.data
+                failed = false
+                true
+            }
+            else -> {
+                failed = true
+                false
+            }
+        }
+    }
+}
 
 /**
  * Owns the whole "Clear voided history" flow: loads the counts when [show] turns true, asks first with the counts in
@@ -36,11 +71,14 @@ fun ClearVoidedHistoryHost(show: Boolean, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val repository = remember { (context.applicationContext as FinanceApplication).appContainer.transactionRepository }
     val scope = rememberCoroutineScope()
+    val stateHolder = remember(repository) { ClearVoidedHistoryStateHolder(repository) }
     var history by remember { mutableStateOf<VoidedHistory?>(null) }
     var result by remember { mutableStateOf<VoidedHistory?>(null) }
     var failed by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { history = repository.previewVoidedHistory() }
+    LaunchedEffect(Unit) {
+        history = stateHolder.load()
+    }
 
     val done = result
     val counts = history
@@ -84,9 +122,10 @@ fun ClearVoidedHistoryHost(show: Boolean, onDismiss: () -> Unit) {
                 Button(
                     onClick = {
                         scope.launch {
-                            when (val r = repository.clearVoidedHistory()) {
-                                is Result.Success -> result = r.data
-                                else -> failed = true
+                            if (stateHolder.confirmClear()) {
+                                result = stateHolder.result
+                            } else {
+                                failed = stateHolder.failed
                             }
                         }
                     },
