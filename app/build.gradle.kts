@@ -136,7 +136,6 @@ dependencies {
 
     // OkHttp Networking
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
 
     // KotlinX Coroutines
     implementation(libs.coroutines.core)

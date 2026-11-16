@@ -49,18 +49,6 @@
     @kotlinx.serialization.Serializable class *;
 }
 
-# Gson / Moshi Support
--keepclassmembers class * {
-    @com.google.gson.annotations.SerializedName <fields>;
-    @com.google.gson.annotations.Expose <fields>;
-}
--dontwarn com.google.gson.**
--keepclassmembers class * {
-    @com.squareup.moshi.Json <fields>;
-    @com.squareup.moshi.JsonQualifier <fields>;
-}
--dontwarn com.squareup.moshi.**
-
 # WorkManager
 -keep class * extends androidx.work.ListenableWorker {
     public <init>(android.content.Context, androidx.work.WorkerParameters);
@@ -75,3 +63,6 @@
 -keep class net.zetetic.** { *; }
 -dontwarn net.zetetic.**
 
+# Readable release stack traces (file names and line numbers are kept, class names are still shrunk)
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
