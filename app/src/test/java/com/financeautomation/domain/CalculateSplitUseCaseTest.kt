@@ -175,8 +175,8 @@ class CalculateSplitUseCaseTest {
         assertEquals("Savings", useCase.normalizeCategory("mutual fund"))
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun testSingularSavingThrowsException() {
-        useCase.normalizeCategory("Saving")
+    @Test
+    fun testSingularSavingNormalizesToPluralSavings() {
+        assertEquals("Savings", useCase.normalizeCategory("Saving"))
     }
 }
