@@ -48,7 +48,8 @@ data class CompanionEntity(
             isSelected = isSelected,
             balance = balance,
             defaultSplitRatio = 1.0,
-            isArchived = isArchived
+            isArchived = isArchived,
+            updatedAt = updatedAt
         )
     }
 

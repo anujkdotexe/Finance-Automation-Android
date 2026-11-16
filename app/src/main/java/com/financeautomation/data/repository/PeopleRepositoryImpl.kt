@@ -114,12 +114,30 @@ class PeopleRepositoryImpl(
     }
 
     override suspend fun deleteCompanion(companion: Companion): Unit = withContext(ioDispatcher) {
+        val coordinator = configSyncCoordinator
+        val now = System.currentTimeMillis()
+        coordinator?.localGateway?.recordTombstone(
+            com.financeautomation.core.constants.ConfigConstants.TYPE_PERSON,
+            companion.name,
+            now
+        )
         resolveDao().delete(CompanionEntity.fromDomain(companion))
-        configSyncCoordinator?.schedulePush()
+        coordinator?.schedulePush()
     }
 
     override suspend fun deleteCompanionById(id: String): Unit = withContext(ioDispatcher) {
-        resolveDao().deleteById(id)
-        configSyncCoordinator?.schedulePush()
+        val dao = resolveDao()
+        val comp = dao.getById(id)
+        val coordinator = configSyncCoordinator
+        val now = System.currentTimeMillis()
+        if (comp != null) {
+            coordinator?.localGateway?.recordTombstone(
+                com.financeautomation.core.constants.ConfigConstants.TYPE_PERSON,
+                comp.name,
+                now
+            )
+        }
+        dao.deleteById(id)
+        coordinator?.schedulePush()
     }
 }

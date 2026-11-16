@@ -10,5 +10,7 @@ data class Companion(
     val isSelected: Boolean = false,
     val balance: Double = 0.0,
     val defaultSplitRatio: Double = 1.0,
-    val isArchived: Boolean = false
+    val isArchived: Boolean = false,
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false
 )

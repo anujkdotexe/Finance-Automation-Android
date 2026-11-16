@@ -49,7 +49,8 @@ data class AccountEntity(
             lastFourDigits = lastFourDigits,
             isDefault = isDefault,
             isArchived = isArchived,
-            displayOrder = displayOrder
+            displayOrder = displayOrder,
+            updatedAt = updatedAt
         )
     }
 

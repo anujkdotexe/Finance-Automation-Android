@@ -127,8 +127,24 @@ interface ConfigSyncLocalGateway {
         isArchived: Boolean,
         displayOrder: Int,
         updatedAt: Long,
+        deleted: Boolean,
+        iconName: String = "Teal"
+    ) = applyRemoteCategory(name, excludedFromBurn, isDefault, isArchived, displayOrder, updatedAt, deleted)
+
+    suspend fun applyRemoteCategory(
+        name: String,
+        excludedFromBurn: Boolean,
+        isDefault: Boolean,
+        isArchived: Boolean,
+        displayOrder: Int,
+        updatedAt: Long,
         deleted: Boolean
-    )
+    ) {}
+
+    /**
+     * Records a soft-delete tombstone so that entity deletion is pushed to the remote Config tab.
+     */
+    suspend fun recordTombstone(type: String, key: String, updatedAt: Long = System.currentTimeMillis()) {}
 
     /**
      * Reconciles a remote companion row against local database.

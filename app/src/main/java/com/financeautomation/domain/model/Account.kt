@@ -10,5 +10,7 @@ data class Account(
     val lastFourDigits: String? = null,
     val isDefault: Boolean = false,
     val isArchived: Boolean = false,
-    val displayOrder: Int = 0
+    val displayOrder: Int = 0,
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false
 )

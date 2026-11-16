@@ -420,12 +420,17 @@ class PreferencesRepositoryImpl(
     override suspend fun setPreference(key: String, value: String?, isDirty: Boolean): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val trimmed = value?.trim()
-        val dirtyFlag = if (isDirty && !ConfigConstants.isLocalOnlyPref(key)) 1 else 0
+        val isLocalOnly = ConfigConstants.isLocalOnlyPref(key)
+        val dirtyFlag = if (isDirty && !isLocalOnly) 1 else 0
         if (dao != null) {
             if (trimmed != null) {
                 dao.setPreference(PreferenceEntity(key, trimmed, updatedAt = System.currentTimeMillis(), dirty = dirtyFlag))
             } else {
-                dao.deletePreference(key)
+                if (dirtyFlag == 1) {
+                    dao.setPreference(PreferenceEntity(key, null, updatedAt = System.currentTimeMillis(), dirty = 1))
+                } else {
+                    dao.deletePreference(key)
+                }
             }
         } else {
             if (trimmed != null) {
@@ -441,12 +446,17 @@ class PreferencesRepositoryImpl(
 
     override suspend fun deletePreference(key: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
+        val isLocalOnly = ConfigConstants.isLocalOnlyPref(key)
         if (dao != null) {
-            dao.deletePreference(key)
+            if (!isLocalOnly) {
+                dao.setPreference(PreferenceEntity(key, null, updatedAt = System.currentTimeMillis(), dirty = 1))
+            } else {
+                dao.deletePreference(key)
+            }
         } else {
             memGenericPrefs.remove(key)
         }
-        if (!ConfigConstants.isLocalOnlyPref(key)) {
+        if (!isLocalOnly) {
             configSyncCoordinator?.schedulePush()
         }
     }

@@ -46,7 +46,8 @@ data class TripTagEntity(
             name = name,
             isActive = isActive,
             isArchived = isArchived,
-            createdAt = createdAt
+            createdAt = createdAt,
+            updatedAt = updatedAt
         )
     }
 

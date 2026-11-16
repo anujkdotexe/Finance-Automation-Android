@@ -98,14 +98,18 @@ class SyncConfigUseCase(
                         )
                     }
                     ConfigConstants.TYPE_CATEGORY -> {
+                        val parts = row.value4.split("|")
+                        val displayOrder = parts[0].toIntOrNull() ?: 0
+                        val colorName = parts.getOrNull(1)?.takeIf { it.isNotBlank() } ?: "Teal"
                         localGateway.applyRemoteCategory(
                             name = row.key,
                             excludedFromBurn = row.value1.equals("true", ignoreCase = true),
                             isDefault = row.value2.equals("true", ignoreCase = true),
                             isArchived = row.value3.equals("true", ignoreCase = true),
-                            displayOrder = row.value4.toIntOrNull() ?: 0,
+                            displayOrder = displayOrder,
                             updatedAt = epochMilli,
-                            deleted = row.deleted
+                            deleted = row.deleted,
+                            iconName = colorName
                         )
                     }
                     ConfigConstants.TYPE_PERSON -> {
@@ -195,66 +199,71 @@ class SyncConfigUseCase(
             val dirtyRows = mutableListOf<ConfigRow>()
 
             dirty.accounts.forEach {
+                val entityTime = if (it.updatedAt > 0L) Instant.ofEpochMilli(it.updatedAt) else now
                 dirtyRows.add(
                     ConfigRow(
                         type = ConfigConstants.TYPE_ACCOUNT,
                         key = it.name,
                         values = listOf(it.lastFourDigits.orEmpty(), it.isDefault.toString(), it.isArchived.toString(), it.displayOrder.toString()),
-                        updatedAt = now,
+                        updatedAt = entityTime,
                         updatedBy = deviceId,
-                        deleted = false
+                        deleted = it.deleted
                     )
                 )
             }
 
             dirty.categories.forEach {
+                val entityTime = if (it.updatedAt > 0L) Instant.ofEpochMilli(it.updatedAt) else now
                 dirtyRows.add(
                     ConfigRow(
                         type = ConfigConstants.TYPE_CATEGORY,
                         key = it.name,
-                        values = listOf(it.isExcludedFromLivingBurn.toString(), it.isDefault.toString(), it.isArchived.toString(), it.displayOrder.toString()),
-                        updatedAt = now,
+                        values = listOf(it.isExcludedFromLivingBurn.toString(), it.isDefault.toString(), it.isArchived.toString(), "${it.displayOrder}|${it.iconName}"),
+                        updatedAt = entityTime,
                         updatedBy = deviceId,
-                        deleted = false
+                        deleted = it.deleted
                     )
                 )
             }
 
             dirty.companions.forEach {
+                val entityTime = if (it.updatedAt > 0L) Instant.ofEpochMilli(it.updatedAt) else now
                 dirtyRows.add(
                     ConfigRow(
                         type = ConfigConstants.TYPE_PERSON,
                         key = it.name,
                         values = listOf("0", it.isArchived.toString()),
-                        updatedAt = now,
+                        updatedAt = entityTime,
                         updatedBy = deviceId,
-                        deleted = false
+                        deleted = it.deleted
                     )
                 )
             }
 
             dirty.tripTags.forEach {
+                val entityTime = if (it.updatedAt > 0L) Instant.ofEpochMilli(it.updatedAt) else now
                 dirtyRows.add(
                     ConfigRow(
                         type = ConfigConstants.TYPE_TRIP,
                         key = it.name,
                         values = listOf(it.isActive.toString(), it.isArchived.toString()),
-                        updatedAt = now,
+                        updatedAt = entityTime,
                         updatedBy = deviceId,
-                        deleted = false
+                        deleted = it.deleted
                     )
                 )
             }
 
             dirty.subscriptions.forEach {
+                val entityTime = if (it.updatedAt > 0L) Instant.ofEpochMilli(it.updatedAt) else now
                 dirtyRows.add(
                     ConfigRow(
                         type = ConfigConstants.TYPE_SUBSCRIPTION,
                         key = it.id,
                         values = listOf(SubscriptionConfigCodec.encode(it)),
-                        updatedAt = now,
+                        updatedAt = entityTime,
                         updatedBy = deviceId,
-                        deleted = false
+                        deleted = it.deleted
                     )
                 )
             }

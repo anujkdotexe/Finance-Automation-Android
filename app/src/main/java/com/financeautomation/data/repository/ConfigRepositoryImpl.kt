@@ -89,17 +89,24 @@ class ConfigRepositoryImpl(
 
             ensureConfigTabInitialized(spreadsheetId)
 
-            // Read existing rows to map composite keys to row indices
-            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:B")
+            // Read existing rows to map composite keys to row indices and remote edit timestamps
+            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:G")
             val existingCells = if (rangeResult is Result.Success) rangeResult.data else emptyList()
 
-            val keyToRowMap = mutableMapOf<String, Int>()
+            data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant)
+            val keyToMetaMap = mutableMapOf<String, ExistingRowMeta>()
             for (i in existingCells.indices) {
                 val row = existingCells[i]
                 val type = row.getOrNull(0)?.toString()?.trim()?.lowercase().orEmpty()
                 val key = row.getOrNull(1)?.toString()?.trim()?.lowercase().orEmpty()
                 if (type.isNotBlank() && key.isNotBlank()) {
-                    keyToRowMap["$type|$key"] = i + 1 // 1-based row number
+                    val updatedStr = row.getOrNull(6)?.toString()?.trim().orEmpty()
+                    val updatedAt = try {
+                        if (updatedStr.isNotBlank()) Instant.parse(updatedStr) else Instant.EPOCH
+                    } catch (e: Exception) {
+                        Instant.EPOCH
+                    }
+                    keyToMetaMap["$type|$key"] = ExistingRowMeta(i + 1, updatedAt)
                 }
             }
 
@@ -108,10 +115,12 @@ class ConfigRepositoryImpl(
 
             for (row in rows) {
                 val compositeKey = row.compositeKey
-                val existingRowIndex = keyToRowMap[compositeKey]
-                if (existingRowIndex != null) {
-                    // Update in-place
-                    updatesMap["'${ConfigConstants.CONFIG_TAB_NAME}'!A$existingRowIndex:I$existingRowIndex"] = listOf(row.toRowCells())
+                val existingMeta = keyToMetaMap[compositeKey]
+                if (existingMeta != null) {
+                    // Conflict resolution: only overwrite if local row is as new or newer than remote row
+                    if (row.updatedAt >= existingMeta.updatedAt) {
+                        updatesMap["'${ConfigConstants.CONFIG_TAB_NAME}'!A${existingMeta.rowIndex}:I${existingMeta.rowIndex}"] = listOf(row.toRowCells())
+                    }
                 } else {
                     // New row to append
                     newRowsToAppend.add(row.toRowCells())
