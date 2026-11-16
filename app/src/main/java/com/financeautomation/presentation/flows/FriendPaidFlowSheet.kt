@@ -88,7 +88,7 @@ fun FriendPaidFlowSheet(
     categories: List<String> = com.financeautomation.domain.usecase.CategoryPickerResolver.resolve(),
     onBack: () -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (amount: Double, creditor: String, whatFor: String) -> Unit,
+    onConfirm: (amount: Double, creditor: String, whatFor: String, category: String, timestamp: Long) -> Unit,
     onKeyboardFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -99,6 +99,7 @@ fun FriendPaidFlowSheet(
 
     val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DISPLAY_DATE_FORMATTER) }
     var dateText by rememberSaveable { mutableStateOf(todayFormatted) }
+    var selectedTimestampMillis by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
     var showAddFriendInput by rememberSaveable { mutableStateOf(false) }
@@ -436,6 +437,10 @@ fun FriendPaidFlowSheet(
                                 .atZone(ZoneId.of("UTC"))
                                 .toLocalDate()
                             dateText = selected.format(DISPLAY_DATE_FORMATTER)
+                            selectedTimestampMillis = selected.atTime(java.time.LocalTime.now(SHEET_ZONE))
+                                .atZone(SHEET_ZONE)
+                                .toInstant()
+                                .toEpochMilli()
                         }
                         showDatePicker = false
                     }) {
@@ -469,7 +474,7 @@ fun FriendPaidFlowSheet(
                 } else {
                     selectedCategory
                 }
-                onConfirm(parsedAmount, creditorName.trim(), effectiveWhatFor)
+                onConfirm(parsedAmount, creditorName.trim(), effectiveWhatFor, selectedCategory, selectedTimestampMillis)
             },
             filledEnabled = isValid
         )

@@ -260,14 +260,18 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                 }
                             }
                         },
-                        onConfirmFriendPaid = { amount, creditor, whatFor ->
+                        onConfirmFriendPaid = { amount, creditor, whatFor, category, timestamp ->
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
+                                    val effectiveWhatFor = if (category.isNotBlank() && !whatFor.contains(category)) {
+                                        if (whatFor.isNotBlank()) "$whatFor ($category)" else category
+                                    } else whatFor
                                     val res = app.appContainer.transactionRepository.logPayable(
                                         creditor = creditor,
                                         amount = amount,
-                                        whatFor = whatFor
+                                        whatFor = effectiveWhatFor,
+                                        timestamp = timestamp
                                     )
                                     withContext(Dispatchers.Main) {
                                         when (res) {

@@ -70,7 +70,7 @@ fun OverlayContentHost(
     onPersonChanged: (String) -> Unit = {},
     onConfirmExpense: () -> Unit,
     onConfirmIncome: (amount: Double, account: String, inflowType: String, settler: String, reason: String, explicitRefs: List<String>) -> Unit,
-    onConfirmFriendPaid: (amount: Double, creditor: String, whatFor: String) -> Unit,
+    onConfirmFriendPaid: (amount: Double, creditor: String, whatFor: String, category: String, timestamp: Long) -> Unit,
     onConfirmRepaid: (amount: Double, person: String, timestamp: Long) -> Unit,
     onStartTrip: (tagName: String) -> Unit,
     onEndTrip: () -> Unit,

@@ -73,13 +73,23 @@ class OverlayActionDispatcher(
         }
     }
 
-    fun confirmPayable(amount: Double, creditor: String, whatFor: String) {
+    fun confirmPayable(
+        amount: Double,
+        creditor: String,
+        whatFor: String,
+        category: String = "",
+        timestamp: Long = System.currentTimeMillis()
+    ) {
         mainScope.launch(ioDispatcher) {
             try {
+                val effectiveWhatFor = if (category.isNotBlank() && !whatFor.contains(category)) {
+                    if (whatFor.isNotBlank()) "$whatFor ($category)" else category
+                } else whatFor
                 val res = transactionRepository.logPayable(
                     creditor = creditor,
                     amount = amount,
-                    whatFor = whatFor
+                    whatFor = effectiveWhatFor,
+                    timestamp = timestamp
                 )
                 mainScope.launch {
                     onDismiss()
