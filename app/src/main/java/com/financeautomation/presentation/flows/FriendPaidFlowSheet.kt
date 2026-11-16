@@ -85,6 +85,7 @@ private val DISPLAY_DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPatt
 @Composable
 fun FriendPaidFlowSheet(
     companions: List<Companion>,
+    categories: List<String> = com.financeautomation.domain.usecase.CategoryPickerResolver.resolve(),
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (amount: Double, creditor: String, whatFor: String) -> Unit,
@@ -361,7 +362,7 @@ fun FriendPaidFlowSheet(
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
-                CategoryConstants.DEFAULT_CATEGORIES.forEach { category ->
+                categories.forEach { category ->
                     val isSelected = selectedCategory.equals(category, ignoreCase = true)
                     AppChip(
                         text = category,

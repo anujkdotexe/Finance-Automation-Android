@@ -184,8 +184,12 @@ fun OverlayContentHost(
                 }
 
                 OverlayFlowScreen.FRIEND_PAID -> {
+                    val resolvedCategories = remember(quickLogState.availableCategories) {
+                        com.financeautomation.domain.usecase.CategoryPickerResolver.resolve(quickLogState.availableCategories)
+                    }
                     FriendPaidFlowSheet(
                         companions = companions,
+                        categories = resolvedCategories,
                         onBack = {
                             if (openedFromMenu) currentScreen = OverlayFlowScreen.MENU else onDismiss()
                         },
