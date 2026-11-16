@@ -115,6 +115,18 @@ object ForegroundHeadsUpHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val dismissIntent = Intent(context, QuickActionReceiver::class.java).apply {
+            action = QuickActionReceiver.ACTION_DISMISS_CAPTURE
+            putExtra(QuickActionReceiver.EXTRA_CAPTURE_ID, capture.id)
+            putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+        }
+        val pendingDismiss = PendingIntent.getBroadcast(
+            context,
+            notificationId * 10 + 3,
+            dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val amountStr = capture.amount?.let { formatRupees(it, includeDecimals = true) } ?: "Pending review"
         val titleText = if (capture.payee.isNotBlank()) capture.payee else context.getString(R.string.notif_payment_detected_title)
 
@@ -127,6 +139,7 @@ object ForegroundHeadsUpHelper {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
             .setContentIntent(pendingDetails)
+            .setDeleteIntent(pendingDismiss)
         if (isCredit) {
             builder.addAction(0, context.getString(R.string.action_menu_income_title), pendingDetails)
         } else {

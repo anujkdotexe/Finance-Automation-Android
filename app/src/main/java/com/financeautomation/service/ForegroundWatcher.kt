@@ -194,6 +194,11 @@ class ForegroundWatcher(
     fun checkAndResume(scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             mutex.withLock {
+                try {
+                    resolveDao().resetShownToWaiting()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
                 val waiting = resolveDao().getWaitingCaptures()
                 if (waiting.isNotEmpty() && watcherJob?.isActive != true) {
                     startWatcherLoop(scope)
@@ -220,7 +225,22 @@ class ForegroundWatcher(
         watcherJob = scope.launch(Dispatchers.IO) {
             try {
                 expireStaleCaptures(resolveDao())
+                try {
+                    resolveDao().resetShownToWaiting()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
+                var lastResetShown = System.currentTimeMillis()
                 while (isActive) {
+                    val nowTime = System.currentTimeMillis()
+                    if (nowTime - lastResetShown > 15_000L) {
+                        try {
+                            resolveDao().resetShownToWaiting()
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                        }
+                        lastResetShown = nowTime
+                    }
                     val waitingList = resolveDao().getWaitingCaptures()
                     if (waitingList.isEmpty()) {
                         pollCounters.clear()

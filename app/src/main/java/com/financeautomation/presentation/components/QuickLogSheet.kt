@@ -379,23 +379,31 @@ fun QuickLogSheet(
                     selected = isPickDate,
                     onClick = {
                         val cal = Calendar.getInstance(tz).apply { timeInMillis = selectedTs }
-                        android.app.DatePickerDialog(
-                            context,
-                            { _, year, month, dayOfMonth ->
-                                val pickedCal = Calendar.getInstance(tz).apply {
-                                    set(Calendar.YEAR, year)
-                                    set(Calendar.MONTH, month)
-                                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                        try {
+                            val dialog = android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    val pickedCal = Calendar.getInstance(tz).apply {
+                                        set(Calendar.YEAR, year)
+                                        set(Calendar.MONTH, month)
+                                        set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                                    }
+                                    val chosen = minOf(pickedCal.timeInMillis, System.currentTimeMillis())
+                                    onDateSelected(chosen)
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).apply {
+                                datePicker.maxDate = System.currentTimeMillis()
+                                if (context !is android.app.Activity && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                    window?.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
                                 }
-                                val chosen = minOf(pickedCal.timeInMillis, System.currentTimeMillis())
-                                onDateSelected(chosen)
-                            },
-                            cal.get(Calendar.YEAR),
-                            cal.get(Calendar.MONTH),
-                            cal.get(Calendar.DAY_OF_MONTH)
-                        ).apply {
-                            datePicker.maxDate = System.currentTimeMillis()
-                        }.show()
+                            }
+                            dialog.show()
+                        } catch (e: Exception) {
+                            com.financeautomation.core.utils.Diagnostics.record("QuickLogSheet", "${e.javaClass.simpleName}: DatePickerDialog failed")
+                        }
                     }
                 )
             }

@@ -264,6 +264,17 @@ class OverlayController(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
+                                        PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_DISMISSED)
+                                        val capId = currentCaptureId
+                                        if (capId != null) {
+                                            mainScope.launch(ioDispatcher) {
+                                                try {
+                                                    pendingCaptureDaoProvider().updateState(capId, PendingCaptureEntity.STATE_DISMISSED)
+                                                } catch (e: Exception) {
+                                                    if (e is CancellationException) throw e
+                                                }
+                                            }
+                                        }
                                         viewModel.onDismiss()
                                         dismiss()
                                     },
@@ -324,6 +335,16 @@ class OverlayController(
                                         onEndTrip = actionDispatcher::endTrip,
                                         onDismiss = {
                                             PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_DISMISSED)
+                                            val capId = currentCaptureId
+                                            if (capId != null) {
+                                                mainScope.launch(ioDispatcher) {
+                                                    try {
+                                                        pendingCaptureDaoProvider().updateState(capId, PendingCaptureEntity.STATE_DISMISSED)
+                                                    } catch (e: Exception) {
+                                                        if (e is CancellationException) throw e
+                                                    }
+                                                }
+                                            }
                                             viewModel.onDismiss()
                                             dismiss()
                                         },
@@ -406,17 +427,28 @@ class OverlayController(
 
     private fun clearCurrentWindow() {
         blurHelper.teardownWindowBlur()
-        currentView?.let { view ->
-            try {
-                currentTreeOwners?.destroy()
-                windowManager.removeView(view)
-            } catch (e: Exception) {
-                Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: clearCurrentWindow")
+        val view = currentView
+        val owners = currentTreeOwners
+        try {
+            if (view != null) {
+                try {
+                    windowManager.removeView(view)
+                } catch (e: Exception) {
+                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: removeView failed")
+                }
             }
+            if (owners != null) {
+                try {
+                    owners.destroy()
+                } catch (e: Exception) {
+                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: owners.destroy failed")
+                }
+            }
+        } finally {
+            currentView = null
+            currentTreeOwners = null
+            currentLayoutParams = null
         }
-        currentView = null
-        currentTreeOwners = null
-        currentLayoutParams = null
     }
 
     /**
