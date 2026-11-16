@@ -643,9 +643,11 @@ class DashboardViewModel(
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("DashboardViewModel", "sync: ${e.javaClass.simpleName}")
+                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
                 _uiState.update {
                     it.copy(
-                        errorMessage = UiText.res(R.string.dashboard_err_sync_failed, e.message ?: "")
+                        errorMessage = UiText.res(R.string.dashboard_err_sync_failed, scrubbed)
                     )
                 }
             } finally {

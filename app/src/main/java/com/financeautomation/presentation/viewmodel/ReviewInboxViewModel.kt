@@ -152,7 +152,7 @@ class ReviewInboxViewModel(
         val repo = subscriptionRepository ?: return
         viewModelScope.launch(ioDispatcher) {
             repo.observeNeedsReviewCycles()
-                .catch { /* ignore */ }
+                .catch { e -> Diagnostics.record("ReviewInboxViewModel", "observeSubscriptionsDue: ${e.javaClass.simpleName}") }
                 .collect { _subscriptionsDue.value = it }
         }
     }
@@ -202,7 +202,7 @@ class ReviewInboxViewModel(
         viewModelScope.launch(ioDispatcher) {
             val qDao = resolveSyncQueueDao() ?: return@launch
             qDao.getFailedQueueFlow()
-                .catch { /* ignore */ }
+                .catch { e -> Diagnostics.record("ReviewInboxViewModel", "observeFailedQueue: ${e.javaClass.simpleName}") }
                 .collect { failedItems ->
                     _uiState.update { it.copy(failedQueueItems = failedItems) }
                 }
@@ -217,7 +217,7 @@ class ReviewInboxViewModel(
                 captureDao.getNewAccountCapturesFlow()
             ) { needsReview, newAccounts ->
                 Pair(needsReview, newAccounts)
-            }.catch { /* ignore */ }
+            }.catch { e -> Diagnostics.record("ReviewInboxViewModel", "observeCaptures: ${e.javaClass.simpleName}") }
                 .collect { (needsReview, newAccounts) ->
                     val newAccountIds = newAccounts.map { it.id }.toSet()
                     val regularCaptures = needsReview.filter { it.id !in newAccountIds }
@@ -425,10 +425,11 @@ class ReviewInboxViewModel(
         viewModelScope.launch(ioDispatcher) {
             transactionRepository.getNeedsReview()
                 .catch { exception ->
+                    Diagnostics.record("ReviewInboxViewModel", "observeNeedsReview: ${exception.javaClass.simpleName}")
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = exception.message?.let { UiText.dynamic(it) } ?: UiText.res(R.string.review_err_load_failed)
+                            errorMessage = UiText.res(R.string.review_err_load_failed)
                         )
                     }
                 }

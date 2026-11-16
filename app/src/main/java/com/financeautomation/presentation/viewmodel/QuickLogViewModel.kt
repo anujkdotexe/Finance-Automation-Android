@@ -105,6 +105,8 @@ class QuickLogViewModel(
                     try {
                         transactionRepository.findRecentSimilar(amountVal, 120_000L)
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: findRecentSimilar")
                         emptyList()
                     }
                 } else emptyList()
@@ -369,7 +371,8 @@ class QuickLogViewModel(
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: updateTransaction")
-                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_update_failed, e.message ?: "")) }
+                    val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
+                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_update_failed, scrubbed)) }
                 }
             }
             return
@@ -401,7 +404,8 @@ class QuickLogViewModel(
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onConfirmAndSave")
-                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_save_failed, e.message ?: "")) }
+                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_save_failed, scrubbed)) }
             }
         }
     }
@@ -454,7 +458,8 @@ class QuickLogViewModel(
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "${e.javaClass.simpleName}: onVoid")
-                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_void_failed, e.message ?: "")) }
+                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.quicklog_err_void_failed, scrubbed)) }
             }
         }
     }

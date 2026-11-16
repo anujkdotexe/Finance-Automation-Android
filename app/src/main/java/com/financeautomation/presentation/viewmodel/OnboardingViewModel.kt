@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.financeautomation.R
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.remote.AuthResult
 import com.financeautomation.data.remote.GoogleAuthTokenProvider
 import com.financeautomation.data.remote.GoogleDriveApiException
@@ -207,6 +208,7 @@ class OnboardingViewModel(
                 accountSwitchGuard?.switchTo(prompt.email)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("OnboardingViewModel", "accountSwitch: ${e.javaClass.simpleName}")
                 _uiState.update {
                     it.copy(pendingAccountSwitch = null, step1State = StepState.ERROR, step1Error = UiText.res(R.string.account_switch_failed))
                 }
