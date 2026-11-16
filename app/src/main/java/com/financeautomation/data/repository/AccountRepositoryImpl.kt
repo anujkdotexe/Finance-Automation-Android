@@ -135,8 +135,13 @@ class AccountRepositoryImpl(
                 account.name.equals(CategoryConstants.ACCOUNT_OTHER, ignoreCase = true))) {
             return@withContext
         }
+        val coordinator = configSyncCoordinator
+        val now = System.currentTimeMillis()
+        if (account != null) {
+            coordinator?.localGateway?.recordTombstone(com.financeautomation.core.constants.ConfigConstants.TYPE_ACCOUNT, account.name, now)
+        }
         dao.deleteById(id)
-        configSyncCoordinator?.schedulePush()
+        coordinator?.schedulePush()
     }
 
     override suspend fun reorderAccounts(accountIds: List<String>): Unit = withContext(ioDispatcher) {

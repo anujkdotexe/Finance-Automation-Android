@@ -101,8 +101,19 @@ class CategoryRepositoryImpl(
     }
 
     override suspend fun deleteCategory(id: String): Unit = withContext(ioDispatcher) {
-        resolveDao().deleteById(id)
-        configSyncCoordinator?.schedulePush()
+        val dao = resolveDao()
+        val cat = dao.getById(id)
+        val coordinator = configSyncCoordinator
+        val now = System.currentTimeMillis()
+        if (cat != null) {
+            coordinator?.localGateway?.recordTombstone(
+                com.financeautomation.core.constants.ConfigConstants.TYPE_CATEGORY,
+                cat.name,
+                now
+            )
+        }
+        dao.deleteById(id)
+        coordinator?.schedulePush()
     }
 
     override suspend fun reorderCategories(categoryIds: List<String>): Unit = withContext(ioDispatcher) {

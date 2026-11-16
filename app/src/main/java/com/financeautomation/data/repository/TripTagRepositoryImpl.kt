@@ -149,7 +149,18 @@ class TripTagRepositoryImpl(
     }
 
     override suspend fun deleteTripTag(id: String): Unit = withContext(ioDispatcher) {
-        resolveDao().deleteById(id)
-        configSyncCoordinator?.schedulePush()
+        val dao = resolveDao()
+        val tag = dao.getById(id)
+        val coordinator = configSyncCoordinator
+        val now = System.currentTimeMillis()
+        if (tag != null) {
+            coordinator?.localGateway?.recordTombstone(
+                com.financeautomation.core.constants.ConfigConstants.TYPE_TRIP,
+                tag.name,
+                now
+            )
+        }
+        dao.deleteById(id)
+        coordinator?.schedulePush()
     }
 }

@@ -90,8 +90,16 @@ class SubscriptionRepositoryImpl(
     }
 
     override suspend fun deleteSubscription(id: String): Unit = withContext(ioDispatcher) {
+        val coordinator = configSyncCoordinatorProvider?.invoke()
+        val now = clock()
+        coordinator?.localGateway?.recordTombstone(
+            com.financeautomation.core.constants.ConfigConstants.TYPE_SUBSCRIPTION,
+            id,
+            now
+        )
+        cycleDaoProvider().deleteForSubscription(id)
         subscriptionDaoProvider().deleteById(id)
-        configSyncCoordinatorProvider?.invoke()?.schedulePush()
+        coordinator?.schedulePush()
     }
 
     override suspend fun getCycle(id: String): SubscriptionCycle? = withContext(ioDispatcher) {

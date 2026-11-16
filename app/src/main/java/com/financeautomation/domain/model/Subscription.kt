@@ -35,7 +35,9 @@ data class Subscription(
     val remind: Boolean = true,
     val keywords: String = "",
     val active: Boolean = true,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false
 ) {
     /** Lower-cased match tokens: the name plus every comma separated keyword. */
     val matchTokens: List<String>

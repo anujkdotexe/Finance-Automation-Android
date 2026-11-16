@@ -11,5 +11,7 @@ data class Category(
     val isExcludedFromLivingBurn: Boolean = false,
     val isArchived: Boolean = false,
     val displayOrder: Int = 0,
-    val iconName: String = "default_tag"
+    val iconName: String = "Teal",
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false
 )

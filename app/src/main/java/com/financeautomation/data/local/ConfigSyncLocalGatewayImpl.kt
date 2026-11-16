@@ -15,7 +15,12 @@ import com.financeautomation.data.local.entity.PreferenceEntity
 import com.financeautomation.data.local.entity.BudgetEntity
 import com.financeautomation.data.local.entity.SubscriptionEntity
 import com.financeautomation.data.local.entity.TripTagEntity
+import com.financeautomation.domain.model.Account
+import com.financeautomation.domain.model.Category
+import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.Subscription
+import com.financeautomation.domain.model.SubscriptionFrequency
+import com.financeautomation.domain.model.TripTag
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.DirtyConfigSnapshot
 import com.financeautomation.domain.repository.SyncedPreference
@@ -93,15 +98,59 @@ class ConfigSyncLocalGatewayImpl(
         val tripTagDao = resolveTripTagDao()
         val preferenceDao = resolvePreferenceDao()
 
-        val dirtyAccounts = accountDao.getDirtyAccounts().map { it.toDomain() }
-        val dirtyCategories = categoryDao.getDirtyCategories().map { it.toDomain() }
-        val dirtyCompanions = companionDao.getDirtyCompanions().map { it.toDomain() }
-        val dirtyTripTags = tripTagDao.getDirtyTripTags().map { it.toDomain() }
+        val tombstones = preferenceDao.getDirtyPreferences()
+            .filter { it.key.startsWith("tombstone:") }
+
+        val tombstonedAccounts = mutableListOf<Account>()
+        val tombstonedCategories = mutableListOf<Category>()
+        val tombstonedCompanions = mutableListOf<Companion>()
+        val tombstonedTripTags = mutableListOf<TripTag>()
+        val tombstonedSubscriptions = mutableListOf<Subscription>()
+
+        tombstones.forEach { t ->
+            val prefixRemoved = t.key.removePrefix("tombstone:")
+            val firstColon = prefixRemoved.indexOf(':')
+            if (firstColon > 0) {
+                val entityType = prefixRemoved.substring(0, firstColon)
+                val entityKey = prefixRemoved.substring(firstColon + 1)
+                when (entityType) {
+                    ConfigConstants.TYPE_ACCOUNT -> tombstonedAccounts.add(
+                        Account(id = entityKey, name = entityKey, deleted = true, updatedAt = t.updatedAt)
+                    )
+                    ConfigConstants.TYPE_CATEGORY -> tombstonedCategories.add(
+                        Category(id = entityKey, name = entityKey, deleted = true, updatedAt = t.updatedAt)
+                    )
+                    ConfigConstants.TYPE_PERSON -> tombstonedCompanions.add(
+                        Companion(id = entityKey, name = entityKey, deleted = true, updatedAt = t.updatedAt)
+                    )
+                    ConfigConstants.TYPE_TRIP -> tombstonedTripTags.add(
+                        TripTag(id = entityKey, name = entityKey, deleted = true, updatedAt = t.updatedAt)
+                    )
+                    ConfigConstants.TYPE_SUBSCRIPTION -> tombstonedSubscriptions.add(
+                        Subscription(
+                            id = entityKey,
+                            name = entityKey,
+                            amount = null,
+                            frequency = SubscriptionFrequency.MONTHLY,
+                            anchorEpochDay = 0L,
+                            account = "",
+                            deleted = true,
+                            updatedAt = t.updatedAt
+                        )
+                    )
+                }
+            }
+        }
+
+        val dirtyAccounts = accountDao.getDirtyAccounts().map { it.toDomain() } + tombstonedAccounts
+        val dirtyCategories = categoryDao.getDirtyCategories().map { it.toDomain() } + tombstonedCategories
+        val dirtyCompanions = companionDao.getDirtyCompanions().map { it.toDomain() } + tombstonedCompanions
+        val dirtyTripTags = tripTagDao.getDirtyTripTags().map { it.toDomain() } + tombstonedTripTags
         val dirtyPrefs = preferenceDao.getDirtyPreferences()
-            .filterNot { ConfigConstants.isLocalOnlyPref(it.key) }
+            .filterNot { ConfigConstants.isLocalOnlyPref(it.key) || it.key.startsWith("tombstone:") }
             .map { SyncedPreference(it.key, it.value, it.updatedAt, it.dirty == 1) }
 
-        val dirtySubscriptions = resolveSubscriptionDao()?.getDirtySubscriptions()?.map { it.toDomain() }.orEmpty()
+        val dirtySubscriptions = (resolveSubscriptionDao()?.getDirtySubscriptions()?.map { it.toDomain() }.orEmpty()) + tombstonedSubscriptions
         val dirtyBudgets = resolveBudgetDao()?.getDirty()?.map { it.toDomain() }.orEmpty()
 
         DirtyConfigSnapshot(
@@ -115,28 +164,68 @@ class ConfigSyncLocalGatewayImpl(
         )
     }
 
+    override suspend fun recordTombstone(type: String, key: String, updatedAt: Long): Unit = withContext(ioDispatcher) {
+        val prefDao = resolvePreferenceDao()
+        prefDao.setPreference(
+            PreferenceEntity(
+                key = "tombstone:$type:$key",
+                value = "deleted",
+                updatedAt = updatedAt,
+                dirty = 1
+            )
+        )
+    }
+
     override suspend fun markAccountsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) resolveAccountDao().markClean(ids)
+        if (ids.isNotEmpty()) {
+            resolveAccountDao().markClean(ids)
+            val prefDao = resolvePreferenceDao()
+            ids.forEach { prefDao.deletePreference("tombstone:${ConfigConstants.TYPE_ACCOUNT}:$it") }
+        }
     }
 
     override suspend fun markCategoriesClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) resolveCategoryDao().markClean(ids)
+        if (ids.isNotEmpty()) {
+            resolveCategoryDao().markClean(ids)
+            val prefDao = resolvePreferenceDao()
+            ids.forEach { prefDao.deletePreference("tombstone:${ConfigConstants.TYPE_CATEGORY}:$it") }
+        }
     }
 
     override suspend fun markCompanionsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) resolveCompanionDao().markClean(ids)
+        if (ids.isNotEmpty()) {
+            resolveCompanionDao().markClean(ids)
+            val prefDao = resolvePreferenceDao()
+            ids.forEach { prefDao.deletePreference("tombstone:${ConfigConstants.TYPE_PERSON}:$it") }
+        }
     }
 
     override suspend fun markTripTagsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) resolveTripTagDao().markClean(ids)
+        if (ids.isNotEmpty()) {
+            resolveTripTagDao().markClean(ids)
+            val prefDao = resolvePreferenceDao()
+            ids.forEach { prefDao.deletePreference("tombstone:${ConfigConstants.TYPE_TRIP}:$it") }
+        }
     }
 
     override suspend fun markPreferencesClean(keys: List<String>): Unit = withContext(ioDispatcher) {
-        if (keys.isNotEmpty()) resolvePreferenceDao().markClean(keys)
+        if (keys.isNotEmpty()) {
+            val prefDao = resolvePreferenceDao()
+            prefDao.markClean(keys)
+            keys.forEach { key ->
+                if (prefDao.getPreference(key) == null) {
+                    prefDao.deletePreference(key)
+                }
+            }
+        }
     }
 
     override suspend fun markSubscriptionsClean(ids: List<String>): Unit = withContext(ioDispatcher) {
-        if (ids.isNotEmpty()) resolveSubscriptionDao()?.markClean(ids)
+        if (ids.isNotEmpty()) {
+            resolveSubscriptionDao()?.markClean(ids)
+            val prefDao = resolvePreferenceDao()
+            ids.forEach { prefDao.deletePreference("tombstone:${ConfigConstants.TYPE_SUBSCRIPTION}:$it") }
+        }
     }
 
     override suspend fun markBudgetsClean(categories: List<String>): Unit = withContext(ioDispatcher) {
@@ -247,7 +336,8 @@ class ConfigSyncLocalGatewayImpl(
         isArchived: Boolean,
         displayOrder: Int,
         updatedAt: Long,
-        deleted: Boolean
+        deleted: Boolean,
+        iconName: String
     ): Unit = withContext(ioDispatcher) {
         val categoryDao = resolveCategoryDao()
         val existing = categoryDao.getByName(name)
@@ -262,6 +352,7 @@ class ConfigSyncLocalGatewayImpl(
                         isExcludedFromLivingBurn = excludedFromBurn,
                         isArchived = isArchived,
                         displayOrder = displayOrder,
+                        iconName = iconName,
                         updatedAt = updatedAt,
                         dirty = 0
                     )
@@ -285,6 +376,7 @@ class ConfigSyncLocalGatewayImpl(
                             isExcludedFromLivingBurn = excludedFromBurn,
                             isArchived = isArchived,
                             displayOrder = displayOrder,
+                            iconName = iconName,
                             updatedAt = updatedAt,
                             dirty = 0
                         )

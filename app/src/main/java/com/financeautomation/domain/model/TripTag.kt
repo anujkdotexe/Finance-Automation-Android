@@ -9,5 +9,7 @@ data class TripTag(
     val name: String,
     val isActive: Boolean = false,
     val isArchived: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = 0L,
+    val deleted: Boolean = false
 )

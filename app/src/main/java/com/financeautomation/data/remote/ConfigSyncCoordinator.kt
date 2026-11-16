@@ -26,7 +26,7 @@ class ConfigSyncCoordinator(
     private val syncConfigUseCase: SyncConfigUseCase,
     private val syncQueueDao: SyncQueueDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
-    private val localGateway: ConfigSyncLocalGateway,
+    val localGateway: ConfigSyncLocalGateway,
     private val applicationScope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {

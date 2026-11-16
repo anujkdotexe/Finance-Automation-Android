@@ -63,7 +63,8 @@ data class SubscriptionEntity(
         remind = remind,
         keywords = keywords,
         active = active,
-        createdAt = createdAt
+        createdAt = createdAt,
+        updatedAt = updatedAt
     )
 
     companion object {

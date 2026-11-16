@@ -37,7 +37,7 @@ data class CategoryEntity(
     val displayOrder: Int = 0,
 
     @ColumnInfo(name = "iconName")
-    val iconName: String = "default_tag",
+    val iconName: String = "Teal",
 
     @ColumnInfo(name = "updatedAt", defaultValue = "0")
     val updatedAt: Long = 0L,
@@ -53,7 +53,8 @@ data class CategoryEntity(
             isExcludedFromLivingBurn = isExcludedFromLivingBurn,
             isArchived = isArchived,
             displayOrder = displayOrder,
-            iconName = iconName
+            iconName = iconName,
+            updatedAt = updatedAt
         )
     }
 
