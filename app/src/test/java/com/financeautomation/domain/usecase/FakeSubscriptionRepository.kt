@@ -45,6 +45,10 @@ class FakeSubscriptionRepository : SubscriptionRepository {
     override suspend fun getSubscription(id: String): Subscription? = subscriptions.value[id]
     override suspend fun getActiveSubscriptions(): List<Subscription> = subscriptions.value.values.filter { it.active }
     override suspend fun upsertSubscription(subscription: Subscription) { addSubscription(subscription) }
+    override suspend fun deleteSubscription(id: String) {
+        subscriptions.value = subscriptions.value - id
+        cycles.value = cycles.value.filterValues { it.subscriptionId != id }
+    }
     override suspend fun getCycle(id: String): SubscriptionCycle? = cycles.value[id]
     override suspend fun getCycleWithSubscription(id: String): SubscriptionCycleWithSubscription? =
         cycles.value[id]?.let { join(it) }

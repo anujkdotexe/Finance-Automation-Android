@@ -25,6 +25,9 @@ interface SubscriptionRepository {
     /** Inserts or replaces a subscription and marks it dirty for the Config mirror. */
     suspend fun upsertSubscription(subscription: Subscription)
 
+    /** Deletes a subscription by its id. */
+    suspend fun deleteSubscription(id: String)
+
     suspend fun getCycle(id: String): SubscriptionCycle?
     suspend fun getCycleWithSubscription(id: String): SubscriptionCycleWithSubscription?
 

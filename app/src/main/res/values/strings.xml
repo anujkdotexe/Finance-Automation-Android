@@ -398,6 +398,14 @@
     <string name="sub_empty_title">No active subscriptions</string>
     <string name="sub_empty_subtitle">Tap Add to track a recurring payment</string>
     <string name="sub_add_title">Add subscription</string>
+    <string name="sub_edit_title">Edit subscription</string>
+    <string name="sub_action_sheet_title">Subscription options</string>
+    <string name="sub_action_edit">Edit details</string>
+    <string name="sub_action_pause">Pause subscription</string>
+    <string name="sub_action_resume">Resume subscription</string>
+    <string name="sub_action_delete">Delete subscription</string>
+    <string name="sub_delete_confirm_title">Delete subscription?</string>
+    <string name="sub_delete_confirm_desc">Are you sure you want to delete \"%s\"? Tracked history will be preserved.</string>
     <string name="sub_add_name_label">NAME</string>
     <string name="sub_add_name_placeholder">e.g. Netflix, Gym, Google One</string>
     <string name="sub_add_amount_label">AMOUNT</string>

@@ -157,5 +157,82 @@ class SubscriptionsViewModelTest {
         assertEquals(1, viewModel.uiState.value.activeSubscriptions.size)
         assertEquals(0, viewModel.uiState.value.pausedSubscriptions.size)
     }
+
+    @Test
+    fun pauseAndResumeSubscription_delegatesAccurately() = runTest {
+        advanceUntilIdle()
+
+        val sub = Subscription(
+            id = "sub_p_r",
+            name = "Prime Video",
+            amount = 1499.0,
+            frequency = SubscriptionFrequency.YEARLY,
+            anchorEpochDay = 20000,
+            account = "ICICI",
+            active = true
+        )
+        repo.addSubscription(sub)
+        advanceUntilIdle()
+
+        viewModel.pauseSubscription("sub_p_r")
+        advanceUntilIdle()
+        assertFalse(repo.getSubscription("sub_p_r")!!.active)
+        assertEquals(1, viewModel.uiState.value.pausedSubscriptions.size)
+
+        viewModel.resumeSubscription("sub_p_r")
+        advanceUntilIdle()
+        assertTrue(repo.getSubscription("sub_p_r")!!.active)
+        assertEquals(1, viewModel.uiState.value.activeSubscriptions.size)
+    }
+
+    @Test
+    fun deleteSubscription_removesSubscriptionPermanently() = runTest {
+        advanceUntilIdle()
+
+        val sub = Subscription(
+            id = "sub_del",
+            name = "Old Gym",
+            amount = 1000.0,
+            frequency = SubscriptionFrequency.MONTHLY,
+            anchorEpochDay = 20000,
+            account = "HDFC",
+            active = true
+        )
+        repo.addSubscription(sub)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.subscriptions.size)
+
+        viewModel.deleteSubscription("sub_del")
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.subscriptions.size)
+        assertTrue(repo.getSubscription("sub_del") == null)
+    }
+
+    @Test
+    fun updateSubscription_updatesDetails() = runTest {
+        advanceUntilIdle()
+
+        val sub = Subscription(
+            id = "sub_upd",
+            name = "Gym Basic",
+            amount = 1000.0,
+            frequency = SubscriptionFrequency.MONTHLY,
+            anchorEpochDay = 20000,
+            account = "HDFC",
+            active = true
+        )
+        repo.addSubscription(sub)
+        advanceUntilIdle()
+
+        val updated = sub.copy(name = "Gym Premium", amount = 1500.0)
+        viewModel.updateSubscription(updated)
+        advanceUntilIdle()
+
+        val retrieved = repo.getSubscription("sub_upd")
+        assertEquals("Gym Premium", retrieved?.name)
+        assertEquals(1500.0, retrieved?.amount ?: 0.0, 0.001)
+    }
 }
 

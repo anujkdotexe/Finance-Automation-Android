@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
 import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupeesAuto
+import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionFrequency
 import com.financeautomation.domain.usecase.ExpressionEvaluator
 import com.financeautomation.presentation.components.ButtonPair
@@ -74,20 +75,29 @@ fun AddSubscriptionSheet(
     onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean) -> Unit,
     modifier: Modifier = Modifier,
     /** Opens the sheet filled in from a detected repeating payment. */
-    prefill: com.financeautomation.domain.usecase.RecurringSuggestion? = null
+    prefill: com.financeautomation.domain.usecase.RecurringSuggestion? = null,
+    /** Opens the sheet for editing an existing subscription. */
+    existing: Subscription? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var name by rememberSaveable { mutableStateOf(prefill?.name.orEmpty()) }
+    var name by rememberSaveable { mutableStateOf(existing?.name ?: prefill?.name.orEmpty()) }
     var amountText by remember {
-        mutableStateOf(prefill?.let { com.financeautomation.core.utils.formatAmountInput(it.amount) } ?: "")
+        mutableStateOf(
+            existing?.amount?.let { com.financeautomation.core.utils.formatAmountInput(it) }
+                ?: prefill?.let { com.financeautomation.core.utils.formatAmountInput(it.amount) }
+                ?: ""
+        )
     }
-    var isFixedAmount by rememberSaveable { mutableStateOf(true) }
-    var selectedFrequency by rememberSaveable { mutableStateOf(prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
-    val defaultAccount = prefill?.account?.takeIf { it in accounts } ?: accounts.firstOrNull() ?: CategoryConstants.ACCOUNT_OTHER
+    var isFixedAmount by rememberSaveable { mutableStateOf(existing?.let { it.amount != null } ?: true) }
+    var selectedFrequency by rememberSaveable { mutableStateOf(existing?.frequency ?: prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
+    val defaultAccount = existing?.account?.takeIf { it in accounts }
+        ?: prefill?.account?.takeIf { it in accounts }
+        ?: accounts.firstOrNull()
+        ?: CategoryConstants.ACCOUNT_OTHER
     var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
-    var remindMe by rememberSaveable { mutableStateOf(true) }
+    var remindMe by rememberSaveable { mutableStateOf(existing?.remind ?: true) }
 
-    var anchorDateEpochDay by rememberSaveable { mutableStateOf<Long?>(null) }
+    var anchorDateEpochDay by rememberSaveable { mutableStateOf<Long?>(existing?.anchorEpochDay) }
     var showDatePicker by remember { mutableStateOf(false) }
 
     val todayEpochDay = remember { java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toEpochDay() }
@@ -141,7 +151,7 @@ fun AddSubscriptionSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = stringResource(R.string.sub_add_title),
+                    text = if (existing != null) stringResource(R.string.sub_edit_title) else stringResource(R.string.sub_add_title),
                     style = FinanceTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
