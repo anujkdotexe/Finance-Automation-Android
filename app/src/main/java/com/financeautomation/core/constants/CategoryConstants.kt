@@ -40,17 +40,14 @@ object CategoryConstants {
 
     /**
      * Normalizes category name according to master ledger rules.
-     * Throws IllegalArgumentException if singular "Saving" is provided.
+     * Normalizes singular "Saving" and plural "Savings" to plural "Savings".
      * Maps investments, mutual funds, and SIPs strictly to plural "Savings".
      */
     fun normalizeCategory(categoryName: String): String {
         val trimmed = categoryName.trim()
         val lower = trimmed.lowercase()
         return when (lower) {
-            "saving" -> throw IllegalArgumentException(
-                "Singular 'Saving' is forbidden. Category must strictly be 'Savings'"
-            )
-            "savings", "investment", "sip", "mutual fund" -> CATEGORY_SAVINGS
+            "saving", "savings", "investment", "sip", "mutual fund" -> CATEGORY_SAVINGS
             else -> trimmed
         }
     }

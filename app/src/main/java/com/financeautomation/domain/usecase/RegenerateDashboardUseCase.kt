@@ -46,7 +46,13 @@ class RegenerateDashboardUseCase(
             }
 
             val sheetProperties = fetchSheetProperties(spreadsheetId)
-            val dashboardSheetId = sheetProperties["Dashboard"] ?: 0
+                ?: return@withContext Result.Error(
+                    IllegalStateException("Failed to fetch sheet properties for spreadsheet $spreadsheetId")
+                )
+            val dashboardSheetId = sheetProperties["Dashboard"]
+                ?: return@withContext Result.Error(
+                    IllegalStateException("Dashboard tab not found in spreadsheet $spreadsheetId")
+                )
 
             val accounts = accountRepository.getAllAccounts(includeArchived = false)
             val categories = categoryRepository.getAllCategories(includeArchived = false)
@@ -70,17 +76,21 @@ class RegenerateDashboardUseCase(
         }
     }
 
-    private fun fetchSheetProperties(spreadsheetId: String): Map<String, Int> {
-        val client = okHttpClient ?: return mapOf("Dashboard" to 0)
+    private fun fetchSheetProperties(spreadsheetId: String): Map<String, Int>? {
+        val client = okHttpClient ?: return null
         val url = "https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle))"
         val requestBuilder = Request.Builder().url(url)
-        tokenProvider?.getAccessToken()?.let { token ->
+        val token = tokenProvider?.getAccessToken()
+        if (!token.isNullOrBlank()) {
             requestBuilder.header("Authorization", "Bearer $token")
         }
 
         return try {
             client.newCall(requestBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful) return mapOf("Dashboard" to 0)
+                if (!response.isSuccessful) {
+                    Diagnostics.record("RegenerateDashboardUseCase", "fetchSheetProperties failed: HTTP ${response.code}")
+                    return null
+                }
                 val bodyString = response.body?.string().orEmpty()
                 val parsed = json.parseToJsonElement(bodyString).jsonObject
                 val sheets = parsed["sheets"]?.jsonArray.orEmpty()
@@ -88,15 +98,15 @@ class RegenerateDashboardUseCase(
                 for (sheet in sheets) {
                     val props = sheet.jsonObject["properties"]?.jsonObject ?: continue
                     val title = props["title"]?.jsonPrimitive?.content ?: continue
-                    val id = props["sheetId"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    val id = props["sheetId"]?.jsonPrimitive?.content?.toIntOrNull() ?: continue
                     result[title] = id
                 }
                 result
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Diagnostics.record("RegenerateDashboardUseCase", "${e.javaClass.simpleName}: fetchSheetIds fallback")
-            mapOf("Dashboard" to 0)
+            Diagnostics.record("RegenerateDashboardUseCase", "${e.javaClass.simpleName}: fetchSheetProperties failed")
+            null
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.financeautomation.data.repository
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.isFuture
 import com.financeautomation.core.utils.TimeGuardConstants
 import com.financeautomation.core.model.ReviewState
@@ -780,7 +781,8 @@ class TransactionRepositoryImpl(
             for (item in pendingItems) {
                 // Items that touch a transaction whose earlier item just failed wait for the next run to keep their order
                 if (item.transactionId in failedIds) continue
-                if (item.operationType == SyncQueueEntity.OP_CONFIG_PUSH) {
+                try {
+                    if (item.operationType == SyncQueueEntity.OP_CONFIG_PUSH) {
                     val configRes = syncConfigUseCase?.push()
                     if (configRes is Result.Success) {
                         syncQueueDao.deleteById(item.id)
@@ -1246,6 +1248,12 @@ class TransactionRepositoryImpl(
                             if (failItem(item, txn, err, st)) break else continue
                         }
                     }
+                }
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("TransactionRepositoryImpl", "${e.javaClass.simpleName}: sync item ${item.id} (${item.operationType}) failed: ${e.message}")
+                    failItem(item, null, e, st)
+                    continue
                 }
             }
 
