@@ -13,6 +13,8 @@ class FakePendingCaptureDao : PendingCaptureDao {
     override suspend fun getById(id: String): PendingCaptureEntity? = captures[id]
     override suspend fun getByNotificationKey(key: String): PendingCaptureEntity? =
         captures.values.lastOrNull { it.notificationKey == key }
+    override suspend fun getByContentHash(hash: String, since: Long): PendingCaptureEntity? =
+        captures.values.lastOrNull { it.contentHash == hash && it.timestamp >= since }
     override suspend fun getByState(state: String): List<PendingCaptureEntity> = captures.values.filter { it.state == state }
     override fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>> =
         flowOf(captures.values.filter { it.state == "WAITING" })

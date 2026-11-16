@@ -30,10 +30,8 @@ object NotificationAccessAlertManager {
             val notificationManager = NotificationManagerCompat.from(context)
 
             if (isAccessGranted) {
-                if (isAlertVisible) {
-                    notificationManager.cancel(NOTIFICATION_ID_CAPTURE_OFF)
-                    isAlertVisible = false
-                }
+                notificationManager.cancel(NOTIFICATION_ID_CAPTURE_OFF)
+                isAlertVisible = false
                 return
             }
 

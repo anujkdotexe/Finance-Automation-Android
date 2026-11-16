@@ -33,6 +33,8 @@ class NotificationProcessorTest {
         override suspend fun update(capture: PendingCaptureEntity) { captures[capture.id] = capture }
         override suspend fun getById(id: String): PendingCaptureEntity? = captures[id]
         override suspend fun getByNotificationKey(key: String): PendingCaptureEntity? = captures.values.lastOrNull { it.notificationKey == key }
+        override suspend fun getByContentHash(hash: String, since: Long): PendingCaptureEntity? =
+            captures.values.lastOrNull { it.contentHash == hash && it.timestamp >= since }
         override suspend fun getByState(state: String): List<PendingCaptureEntity> = captures.values.filter { it.state == state }
         override fun getWaitingCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(captures.values.filter { it.state == "WAITING" })
         override fun getNeedsReviewCapturesFlow(): Flow<List<PendingCaptureEntity>> = flowOf(captures.values.filter { it.state == "NEEDS_REVIEW" })
@@ -56,6 +58,8 @@ class NotificationProcessorTest {
         override suspend fun insert(handled: HandledNotificationEntity) { this.handled[handled.key] = handled }
         override suspend fun get(key: String, postTime: Long): HandledNotificationEntity? = handled[key]?.takeIf { it.postTime == postTime }
         override suspend fun getLatestByKey(key: String): HandledNotificationEntity? = handled[key]
+        override suspend fun getByContentHash(hash: String, since: Long): HandledNotificationEntity? =
+            handled.values.lastOrNull { it.contentHash == hash && it.handledAt >= since }
         override suspend fun pruneOlderThan(cutoffTime: Long) { handled.entries.removeIf { it.value.handledAt < cutoffTime } }
     }
 

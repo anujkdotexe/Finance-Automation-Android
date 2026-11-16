@@ -100,6 +100,7 @@ class ForegroundWatcher(
 
     private val mutex = Mutex()
     private var watcherJob: Job? = null
+    private val isStartingLoop = java.util.concurrent.atomic.AtomicBoolean(false)
     private val pollCounters = ConcurrentHashMap<String, Int>()
     private val failedRetryDelays = ConcurrentHashMap<String, Long>()
     private val wakeChannel = Channel<Unit>(Channel.CONFLATED)
@@ -140,7 +141,7 @@ class ForegroundWatcher(
 
         val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return false
         val now = System.currentTimeMillis()
-        val events = usageStats.queryEvents(now - 5 * 60_000L, now) ?: return false
+        val events = usageStats.queryEvents(now - 10 * 60_000L, now) ?: return false
 
         var lastResumeTime = 0L
         var lastPauseTime = 0L
@@ -221,6 +222,7 @@ class ForegroundWatcher(
     }
 
     private fun startWatcherLoop(scope: CoroutineScope) {
+        if (!isStartingLoop.compareAndSet(false, true)) return
         registerScreenReceiver()
         watcherJob = scope.launch(Dispatchers.IO) {
             try {
@@ -324,6 +326,7 @@ class ForegroundWatcher(
             } catch (e: Exception) {
                 Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: loop error")
             } finally {
+                isStartingLoop.set(false)
                 unregisterScreenReceiver()
             }
         }

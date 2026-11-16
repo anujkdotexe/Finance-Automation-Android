@@ -30,6 +30,8 @@ import com.financeautomation.domain.usecase.WordingClass
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -75,13 +77,15 @@ class NotificationProcessor(
     private val ownPackageName: String = "com.financeautomation"
 ) {
 
+    private val processMutex = Mutex()
+
     suspend fun process(
         sourcePackage: String,
         title: String,
         text: String,
         postTime: Long = System.currentTimeMillis(),
         sbnKey: String = ""
-    ): NotificationProcessingOutcome {
+    ): NotificationProcessingOutcome = processMutex.withLock {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
             return NotificationProcessingOutcome.Ignored("Self notification dropped")
@@ -116,18 +120,31 @@ class NotificationProcessor(
         val contentHash = computeContentHash(title, text)
         val key = if (sbnKey.isNotBlank()) sbnKey else "$sourcePackage|$postTime"
 
-        // 5. Handled-notification check
+        // 5. Handled-notification and reconnect replay check
+        val cutoff = postTime - 24L * 60L * 60L * 1000L
         if (handledNotificationDao != null) {
             val existingHandled = handledNotificationDao.get(key = key, postTime = postTime)
-            if (existingHandled != null && existingHandled.contentHash == contentHash) {
+                ?: handledNotificationDao.getLatestByKey(key)?.takeIf { it.contentHash == contentHash }
+                ?: handledNotificationDao.getByContentHash(contentHash, cutoff)
+            if (existingHandled != null) {
                 // Reconnect replay or duplicate posted alert
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
                 return NotificationProcessingOutcome.Ignored("Duplicate or reconnect replay notification dropped")
             }
 
             // Prune rows older than 24 hours
-            val cutoff = postTime - 24L * 60L * 60L * 1000L
             handledNotificationDao.pruneOlderThan(cutoff)
+        }
+
+        if (pendingCaptureDao != null) {
+            val existingCapture = pendingCaptureDao.getByContentHash(contentHash, cutoff)
+            if (existingCapture != null && (existingCapture.state == PendingCaptureEntity.STATE_WAITING ||
+                existingCapture.state == PendingCaptureEntity.STATE_SHOWN ||
+                existingCapture.state == PendingCaptureEntity.STATE_DONE ||
+                existingCapture.state == PendingCaptureEntity.STATE_NEEDS_REVIEW)) {
+                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
+                return NotificationProcessingOutcome.Ignored("Duplicate or reconnect replay notification dropped")
+            }
         }
 
         // 5b. Expire WAITING captures older than 24 hours quietly to Needs Review
@@ -380,8 +397,13 @@ class NotificationProcessor(
         )
 
         val insertOp: suspend () -> Unit = {
-            handledNotificationDao?.insert(handledEntity)
-            pendingCaptureDao?.insert(capture)
+            val cutoffTime = postTime - 24L * 60L * 60L * 1000L
+            val isDuplicate = handledNotificationDao?.getByContentHash(contentHash, cutoffTime) != null ||
+                pendingCaptureDao?.getByContentHash(contentHash, cutoffTime) != null
+            if (!isDuplicate) {
+                handledNotificationDao?.insert(handledEntity)
+                pendingCaptureDao?.insert(capture)
+            }
         }
         if (runInTransaction != null) runInTransaction.invoke(insertOp) else insertOp()
 
