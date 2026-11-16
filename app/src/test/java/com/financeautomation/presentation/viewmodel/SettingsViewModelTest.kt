@@ -61,15 +61,18 @@ class SettingsViewModelTest {
 
     private class FakePreferencesRepository : PreferencesRepository {
         var email: String? = "test@example.com"
-        var activeSpreadsheetId: String? = "sheet_123"
+        val spreadsheetIdFlow = MutableStateFlow<String?>("sheet_123")
+        var activeSpreadsheetId: String?
+            get() = spreadsheetIdFlow.value
+            set(value) { spreadsheetIdFlow.value = value }
         val yearMap = mutableMapOf<Int, String>()
         val devModeFlow = MutableStateFlow(false)
         val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
 
-        override fun getSpreadsheetId(): Flow<String?> = flowOf(activeSpreadsheetId)
-        override suspend fun getSpreadsheetIdSync(): String? = activeSpreadsheetId
+        override fun getSpreadsheetId(): Flow<String?> = spreadsheetIdFlow.asStateFlow()
+        override suspend fun getSpreadsheetIdSync(): String? = spreadsheetIdFlow.value
         override suspend fun setSpreadsheetId(id: String) {
-            activeSpreadsheetId = id
+            spreadsheetIdFlow.value = id
         }
 
         override fun getSpreadsheetIdForYear(year: Int): Flow<String?> = flowOf(yearMap[year])
@@ -77,6 +80,11 @@ class SettingsViewModelTest {
         override suspend fun setSpreadsheetIdForYear(year: Int, id: String) {
             yearMap[year] = id
         }
+
+        val titleFlow = MutableStateFlow<String?>("Finance2026")
+        override fun getSpreadsheetTitle(): Flow<String?> = titleFlow.asStateFlow()
+        override suspend fun getSpreadsheetTitleSync(): String? = titleFlow.value
+        override suspend fun setSpreadsheetTitle(title: String) { titleFlow.value = title }
 
         override fun getDefaultAccount(): Flow<String> = flowOf("SBI")
         override suspend fun getDefaultAccountSync(): String = "SBI"
@@ -223,6 +231,25 @@ class SettingsViewModelTest {
 
         assertTrue("Expected forceOnboarding to be true", forceOnboarding)
         assertEquals("Expected resolver not to be called by re-running setup alone", 0, resolver.resolveCalls)
+    }
+
+    @Test
+    fun testSettingsUiStateDisplaysRealWorkbookNameAndNeverFakeLedgerString() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        prefs.setSpreadsheetId("sheet_123")
+        prefs.setSpreadsheetTitle("Finance2026")
+
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        val state = vm.uiState.value
+        assertEquals("sheet_123", state.spreadsheetId)
+        assertEquals("Finance2026", state.workbookName)
+        assertFalse("Must never display fake 'Finance Ledger 2026'", state.workbookName?.contains("Finance Ledger") == true)
     }
 
     @Test

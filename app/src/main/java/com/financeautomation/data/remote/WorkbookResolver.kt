@@ -217,6 +217,7 @@ open class WorkbookResolver(
             val currentYear = ZonedDateTime.now(clock).year
             if (year == currentYear) {
                 preferencesRepository.setSpreadsheetId(newSpreadsheetId)
+                preferencesRepository.setSpreadsheetTitle(workbookName)
             }
 
             // Newly created: mirror local default config to Config tab, then regenerate Dashboard
@@ -260,6 +261,7 @@ open class WorkbookResolver(
             val currentYear = ZonedDateTime.now(clock).year
             if (year == currentYear) {
                 preferencesRepository.setSpreadsheetId(newId)
+                preferencesRepository.setSpreadsheetTitle(workbookName)
             }
 
             syncConfigUseCase?.mirrorToCloud(newId)
