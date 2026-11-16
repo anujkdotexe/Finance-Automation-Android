@@ -220,4 +220,109 @@ class YearRolloverMultiWorkbookTest {
         // 2. Status edits (marking origin Dec26 row as Carried) MUST target 2026 workbook!
         assertTrue(recordedRequests.any { it.contains("POST") && it.contains("sheet_finance_2026") && it.contains("values:batchUpdate") })
     }
+
+    @Test
+    fun newWorkbookCreationCopiesConfigMirrorToNewWorkbook() = runBlocking {
+        val kolkata = ZoneId.of("Asia/Kolkata")
+        val instant2027 = Instant.parse("2027-01-01T18:31:00Z")
+        val clock = MutableClock(instant2027, kolkata)
+
+        val prefDao = TestPreferenceDao()
+        val prefsRepo = PreferencesRepositoryImpl(
+            preferenceDao = prefDao,
+            clock = clock
+        )
+
+        var mirrorTargetSpreadsheetId: String? = null
+        var mirrorCalled = false
+
+        // Mock dependencies for WorkbookResolver
+        val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+        val interceptor = Interceptor { chain ->
+            val req = chain.request()
+            val url = req.url.toString()
+            val body = when {
+                url.contains("/files?q=") -> """{"files":[]}"""
+                req.method == "POST" && url.contains("/files") -> """{"id":"sheet_finance_2027"}"""
+                req.method == "POST" && url.contains(":batchUpdate") -> """{"replies":[{"addSheet":{"properties":{"sheetId":0,"title":"Dashboard"}}}]}"""
+                req.method == "GET" && url.contains("/values/") -> """{"values":[["Header"]]}"""
+                else -> "{}"
+            }
+            Response.Builder()
+                .request(req)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(body.toResponseBody(jsonMediaType))
+                .build()
+        }
+
+        val okHttpClient = OkHttpClient.Builder().addInterceptor(interceptor).build()
+        val tokenProvider = object : TokenProvider {
+            override fun getAccessToken(): String = "tok"
+            override fun refreshAccessToken(): String = "tok"
+        }
+        val driveClient = GoogleDriveClient(okHttpClient, tokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, tokenProvider)
+
+        val fakeLocalGateway = object : com.financeautomation.domain.repository.ConfigSyncLocalGateway {
+            override suspend fun markAllLocalItemsDirty() {}
+            override suspend fun getDirtySnapshot(): com.financeautomation.domain.repository.DirtyConfigSnapshot =
+                com.financeautomation.domain.repository.DirtyConfigSnapshot(
+                    accounts = listOf(com.financeautomation.domain.model.Account("a1", "HDFC", isDefault = true, isArchived = false, displayOrder = 0)),
+                    categories = listOf(com.financeautomation.domain.model.Category("c1", "Food & Drink", isExcludedFromLivingBurn = false, isDefault = true, isArchived = false, displayOrder = 0)),
+                    companions = listOf(com.financeautomation.domain.model.Companion("p1", "Rahul", isArchived = false)),
+                    tripTags = emptyList(),
+                    preferences = emptyList()
+                )
+            override suspend fun markAccountsClean(ids: List<String>) {}
+            override suspend fun markCategoriesClean(ids: List<String>) {}
+            override suspend fun markCompanionsClean(ids: List<String>) {}
+            override suspend fun markTripTagsClean(ids: List<String>) {}
+            override suspend fun markPreferencesClean(keys: List<String>) {}
+            override suspend fun markSubscriptionsClean(ids: List<String>) {}
+            override suspend fun markBudgetsClean(categories: List<String>) {}
+            override suspend fun applyRemoteAccount(name: String, lastFour: String?, isDefault: Boolean, isArchived: Boolean, displayOrder: Int, updatedAt: Long, deleted: Boolean) {}
+            override suspend fun applyRemoteCategory(name: String, excludedFromBurn: Boolean, isDefault: Boolean, isArchived: Boolean, displayOrder: Int, updatedAt: Long, deleted: Boolean) {}
+            override suspend fun applyRemoteCompanion(name: String, isArchived: Boolean, updatedAt: Long, deleted: Boolean) {}
+            override suspend fun applyRemoteTripTag(name: String, isActive: Boolean, isArchived: Boolean, updatedAt: Long, deleted: Boolean) {}
+            override suspend fun applyRemotePreference(key: String, value: String?, updatedAt: Long, deleted: Boolean) {}
+            override suspend fun applyRemoteBudget(category: String, monthlyAmount: Double, updatedAt: Long, deleted: Boolean) {}
+            override suspend fun applyRemoteSubscription(subscription: com.financeautomation.domain.model.Subscription, updatedAt: Long, deleted: Boolean) {}
+        }
+
+        val fakeConfigRepo = object : com.financeautomation.domain.repository.ConfigRepository {
+            override suspend fun readAll(spreadsheetId: String): Result<List<com.financeautomation.domain.model.ConfigRow>> =
+                Result.Success(emptyList())
+            override suspend fun upsert(spreadsheetId: String, rows: List<com.financeautomation.domain.model.ConfigRow>): Result<Unit> {
+                mirrorTargetSpreadsheetId = spreadsheetId
+                mirrorCalled = true
+                return Result.Success(Unit)
+            }
+            override suspend fun tombstone(spreadsheetId: String, type: String, key: String, deviceId: String): Result<Unit> = Result.Success(Unit)
+        }
+
+        val syncConfigUseCase = com.financeautomation.domain.usecase.SyncConfigUseCase(
+            configRepository = fakeConfigRepo,
+            localGateway = fakeLocalGateway,
+            preferencesRepository = prefsRepo
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefsRepo,
+            syncConfigUseCase = syncConfigUseCase,
+            clock = clock
+        )
+
+        val result = resolver.resolveForYear(2027)
+        assertTrue("Workbook resolution for 2027 must succeed: $result", result is Result.Success)
+        assertEquals("sheet_finance_2027", (result as Result.Success).data)
+
+        // Verify that Config mirror was populated into the newly created 2027 workbook
+        assertTrue("mirrorToCloud must be called when creating new workbook", mirrorCalled)
+        assertEquals("sheet_finance_2027", mirrorTargetSpreadsheetId)
+        assertEquals("sheet_finance_2027", prefsRepo.getSpreadsheetIdForYearSync(2027))
+    }
 }
