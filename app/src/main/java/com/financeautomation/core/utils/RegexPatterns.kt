@@ -19,13 +19,15 @@ object RegexPatterns {
 
     // Merchant / Payee regex extracting business names or VPAs
     val MERCHANT_REGEX: Regex = Regex(
-        """\b(?:paid\s+to|sent\s+to|transferred\s+to|trf\s+to|towards|to|at|vpa)\s+([A-Za-z0-9\s&._\-@]+?)(?:,\s*|\s+on\b|\.(?!\d)|$|\s+ref\b|\s+using\b|\s+via\b|\s+through\b|\s+utr\b|\s+a/c\b|\s+avl\b|\s+bal\b|\b\d{12}\b)""",
+        """\b(?:paid\s+to|sent\s+to|transferred\s+to|trf\s+to|received\s+from|from|towards|to|at)\s+([A-Za-z0-9\s&._\-@]+?)(?:,\s*|\s+on\b|\.(?!\d)|$|\s+ref\b|\s+using\b|\s+via\b|\s+through\b|\s+into\b|\s+utr\b|\s+a/c\b|\s+avl\b|\s+bal\b|\b\d{12}\b)""",
         RegexOption.IGNORE_CASE
     )
 
     private val INVALID_MERCHANT_REGEX: Regex = Regex(
         """(?i)^(?:[#\d\s\-+]+|.*your\s+account.*|.*your\s+a/c.*|.*blockupi.*|.*call\b.*)$"""
     )
+
+    private val OWN_VPA_CONTEXT_REGEX: Regex = Regex("""(?i)\b(?:into|using|via|through|from|your\s+vpa|my\s+vpa|linked\s+to)\s+$""")
 
     // Financial transaction keywords check for SMS filtering
     val FINANCIAL_KEYWORDS_REGEX: Regex = Regex(
@@ -44,7 +46,8 @@ object RegexPatterns {
     )
 
     // Words that mark an amount as a balance or limit, not the payment
-    private val BALANCE_CONTEXT_REGEX: Regex = Regex("""(?i)(bal(?:ance)?|avl|avail(?:able)?|limit|outstanding|minimum|due)\W{0,12}$""")
+    private val BALANCE_BEFORE_REGEX: Regex = Regex("""(?i)(?:bal(?:ance)?|avl|avail(?:able)?|limit|outstanding|minimum|due)\W{0,15}$""")
+    private val BALANCE_AFTER_REGEX: Regex = Regex("""(?i)^\W{0,15}(?:bal(?:ance)?|avl|avail(?:able)?|limit|outstanding|is\s+your\s+(?:bal|avail))""")
 
     // Debit direction flag keywords
     val DEBIT_FLAG_REGEX: Regex = Regex(
@@ -130,11 +133,13 @@ object RegexPatterns {
         // 2. Otherwise the first amount that is not labelled as a balance or limit
         val all = AMOUNT_REGEX.findAll(text).toList()
         val preferred = all.firstOrNull { m ->
-            val before = text.substring((m.range.first - 25).coerceAtLeast(0), m.range.first)
-            !BALANCE_CONTEXT_REGEX.containsMatchIn(before)
+            val before = text.substring((m.range.first - 30).coerceAtLeast(0), m.range.first)
+            val afterStart = (m.range.last + 1).coerceAtMost(text.length)
+            val afterEnd = (afterStart + 30).coerceAtMost(text.length)
+            val after = text.substring(afterStart, afterEnd)
+            !BALANCE_BEFORE_REGEX.containsMatchIn(before) && !BALANCE_AFTER_REGEX.containsMatchIn(after)
         }
-        val match = preferred ?: all.firstOrNull() ?: BANK_SMS_AMOUNT_REGEX.find(text)
-        return match?.groupValues?.get(1)?.let { raw ->
+        return preferred?.groupValues?.get(1)?.let { raw ->
             val clean = raw.replace(",", "")
             clean.toDoubleOrNull()
         }
@@ -144,17 +149,19 @@ object RegexPatterns {
      * Extracts merchant or payee name.
      */
     fun extractMerchant(text: String): String? {
-        val vpaMatch = VPA_REGEX.find(text)
-        if (vpaMatch != null) {
-            val vpa = vpaMatch.groupValues[1].trim()
-            if (!vpa.contains("ref", ignoreCase = true) && !INVALID_MERCHANT_REGEX.matches(vpa)) {
-                return vpa
-            }
-        }
         for (match in MERCHANT_REGEX.findAll(text)) {
             val candidate = match.groupValues.getOrNull(1)?.trim()?.trim(' ', '.', ',', '-') ?: continue
             if (candidate.isNotBlank() && !INVALID_MERCHANT_REGEX.matches(candidate)) {
                 return candidate
+            }
+        }
+        val vpaMatch = VPA_REGEX.find(text)
+        if (vpaMatch != null) {
+            val before = text.substring((vpaMatch.range.first - 20).coerceAtLeast(0), vpaMatch.range.first)
+            val isOwnVpaContext = OWN_VPA_CONTEXT_REGEX.containsMatchIn(before)
+            val vpa = vpaMatch.groupValues[1].trim()
+            if (!isOwnVpaContext && !vpa.contains("ref", ignoreCase = true) && !INVALID_MERCHANT_REGEX.matches(vpa)) {
+                return vpa
             }
         }
         return null

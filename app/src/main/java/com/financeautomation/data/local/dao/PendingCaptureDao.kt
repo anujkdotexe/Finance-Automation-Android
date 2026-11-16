@@ -27,6 +27,9 @@ interface PendingCaptureDao {
     @Query("SELECT * FROM pending_captures WHERE notificationKey = :key ORDER BY updatedAt DESC LIMIT 1")
     suspend fun getByNotificationKey(key: String): PendingCaptureEntity?
 
+    @Query("SELECT * FROM pending_captures WHERE contentHash = :hash AND timestamp >= :since LIMIT 1")
+    suspend fun getByContentHash(hash: String, since: Long): PendingCaptureEntity?
+
     @Query("SELECT * FROM pending_captures WHERE state = :state ORDER BY timestamp ASC")
     suspend fun getByState(state: String): List<PendingCaptureEntity>
 

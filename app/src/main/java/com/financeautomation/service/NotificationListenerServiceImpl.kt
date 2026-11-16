@@ -86,6 +86,11 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         super.onListenerConnected()
         isConnected = true
         PipelineTrail.record(PipelineStage.LISTENER, PipelineCode.CONNECTED)
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            nm?.cancel(com.financeautomation.service.worker.NotificationListenerHealthWorker.HEALTH_ALERT_ID)
+            nm?.cancel(NotificationAccessAlertManager.NOTIFICATION_ID_CAPTURE_OFF)
+        } catch (_: Exception) {}
         val app = applicationContext as? FinanceApplication
         val watcher = app?.appContainer?.foregroundWatcher
 

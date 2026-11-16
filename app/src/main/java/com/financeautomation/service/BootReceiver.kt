@@ -45,15 +45,20 @@ class BootReceiver : BroadcastReceiver() {
             SyncTransactionsWorker.enqueuePeriodic(context)
 
             // 3. Reset incomplete SHOWN captures to WAITING and resume ForegroundWatcher
+            val pendingResult = goAsync()
             val app = context.applicationContext as? FinanceApplication
             receiverScope.launch {
                 try {
-                    app?.appContainer?.awaitDatabase()?.pendingCaptureDao()?.resetShownToWaiting()
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    Diagnostics.record("BootReceiver", "${e.javaClass.simpleName}: resetShownToWaiting")
+                    try {
+                        app?.appContainer?.awaitDatabase()?.pendingCaptureDao()?.resetShownToWaiting()
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        Diagnostics.record("BootReceiver", "${e.javaClass.simpleName}: resetShownToWaiting")
+                    }
+                    app?.appContainer?.foregroundWatcher?.checkAndResume(receiverScope)
+                } finally {
+                    pendingResult.finish()
                 }
-                app?.appContainer?.foregroundWatcher?.checkAndResume(receiverScope)
             }
         } catch (e: Exception) {
             Diagnostics.record("BootReceiver", "${e.javaClass.simpleName}: onReceive")

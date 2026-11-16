@@ -154,6 +154,7 @@ class DashboardViewModelTest {
         override suspend fun getWaitingCaptures(): List<PendingCaptureEntity> = emptyList()
         override suspend fun getById(id: String): PendingCaptureEntity? = captures.value.find { it.id == id }
         override suspend fun getByNotificationKey(key: String): PendingCaptureEntity? = null
+        override suspend fun getByContentHash(hash: String, since: Long): PendingCaptureEntity? = null
         override suspend fun getByState(state: String): List<PendingCaptureEntity> = emptyList()
         override suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity> = emptyList()
         override suspend fun getAwaitingSuccessCaptures(): List<PendingCaptureEntity> = emptyList()
