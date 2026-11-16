@@ -219,9 +219,11 @@ class ReviewInboxViewModel(
                 Pair(needsReview, newAccounts)
             }.catch { /* ignore */ }
                 .collect { (needsReview, newAccounts) ->
+                    val newAccountIds = newAccounts.map { it.id }.toSet()
+                    val regularCaptures = needsReview.filter { it.id !in newAccountIds }
                     _uiState.update {
                         it.copy(
-                            captures = needsReview,
+                            captures = regularCaptures,
                             newAccountCaptures = newAccounts
                         )
                     }
@@ -240,7 +242,13 @@ class ReviewInboxViewModel(
     fun dismissCapture(id: String) {
         viewModelScope.launch(ioDispatcher) {
             val captureDao = resolvePendingCaptureDao() ?: return@launch
-            captureDao.updateState(id, PendingCaptureEntity.STATE_DISMISSED)
+            val current = captureDao.getById(id)
+            val newState = if (current?.state == PendingCaptureEntity.STATE_DISMISSED) {
+                PendingCaptureEntity.STATE_DONE
+            } else {
+                PendingCaptureEntity.STATE_DISMISSED
+            }
+            captureDao.updateState(id, newState)
             _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_capture_dismissed)) }
         }
     }

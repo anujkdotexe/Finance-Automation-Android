@@ -87,6 +87,21 @@ fun ReviewInboxScreen(
         }
     }
 
+    LaunchedEffect(state.openQuickLogCaptureId) {
+        val capId = state.openQuickLogCaptureId ?: return@LaunchedEffect
+        val authIntent = android.app.PendingIntent.getActivity(
+            context,
+            0,
+            android.content.Intent(),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        context.startActivity(android.content.Intent(context, com.financeautomation.presentation.ui.ModalBottomSheetActivity::class.java).apply {
+            putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_CAPTURE_ID, capId)
+            putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
+        })
+        reviewInboxViewModel.clearOpenQuickLogCaptureId()
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface,
@@ -102,6 +117,12 @@ fun ReviewInboxScreen(
                 reviewInboxViewModel.selectTransaction(txn)
                 onEditTransaction?.invoke(txn)
             },
+            onKeepBoth = reviewInboxViewModel::keepBoth,
+            onKeepOne = reviewInboxViewModel::keepOne,
+            onDismissDuplicate = reviewInboxViewModel::voidTransaction,
+            onConfirmCapture = reviewInboxViewModel::confirmCapture,
+            onDismissCapture = reviewInboxViewModel::dismissCapture,
+            onAddAccount = { id, name, digits -> reviewInboxViewModel.addAccountFromCapture(id, name, digits) },
             onSubscriptionYes = reviewInboxViewModel::subscriptionYes,
             onSubscriptionNotYet = reviewInboxViewModel::subscriptionNotYet,
             onSubscriptionSkip = reviewInboxViewModel::subscriptionSkip,
@@ -124,6 +145,12 @@ fun ReviewInboxContent(
     onConfirmTransaction: (String, String?) -> Unit,
     onConfirmAll: () -> Unit = {},
     onSelectTransaction: (Transaction) -> Unit,
+    onKeepBoth: (String) -> Unit = {},
+    onKeepOne: (String) -> Unit = {},
+    onDismissDuplicate: (String) -> Unit = {},
+    onConfirmCapture: (String) -> Unit = {},
+    onDismissCapture: (String) -> Unit = {},
+    onAddAccount: (String, String, String) -> Unit = { _, _, _ -> },
     onSubscriptionYes: (String) -> Unit = {},
     onSubscriptionNotYet: (String) -> Unit = {},
     onSubscriptionSkip: (String) -> Unit = {},
@@ -133,7 +160,7 @@ fun ReviewInboxContent(
     onDismissHint: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val totalPendingCount = state.items.size + subscriptionsDue.size
+    val totalPendingCount = state.totalCount + subscriptionsDue.size
     val todayLabel = stringResource(R.string.subscription_due_today)
 
     Column(
@@ -158,7 +185,7 @@ fun ReviewInboxContent(
                     )
                 }
             }
-            state.items.isEmpty() && subscriptionsDue.isEmpty() && state.failedQueueItems.isEmpty() -> {
+            state.items.isEmpty() && state.captures.isEmpty() && state.newAccountCaptures.isEmpty() && subscriptionsDue.isEmpty() && state.failedQueueItems.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -232,7 +259,36 @@ fun ReviewInboxContent(
                         }
                     }
 
-                    // 5. Normal unreviewed transaction cards
+                    // 5. Captures pending user review (WAITING, SHOWN, DISMISSED)
+                    if (state.captures.isNotEmpty()) {
+                        items(
+                            items = state.captures,
+                            key = { "capture_${it.id}" }
+                        ) { capture ->
+                            ReviewCaptureCard(
+                                capture = capture,
+                                onConfirm = { onConfirmCapture(capture.id) },
+                                onDismiss = { onDismissCapture(capture.id) }
+                            )
+                        }
+                    }
+
+                    // 6. New Account Captures
+                    if (state.newAccountCaptures.isNotEmpty()) {
+                        items(
+                            items = state.newAccountCaptures,
+                            key = { "new_account_${it.id}" }
+                        ) { capture ->
+                            ReviewNewAccountCard(
+                                capture = capture,
+                                onAddAccount = { name, lastFour -> onAddAccount(capture.id, name, lastFour) },
+                                onConfirm = { onConfirmCapture(capture.id) },
+                                onDismiss = { onDismissCapture(capture.id) }
+                            )
+                        }
+                    }
+
+                    // 7. Normal & duplicate unreviewed transaction cards
                     items(
                         items = state.items,
                         key = { it.id }
@@ -240,7 +296,10 @@ fun ReviewInboxContent(
                         ReviewTransactionCard(
                             transaction = transaction,
                             onConfirm = { onConfirmTransaction(transaction.id, null) },
-                            onEdit = { onSelectTransaction(transaction) }
+                            onEdit = { onSelectTransaction(transaction) },
+                            onKeepBoth = { onKeepBoth(transaction.id) },
+                            onKeepOne = { onKeepOne(transaction.id) },
+                            onDismissDuplicate = { onDismissDuplicate(transaction.id) }
                         )
                     }
                 }

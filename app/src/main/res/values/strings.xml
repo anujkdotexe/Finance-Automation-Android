@@ -242,6 +242,16 @@
     <string name="action_skip">Skip</string>
     <string name="action_skip_this_time">Skip</string>
     <string name="action_confirm_all">Confirm all</string>
+    <string name="action_keep_both">Keep both</string>
+    <string name="action_keep_one">Keep one</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_add_account">Add account</string>
+    <string name="review_new_account_title">New account detected</string>
+    <string name="review_new_account_desc">Add %1$s to accounts to auto-assign future payments</string>
+    <string name="capture_state_dismissed">Dismissed</string>
+    <string name="capture_state_waiting">Waiting</string>
+    <string name="capture_state_shown">Shown</string>
+    <string name="capture_state_needs_review">Needs Review</string>
     <string name="action_clear_search">Clear search</string>
     <string name="action_search_all_months">Search all months</string>
     <string name="action_go_to_current_month">Go to current month</string>
