@@ -209,19 +209,34 @@ fun PreferencesScreen(
                 )
 
                 // ROW 3: Subscription Reminder Time
+                val (curH, curM) = remember(state.subscriptionReminderTime) {
+                    val parts = com.financeautomation.domain.repository.PreferencesRepository.normalizeReminderTime(state.subscriptionReminderTime)
+                        .split(":").map { it.toIntOrNull() ?: 0 }
+                    Pair(parts.getOrElse(0) { 21 }, parts.getOrElse(1) { 0 })
+                }
+                val formattedReminderTime = remember(curH, curM) {
+                    val amPm = if (curH >= 12) "PM" else "AM"
+                    val h12 = if (curH == 0) 12 else if (curH > 12) curH - 12 else curH
+                    "%d:%02d %s".format(h12, curM, amPm)
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                         .clip(FinanceShapes.medium)
                         .clickable {
-                            val nextDelay = when (state.settleDelaySeconds) {
-                                60 -> 120
-                                120 -> 180
-                                180 -> 300
-                                else -> 60
+                            if (activity != null) {
+                                android.app.TimePickerDialog(
+                                    activity,
+                                    { _, hourOfDay, minute ->
+                                        viewModel.onSubscriptionReminderTimeChanged("%02d:%02d".format(hourOfDay, minute))
+                                    },
+                                    curH,
+                                    curM,
+                                    false
+                                ).show()
                             }
-                            viewModel.onSettleDelayChanged(nextDelay)
                         }
                         .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
                     verticalAlignment = Alignment.CenterVertically,
@@ -246,7 +261,7 @@ fun PreferencesScreen(
                         horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                     ) {
                         Text(
-                            text = "9:00 PM",
+                            text = formattedReminderTime,
                             style = FinanceTheme.typography.labelLarge,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary
@@ -301,7 +316,7 @@ fun PreferencesScreen(
                     val accountsList = if (state.accounts.isNotEmpty()) {
                         state.accounts.map { it.name }
                     } else {
-                        listOf("HDFC", "ICICI", "Cash", "Other")
+                        listOf(com.financeautomation.core.constants.CategoryConstants.ACCOUNT_OTHER)
                     }
                     accountsList.forEach { accountName ->
                         Row(
