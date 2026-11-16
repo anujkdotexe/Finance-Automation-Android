@@ -577,4 +577,47 @@ class QuickLogViewModelTest {
         advanceUntilIdle()
         assertEquals(true, vm.uiState.value.isSaveEnabled)
     }
+
+    @Test
+    fun onVoid_invokesRepoVoidAndMarksVoided() = runTest {
+        val txnRepo = FakeTransactionRepo()
+        val txn = Transaction(
+            id = "txn_to_void",
+            timestamp = System.currentTimeMillis(),
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Test Shop",
+            category = "Food & Drink",
+            totalAmount = 250.0,
+            companions = "Personal",
+            myShare = 250.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED
+        )
+        txnRepo.insertTransaction(txn)
+
+        val vm = QuickLogViewModel(
+            transactionRepository = txnRepo,
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            accountRepository = FakeAccountRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.loadTransaction("txn_to_void")
+        advanceUntilIdle()
+        assertEquals("txn_to_void", vm.uiState.value.transactionId)
+
+        var callbackCalled = false
+        vm.onVoid { callbackCalled = true }
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isVoided)
+        assertTrue(callbackCalled)
+    }
 }
