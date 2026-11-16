@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -52,8 +51,11 @@ class QuickLogWidgetProvider : AppWidgetProvider() {
         private const val DEFAULT_SIZE_DP = 40f
         private const val MIN_SIDE_PX = 48
         private const val MAX_SIDE_PX = 512
-        private const val CORNER_RADIUS_RATIO = 0.22f
-        private const val SYMBOL_SCALE_RATIO = 0.56f
+        /** The tile is drawn smaller than the cell so it matches the size of the launcher's app icons. */
+        private const val TILE_FILL_RATIO = 0.64f
+        private const val CORNER_RADIUS_RATIO = 0.28f
+        /** The glyph occupies about 41 percent of its 108 unit drawable, so the drawable is drawn larger than the tile. */
+        private const val SYMBOL_SCALE_RATIO = 1.3f
 
         fun updateAllWidgets(context: Context) {
             try {
@@ -130,28 +132,22 @@ class QuickLogWidgetProvider : AppWidgetProvider() {
             val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
 
-            val radius = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                try {
-                    context.resources.getDimension(android.R.dimen.system_app_widget_background_radius)
-                } catch (e: Resources.NotFoundException) {
-                    Diagnostics.record("QuickLogWidgetProvider", "${e.javaClass.simpleName}: system_app_widget_background_radius not found")
-                    CORNER_RADIUS_RATIO * side
-                }
-            } else {
-                CORNER_RADIUS_RATIO * side
-            }
+            // The tile is centred in the cell and sized like an app icon, so it does not dwarf the icons around it
+            val tile = (side * TILE_FILL_RATIO).toInt().coerceAtLeast(1)
+            val inset = (side - tile) / 2
+            val radius = CORNER_RADIUS_RATIO * tile
 
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = ContextCompat.getColor(context, R.color.widget_background)
                 style = Paint.Style.FILL
             }
-            val rect = RectF(0f, 0f, side.toFloat(), side.toFloat())
+            val rect = RectF(inset.toFloat(), inset.toFloat(), (inset + tile).toFloat(), (inset + tile).toFloat())
             canvas.drawRoundRect(rect, radius, radius, bgPaint)
 
             val symbolDrawable = ContextCompat.getDrawable(context, R.drawable.ic_widget_glyph)?.mutate()
             if (symbolDrawable != null) {
                 DrawableCompat.setTint(symbolDrawable, ContextCompat.getColor(context, R.color.widget_symbol))
-                val symbolSize = (side * SYMBOL_SCALE_RATIO).toInt()
+                val symbolSize = (tile * SYMBOL_SCALE_RATIO).toInt()
                 val offset = (side - symbolSize) / 2
                 symbolDrawable.setBounds(offset, offset, offset + symbolSize, offset + symbolSize)
                 symbolDrawable.draw(canvas)

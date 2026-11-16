@@ -3,12 +3,14 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:minWidth="@dimen/app_widget_min_width"
     android:minHeight="@dimen/app_widget_min_height"
+    android:minResizeWidth="@dimen/app_widget_min_width"
+    android:minResizeHeight="@dimen/app_widget_min_height"
     android:targetCellWidth="1"
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_quick_log"
     android:description="@string/quick_log_widget_desc"
-    android:resizeMode="none"
+    android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     tools:targetApi="s">
 </appwidget-provider>
