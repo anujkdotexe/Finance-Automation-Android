@@ -112,6 +112,18 @@ fun RepaidFriendFlowSheet(
     val defaultAccount = accounts.firstOrNull { it.isDefault }?.name ?: accounts.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_OTHER
     var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
 
+    LaunchedEffect(accounts) {
+        if (accounts.isNotEmpty()) {
+            val hasValidSelection = accounts.any { it.name.equals(selectedAccount, ignoreCase = true) }
+            if (!hasValidSelection) {
+                val preferred = accounts.firstOrNull { it.isDefault }?.name ?: accounts.firstOrNull()?.name
+                if (preferred != null) {
+                    selectedAccount = preferred
+                }
+            }
+        }
+    }
+
     var amountText by rememberSaveable { mutableStateOf("") }
     var noteText by rememberSaveable { mutableStateOf("") }
 

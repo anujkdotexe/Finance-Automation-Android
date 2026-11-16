@@ -268,7 +268,15 @@ class QuickLogViewModel(
                 )
                 peopleRepository.insertCompanion(newCompanion)
                 _uiState.update { current ->
-                    current.copy(selectedCompanionIds = current.selectedCompanionIds + newCompanion.id)
+                    val updatedCompanions = if (current.availableCompanions.any { it.id == newCompanion.id }) {
+                        current.availableCompanions
+                    } else {
+                        current.availableCompanions + newCompanion
+                    }
+                    current.copy(
+                        availableCompanions = updatedCompanions,
+                        selectedCompanionIds = current.selectedCompanionIds + newCompanion.id
+                    )
                 }
                 recalculateSplit()
             } catch (e: Exception) {

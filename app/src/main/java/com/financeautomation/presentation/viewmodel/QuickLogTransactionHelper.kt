@@ -3,6 +3,7 @@ package com.financeautomation.presentation.viewmodel
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
+import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
@@ -145,12 +146,12 @@ object QuickLogTransactionHelper {
             (existing.owedToMe > 0.0 && existing.owedToMe < (existing.totalAmount - existing.myShare - 0.01))
 
         val updated = if (isSettledOrCarried) {
-            // Item 2.2: For Settled/Carried Fwd rows or modified owed, allow only description, category, and account edits
+            // For Settled/Carried Fwd rows or modified owed, allow only description, category, and account edits. Keep existing tripTag.
             existing.copy(
                 merchant = state.payee.ifBlank { existing.merchant },
                 category = state.selectedCategory,
                 account = state.selectedAccount,
-                tripTag = state.activeTripTag?.name ?: existing.tripTag,
+                tripTag = existing.tripTag,
                 reviewState = ReviewState.CONFIRMED,
                 isPossibleDuplicate = false,
                 duplicateOfId = null
@@ -160,6 +161,11 @@ object QuickLogTransactionHelper {
                 .filter { state.selectedCompanionIds.contains(it.id) }
                 .map { it.name }
             val companionsText = if (state.splitMode == SplitMode.JUST_ME) "Personal" else selectedCompanions.joinToString(", ")
+            val newStatus = if (state.splitMode == SplitMode.JUST_ME || state.owedToMe <= 0.0) {
+                TransactionStatus.PERSONAL
+            } else {
+                TransactionStatus.PENDING
+            }
             existing.copy(
                 merchant = state.payee.ifBlank { "Expense" },
                 category = state.selectedCategory,
@@ -167,8 +173,9 @@ object QuickLogTransactionHelper {
                 myShare = state.myShare,
                 owedToMe = state.owedToMe,
                 companions = companionsText,
+                status = newStatus,
                 account = state.selectedAccount,
-                tripTag = state.activeTripTag?.name ?: existing.tripTag,
+                tripTag = existing.tripTag,
                 reviewState = ReviewState.CONFIRMED,
                 isPossibleDuplicate = false,
                 duplicateOfId = null

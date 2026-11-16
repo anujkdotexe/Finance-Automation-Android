@@ -504,6 +504,7 @@ fun QuickLogSheet(
             SegmentedChoice(
                 options = listOf(SplitMode.JUST_ME, SplitMode.SPLIT_EQUALLY, SplitMode.CUSTOM),
                 selectedOption = state.splitMode,
+                enabled = !state.isFinancialLocked,
                 onOptionSelected = { mode ->
                     focusManager.clearFocus()
                     onSplitModeChanged(mode)
@@ -516,6 +517,15 @@ fun QuickLogSheet(
                     }
                 }
             )
+
+            if (state.isFinancialLocked) {
+                Spacer(modifier = Modifier.height(FinanceTheme.spacing.xxs))
+                Text(
+                    text = "Amount and split are locked because this transaction is settled or carried forward",
+                    style = FinanceTheme.typography.bodySmall,
+                    color = FinanceTheme.colors.onSurfaceVariant
+                )
+            }
         }
 
         // 6. Companion Split Content (Split Equally / Custom)
