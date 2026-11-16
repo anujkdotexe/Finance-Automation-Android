@@ -349,6 +349,7 @@
     <string name="sync_cloud_storage">Cloud storage</string>
     <string name="sync_google_account">Google account</string>
     <string name="sync_workbook">Workbook</string>
+    <string name="sync_not_connected">Not connected</string>
     <string name="sync_open_in_sheets">Open in Sheets</string>
     <string name="sync_last_sync">Last sync</string>
     <string name="sync_btn_sync_now">Sync now</string>

@@ -40,6 +40,21 @@ interface PreferencesRepository {
     suspend fun setSpreadsheetIdForYear(year: Int, id: String)
 
     /**
+     * Observes the display title of the active spreadsheet workbook.
+     */
+    fun getSpreadsheetTitle(): Flow<String?> = kotlinx.coroutines.flow.flowOf(null)
+
+    /**
+     * Retrieves the display title of the active spreadsheet workbook synchronously.
+     */
+    suspend fun getSpreadsheetTitleSync(): String? = null
+
+    /**
+     * Updates the display title of the active spreadsheet workbook.
+     */
+    suspend fun setSpreadsheetTitle(title: String) {}
+
+    /**
      * Observes the default payment funding account name.
      */
     fun getDefaultAccount(): Flow<String>
@@ -243,6 +258,7 @@ interface PreferencesRepository {
     companion object {
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
+        const val KEY_SPREADSHEET_TITLE: String = "key_spreadsheet_title"
         const val KEY_DEFAULT_ACCOUNT: String = "key_default_account"
         const val KEY_ACTIVE_TRIP: String = "key_active_trip"
         const val KEY_GOOGLE_EMAIL: String = "key_google_email"

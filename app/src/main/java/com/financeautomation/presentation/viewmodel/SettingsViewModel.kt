@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
  */
 data class SettingsUiState(
     val spreadsheetId: String = "",
+    val workbookName: String? = null,
     val defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
     val activeTripTag: String = "",
     val settleDelaySeconds: Int = 120,
@@ -154,6 +155,11 @@ class SettingsViewModel(
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.getSpreadsheetId().collect { id ->
                 _uiState.update { it.copy(spreadsheetId = id ?: "") }
+            }
+        }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getSpreadsheetTitle().collect { title ->
+                _uiState.update { it.copy(workbookName = title) }
             }
         }
         viewModelScope.launch(ioDispatcher) {

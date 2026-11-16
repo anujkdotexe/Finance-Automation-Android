@@ -100,6 +100,28 @@ class PreferencesRepositoryImpl(
         }
     }
 
+    override fun getSpreadsheetTitle(): Flow<String?> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emit(null)
+        } else {
+            emitAll(dao.getPreferenceFlow(KEY_SPREADSHEET_TITLE))
+        }
+    }.flowOn(ioDispatcher)
+
+    override suspend fun getSpreadsheetTitleSync(): String? = withContext(ioDispatcher) {
+        val dao = resolveDao() ?: return@withContext null
+        dao.getPreference(KEY_SPREADSHEET_TITLE)
+    }
+
+    override suspend fun setSpreadsheetTitle(title: String): Unit = withContext(ioDispatcher) {
+        val trimmed = title.trim()
+        val dao = resolveDao()
+        if (dao != null) {
+            dao.setPreference(PreferenceEntity(KEY_SPREADSHEET_TITLE, trimmed, updatedAt = System.currentTimeMillis(), dirty = 0))
+        }
+    }
+
     private fun currentYear(): Int = java.time.ZonedDateTime.now(clock).year
 
     override fun getSpreadsheetIdForYear(year: Int): Flow<String?> = flow {
@@ -432,6 +454,7 @@ class PreferencesRepositoryImpl(
     companion object {
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
+        const val KEY_SPREADSHEET_TITLE: String = PreferencesRepository.KEY_SPREADSHEET_TITLE
         const val KEY_DEFAULT_ACCOUNT: String = "key_default_account"
         const val KEY_ACTIVE_TRIP: String = "key_active_trip"
         const val KEY_GOOGLE_EMAIL: String = "key_google_email"

@@ -349,7 +349,11 @@ fun SyncBackupScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = if (state.spreadsheetId.isNotBlank()) "Finance Ledger 2026" else "No workbook linked",
+                                text = if (state.spreadsheetId.isNotBlank()) {
+                                    state.workbookName?.takeIf { it.isNotBlank() } ?: "Finance${java.time.Year.now().value}"
+                                } else {
+                                    stringResource(R.string.sync_not_connected)
+                                },
                                 style = FinanceTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
