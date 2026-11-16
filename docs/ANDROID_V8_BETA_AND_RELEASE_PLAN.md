@@ -43,15 +43,15 @@ Prerequisite configuration files and asset placement across build targets:
 
 | File path | Purpose | Required by | Fallback / Behavior if missing |
 | :--- | :--- | :--- | :--- |
-| `local.properties` | Android SDK directory (`sdk.dir`) and optional OAuth client ID override (`oauth.client.id`) | `debug`, `beta`, `release` | Required for Gradle build to locate SDK. `oauth.client.id` defaults to dev ID if unspecified. |
+| `local.properties` | Android SDK directory (`sdk.dir`) | `debug`, `beta`, `release` | Required for Gradle build to locate SDK. OAuth configuration uses package name `com.financeautomation` and SHA-1 in Google Cloud Console; the app reads no client ID from local.properties. |
 | `keystore.properties` | Release keystore path, alias, keystore password, and key password | `beta`, `release` | In `beta`, gracefully falls back to debug signing key if absent so developers can build locally. In `release`, required for release signing. |
 | `app/google-services.json` | Firebase configuration for Crashlytics telemetry | `beta`, `release` | Optional. If absent, the Google Services and Crashlytics Gradle plugins are bypassed gracefully. |
 | `app/src/main/assets/oem_routes.json` | Bundled vendor navigation routes for battery and background settings | `debug`, `beta`, `release` | Bundled repository asset. Loaded at runtime with hardcoded fallback intents if missing. |
 
 Build type requirements:
-- `debug`: Builds with debug key. Exposes `NotificationSimulatorReceiver`. Enables vendor discovery scan. Crashlytics disabled.
-- `beta`: Signs with release key if `keystore.properties` is present (debug key fallback). Simulator stripped. Enables vendor discovery scan. Crashlytics enabled when opted-in.
-- `release`: Signs with release key. Simulator stripped. `QUERY_ALL_PACKAGES` stripped. Vendor discovery scan disabled. Crashlytics enabled when opted-in. `allowBackup=false`.
+- `debug`: Builds with debug key. Enables vendor discovery scan. Crashlytics disabled. Real notifications only (no simulator in any build type).
+- `beta`: Signs with release key if `keystore.properties` is present (debug key fallback). Enables vendor discovery scan. Crashlytics enabled when opted-in.
+- `release`: Signs with release key. `QUERY_ALL_PACKAGES` stripped. Vendor discovery scan disabled. Crashlytics enabled when opted-in. `allowBackup=false`.
 
 Build and sideload commands:
 - Debug APK:
