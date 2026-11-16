@@ -398,7 +398,13 @@ class SettingsSyncCoordinator(
                     }
                     is Result.Error -> {
                         Diagnostics.record("SettingsSyncCoordinator", "check_all_months_error: ${result.throwable.javaClass.simpleName}")
-                        uiState.update { it.copy(errorMessage = UiText.res(R.string.err_check_all_months_failed)) }
+                        val rawMsg = result.throwable.message.orEmpty()
+                        val message = if (rawMsg.contains("10 minutes", ignoreCase = true)) {
+                            UiText.dynamic(rawMsg)
+                        } else {
+                            UiText.res(R.string.err_check_all_months_failed)
+                        }
+                        uiState.update { it.copy(errorMessage = message) }
                     }
                     is Result.Loading -> {}
                 }

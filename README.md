@@ -87,8 +87,8 @@ The `.env.example` file is a leftover from an earlier design. The app does not r
 ### Build Commands
 
 ```bash
-# Assemble debug APK
-./gradlew assembleDebug
+# Run unit tests
+./gradlew testBetaUnitTest
 
 # Run static checks and compilation verification
 ./gradlew check
@@ -159,7 +159,7 @@ The agents collaborate asynchronously through a zero-dependency Model Context Pr
 ### Iterative Cycle
 
 1. The reviewer agent inspects the codebase against `docs/ANDROID_V8_PHASE_GUIDE.md` and dispatches phase requirements.
-2. The build agent reads instructions via `read_inbox`, confirms code conditions, implements changes, and verifies using `./gradlew assembleDebug`.
+2. The build agent reads instructions via `read_inbox`, confirms code conditions, implements changes, and verifies using `./gradlew testBetaUnitTest`.
 3. The build agent submits a structured report via `post_report` citing modified files, verification evidence, and edge case handling.
 4. The reviewer reviews the implementation directly in the code, issues any required corrections, and authorizes progression to the next phase.
 

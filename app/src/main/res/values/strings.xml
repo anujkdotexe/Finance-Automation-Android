@@ -67,7 +67,6 @@
     <string name="onboarding_error_unknown_with_message">%1$s. Check Settings &gt; Advanced Diagnostics for details.</string>
     <string name="onboarding_error_unknown">Failed to resolve finance workspace. Check Settings &gt; Advanced Diagnostics for details.</string>
     <string name="report_include_google_errors">Include Google error details</string>
-    <string name="action_retry_workspace">Retry Workspace Setup</string>
 
     <!-- Dashboard & Home Screen -->
     <string name="dashboard_hero_burn_title">Living burn</string>
@@ -189,8 +188,6 @@
     <string name="trip_end_confirm_desc">Are you sure you want to end trip \"%s\"? Expenses will remain saved.</string>
     <string name="btn_save_expense">Save expense</string>
     <string name="label_details">Details</string>
-    <string name="label_today">Today</string>
-    <string name="label_yesterday">Yesterday</string>
     <string name="label_amount">Amount</string>
 
     <!-- Settings Subsections -->
@@ -203,9 +200,6 @@
     <string name="cd_back">Back</string>
     <string name="cd_close">Close</string>
     <string name="cd_warning">Warning</string>
-    <string name="cd_success">Success</string>
-    <string name="cd_info">Information</string>
-    <string name="cd_sync">Sync</string>
 
     <!-- Navigation & Main Screen Titles -->
     <string name="nav_inbox_title">Needs Review</string>
@@ -261,15 +255,12 @@
     <string name="action_export_this_month">Export this month</string>
     <string name="export_failed">Export failed: %1$s</string>
     <string name="action_go_to_dashboard">Go to Dashboard</string>
-    <string name="action_details">Details</string>
-    <string name="action_hide_details">Hide details</string>
     <string name="action_add_expense">Add expense</string>
     <string name="subscription_review_title">Did you pay %1$s?</string>
     <string name="subscription_amount_varies">Amount varies</string>
     <string name="subscription_review_subtitle">%1$s, due %2$s</string>
     <string name="review_count_to_review">%1$d to review</string>
     <string name="review_all_caught_up">All caught up</string>
-    <string name="transactions_month_total">Month total</string>
     <string name="transactions_search_placeholder">Search transactions</string>
     <string name="transactions_no_matches_title">No matches found</string>
     <string name="transactions_no_matches_subtitle">No transactions found matching \"%1$s\" in %2$s.</string>
@@ -334,21 +325,9 @@
     <string name="categories_add_sheet_color_label">Colour</string>
 
     <!-- Capture and Permissions Screen -->
-    <string name="capture_notification_title">Notification access</string>
-    <string name="capture_notification_desc">Reads payment notifications</string>
-    <string name="capture_battery_title">Battery optimisation</string>
-    <string name="capture_battery_desc">Unrestricted background execution</string>
-    <string name="capture_overlay_title">Overlay</string>
-    <string name="capture_overlay_desc">Displays instant capture prompt</string>
-    <string name="capture_usage_access_title">Usage access</string>
-    <string name="capture_usage_access_desc">Used to know when a payment app was just used so you can categorize your expense.</string>
     <string name="capture_apps_title">Apps we read</string>
     <string name="capture_apps_desc">Google Pay, BHIM, Supermoney, PhonePe, Paytm, Bank SMS</string>
     <string name="capture_privacy_note">We never read WhatsApp, Telegram or OTP messages.</string>
-    <string name="status_on">On</string>
-    <string name="status_off">Off</string>
-    <string name="status_unrestricted">Unrestricted</string>
-    <string name="status_restricted">Restricted</string>
 
     <!-- Sync and Backup Screen -->
     <string name="sync_cloud_storage">Cloud storage</string>
@@ -403,7 +382,6 @@
     <string name="sub_empty_subtitle">Tap Add to track a recurring payment</string>
     <string name="sub_add_title">Add subscription</string>
     <string name="sub_edit_title">Edit subscription</string>
-    <string name="sub_action_sheet_title">Subscription options</string>
     <string name="sub_action_edit">Edit details</string>
     <string name="sub_action_pause">Pause subscription</string>
     <string name="sub_action_resume">Resume subscription</string>
@@ -497,17 +475,7 @@
     <!-- Onboarding Checklist (U12) -->
     <string name="onboarding_checklist_title">Setup checklist</string>
     <string name="onboarding_checklist_desc">Complete these quick steps to start logging expenses automatically.</string>
-    <string name="onboarding_checklist_step1_title">Connect Google sheet</string>
-    <string name="onboarding_checklist_step1_default_sheet">Finance 2026</string>
-    <string name="onboarding_checklist_step1_connected">Connected</string>
-    <string name="onboarding_checklist_step1_connect">Connect</string>
-    <string name="onboarding_checklist_step2_title">Notification access</string>
-    <string name="onboarding_checklist_step2_desc">Detect bank notifications</string>
     <string name="onboarding_checklist_step2_grant">Grant</string>
-    <string name="onboarding_checklist_step2_active">Active</string>
-    <string name="onboarding_checklist_step3_title">Default account</string>
-    <string name="onboarding_checklist_step3_desc">Choose primary card or bank</string>
-    <string name="onboarding_checklist_step3_configured">Configured</string>
     <string name="onboarding_checklist_continue">Continue</string>
     <string name="onboarding_checklist_trouble">Having trouble?</string>
 
@@ -645,10 +613,8 @@
     <string name="txn_chip_show_void">Show void</string>
     <string name="txn_chip_needs_review">Needs review</string>
     <string name="txn_chip_income">Income</string>
-    <string name="txn_detail_category">Category</string>
     <string name="txn_detail_account">Account</string>
     <string name="txn_detail_datetime">Date &amp; time</string>
-    <string name="txn_detail_split">Split</string>
     <string name="txn_detail_source">Source</string>
     <string name="txn_detail_type">Type</string>
     <string name="txn_detail_note">Note</string>
@@ -706,15 +672,11 @@
     <string name="subscription_remind_in_4_days">In 4 days</string>
 
     <!-- Transactions -->
-    <string name="txns_voided_msg">Transaction voided</string>
     <string name="txns_voided_named_msg">Voided %1$s</string>
     <string name="status_voided">Voided</string>
     <string name="txns_entry_voided_msg">Entry voided</string>
     <string name="txns_total_paid">Total paid: %1$s</string>
     <string name="txns_filter_living_burn_dismiss">Living burn ✕</string>
-    <string name="txns_sheet_row">Sheet row: %1$s</string>
-    <string name="txns_unassigned">Unassigned</string>
-    <string name="txns_id_label">ID: %1$s</string>
 
     <!-- Navigation & Common Content Descriptions -->
     <string name="nav_transactions_title">Transactions</string>
@@ -756,11 +718,8 @@
     <string name="settings_msg_sync_completed">Sync completed successfully</string>
     <string name="settings_msg_reconciled_all_months">Reconciled %1$d change(s) across all months</string>
     <string name="settings_msg_all_months_up_to_date">All months up to date (nothing changed)</string>
-    <string name="settings_err_sync_failed">Sync failed with error: %1$s</string>
     <string name="settings_msg_config_mirrored">Configuration successfully mirrored to Google Sheets Config tab</string>
-    <string name="settings_err_config_mirror_failed">Failed to mirror config: %1$s</string>
     <string name="settings_msg_config_restored">Restored configuration from Google Sheets Config tab</string>
-    <string name="settings_err_config_restore_failed">Failed to restore config: %1$s</string>
     <string name="settings_msg_workbook_formatted">Master Workbook (Dashboard, %1$s) formatted</string>
     <string name="settings_err_format_workbook">Failed to format master workbook (status %1$d, %2$s). Check network connection.</string>
 
@@ -816,15 +775,9 @@
     <string name="quicklog_err_future_date">That date is in the future.</string>
     <string name="quicklog_msg_updated">Updated</string>
     <string name="quicklog_msg_saved_will_sync">Saved %1$s, will sync</string>
-    <string name="quicklog_err_update_failed">Update failed: %1$s</string>
-    <string name="quicklog_err_save_failed">Save failed: %1$s</string>
-    <string name="quicklog_err_void_failed">Void failed: %1$s</string>
 
     <!-- DashboardViewModel -->
-    <string name="dashboard_msg_synced_count">Synced %1$d transaction(s)</string>
     <string name="dashboard_msg_synced_sheets">Synced %1$d transaction(s) to Google Sheets</string>
-    <string name="dashboard_msg_all_up_to_date">All transactions up to date</string>
-    <string name="dashboard_err_sync_failed">Sync failed with error: %1$s</string>
     <string name="err_sync_failed_generic">Sync failed. Details are in Diagnostics.</string>
     <string name="err_save_failed_generic">Failed to save. Details are in Diagnostics.</string>
     <string name="err_update_failed_generic">Failed to update. Details are in Diagnostics.</string>
@@ -848,9 +801,6 @@
     <string name="settings_err_trip_remove_failed">The trip could not be removed</string>
 
     <!-- Setup page: the step that needs the user -->
-    <string name="onboarding_needs_attention">Needs attention</string>
-    <string name="onboarding_sign_in">Sign in</string>
-    <string name="onboarding_set_up_workbook">Set up workbook</string>
 
     <!-- Rows waiting in review, not counted in the burn -->
     <string name="dashboard_unconfirmed_one">1 unconfirmed row, %1$s not counted</string>
@@ -859,7 +809,6 @@
     <!-- Attention cards: what is wrong, why, and the one fix -->
     <string name="attn_needs_attention">Needs attention</string>
     <string name="attn_in_progress">Working on it</string>
-    <string name="attn_done">Done</string>
     <string name="attn_sign_in_title">Sign in to Google</string>
     <string name="attn_sign_in_done">Signed in</string>
     <string name="attn_sign_in_reason">You are signed out, so nothing can sync to your sheet.</string>
