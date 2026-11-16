@@ -419,19 +419,8 @@ fun QuickLogSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            val allCategories = remember {
-                listOf(
-                    CategoryConstants.CATEGORY_FOOD_AND_DRINK,
-                    CategoryConstants.CATEGORY_GROCERIES,
-                    CategoryConstants.CATEGORY_TRANSIT,
-                    CategoryConstants.CATEGORY_SUBSCRIPTIONS,
-                    CategoryConstants.CATEGORY_SHOPPING,
-                    CategoryConstants.CATEGORY_TRIP_TRAVEL,
-                    CategoryConstants.CATEGORY_HEALTH,
-                    CategoryConstants.CATEGORY_FAMILY,
-                    CategoryConstants.CATEGORY_SAVINGS,
-                    CategoryConstants.CATEGORY_OTHER
-                )
+            val allCategories = remember(state.availableCategories) {
+                com.financeautomation.domain.usecase.CategoryPickerResolver.resolve(state.availableCategories)
             }
 
             FlowRow(
