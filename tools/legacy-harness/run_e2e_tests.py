@@ -18,7 +18,7 @@ ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from tests.test_tier1_features import (
+from test_tier1_features import (
     TestFeature01HeadlessGradleScaffolding,
     TestFeature02VersionCatalogConfig,
     TestFeature03RootAndAppBuildScripts,
@@ -70,7 +70,7 @@ from tests.test_tier1_features import (
     TestFeature49HiddenConfigTabMirroring,
     TestFeature50DynamicDashboardFormulaRegeneration,
 )
-from tests.test_tier2_boundaries import (
+from test_tier2_boundaries import (
     TestTier2AmountBoundaries,
     TestTier2CategoryValidationBoundaries,
     TestTier2CompanionCountBoundaries,
@@ -83,7 +83,7 @@ from tests.test_tier2_boundaries import (
     TestTier2TimeSerialBoundaries,
     TestTier2UtrLengthBoundaries,
 )
-from tests.test_tier3_combinations import (
+from test_tier3_combinations import (
     TestTier3CategoryAndSplitCombinations,
     TestTier3InflowTypeAndRepaymentCombinations,
     TestTier3SettleWindowAndDeduplicationCombinations,
@@ -91,7 +91,7 @@ from tests.test_tier3_combinations import (
     TestTier3SplitModeStateCombinations,
     TestTier3TwoAxisStateTransitionsPairwise,
 )
-from tests.test_tier4_real_world import TestTier4RealWorldScenarios
+from test_tier4_real_world import TestTier4RealWorldScenarios
 
 
 def build_tier1_suite() -> unittest.TestSuite:

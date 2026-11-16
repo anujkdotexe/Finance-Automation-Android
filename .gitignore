@@ -68,3 +68,7 @@ Finance2026_Template_v2.xlsx
 # Agent private rules
 .gemini/
 tools/watch_inbox.py
+
+# Python bytecode
+__pycache__/
+*.pyc

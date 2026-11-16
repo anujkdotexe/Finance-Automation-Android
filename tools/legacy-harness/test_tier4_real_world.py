@@ -22,7 +22,7 @@ ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from tests.domain_harness import (
+from domain_harness import (
     TABLE_1_DEBITS_RANGE,
     DeduplicationEngine,
     InflowTransaction,
