@@ -264,9 +264,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
-                                    val effectiveWhatFor = if (category.isNotBlank() && !whatFor.contains(category)) {
-                                        if (whatFor.isNotBlank()) "$whatFor ($category)" else category
-                                    } else whatFor
+                                    val effectiveWhatFor = com.financeautomation.core.utils.PayableFormatUtils.buildEffectiveWhatFor(whatFor, category)
                                     val res = app.appContainer.transactionRepository.logPayable(
                                         creditor = creditor,
                                         amount = amount,
