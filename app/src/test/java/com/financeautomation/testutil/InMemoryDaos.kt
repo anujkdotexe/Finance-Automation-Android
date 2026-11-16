@@ -134,9 +134,9 @@ class InMemoryQueueDao : SyncQueueDao {
     }
     override suspend fun recoverRetryableFailedItems(): Int {
         var count = 0
-        queue.values.filter { it.status == SyncQueueEntity.STATUS_FAILED && (it.lastErrorKind in listOf("NO_NETWORK", "RATE_LIMITED", "SERVER_BUSY") || (it.retryCount < 999 && it.lastErrorKind != "SHEET_CHANGED" && it.lastErrorKind != "AUTH_EXPIRED")) }
+        queue.values.filter { it.status == SyncQueueEntity.STATUS_FAILED && it.lastErrorKind in listOf("NO_NETWORK", "RATE_LIMITED", "SERVER_BUSY") }
             .forEach {
-                queue[it.id] = it.copy(status = SyncQueueEntity.STATUS_PENDING, retryCount = 0)
+                queue[it.id] = it.copy(status = SyncQueueEntity.STATUS_PENDING)
                 count++
             }
         return count

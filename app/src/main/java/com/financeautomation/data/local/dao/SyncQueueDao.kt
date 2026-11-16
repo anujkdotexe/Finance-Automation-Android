@@ -66,7 +66,7 @@ interface SyncQueueDao {
     @Query("UPDATE sync_queue SET status = 'PENDING', retryCount = 0, lastErrorKind = NULL, lastErrorDetail = NULL WHERE id = :id")
     suspend fun resetQueueItem(id: Long)
 
-    @Query("UPDATE sync_queue SET status = 'PENDING', retryCount = 0 WHERE status = 'FAILED' AND (lastErrorKind IN ('NO_NETWORK', 'RATE_LIMITED', 'SERVER_BUSY') OR (retryCount < 999 AND lastErrorKind != 'SHEET_CHANGED' AND lastErrorKind != 'AUTH_EXPIRED'))")
+    @Query("UPDATE sync_queue SET status = 'PENDING' WHERE status = 'FAILED' AND lastErrorKind IN ('NO_NETWORK', 'RATE_LIMITED', 'SERVER_BUSY')")
     suspend fun recoverRetryableFailedItems(): Int
 
     @Query("SELECT COUNT(*) FROM sync_queue WHERE operationType = :opType AND (status = 'PENDING' OR status = 'IN_PROGRESS')")
