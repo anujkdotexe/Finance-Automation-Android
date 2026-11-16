@@ -826,4 +826,20 @@ class SettingsViewModelTest {
         assertTrue(com.financeautomation.core.constants.ConfigConstants.isLocalOnlyPref("app_lock_enabled"))
         assertTrue(com.financeautomation.core.constants.ConfigConstants.isLocalOnlyPref("hide_recents_preview"))
     }
+
+    @Test
+    fun testSubscriptionReminderTime_observesAndUpdatesPreference() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+        assertEquals("21:00", vm.uiState.value.subscriptionReminderTime)
+
+        vm.onSubscriptionReminderTimeChanged("08:30")
+        assertEquals("08:30", vm.uiState.value.subscriptionReminderTime)
+        assertEquals("08:30", prefs.getSubscriptionReminderTimeSync())
+    }
 }

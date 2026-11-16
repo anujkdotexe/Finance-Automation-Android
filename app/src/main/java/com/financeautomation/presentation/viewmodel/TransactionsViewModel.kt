@@ -144,7 +144,9 @@ data class TransactionsUiState(
     val isSyncing: Boolean = false,
     val monthOffset: Int = 0,
     /** Budget progress of the filtered category for the selected month, or null when no category or no budget. */
-    val categoryBudget: com.financeautomation.domain.usecase.BudgetProgress? = null
+    val categoryBudget: com.financeautomation.domain.usecase.BudgetProgress? = null,
+    val waitingCount: Int = 0,
+    val failedCount: Int = 0
 )
 
 /**
@@ -225,8 +227,11 @@ class TransactionsViewModel(
                         values[9] as List<com.financeautomation.domain.model.Category>
                     )
                 )
+                val qIds = values[5] as QueueTransactionIds
                 @Suppress("UNCHECKED_CAST")
                 state.copy(
+                    waitingCount = qIds.pending.size,
+                    failedCount = qIds.failed.size,
                     categoryBudget = categoryBudgetFor(
                         category = (values[4] as TransactionFilter).category,
                         monthOffset = values[2] as Int,

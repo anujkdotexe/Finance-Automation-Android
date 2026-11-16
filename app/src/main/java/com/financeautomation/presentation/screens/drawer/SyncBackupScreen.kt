@@ -425,7 +425,7 @@ fun SyncBackupScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = if (state.isSyncing) "Syncing..." else "Synced 2m ago",
+                            text = if (state.isSyncing) stringResource(R.string.sync_syncing) else stringResource(R.string.sync_synced_recent),
                             style = FinanceTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface

@@ -63,7 +63,8 @@ data class SettingsUiState(
     val developerMode: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val appLockEnabled: Boolean = false,
-    val hideRecentsPreview: Boolean = false
+    val hideRecentsPreview: Boolean = false,
+    val subscriptionReminderTime: String = PreferencesRepository.DEFAULT_SUBSCRIPTION_REMINDER_TIME
 )
 
 /**
@@ -207,6 +208,18 @@ class SettingsViewModel(
             val lockOn = preferencesRepository.getAppLockEnabled()
             val hide = preferencesRepository.getHideRecentsPreview()
             _uiState.update { it.copy(appLockEnabled = lockOn, hideRecentsPreview = hide) }
+        }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getSubscriptionReminderTime().collect { time ->
+                _uiState.update { it.copy(subscriptionReminderTime = time) }
+            }
+        }
+    }
+
+    fun onSubscriptionReminderTimeChanged(time: String) {
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setSubscriptionReminderTime(time)
+            _uiState.update { it.copy(subscriptionReminderTime = PreferencesRepository.normalizeReminderTime(time)) }
         }
     }
 

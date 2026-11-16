@@ -116,6 +116,7 @@ fun TransactionsScreen(
     viewModel: TransactionsViewModel,
     onTransactionClick: (Transaction) -> Unit = {},
     onNavigateToSync: () -> Unit = {},
+    onNavigateToNeedsReview: () -> Unit = {},
     onAddExpense: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -157,6 +158,7 @@ fun TransactionsScreen(
                     selectedInflow = inf
                 },
                 onNavigateToSync = onNavigateToSync,
+                onNavigateToNeedsReview = onNavigateToNeedsReview,
                 onVoidTransaction = { targetTxn ->
                     viewModel.voidTransaction(targetTxn)
                     coroutineScope.launch {
@@ -246,6 +248,7 @@ fun TransactionsContent(
     onTransactionClick: (Transaction) -> Unit,
     onInflowClick: (Inflow) -> Unit = {},
     onNavigateToSync: () -> Unit = {},
+    onNavigateToNeedsReview: () -> Unit = {},
     onVoidTransaction: (Transaction) -> Unit = {},
     onExportThisMonth: () -> Unit = {},
     onAddExpense: () -> Unit,
@@ -259,8 +262,11 @@ fun TransactionsContent(
     ) {
         // 1. Single-line quiet sync line
         SyncStatusLine(
-            lastSyncedText = "Synced 2m ago",
+            waitingCount = state.waitingCount,
+            failedCount = state.failedCount,
+            isSyncing = state.isSyncing,
             modifier = Modifier.padding(top = FinanceTheme.spacing.s),
+            onFailedClick = onNavigateToNeedsReview,
             onClick = onNavigateToSync
         )
 

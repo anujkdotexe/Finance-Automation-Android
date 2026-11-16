@@ -161,6 +161,9 @@
 
     <string name="menu_sync_backup">Sync and backup</string>
     <string name="nav_subscriptions_placeholder">No subscriptions available</string>
+    <string name="sub_add_pick_start_date">Pick a start date</string>
+    <string name="sub_add_due_today">Due today</string>
+    <string name="sub_add_due_in_days">Due in %d days</string>
 
     <!-- Sheet Flow Prompts and Labels -->
     <string name="inflow_type_income">Income / Salary</string>
@@ -668,6 +671,7 @@
 
     <!-- Review inbox -->
     <string name="sync_synced_recent">Synced recently</string>
+    <string name="sync_syncing">Syncing…</string>
     <string name="queue_op_friend_settlement">Friend Settlement</string>
     <string name="queue_op_friend_payable">Friend Payable</string>
     <string name="queue_op_repayment">Repayment</string>

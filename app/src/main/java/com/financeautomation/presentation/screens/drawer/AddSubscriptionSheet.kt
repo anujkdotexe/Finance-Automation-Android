@@ -1,5 +1,7 @@
 package com.financeautomation.presentation.screens.drawer
 
+import com.financeautomation.core.constants.CategoryConstants
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +28,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Subscriptions
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -38,6 +42,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -73,13 +79,46 @@ fun AddSubscriptionSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by rememberSaveable { mutableStateOf(prefill?.name.orEmpty()) }
     var amountText by remember {
-        mutableStateOf(prefill?.let { com.financeautomation.core.utils.formatAmountInput(it.amount) } ?: "649.00")
+        mutableStateOf(prefill?.let { com.financeautomation.core.utils.formatAmountInput(it.amount) } ?: "")
     }
     var isFixedAmount by rememberSaveable { mutableStateOf(true) }
     var selectedFrequency by rememberSaveable { mutableStateOf(prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
-    val defaultAccount = prefill?.account?.takeIf { it in accounts } ?: accounts.firstOrNull() ?: "Primary"
+    val defaultAccount = prefill?.account?.takeIf { it in accounts } ?: accounts.firstOrNull() ?: CategoryConstants.ACCOUNT_OTHER
     var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
     var remindMe by rememberSaveable { mutableStateOf(true) }
+
+    var anchorDateEpochDay by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val todayEpochDay = remember { java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toEpochDay() }
+    val nextDueEpochDay = remember(anchorDateEpochDay, selectedFrequency) {
+        anchorDateEpochDay?.let { anchor ->
+            val anchorDate = java.time.LocalDate.ofEpochDay(anchor)
+            when (selectedFrequency) {
+                SubscriptionFrequency.WEEKLY -> {
+                    var d = anchorDate
+                    while (d.toEpochDay() < todayEpochDay) {
+                        d = d.plusWeeks(1)
+                    }
+                    d.toEpochDay()
+                }
+                SubscriptionFrequency.MONTHLY -> {
+                    var d = anchorDate
+                    while (d.toEpochDay() < todayEpochDay) {
+                        d = d.plusMonths(1)
+                    }
+                    d.toEpochDay()
+                }
+                SubscriptionFrequency.YEARLY -> {
+                    var d = anchorDate
+                    while (d.toEpochDay() < todayEpochDay) {
+                        d = d.plusYears(1)
+                    }
+                    d.toEpochDay()
+                }
+            }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -327,6 +366,7 @@ fun AddSubscriptionSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                                .clickable { showDatePicker = true }
                                 .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -341,23 +381,45 @@ fun AddSubscriptionSheet(
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                                 )
-                                Text(
-                                    text = "20 Dec 2026",
-                                    style = FinanceTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                if (nextDueEpochDay != null) {
+                                    val formattedDate = remember(nextDueEpochDay) {
+                                        java.time.LocalDate.ofEpochDay(nextDueEpochDay)
+                                            .format(java.time.format.DateTimeFormatter.ofPattern("d MMM uuuu", java.util.Locale.US))
+                                    }
+                                    Text(
+                                        text = formattedDate,
+                                        style = FinanceTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                } else {
+                                    Text(
+                                        text = stringResource(R.string.sub_add_pick_start_date),
+                                        style = FinanceTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
-                            Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                                shape = FinanceShapes.small
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.subscription_remind_in_4_days),
-                                    style = FinanceTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
-                                )
+                            if (nextDueEpochDay != null) {
+                                val daysUntil = nextDueEpochDay - todayEpochDay
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                                    shape = FinanceShapes.small
+                                ) {
+                                    val pillText = when {
+                                        daysUntil == 0L -> stringResource(R.string.sub_add_due_today)
+                                        daysUntil > 0L -> stringResource(R.string.sub_add_due_in_days, daysUntil.toInt())
+                                        else -> ""
+                                    }
+                                    if (pillText.isNotEmpty()) {
+                                        Text(
+                                            text = pillText,
+                                            style = FinanceTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -376,7 +438,7 @@ fun AddSubscriptionSheet(
                         horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                     ) {
-                        val availableAccounts = accounts.ifEmpty { listOf("HDFC ••4921", "ICICI ••1042", "Cash", "Other") }
+                        val availableAccounts = accounts.ifEmpty { listOf(CategoryConstants.ACCOUNT_OTHER) }
                         availableAccounts.forEach { acc ->
                             val isSelected = selectedAccount == acc
                             FilterChip(
@@ -516,6 +578,35 @@ fun AddSubscriptionSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = anchorDateEpochDay?.let { it * 86400000L } ?: System.currentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            anchorDateEpochDay = java.time.Instant.ofEpochMilli(millis)
+                                .atZone(java.time.ZoneId.of("UTC"))
+                                .toLocalDate()
+                                .toEpochDay()
+                        }
+                        showDatePicker = false
+                    }
+                ) { Text(stringResource(R.string.action_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 }

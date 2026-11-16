@@ -1,5 +1,7 @@
 package com.financeautomation.presentation.flows
 
+import com.financeautomation.core.constants.CategoryConstants
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +109,7 @@ fun RepaidFriendFlowSheet(
     var personName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
     val selectedCompanion = companions.firstOrNull { it.name.equals(personName, ignoreCase = true) }
 
-    val defaultAccount = accounts.firstOrNull { it.isDefault }?.name ?: accounts.firstOrNull()?.name ?: "Cash"
+    val defaultAccount = accounts.firstOrNull { it.isDefault }?.name ?: accounts.firstOrNull()?.name ?: CategoryConstants.ACCOUNT_OTHER
     var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
 
     var amountText by rememberSaveable { mutableStateOf("") }
