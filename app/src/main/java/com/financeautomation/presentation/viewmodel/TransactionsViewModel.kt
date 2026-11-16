@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -165,6 +166,8 @@ class TransactionsViewModel(
     private val isSyncingFlow = MutableStateFlow(false)
     private val filterFlow = MutableStateFlow(TransactionFilter())
 
+    private var availableCategories: List<String> = CategoryConstants.DEFAULT_CATEGORIES
+
     private val _uiState = MutableStateFlow(TransactionsUiState(isLoading = true))
     val uiState: StateFlow<TransactionsUiState> = _uiState.asStateFlow()
 
@@ -191,7 +194,10 @@ class TransactionsViewModel(
     private fun observeTransactions() {
         val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
         val budgetsFlow = budgetRepository?.observeBudgets() ?: flowOf(emptyList())
-        val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
+        val categoriesFlow = (categoryRepository?.getCategories() ?: flowOf(emptyList()))
+            .onEach { cats ->
+                availableCategories = (CategoryConstants.DEFAULT_CATEGORIES + cats.map { it.name }).distinct()
+            }
         viewModelScope.launch(ioDispatcher) {
             combine(
                 transactionRepository.getTransactions(),
@@ -308,10 +314,12 @@ class TransactionsViewModel(
             return
         }
         val trimmed = category.trim()
-        val defaultMatch = CategoryConstants.DEFAULT_CATEGORIES
+        val match = availableCategories
             .firstOrNull { it.equals(trimmed, ignoreCase = true) }
-        val finalCategory = defaultMatch ?: trimmed
-        filterFlow.update { it.copy(category = finalCategory, excludeSavingsAndIgnored = false, status = null) }
+        if (match != null) {
+            filterFlow.update { it.copy(category = match, excludeSavingsAndIgnored = false, status = null) }
+        }
+        // Unknown category is ignored
     }
 
     fun setTypeFilter(type: String?) {
