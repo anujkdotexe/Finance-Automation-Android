@@ -22,10 +22,11 @@ Source documents (read them first, they define the behaviour):
 
 1. Read each file completely before editing it. List a directory before assuming a path. Confirm every finding in the
    code before fixing it.
-2. Testing is deferred until the MVP is in place. Do not write or edit tests and do not report test results. Note in
-   your report which existing test files reference names you changed. A phase is done when `.\gradlew.bat assembleDebug`
-   succeeds and you have traced the behaviour through the code by hand.
-3. AGENTS.md rules: no commit or push, no emojis anywhere, no `!!`, no secrets or keys in source, no local machine paths
+2. HISTORICAL (updated 2026-11-16): this guide first told agents to defer tests. The rule now is in `AGENTS.md`: unit
+   tests may run at any time, every fix needs a test that fails before and passes after, tests go through production
+   constructors, and build, lint and install run only when the owner says so. Report only what you actually ran.
+3. AGENTS.md rules: no push and no merge into `main` without the owner's approval (commits on the feature branch are
+   allowed during an approved round), no emojis anywhere, no `!!`, no secrets or keys in source, no local machine paths
    in documentation, no mock or stub Google clients, `Savings` always plural.
 4. Layering: `domain` is pure Kotlin with no Android imports. Network and sheet code lives in `data`. UI in
    `presentation`. Services and receivers in `service`.
