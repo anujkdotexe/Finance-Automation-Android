@@ -27,6 +27,7 @@ import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.dao.TripTagDao
 import com.financeautomation.data.local.entity.AccountEntity
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.data.local.entity.CategoryEntity
 import com.financeautomation.data.local.entity.CategoryStatEntity
 import com.financeautomation.data.local.entity.CompanionEntity
@@ -310,18 +311,18 @@ abstract class FinanceDatabase : RoomDatabase() {
             }
 
             val preferenceDao = database.preferenceDao()
-            if (preferenceDao.getPreference("key_default_account") == null) {
+            if (preferenceDao.getPreference(PreferencesRepository.KEY_DEFAULT_ACCOUNT) == null) {
                 preferenceDao.setPreference(
                     PreferenceEntity(
-                        key = "key_default_account",
+                        key = PreferencesRepository.KEY_DEFAULT_ACCOUNT,
                         value = CategoryConstants.ACCOUNT_OTHER
                     )
                 )
             }
-            if (preferenceDao.getPreference("key_settle_delay_seconds") == null) {
+            if (preferenceDao.getPreference(PreferencesRepository.KEY_SETTLE_DELAY_SECONDS) == null) {
                 preferenceDao.setPreference(
                     PreferenceEntity(
-                        key = "key_settle_delay_seconds",
+                        key = PreferencesRepository.KEY_SETTLE_DELAY_SECONDS,
                         value = "120"
                     )
                 )

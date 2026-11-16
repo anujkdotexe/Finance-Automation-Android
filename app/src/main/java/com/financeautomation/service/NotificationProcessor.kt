@@ -21,6 +21,7 @@ import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
@@ -148,7 +149,7 @@ class NotificationProcessor(
             emptyList()
         }
         val defaultAccount: String = try {
-            preferenceDao?.getPreference("default_account") ?: CategoryConstants.ACCOUNT_OTHER
+            preferenceDao?.getPreference(PreferencesRepository.KEY_DEFAULT_ACCOUNT) ?: CategoryConstants.ACCOUNT_OTHER
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: defaultAccount preference fallback")

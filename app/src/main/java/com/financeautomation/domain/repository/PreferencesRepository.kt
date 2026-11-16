@@ -241,6 +241,18 @@ interface PreferencesRepository {
     }
 
     companion object {
+        const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
+        fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
+        const val KEY_DEFAULT_ACCOUNT: String = "key_default_account"
+        const val KEY_ACTIVE_TRIP: String = "key_active_trip"
+        const val KEY_GOOGLE_EMAIL: String = "key_google_email"
+        const val KEY_GOOGLE_DISPLAY_NAME: String = "key_google_display_name"
+        const val KEY_GOOGLE_PHOTO_URL: String = "key_google_photo_url"
+        const val KEY_SETTLE_DELAY_SECONDS: String = "key_settle_delay_seconds"
+        const val KEY_DEVICE_ID: String = "device_id"
+        const val KEY_DEVELOPER_MODE: String = "key_developer_mode"
+        const val KEY_THEME_MODE: String = "key_theme_mode"
+
         const val KEY_DASHBOARD_HINT_DISMISSED: String = "dashboard_hint_dismissed"
         const val KEY_NEEDS_REVIEW_HINT_DISMISSED: String = "needs_review_hint_dismissed"
         const val KEY_SUBSCRIPTION_REMINDER_TIME: String = "subscription_reminder_time"
