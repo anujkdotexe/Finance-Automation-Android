@@ -185,6 +185,8 @@
     <string name="label_personal_share">Your Personal Share ₹</string>
     <string name="format_trip_tag">Trip: %s</string>
     <string name="action_end_trip">End Trip</string>
+    <string name="trip_end_confirm_title">End trip?</string>
+    <string name="trip_end_confirm_desc">Are you sure you want to end trip \"%s\"? Expenses will remain saved.</string>
     <string name="btn_save_expense">Save expense</string>
     <string name="label_details">Details</string>
     <string name="label_today">Today</string>
