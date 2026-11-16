@@ -48,7 +48,7 @@ import com.financeautomation.presentation.theme.categoryPaletteColors
 @Composable
 fun AddCategorySheet(
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
+    onSave: (name: String, colorName: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -162,7 +162,9 @@ fun AddCategorySheet(
                     filledText = stringResource(R.string.action_save),
                     onFilledClick = {
                         if (categoryName.isNotBlank()) {
-                            onSave(categoryName.trim())
+                            val chosenColor = com.financeautomation.presentation.theme.CategoryColorTokens.PALETTE
+                                .getOrNull(selectedColorIndex)?.name ?: "Teal"
+                            onSave(categoryName.trim(), chosenColor)
                         }
                     },
                     filledEnabled = categoryName.isNotBlank(),

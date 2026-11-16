@@ -191,7 +191,7 @@ class SettingsCustomizationCoordinator(
         }
     }
 
-    fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false) {
+    fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false, colorName: String = "default_tag") {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {
             uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_category_blank)) }
@@ -212,7 +212,8 @@ class SettingsCustomizationCoordinator(
                     isDefault = false,
                     isExcludedFromLivingBurn = isExcludedFromLivingBurn,
                     isArchived = false,
-                    displayOrder = uiState.value.categories.size
+                    displayOrder = uiState.value.categories.size,
+                    iconName = colorName
                 )
                 repo.insertCategory(newCat)
                 uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, trimmed)) }
