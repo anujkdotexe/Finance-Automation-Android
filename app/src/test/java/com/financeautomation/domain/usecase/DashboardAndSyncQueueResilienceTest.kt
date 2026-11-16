@@ -151,6 +151,46 @@ class DashboardAndSyncQueueResilienceTest {
     }
 
     @Test
+    fun regenerateDashboardFetchesAllCategoriesIncludingArchived() = runTest(testDispatcher) {
+        var recordedIncludeArchived: Boolean? = null
+        val catRepo = object : CategoryRepository {
+            override fun getCategories(includeArchived: Boolean): Flow<List<Category>> = flowOf(emptyList())
+            override suspend fun getAllCategories(includeArchived: Boolean): List<Category> {
+                recordedIncludeArchived = includeArchived
+                return emptyList()
+            }
+            override suspend fun getActiveCategories(): List<Category> = emptyList()
+            override suspend fun getCategoryById(id: String): Category? = null
+            override suspend fun getCategoryByName(name: String): Category? = null
+            override suspend fun insertCategory(category: Category) {}
+            override suspend fun updateCategory(category: Category) {}
+            override suspend fun setExcludedFromLivingBurn(id: String, excluded: Boolean) {}
+            override suspend fun archiveCategory(id: String) {}
+            override suspend fun unarchiveCategory(id: String) {}
+            override suspend fun deleteCategory(id: String) {}
+            override suspend fun reorderCategories(categoryIds: List<String>) {}
+        }
+        var gatewayCategories: List<Category>? = null
+        val gateway = object : com.financeautomation.domain.repository.DashboardRemoteGateway {
+            override suspend fun regenerateDashboard(spreadsheetId: String, categories: List<Category>): Result<Unit> {
+                gatewayCategories = categories
+                return Result.Success(Unit)
+            }
+        }
+        val useCase = RegenerateDashboardUseCase(
+            dashboardRemoteGateway = gateway,
+            preferencesRepository = FakePrefRepo(),
+            accountRepository = FakeAccRepo(),
+            categoryRepository = catRepo,
+            ioDispatcher = testDispatcher
+        )
+
+        val res = useCase()
+        assertTrue(res is Result.Success)
+        assertEquals(true, recordedIncludeArchived)
+    }
+
+    @Test
     fun syncQueuePoisonPillDoesNotBlockQueueRun() = runTest(testDispatcher) {
         val queue = ConcurrentHashMap<Long, SyncQueueEntity>()
         var queueStatusUpdates = mutableMapOf<Long, String>()

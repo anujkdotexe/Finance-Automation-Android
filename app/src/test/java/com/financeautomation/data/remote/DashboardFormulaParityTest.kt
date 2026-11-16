@@ -76,9 +76,43 @@ class DashboardFormulaParityTest {
         else -> emptyList()
     }
 
+    private fun collectStrings(node: Any?): List<String> = when (node) {
+        is Map<*, *> -> node.entries.flatMap { (k, v) ->
+            if (k == "stringValue" && v is String) listOf(v) else collectStrings(v)
+        }
+        is List<*> -> node.flatMap { collectStrings(it) }
+        else -> emptyList()
+    }
+
     @Test
     fun testCategorySpendFormulaUsesTheLiveSpacing() {
         val expected = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y6, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
         assertEquals(expected, DashboardFormulaBuilder.buildCategorySpendFormula(6))
+    }
+
+    @Test
+    fun testDashboardFormulaRequestsExcludesArchivedExcludedCategoriesWhileArchivedIncludedStillCounts() {
+        val categories = listOf(
+            com.financeautomation.domain.model.Category(id = "c1", name = "Rent", isDefault = false, isExcludedFromLivingBurn = true, isArchived = true, displayOrder = 0),
+            com.financeautomation.domain.model.Category(id = "c2", name = "Groceries", isDefault = false, isExcludedFromLivingBurn = false, isArchived = true, displayOrder = 1),
+            com.financeautomation.domain.model.Category(id = "c3", name = "Investments", isDefault = false, isExcludedFromLivingBurn = true, isArchived = false, displayOrder = 2),
+            com.financeautomation.domain.model.Category(id = "c4", name = "Dining", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 3)
+        )
+
+        val requests = DashboardFormulaBuilder.buildDashboardFormulaRequests(dashboardSheetId = 4, categories = categories)
+
+        val currentBurnFormula = requests.flatMap { collectFormulas(it) }
+            .first { it.contains("TEXT(TODAY(), \"mmm\")") && it.contains("!I4:I") }
+
+        assertTrue("Current burn formula must exclude Rent", currentBurnFormula.contains("\"<>Rent\""))
+        assertTrue("Current burn formula must exclude Investments", currentBurnFormula.contains("\"<>Investments\""))
+        org.junit.Assert.assertFalse("Current burn formula must not exclude Groceries", currentBurnFormula.contains("<>Groceries"))
+        org.junit.Assert.assertFalse("Current burn formula must not exclude Dining", currentBurnFormula.contains("<>Dining"))
+
+        val cellStrings = requests.flatMap { collectStrings(it) }
+        assertTrue("Active non-excluded category Dining must appear in category table", cellStrings.contains("Dining"))
+        assertTrue("Active excluded category Investments must appear in category table", cellStrings.contains("Investments"))
+        org.junit.Assert.assertFalse("Archived excluded category Rent must be hidden from category table", cellStrings.contains("Rent"))
+        org.junit.Assert.assertFalse("Archived category Groceries must be hidden from category table", cellStrings.contains("Groceries"))
     }
 }

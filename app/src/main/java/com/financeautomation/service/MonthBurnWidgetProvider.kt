@@ -102,7 +102,7 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
         private suspend fun loadSummary(context: Context): MonthBurnSummary {
             val container = (context.applicationContext as FinanceApplication).appContainer
             val transactions = container.transactionRepository.getTransactions().first()
-            val categories = container.categoryRepository.getCategories().first()
+            val categories = container.categoryRepository.getCategories(includeArchived = true).first()
             val queue = container.awaitDatabase().syncQueueDao().getAllQueueFlow().first()
             val waiting = queue.count {
                 it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS

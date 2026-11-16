@@ -23,7 +23,11 @@ object LivingBurn {
 
     val KOLKATA: ZoneId = ZoneId.of("Asia/Kolkata")
 
-    /** Lower-cased, trimmed names of the categories the owner excluded from living burn. */
+    /**
+     * Lower-cased, trimmed names of the categories the owner excluded from living burn.
+     * Includes both active and archived categories so that archiving a category that is excluded
+     * from living burn never turns its historical spending into living burn.
+     */
     fun excludedNames(categories: List<Category>): Set<String> =
         categories.filter { it.isExcludedFromLivingBurn }.map { it.name.trim().lowercase() }.toSet()
 

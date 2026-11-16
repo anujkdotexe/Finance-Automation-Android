@@ -73,7 +73,7 @@ class InsightsViewModel(
         viewModelScope.launch(ioDispatcher) {
             combine(
                 transactionRepository.getTransactions(),
-                categoryRepository?.getCategories() ?: flowOf(emptyList()),
+                categoryRepository?.getCategories(includeArchived = true) ?: flowOf(emptyList()),
                 inflowRepository?.getAllInflows() ?: flowOf(emptyList()),
                 selectedMonth
             ) { transactions, categories, inflows, month -> build(transactions, categories, inflows, month) }

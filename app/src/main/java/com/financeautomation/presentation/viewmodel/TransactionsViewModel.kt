@@ -196,9 +196,9 @@ class TransactionsViewModel(
     private fun observeTransactions() {
         val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
         val budgetsFlow = budgetRepository?.observeBudgets() ?: flowOf(emptyList())
-        val categoriesFlow = (categoryRepository?.getCategories() ?: flowOf(emptyList()))
+        val categoriesFlow = (categoryRepository?.getCategories(includeArchived = true) ?: flowOf(emptyList()))
             .onEach { cats ->
-                availableCategories = (CategoryConstants.DEFAULT_CATEGORIES + cats.map { it.name }).distinct()
+                availableCategories = (CategoryConstants.DEFAULT_CATEGORIES + cats.filter { !it.isArchived }.map { it.name }).distinct()
             }
         viewModelScope.launch(ioDispatcher) {
             combine(

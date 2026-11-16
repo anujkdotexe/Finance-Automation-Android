@@ -757,6 +757,55 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun testArchivingExcludedCategoryPreservesItsExclusionFromLivingBurn() = runTest {
+        val now = System.currentTimeMillis()
+        val tRepo = FakeTransactionRepo()
+        listOf(
+            Transaction("t1", now, 46000, 0.5, "SBI", "Landlord", "", "Rent", 15000.0, "Personal", 15000.0, 0.0, TransactionStatus.PERSONAL, "manual", ReviewState.CONFIRMED, com.financeautomation.core.model.SyncState.SYNCED, null, false),
+            Transaction("t2", now, 46000, 0.5, "SBI", "Cafe", "", "Food & Drink", 250.0, "Personal", 250.0, 0.0, TransactionStatus.PERSONAL, "manual", ReviewState.CONFIRMED, com.financeautomation.core.model.SyncState.SYNCED, null, false)
+        ).forEach { tRepo.insertTransaction(it) }
+
+        var requestedIncludeArchived: Boolean? = null
+        val customCatRepo = object : CategoryRepository {
+            override fun getCategories(includeArchived: Boolean): Flow<List<Category>> {
+                requestedIncludeArchived = includeArchived
+                return flowOf(
+                    listOf(
+                        Category("1", "Food & Drink", isExcludedFromLivingBurn = false, isArchived = false),
+                        Category("2", "Rent", isExcludedFromLivingBurn = true, isArchived = true)
+                    )
+                )
+            }
+            override suspend fun getAllCategories(includeArchived: Boolean): List<Category> = emptyList()
+            override suspend fun getActiveCategories(): List<Category> = emptyList()
+            override suspend fun getCategoryById(id: String): Category? = null
+            override suspend fun getCategoryByName(name: String): Category? = null
+            override suspend fun insertCategory(category: Category) {}
+            override suspend fun updateCategory(category: Category) {}
+            override suspend fun setExcludedFromLivingBurn(id: String, excluded: Boolean) {}
+            override suspend fun archiveCategory(id: String) {}
+            override suspend fun unarchiveCategory(id: String) {}
+            override suspend fun deleteCategory(id: String) {}
+            override suspend fun reorderCategories(categoryIds: List<String>) {}
+        }
+
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            categoryRepository = customCatRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals("DashboardViewModel must request categories including archived ones", true, requestedIncludeArchived)
+        assertEquals("Archived excluded category Rent must remain excluded from currentBurn", 250.0, vm.uiState.value.currentBurn, 0.001)
+        val whereItWent = vm.uiState.value.allCategories
+        assertEquals(1, whereItWent.size)
+        assertEquals("Food & Drink", whereItWent[0].category)
+        assertEquals(250.0, whereItWent[0].amount, 0.001)
+    }
+
+    @Test
     fun testVoidingAnInflowReducesTheIncomeFigure() = runTest {
         val now = System.currentTimeMillis()
         val inflowRepo = FakeInflowRepo()
