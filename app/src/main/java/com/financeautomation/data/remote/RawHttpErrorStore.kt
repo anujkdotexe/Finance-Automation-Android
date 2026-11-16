@@ -19,13 +19,7 @@ import java.time.Instant
  * Stores RESPONSE body only (cut to 4 KB each, max 20 entries) in a private JSON file off the main thread.
  * Enabled for beta and debug builds only. Provisioning and sheet-structure calls only.
  */
-@Serializable
-data class RawHttpErrorEntry(
-    val timestamp: String,
-    val endpointId: String,
-    val httpStatus: Int,
-    val responseBody: String
-)
+typealias RawHttpErrorEntry = com.financeautomation.domain.model.RawHttpErrorEntry
 
 class RawHttpErrorStore(
     private val filesDir: File,

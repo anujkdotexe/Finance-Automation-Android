@@ -76,7 +76,7 @@ data class CompatibilityReportData(
     val lastHeartbeatTime: Long = 0L,
     val todayDroppedNonWhitelistedCount: Long = 0L,
     val userNote: String? = null,
-    val rawGoogleErrors: List<com.financeautomation.data.remote.RawHttpErrorEntry> = emptyList()
+    val rawGoogleErrors: List<RawHttpErrorEntry> = emptyList()
 )
 
 /**

@@ -26,10 +26,7 @@ import java.net.URLEncoder
 /**
  * Thrown when the hidden Config tab is absent from the spreadsheet or contains no data rows.
  */
-class EmptyOrMissingConfigTabException(
-    message: String,
-    cause: Throwable? = null
-) : Exception(message, cause)
+typealias EmptyOrMissingConfigTabException = com.financeautomation.domain.model.EmptyOrMissingConfigTabException
 
 /**
  * Encapsulates full configuration state snapshot for cloud mirroring and restore.
@@ -53,7 +50,15 @@ class ConfigSheetManager(
     private val tokenProvider: TokenProvider? = null,
     private val baseUrl: String = "https://sheets.googleapis.com/v4/spreadsheets",
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-) {
+) : com.financeautomation.domain.repository.LegacyConfigGateway {
+
+    override suspend fun readLegacyConfig(spreadsheetId: String): Result<Unit> {
+        return when (val res = readConfig(spreadsheetId)) {
+            is Result.Success -> Result.Success(Unit)
+            is Result.Error -> Result.Error(res.throwable)
+            is Result.Loading -> Result.Loading
+        }
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()

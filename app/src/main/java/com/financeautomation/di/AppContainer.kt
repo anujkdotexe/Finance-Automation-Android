@@ -437,7 +437,7 @@ class DefaultAppContainer(
             configRepository = configRepository,
             localGateway = configSyncLocalGateway,
             preferencesRepository = preferencesRepository,
-            configSheetManager = configSheetManager,
+            legacyConfigGateway = configSheetManager,
             ioDispatcher = ioDispatcher
         )
     }
@@ -457,13 +457,17 @@ class DefaultAppContainer(
     }
 
     override val regenerateDashboardUseCase: RegenerateDashboardUseCase by lazy {
-        RegenerateDashboardUseCase(
+        val gateway = com.financeautomation.data.remote.DashboardRemoteGatewayImpl(
             googleSheetsClient = googleSheetsClient,
+            tokenProvider = tokenProvider,
+            okHttpClient = okHttpClient,
+            ioDispatcher = ioDispatcher
+        )
+        RegenerateDashboardUseCase(
+            dashboardRemoteGateway = gateway,
             preferencesRepository = preferencesRepository,
             accountRepository = accountRepository,
             categoryRepository = categoryRepository,
-            okHttpClient = okHttpClient,
-            tokenProvider = tokenProvider,
             ioDispatcher = ioDispatcher
         )
     }
@@ -606,9 +610,12 @@ class DefaultAppContainer(
     }
 
     override val getOpenDebtsForPersonUseCase: GetOpenDebtsForPersonUseCase by lazy {
+        val gateway = com.financeautomation.data.remote.LedgerSnapshotGatewayImpl(
+            googleSheetsClient = googleSheetsClient
+        )
         GetOpenDebtsForPersonUseCase(
             preferencesRepository = preferencesRepository,
-            googleSheetsClient = googleSheetsClient,
+            ledgerSnapshotGateway = gateway,
             ioDispatcher = ioDispatcher
         )
     }

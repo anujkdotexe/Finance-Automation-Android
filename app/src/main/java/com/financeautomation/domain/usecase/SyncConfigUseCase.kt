@@ -3,8 +3,8 @@ package com.financeautomation.domain.usecase
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.safeCall
-import com.financeautomation.data.remote.ConfigSheetManager
-import com.financeautomation.data.remote.EmptyOrMissingConfigTabException
+import com.financeautomation.domain.model.EmptyOrMissingConfigTabException
+import com.financeautomation.domain.repository.LegacyConfigGateway
 import com.financeautomation.domain.model.ConfigRow
 import com.financeautomation.domain.repository.ConfigRepository
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
@@ -24,7 +24,7 @@ class SyncConfigUseCase(
     private val configRepository: ConfigRepository,
     private val localGateway: ConfigSyncLocalGateway,
     private val preferencesRepository: PreferencesRepository,
-    private val configSheetManager: ConfigSheetManager? = null,
+    private val legacyConfigGateway: LegacyConfigGateway? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
 
@@ -63,8 +63,8 @@ class SyncConfigUseCase(
             val rows = (readResult as Result.Success).data
             if (rows.isEmpty()) {
                 // Check if legacy fixed-grid Config!A1:P50 exists for backwards compatibility
-                if (configSheetManager != null) {
-                    val legacyResult = configSheetManager.readConfig(spreadsheetId)
+                if (legacyConfigGateway != null) {
+                    val legacyResult = legacyConfigGateway.readLegacyConfig(spreadsheetId)
                     if (legacyResult is Result.Success) {
                         localGateway.markAllLocalItemsDirty()
                         push(spreadsheetId)
