@@ -298,7 +298,7 @@ class DashboardViewModel(
             val payableDao = resolvePayableDao()
             val pendingCaptureDao = resolvePendingCaptureDao()
             val payablesFlow = payableDao?.observePending() ?: flowOf(emptyList())
-            val categoriesFlow = categoryRepository?.getCategories() ?: flowOf(emptyList())
+            val categoriesFlow = categoryRepository?.getCategories(includeArchived = true) ?: flowOf(emptyList())
             val needsReviewCapturesFlow = pendingCaptureDao?.getNeedsReviewCapturesFlow() ?: flowOf(emptyList())
             val inflowsFlow = inflowRepository?.getAllInflows() ?: flowOf(emptyList())
             val budgetsFlow = budgetRepository?.observeBudgets() ?: flowOf(emptyList())

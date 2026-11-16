@@ -30,7 +30,7 @@ class RegenerateDashboardUseCase(
                 )
             }
 
-            val categories = categoryRepository.getAllCategories(includeArchived = false)
+            val categories = categoryRepository.getAllCategories(includeArchived = true)
             dashboardRemoteGateway.regenerateDashboard(spreadsheetId, categories)
         } catch (e: Exception) {
             Result.Error(e)

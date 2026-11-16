@@ -93,7 +93,7 @@ object DashboardFormulaBuilder {
         categories: List<Category>
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
-        val excludedNames = categories.filter { it.isExcludedFromLivingBurn && !it.isArchived }.map { it.name }
+        val excludedNames = categories.filter { it.isExcludedFromLivingBurn }.map { it.name }
 
         // 1. Current Month Burn (A5)
         requests.add(

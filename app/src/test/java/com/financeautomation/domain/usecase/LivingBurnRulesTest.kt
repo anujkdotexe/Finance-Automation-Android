@@ -90,4 +90,53 @@ class LivingBurnRulesTest {
             0.001
         )
     }
+
+    @Test
+    fun archivedExcludedCategoryStaysExcludedWhileArchivedIncludedCategoryCounts() {
+        val rows = listOf(
+            txn("1", 1000.0, category = "Rent"),
+            txn("2", 200.0, category = "Groceries"),
+            txn("3", 300.0, category = "Investments"),
+            txn("4", 150.0, category = "Dining")
+        )
+        val categories = listOf(
+            Category(id = "c1", name = "Rent", isDefault = false, isExcludedFromLivingBurn = true, isArchived = true, displayOrder = 0),
+            Category(id = "c2", name = "Groceries", isDefault = false, isExcludedFromLivingBurn = false, isArchived = true, displayOrder = 1),
+            Category(id = "c3", name = "Investments", isDefault = false, isExcludedFromLivingBurn = true, isArchived = false, displayOrder = 2),
+            Category(id = "c4", name = "Dining", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 3)
+        )
+        val excludedNames = LivingBurn.excludedNames(categories)
+
+        // Rent (excluded + archived) is excluded.
+        // Investments (excluded + active) is excluded.
+        // Groceries (not excluded + archived) counts.
+        // Dining (not excluded + active) counts.
+        // Expected total = 200.0 (Groceries) + 150.0 (Dining) = 350.0.
+        val totalBurn = LivingBurn.total(rows, window, excludedNames)
+        assertEquals(350.0, totalBurn, 0.001)
+
+        val byCategory = LivingBurn.byCategory(rows, window, excludedNames)
+        assertEquals(2, byCategory.size)
+        assertEquals(200.0, byCategory["Groceries"] ?: 0.0, 0.001)
+        assertEquals(150.0, byCategory["Dining"] ?: 0.0, 0.001)
+        assertEquals(null, byCategory["Rent"])
+        assertEquals(null, byCategory["Investments"])
+
+        // InsightsCalculator, MonthBurnSummaryUseCase, and BudgetProgressUseCase follow the same rule
+        val month = YearMonth.of(2026, 11)
+        assertEquals(350.0, InsightsCalculator().total(rows, categories, month), 0.001)
+
+        val widgetSummary = MonthBurnSummaryUseCase()(rows, categories, 0, nowMillis = inMonth)
+        assertEquals(350.0, widgetSummary.livingBurn, 0.001)
+
+        val budgets = listOf(
+            com.financeautomation.domain.model.Budget(category = "Rent", monthlyAmount = 1500.0, updatedAt = 0L),
+            com.financeautomation.domain.model.Budget(category = "Groceries", monthlyAmount = 500.0, updatedAt = 0L)
+        )
+        val progress = BudgetProgressUseCase().forMonth(2026, 11, budgets, rows, categories)
+        // Rent has 0 spent because it is excluded
+        assertEquals(0.0, progress.first { it.category == "Rent" }.spent, 0.001)
+        // Groceries has 200 spent because it is not excluded
+        assertEquals(200.0, progress.first { it.category == "Groceries" }.spent, 0.001)
+    }
 }
