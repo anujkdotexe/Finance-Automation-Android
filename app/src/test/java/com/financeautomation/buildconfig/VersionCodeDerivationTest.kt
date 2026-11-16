@@ -1,5 +1,6 @@
 package com.financeautomation.buildconfig
 
+import com.financeautomation.core.utils.VersionCodeDerivation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -8,16 +9,26 @@ import java.io.File
 class VersionCodeDerivationTest {
 
     @Test
-    fun testBuildGradleDerivesVersionCodeFromGitCommitCount() {
-        val buildGradle = File("build.gradle.kts")
-        val appBuildGradle = File("app/build.gradle.kts")
-        val targetFile = if (appBuildGradle.exists()) appBuildGradle else buildGradle
-        assertTrue("app/build.gradle.kts must exist", targetFile.exists())
+    fun testParseCommitCount_parsesValidOutputCorrectly() {
+        assertEquals(42, VersionCodeDerivation.parseCommitCount("42"))
+        assertEquals(105, VersionCodeDerivation.parseCommitCount("105\n"))
+        assertEquals(1, VersionCodeDerivation.parseCommitCount("   1   \n"))
+    }
 
-        val content = targetFile.readText()
-        assertTrue("Must derive from git rev-list --count HEAD", content.contains("git") && content.contains("rev-list") && content.contains("--count"))
-        assertTrue("Must have safe fallback to 1", content.contains("orElse(1)"))
-        assertTrue("versionName must remain 1.0.0", content.contains("versionName = \"1.0.0\""))
-        assertTrue("versionCode must use gitCommitCount", content.contains("versionCode = gitCommitCount"))
+    @Test
+    fun testParseCommitCount_fallsBackOnInvalidOrEmptyInput() {
+        assertEquals(1, VersionCodeDerivation.parseCommitCount(null))
+        assertEquals(1, VersionCodeDerivation.parseCommitCount(""))
+        assertEquals(1, VersionCodeDerivation.parseCommitCount("   \n\t"))
+        assertEquals(1, VersionCodeDerivation.parseCommitCount("not_a_number"))
+        assertEquals(5, VersionCodeDerivation.parseCommitCount("invalid", fallback = 5))
+        assertEquals(1, VersionCodeDerivation.parseCommitCount("0")) // 0 is invalid versionCode in Android
+        assertEquals(1, VersionCodeDerivation.parseCommitCount("-12"))
+    }
+
+    @Test
+    fun testDeriveFromGit_runsRealGitProcessAndReturnsPositiveCount() {
+        val count = VersionCodeDerivation.deriveFromGit(File("."))
+        assertTrue("Version code derived from git must be at least 1, got $count", count >= 1)
     }
 }
