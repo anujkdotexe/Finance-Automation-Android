@@ -60,7 +60,7 @@ object DatabaseEncryptionMigrator {
             return null
         }
 
-        Log.i(TAG, "Unencrypted SQLite database detected at ${dbFile.absolutePath}. Starting SQLCipher migration.")
+        Log.i(TAG, "Unencrypted SQLite database detected. Starting SQLCipher migration.")
         val encFile = File(dbFile.parentFile, "$dbName.enc")
         if (encFile.exists()) {
             encFile.delete()

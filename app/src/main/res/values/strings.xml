@@ -676,7 +676,8 @@
     <string name="status_voided">Voided</string>
     <string name="txns_entry_voided_msg">Entry voided</string>
     <string name="txns_total_paid">Total paid: %1$s</string>
-    <string name="txns_filter_living_burn_dismiss">Living burn ✕</string>
+    <string name="txns_filter_living_burn_dismiss">Living burn (clear)</string>
+    <string name="txns_filter_category_dismiss">%1$s (clear)</string>
 
     <!-- Navigation & Common Content Descriptions -->
     <string name="nav_transactions_title">Transactions</string>

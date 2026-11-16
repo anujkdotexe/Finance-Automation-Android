@@ -398,7 +398,7 @@ fun TransactionsContent(
         ) {
             if (!currentCategory.isNullOrBlank()) {
                 AppChip(
-                    text = "$currentCategory ✕",
+                    text = stringResource(R.string.txns_filter_category_dismiss, currentCategory.orEmpty()),
                     selected = true,
                     onClick = { onFilterChange(state.activeFilter.copy(category = null)) }
                 )
