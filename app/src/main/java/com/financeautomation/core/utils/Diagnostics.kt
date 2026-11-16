@@ -74,7 +74,7 @@ object Diagnostics {
         val entry = Record(
             timestamp = System.currentTimeMillis(),
             tag = tag,
-            reason = reason
+            reason = PrivacyScrubber.scrub(reason)
         )
         records.addLast(entry)
         while (records.size > MAX_CAPACITY) {

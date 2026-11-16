@@ -33,7 +33,7 @@ data class GoogleApiError(
     fun formatExceptionMessage(context: String = ""): String {
         val prefix = if (context.isNotBlank()) "$context: " else ""
         val detail = reason ?: status ?: "UNKNOWN"
-        return "${prefix}$endpointId HTTP $httpStatus ($detail) - $message"
+        return "${prefix}$endpointId HTTP $httpStatus ($detail) - ${com.financeautomation.core.utils.PrivacyScrubber.scrub(message)}"
     }
 
     companion object {

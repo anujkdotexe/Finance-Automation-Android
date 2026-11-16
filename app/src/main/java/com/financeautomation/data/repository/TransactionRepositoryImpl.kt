@@ -1707,7 +1707,7 @@ class TransactionRepositoryImpl(
     private suspend fun markPermanentFailure(item: SyncQueueEntity, err: Throwable?, fallbackDetail: String? = null) {
         val kind = SyncErrorKind.fromThrowable(err).name
         val detail = err?.message ?: fallbackDetail ?: err?.javaClass?.simpleName ?: "Permanent failure"
-        resolveSyncQueueDao().setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, 999, kind, detail.take(300))
+        resolveSyncQueueDao().setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, 999, kind, com.financeautomation.core.utils.PrivacyScrubber.scrub(detail))
     }
 
     private fun isRunWideFailure(err: Throwable): Boolean = when (err) {
@@ -1724,7 +1724,7 @@ class TransactionRepositoryImpl(
         val isTransient = isTransientNetworkFailure(throwable)
         val newRetries = if (isTransient) item.retryCount else item.retryCount + 1
         val kind = SyncErrorKind.fromThrowable(throwable).name
-        val detail = throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure"
+        val detail = com.financeautomation.core.utils.PrivacyScrubber.scrub(throwable?.message ?: throwable?.javaClass?.simpleName ?: "Transport failure")
         if (newRetries >= MAX_SYNC_RETRIES) {
             qDao.setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, newRetries, kind, detail)
         } else {
