@@ -6,6 +6,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -93,13 +94,19 @@ fun PrivacyPolicyScreen(
 
             OutlinedButton(
                 onClick = { openExternalLink(context, "https://financeautomation.app/privacy") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
-                    Text(text = stringResource(R.string.privacy_open_online))
+                    Text(
+                        text = stringResource(R.string.privacy_open_online),
+                        maxLines = 2,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = null

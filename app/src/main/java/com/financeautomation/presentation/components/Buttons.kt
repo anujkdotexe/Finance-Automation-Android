@@ -216,7 +216,8 @@ fun ButtonPair(
     filledEnabled: Boolean = true,
     isFilledLoading: Boolean = false
 ) {
-    val isLong = outlinedText.length > MAX_BUTTON_PAIR_LABEL_LENGTH || filledText.length > MAX_BUTTON_PAIR_LABEL_LENGTH
+    val fontScale = androidx.compose.ui.platform.LocalConfiguration.current.fontScale
+    val isLong = fontScale >= 1.3f || outlinedText.length > MAX_BUTTON_PAIR_LABEL_LENGTH || filledText.length > MAX_BUTTON_PAIR_LABEL_LENGTH
     if (isLong) {
         Column(
             modifier = modifier.fillMaxWidth(),

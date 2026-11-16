@@ -621,27 +621,35 @@ class DashboardViewModel(
     fun syncNow(context: Context? = null) {
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(isSyncing = true, syncMessage = null, errorMessage = null) }
-
-            when (val res = transactionRepository.syncPendingTransactions(userInitiated = true)) {
-                is Result.Success -> {
-                    val count = res.data
-                    _uiState.update {
-                        it.copy(
-                            isSyncing = false,
-                            syncMessage = UiText.res(R.string.dashboard_msg_synced_sheets, count)
-                        )
+            try {
+                when (val res = transactionRepository.syncPendingTransactions(userInitiated = true)) {
+                    is Result.Success -> {
+                        val count = res.data
+                        _uiState.update {
+                            it.copy(
+                                syncMessage = UiText.res(R.string.dashboard_msg_synced_sheets, count)
+                            )
+                        }
                     }
-                }
-                is Result.Error -> {
-                    _uiState.update {
-                        it.copy(
-                            isSyncing = false,
-                            errorMessage = res.message?.let { msg -> UiText.dynamic(msg) }
-                                ?: UiText.res(R.string.dashboard_err_sync_failed, res.throwable.message ?: "")
-                        )
+                    is Result.Error -> {
+                        _uiState.update {
+                            it.copy(
+                                errorMessage = res.message?.let { msg -> UiText.dynamic(msg) }
+                                    ?: UiText.res(R.string.dashboard_err_sync_failed, res.throwable.message ?: "")
+                            )
+                        }
                     }
+                    is Result.Loading -> {}
                 }
-                is Result.Loading -> {}
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.update {
+                    it.copy(
+                        errorMessage = UiText.res(R.string.dashboard_err_sync_failed, e.message ?: "")
+                    )
+                }
+            } finally {
+                _uiState.update { it.copy(isSyncing = false) }
             }
         }
     }
