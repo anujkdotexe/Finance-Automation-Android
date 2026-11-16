@@ -41,4 +41,7 @@ interface SubscriptionCycleDao {
 
     @Query("UPDATE subscription_cycles SET state = 'PAID', transactionId = :transactionId, updatedAt = :updatedAt WHERE id = :id")
     suspend fun markPaid(id: String, transactionId: String, updatedAt: Long)
+
+    @Query("DELETE FROM subscription_cycles WHERE subscriptionId = :subscriptionId")
+    suspend fun deleteForSubscription(subscriptionId: String)
 }
