@@ -118,12 +118,13 @@ fun <T> SegmentedChoice(
     selectedOption: T,
     onOptionSelected: (T) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     labelProvider: (T) -> String = { it.toString() }
 ) {
     val view = LocalView.current
     Surface(
         shape = FinanceShapes.pill,
-        color = FinanceTheme.colors.surfaceContainerLow,
+        color = if (enabled) FinanceTheme.colors.surfaceContainerLow else FinanceTheme.colors.surfaceContainerLowest,
         modifier = modifier
             .fillMaxWidth()
             .height(FinanceTheme.sizes.segmentedChoiceHeight)
@@ -140,7 +141,7 @@ fun <T> SegmentedChoice(
                 val bgModifier = if (isSelected) {
                     Modifier
                         .clip(FinanceShapes.pill)
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(if (enabled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
                 } else {
                     Modifier
                 }
@@ -152,6 +153,7 @@ fun <T> SegmentedChoice(
                         .then(bgModifier)
                         .clickable(
                             role = Role.RadioButton,
+                            enabled = enabled,
                             onClick = {
                                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                 onOptionSelected(option)
@@ -164,7 +166,11 @@ fun <T> SegmentedChoice(
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                         ),
-                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = when {
+                            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            isSelected -> MaterialTheme.colorScheme.onSurface
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

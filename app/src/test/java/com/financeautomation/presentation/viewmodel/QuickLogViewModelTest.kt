@@ -620,4 +620,149 @@ class QuickLogViewModelTest {
         assertTrue(vm.uiState.value.isVoided)
         assertTrue(callbackCalled)
     }
+
+    @Test
+    fun onAddNewCompanion_recalculatesSplitImmediatelyWithNewCompanion() = runTest {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            accountRepository = FakeAccountRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.onAmountChanged("600")
+        vm.onSplitModeChanged(SplitMode.SPLIT_EQUALLY)
+        // With 0 companions selected in SPLIT_EQUALLY, it's 1 person (just me = 600)
+        assertEquals(600.0, vm.uiState.value.myShare, 0.01)
+
+        // Add a companion -> now 1 companion selected (Alice + me = 2 people, 300 each)
+        vm.onCompanionToggled("1")
+        advanceUntilIdle()
+        assertEquals(300.0, vm.uiState.value.myShare, 0.01)
+        assertEquals(300.0, vm.uiState.value.owedToMe, 0.01)
+
+        // Add a brand new companion -> immediately 2 companions selected + me = 3 people, 200 each
+        vm.onAddNewCompanion("Charlie")
+        advanceUntilIdle()
+        assertEquals(200.0, vm.uiState.value.myShare, 0.01)
+        assertEquals(400.0, vm.uiState.value.owedToMe, 0.01)
+        assertTrue(vm.uiState.value.availableCompanions.any { it.name == "Charlie" })
+    }
+
+    @Test
+    fun updateExisting_retainsTripTagAndUpdatesPendingStatus() = runTest {
+        val txnRepo = FakeTransactionRepo()
+        val original = Transaction(
+            id = "txn_edit_test",
+            timestamp = System.currentTimeMillis() - 10000,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Old Merchant",
+            category = "Food & Drink",
+            totalAmount = 300.0,
+            companions = "Personal",
+            myShare = 300.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            tripTag = "Goa Trip"
+        )
+        txnRepo.insertTransaction(original)
+
+        val vm = QuickLogViewModel(
+            transactionRepository = txnRepo,
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            accountRepository = FakeAccountRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.loadTransaction("txn_edit_test")
+        advanceUntilIdle()
+
+        // Change split to split equally with Alice
+        vm.onSplitModeChanged(SplitMode.SPLIT_EQUALLY)
+        vm.onCompanionToggled("1")
+        advanceUntilIdle()
+
+        var saved = false
+        vm.onConfirmAndSave { _, _ -> saved = true }
+        advanceUntilIdle()
+
+        assertTrue(saved)
+        val updated = txnRepo.getTransactionById("txn_edit_test")
+        assertNotNull(updated)
+        // Should retain original trip tag, not blank or overwritten
+        assertEquals("Goa Trip", updated!!.tripTag)
+        // Should update status to PENDING
+        assertEquals(TransactionStatus.PENDING, updated.status)
+        assertEquals(150.0, updated.myShare, 0.01)
+        assertEquals(150.0, updated.owedToMe, 0.01)
+    }
+
+    @Test
+    fun updateExisting_onSettledRow_preservesFinancialFieldsAndTripTag() = runTest {
+        val txnRepo = FakeTransactionRepo()
+        val settled = Transaction(
+            id = "txn_settled",
+            timestamp = System.currentTimeMillis() - 20000,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Settled Shop",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Alice",
+            myShare = 250.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.SETTLED,
+            tripTag = "Paris 2026"
+        )
+        txnRepo.insertTransaction(settled)
+
+        val vm = QuickLogViewModel(
+            transactionRepository = txnRepo,
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            accountRepository = FakeAccountRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.loadTransaction("txn_settled")
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isFinancialLocked)
+
+        vm.onPayeeChanged("New Merchant Name")
+        vm.onCategorySelected("Shopping")
+
+        var saved = false
+        vm.onConfirmAndSave { _, _ -> saved = true }
+        advanceUntilIdle()
+
+        assertTrue(saved)
+        val updated = txnRepo.getTransactionById("txn_settled")
+        assertNotNull(updated)
+        assertEquals("New Merchant Name", updated!!.merchant)
+        assertEquals("Shopping", updated.category)
+        // Financials must remain untouched
+        assertEquals(500.0, updated.totalAmount, 0.01)
+        assertEquals(250.0, updated.myShare, 0.01)
+        assertEquals(0.0, updated.owedToMe, 0.01)
+        assertEquals(TransactionStatus.SETTLED, updated.status)
+        assertEquals("Alice", updated.companions)
+        assertEquals("Paris 2026", updated.tripTag)
+    }
 }

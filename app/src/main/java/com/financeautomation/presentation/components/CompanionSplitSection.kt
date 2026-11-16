@@ -95,6 +95,7 @@ fun CompanionSplitSection(
                         onCustomShareChanged(input)
                     }
                 },
+                enabled = !state.isFinancialLocked,
                 placeholder = { Text(text = "0.00", style = FinanceTheme.typography.bodyMedium) },
                 singleLine = true,
                 shape = FinanceShapes.card,
@@ -164,7 +165,7 @@ fun CompanionSplitSection(
                     ),
                     modifier = Modifier
                         .clip(FinanceShapes.pill)
-                        .clickable {
+                        .clickable(enabled = !state.isFinancialLocked) {
                             focusManager.clearFocus()
                             onCompanionToggled(friend.id)
                         }
@@ -193,7 +194,11 @@ fun CompanionSplitSection(
                             text = friend.name,
                             style = FinanceTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else FinanceTheme.colors.onSurface
+                            color = when {
+                                state.isFinancialLocked -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
+                                else -> FinanceTheme.colors.onSurface
+                            }
                         )
 
                         if (isSelected) {
@@ -208,34 +213,36 @@ fun CompanionSplitSection(
                 }
             }
 
-            // Add Friend Chip
-            Surface(
-                shape = FinanceShapes.pill,
-                color = FinanceTheme.colors.surfaceContainerHigh,
-                border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outlineVariant),
-                modifier = Modifier
-                    .clip(FinanceShapes.pill)
-                    .clickable {
-                        focusManager.clearFocus()
-                        showAddFriendInput = !showAddFriendInput
-                    }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+            // Add Friend Chip (only allowed when split is not locked)
+            if (!state.isFinancialLocked) {
+                Surface(
+                    shape = FinanceShapes.pill,
+                    color = FinanceTheme.colors.surfaceContainerHigh,
+                    border = BorderStroke(FinanceTheme.sizes.strokeThin, FinanceTheme.colors.outlineVariant),
+                    modifier = Modifier
+                        .clip(FinanceShapes.pill)
+                        .clickable {
+                            focusManager.clearFocus()
+                            showAddFriendInput = !showAddFriendInput
+                        }
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = stringResource(R.string.cd_add_friend),
-                        tint = FinanceTheme.colors.primary,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
-                    )
-                    Text(
-                        text = stringResource(R.string.action_add_friend),
-                        style = FinanceTheme.typography.labelMedium,
-                        color = FinanceTheme.colors.primary
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.cd_add_friend),
+                            tint = FinanceTheme.colors.primary,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconSmall)
+                        )
+                        Text(
+                            text = stringResource(R.string.action_add_friend),
+                            style = FinanceTheme.typography.labelMedium,
+                            color = FinanceTheme.colors.primary
+                        )
+                    }
                 }
             }
         }
