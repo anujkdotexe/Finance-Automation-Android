@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Developer contact details shown on the About, Privacy and Open source licences screens. Public details given by the owner. -->
+<resources>
+    <string name="developer_name" translatable="false">Anuj Kondawar</string>
+    <string name="developer_email" translatable="false">kondawaranuj2@gmail.com</string>
+    <string name="developer_github_label" translatable="false">GitHub</string>
+    <string name="developer_github_url" translatable="false">https://github.com/anujkdotexe</string>
+    <string name="developer_portfolio_label" translatable="false">Portfolio</string>
+    <string name="developer_portfolio_url" translatable="false">https://www.anujkdotexe.in/</string>
+    <string name="developer_linkedin_label" translatable="false">LinkedIn</string>
+    <string name="developer_linkedin_url" translatable="false">https://www.linkedin.com/in/anujkondawar/</string>
+    <string name="developer_copyright" translatable="false">Copyright 2026 Anuj Kondawar. All rights reserved.</string>
+</resources>
