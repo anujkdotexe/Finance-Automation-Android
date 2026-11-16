@@ -39,12 +39,20 @@ fun AccountSwitchDialog(prompt: AccountSwitchPrompt, onConfirm: () -> Unit, onCa
         },
         dismissButton = {
             OutlinedButton(onClick = onCancel, modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)) {
-                Text(stringResource(R.string.action_cancel))
+                Text(
+                    text = stringResource(R.string.action_cancel),
+                    maxLines = 2,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         },
         confirmButton = {
             Button(onClick = onConfirm, modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)) {
-                Text(stringResource(R.string.account_switch_confirm))
+                Text(
+                    text = stringResource(R.string.account_switch_confirm),
+                    maxLines = 2,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         }
     )

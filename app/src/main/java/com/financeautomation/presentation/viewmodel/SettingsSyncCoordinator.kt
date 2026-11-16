@@ -345,26 +345,35 @@ class SettingsSyncCoordinator(
         val repo = transactionRepository ?: return
         scope.launch(ioDispatcher) {
             uiState.update { it.copy(isSyncing = true, syncResult = null, errorMessage = null) }
-            when (val result = repo.syncPendingTransactions(userInitiated = true)) {
-                is Result.Success -> {
-                    val count = result.data
-                    uiState.update {
-                        it.copy(
-                            isSyncing = false,
-                            syncResult = "Synced $count transaction(s) to Google Sheets",
-                            userMessage = UiText.res(R.string.settings_msg_sync_completed)
-                        )
+            try {
+                when (val result = repo.syncPendingTransactions(userInitiated = true)) {
+                    is Result.Success -> {
+                        val count = result.data
+                        uiState.update {
+                            it.copy(
+                                syncResult = "Synced $count transaction(s) to Google Sheets",
+                                userMessage = UiText.res(R.string.settings_msg_sync_completed)
+                            )
+                        }
                     }
-                }
-                is Result.Error -> {
-                    uiState.update {
-                        it.copy(
-                            isSyncing = false,
-                            errorMessage = UiText.res(R.string.settings_err_sync_failed, result.throwable.message ?: "")
-                        )
+                    is Result.Error -> {
+                        uiState.update {
+                            it.copy(
+                                errorMessage = UiText.res(R.string.settings_err_sync_failed, result.throwable.message ?: "")
+                            )
+                        }
                     }
+                    is Result.Loading -> {}
                 }
-                is Result.Loading -> {}
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                uiState.update {
+                    it.copy(
+                        errorMessage = UiText.res(R.string.settings_err_sync_failed, e.message ?: "")
+                    )
+                }
+            } finally {
+                uiState.update { it.copy(isSyncing = false) }
             }
         }
     }
@@ -373,24 +382,33 @@ class SettingsSyncCoordinator(
         val useCase = syncConfigUseCase ?: return
         scope.launch(ioDispatcher) {
             uiState.update { it.copy(isConfigSyncing = true, errorMessage = null) }
-            when (val res = useCase.mirrorToCloud()) {
-                is Result.Success -> {
-                    uiState.update {
-                        it.copy(
-                            isConfigSyncing = false,
-                            userMessage = UiText.res(R.string.settings_msg_config_mirrored)
-                        )
+            try {
+                when (val res = useCase.mirrorToCloud()) {
+                    is Result.Success -> {
+                        uiState.update {
+                            it.copy(
+                                userMessage = UiText.res(R.string.settings_msg_config_mirrored)
+                            )
+                        }
                     }
-                }
-                is Result.Error -> {
-                    uiState.update {
-                        it.copy(
-                            isConfigSyncing = false,
-                            errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, res.throwable.message ?: "")
-                        )
+                    is Result.Error -> {
+                        uiState.update {
+                            it.copy(
+                                errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, res.throwable.message ?: "")
+                            )
+                        }
                     }
+                    is Result.Loading -> {}
                 }
-                is Result.Loading -> {}
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                uiState.update {
+                    it.copy(
+                        errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, e.message ?: "")
+                    )
+                }
+            } finally {
+                uiState.update { it.copy(isConfigSyncing = false) }
             }
         }
     }
@@ -399,24 +417,33 @@ class SettingsSyncCoordinator(
         val useCase = syncConfigUseCase ?: return
         scope.launch(ioDispatcher) {
             uiState.update { it.copy(isConfigSyncing = true, errorMessage = null) }
-            when (val res = useCase.restoreFromCloud()) {
-                is Result.Success -> {
-                    uiState.update {
-                        it.copy(
-                            isConfigSyncing = false,
-                            userMessage = UiText.res(R.string.settings_msg_config_restored)
-                        )
+            try {
+                when (val res = useCase.restoreFromCloud()) {
+                    is Result.Success -> {
+                        uiState.update {
+                            it.copy(
+                                userMessage = UiText.res(R.string.settings_msg_config_restored)
+                            )
+                        }
                     }
-                }
-                is Result.Error -> {
-                    uiState.update {
-                        it.copy(
-                            isConfigSyncing = false,
-                            errorMessage = UiText.res(R.string.settings_err_config_restore_failed, res.throwable.message ?: "")
-                        )
+                    is Result.Error -> {
+                        uiState.update {
+                            it.copy(
+                                errorMessage = UiText.res(R.string.settings_err_config_restore_failed, res.throwable.message ?: "")
+                            )
+                        }
                     }
+                    is Result.Loading -> {}
                 }
-                is Result.Loading -> {}
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                uiState.update {
+                    it.copy(
+                        errorMessage = UiText.res(R.string.settings_err_config_restore_failed, e.message ?: "")
+                    )
+                }
+            } finally {
+                uiState.update { it.copy(isConfigSyncing = false) }
             }
         }
     }
