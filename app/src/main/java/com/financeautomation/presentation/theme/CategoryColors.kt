@@ -140,10 +140,23 @@ fun categoryDotColor(categoryName: String, isDark: Boolean): Color {
     return if (isDark) token.dark else token.light
 }
 
+/** Resolves dot color for a domain category, honoring custom chosen color in iconName if present. */
+fun categoryDotColor(category: com.financeautomation.domain.model.Category, isDark: Boolean): Color {
+    val fromToken = CategoryColorTokens.ALL.find { it.name.equals(category.iconName, ignoreCase = true) }
+    val token = fromToken ?: categoryColorToken(category.name)
+    return if (isDark) token.dark else token.light
+}
+
 /** Composable resolving dot color for a category name observing active dark theme. */
 @Composable
 fun categoryDotColor(categoryName: String): Color {
     return categoryDotColor(categoryName, isSystemInDarkTheme())
+}
+
+/** Composable resolving dot color for a domain category observing active dark theme. */
+@Composable
+fun categoryDotColor(category: com.financeautomation.domain.model.Category): Color {
+    return categoryDotColor(category, isSystemInDarkTheme())
 }
 
 /** Resolves dot color by index for a given dark mode setting. */

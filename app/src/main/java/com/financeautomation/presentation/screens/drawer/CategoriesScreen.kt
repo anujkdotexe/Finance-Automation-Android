@@ -102,7 +102,7 @@ fun CategoriesScreen(
             state.categories.forEachIndexed { index, category ->
                 val isLocked = category.name.equals("Savings", ignoreCase = true) ||
                     category.name.equals("Transfer", ignoreCase = true)
-                val dotColor = categoryDotColor(category.name)
+                val dotColor = categoryDotColor(category)
 
                 CategoryItemCard(
                     category = category,
@@ -135,8 +135,8 @@ fun CategoriesScreen(
     if (showAddCategorySheet) {
         AddCategorySheet(
             onDismiss = { showAddCategorySheet = false },
-            onSave = { name ->
-                viewModel.onAddCategory(name, isExcludedFromLivingBurn = false)
+            onSave = { name, colorName ->
+                viewModel.onAddCategory(name, isExcludedFromLivingBurn = false, colorName = colorName)
                 showAddCategorySheet = false
             }
         )

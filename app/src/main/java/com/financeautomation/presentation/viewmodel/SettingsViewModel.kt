@@ -256,7 +256,8 @@ class SettingsViewModel(
 
     // --- Expense Categories & Living Burn ---
 
-    fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false) = customizationCoordinator.onAddCategory(name, isExcludedFromLivingBurn)
+    fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false, colorName: String = "default_tag") =
+        customizationCoordinator.onAddCategory(name, isExcludedFromLivingBurn, colorName)
 
     fun onRenameCategory(categoryId: String, newName: String) = customizationCoordinator.onRenameCategory(categoryId, newName)
 
