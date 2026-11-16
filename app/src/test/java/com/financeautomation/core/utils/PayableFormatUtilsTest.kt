@@ -28,4 +28,13 @@ class PayableFormatUtilsTest {
         assertEquals("Food & Drink dinner", PayableFormatUtils.buildEffectiveWhatFor("Food & Drink dinner", "Food & Drink"))
         assertEquals("Dinner (food & drink)", PayableFormatUtils.buildEffectiveWhatFor("Dinner (food & drink)", "Food & Drink"))
     }
+
+    @Test
+    fun testBuildEffectiveWhatFor_editAndResave_categoryNotDuplicated() {
+        val initial = PayableFormatUtils.buildEffectiveWhatFor("Dinner", "Food")
+        assertEquals("Dinner (Food)", initial)
+        // User edits whatFor or re-submits row with same category:
+        val resaved = PayableFormatUtils.buildEffectiveWhatFor(initial, "Food")
+        assertEquals("Category is not duplicated upon resave", "Dinner (Food)", resaved)
+    }
 }
