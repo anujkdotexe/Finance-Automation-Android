@@ -62,6 +62,7 @@ fun CapturePermissionsScreen(
     setupHealthViewModel: SetupHealthViewModel?,
     overlayControllerProvider: (() -> OverlayController)? = null,
     onReRunSetup: () -> Unit = {},
+    onNavigateGoogleSignIn: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -284,6 +285,7 @@ fun CapturePermissionsScreen(
             com.financeautomation.presentation.screens.SetupHealthCard(
                 viewModel = setupHealthViewModel,
                 overlayControllerProvider = overlayControllerProvider,
+                onNavigateGoogleSignIn = onNavigateGoogleSignIn,
                 modifier = Modifier.fillMaxWidth()
             )
         }

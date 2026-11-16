@@ -187,7 +187,15 @@ fun SetupHealthCard(
                 onFix = {
                     fallbackInstructionText = null
                     if (checkItem.id == HealthCheckId.GOOGLE_CONNECTION) {
-                        onNavigateGoogleSignIn?.invoke()
+                        if (onNavigateGoogleSignIn != null) {
+                            onNavigateGoogleSignIn.invoke()
+                        } else {
+                            val navIntent = Intent(context, com.financeautomation.presentation.ui.MainActivity::class.java).apply {
+                                putExtra("extra_route", com.financeautomation.presentation.ui.AppRoutes.SYNC_BACKUP)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            }
+                            context.startActivity(navIntent)
+                        }
                     } else if (checkItem.id == HealthCheckId.POST_NOTIFICATIONS && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         val activity = context as? Activity
                         val permanentlyDenied = activity != null && ContextCompat.checkSelfPermission(

@@ -59,6 +59,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun DiagnosticsScreen(
     state: SettingsUiState,
+    onSyncNow: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -136,8 +137,8 @@ fun DiagnosticsScreen(
                         title = stringResource(R.string.diag_run_sync_now),
                         subtitle = stringResource(R.string.diag_run_sync_now_desc),
                         onClick = {
-                            val intent = Intent("com.financeautomation.ACTION_SYNC_NOW")
-                            context.sendBroadcast(intent)
+                            onSyncNow()
+                            Toast.makeText(context, context.getString(R.string.sync_syncing), Toast.LENGTH_SHORT).show()
                         }
                     )
 
