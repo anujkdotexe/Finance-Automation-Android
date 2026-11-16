@@ -402,15 +402,9 @@ open class GoogleDriveClient(
                 }.toString()
 
                 val multipartBody = okhttp3.MultipartBody.Builder()
-                    .setType(okhttp3.MultipartBody.FORM)
-                    .addPart(
-                        okhttp3.Headers.headersOf("Content-Type", "application/json; charset=UTF-8"),
-                        metadata.toRequestBody("application/json; charset=utf-8".toMediaType())
-                    )
-                    .addPart(
-                        okhttp3.Headers.headersOf("Content-Type", "application/json"),
-                        requestBody
-                    )
+                    .setType("multipart/related".toMediaType())
+                    .addPart(metadata.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .addPart(requestBody)
                     .build()
 
                 val createUrl = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"

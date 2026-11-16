@@ -401,10 +401,14 @@ class AccountingSyncExecutor(
 
         // 3. Upload carry_forward_<year>.json to Google Drive folder
         val folderResult = googleDriveClient.findOrCreateFolder("FinanceAutomation")
-        if (folderResult is Result.Success) {
-            val folderId = folderResult.data
-            val fileName = "carry_forward_${req.year}.json"
-            googleDriveClient.uploadOrUpdateTextFile(folderId, fileName, statement.jsonContent)
+        if (folderResult is Result.Error) {
+            return Result.Error(folderResult.exception)
+        }
+        val folderId = (folderResult as Result.Success).data
+        val fileName = "carry_forward_${req.year}.json"
+        val uploadRes = googleDriveClient.uploadOrUpdateTextFile(folderId, fileName, statement.jsonContent)
+        if (uploadRes is Result.Error) {
+            return Result.Error(uploadRes.exception)
         }
 
         return Result.Success(Unit)
