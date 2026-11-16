@@ -37,6 +37,7 @@ object MainRouteValidator {
         AppRoutes.TRANSACTIONS
     )
 
+    val ALLOWED_SCHEMES: Set<String> = setOf("financeautomation", "finance")
     private const val DEEP_LINK_SCHEME = "financeautomation"
 
     /**
@@ -50,7 +51,7 @@ object MainRouteValidator {
     }
 
     /**
-     * Resolves and validates an intent's route from extra_route or a financeautomation:// URI string.
+     * Resolves and validates an intent's route from extra_route or a financeautomation:// or finance:// URI string.
      * Ignores any query parameters, payload arguments, or unknown route names.
      */
     fun resolveRoute(extraRoute: String?, dataUriString: String?, internal: Boolean = false): String? {
@@ -62,8 +63,11 @@ object MainRouteValidator {
 
         // 2. Validate deep link URI
         if (!dataUriString.isNullOrBlank()) {
-            val schemePrefix = "$DEEP_LINK_SCHEME://"
-            if (dataUriString.startsWith(schemePrefix, ignoreCase = true)) {
+            val matchingScheme = ALLOWED_SCHEMES.firstOrNull { scheme ->
+                dataUriString.startsWith("$scheme://", ignoreCase = true)
+            }
+            if (matchingScheme != null) {
+                val schemePrefix = "$matchingScheme://"
                 val withoutScheme = dataUriString.substring(schemePrefix.length)
                 // Strip query parameters and fragment
                 val pathOnly = withoutScheme.split('?', '#').firstOrNull { it.isNotBlank() } ?: return null

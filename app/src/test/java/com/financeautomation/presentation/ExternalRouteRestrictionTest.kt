@@ -26,11 +26,13 @@ class ExternalRouteRestrictionTest {
 
     @Test
     fun externalDeepLinkIsLimitedToTheThreeSafeScreens() {
-        assertEquals(AppRoutes.DASHBOARD, MainRouteValidator.resolveRoute(null, "financeautomation://dashboard"))
-        assertEquals(AppRoutes.NEEDS_REVIEW, MainRouteValidator.resolveRoute(null, "financeautomation://route/needsReview"))
-        assertEquals(AppRoutes.TRANSACTIONS, MainRouteValidator.resolveRoute(null, "financeautomation://transactions"))
-        for (route in restricted) {
-            assertNull("deep link $route must be rejected", MainRouteValidator.resolveRoute(null, "financeautomation://route/$route"))
+        for (scheme in listOf("financeautomation", "finance")) {
+            assertEquals(AppRoutes.DASHBOARD, MainRouteValidator.resolveRoute(null, "$scheme://dashboard"))
+            assertEquals(AppRoutes.NEEDS_REVIEW, MainRouteValidator.resolveRoute(null, "$scheme://route/needsReview"))
+            assertEquals(AppRoutes.TRANSACTIONS, MainRouteValidator.resolveRoute(null, "$scheme://transactions"))
+            for (route in restricted) {
+                assertNull("deep link $route must be rejected with scheme $scheme", MainRouteValidator.resolveRoute(null, "$scheme://route/$route"))
+            }
         }
     }
 

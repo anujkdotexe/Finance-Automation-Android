@@ -56,6 +56,16 @@ class MainRouteValidatorTest {
         // Form 4: financeautomation://transactions
         val txns = MainRouteValidator.resolveRoute(null, "financeautomation://transactions")
         assertEquals(AppRoutes.TRANSACTIONS, txns)
+
+        // Form 5: finance:// scheme variant
+        val financeDash = MainRouteValidator.resolveRoute(null, "finance://dashboard")
+        assertEquals(AppRoutes.DASHBOARD, financeDash)
+        val financeTxns = MainRouteValidator.resolveRoute(null, "finance://transactions")
+        assertEquals(AppRoutes.TRANSACTIONS, financeTxns)
+        val financeNeedsReview = MainRouteValidator.resolveRoute(null, "finance://route/needsReview")
+        assertEquals(AppRoutes.NEEDS_REVIEW, financeNeedsReview)
+        val financeRestricted = MainRouteValidator.resolveRoute(null, "finance://route/syncBackup")
+        assertNull("finance:// scheme cannot open restricted routes", financeRestricted)
     }
 
     @Test
