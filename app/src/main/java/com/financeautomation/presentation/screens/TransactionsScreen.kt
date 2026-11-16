@@ -150,10 +150,7 @@ fun TransactionsScreen(
                 onSearchScopeChange = viewModel::setSearchScope,
                 onFilterChange = viewModel::setFilter,
                 onClearFilter = viewModel::clearFilter,
-                onTransactionClick = { txn ->
-                    selectedTransaction = txn
-                    onTransactionClick(txn)
-                },
+                onTransactionClick = onTransactionClick,
                 onInflowClick = { inf ->
                     selectedInflow = inf
                 },
