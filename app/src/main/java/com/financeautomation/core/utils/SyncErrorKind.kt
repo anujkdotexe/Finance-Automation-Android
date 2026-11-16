@@ -70,6 +70,54 @@ enum class SyncErrorKind {
         }
 
         /**
+         * Extracts an HTTP status code (100..599) from [throwable] or its cause chain.
+         */
+        fun extractHttpCode(throwable: Throwable?): Int? {
+            if (throwable == null) return null
+            if (throwable is GoogleSheetsApiException && throwable.statusCode > 0) {
+                return throwable.statusCode
+            }
+            val cause = throwable.cause
+            if (cause is GoogleSheetsApiException && cause.statusCode > 0) {
+                return cause.statusCode
+            }
+            val msg = throwable.message?.lowercase() ?: ""
+            val code = STATUS_IN_TEXT.find(msg)?.groupValues?.get(1)?.toIntOrNull()
+            if (code != null) return code
+            if (cause != null && cause !== throwable) {
+                return extractHttpCode(cause)
+            }
+            return null
+        }
+
+        /**
+         * Derives a short safe diagnostic code without exposing raw exception messages.
+         * Example: "dashboard sync, HTTP 403" or "dashboard sync, ConnectException".
+         */
+        fun safeCode(stage: String, throwable: Throwable?, statusCode: Int? = null): String {
+            val httpCode = statusCode ?: extractHttpCode(throwable)
+            val codePart = if (httpCode != null && httpCode > 0) "HTTP $httpCode" else (throwable?.javaClass?.simpleName ?: "Error")
+            return "$stage, $codePart"
+        }
+
+        /**
+         * Returns the friendly classification sentence plus a short safe code.
+         * Zero raw exception message text is exposed.
+         * Example: "Google is busy. This will retry on its own. (dashboard sync, HTTP 429)"
+         */
+        fun formatUserMessage(stage: String, throwable: Throwable?, statusCode: Int? = null): String {
+            val httpCode = statusCode ?: extractHttpCode(throwable)
+            val kind = if (httpCode != null && httpCode > 0) {
+                val byStatus = fromStatusCode(httpCode, throwable?.message.orEmpty())
+                if (byStatus != UNKNOWN) byStatus else fromThrowable(throwable)
+            } else {
+                fromThrowable(throwable)
+            }
+            val code = safeCode(stage, throwable, statusCode)
+            return "${kind.plainMessage()} ($code)"
+        }
+
+        /**
          * Maps an HTTP status code. A 403 is ambiguous (permission, quota, API not enabled),
          * so it is classified from [message] and is UNKNOWN when the text does not say which.
          */

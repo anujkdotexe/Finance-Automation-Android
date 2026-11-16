@@ -56,6 +56,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
+import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.presentation.components.AccountAvatar
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.util.MonthCsvExporter
@@ -598,8 +601,9 @@ fun SyncBackupScreen(
                         coroutineScope.launch {
                             MonthCsvExporter.exportMonth(context, 0)
                                 .onFailure { e ->
+                                    Diagnostics.record("SyncBackupScreen", "export_failed: ${SyncErrorKind.safeCode("export", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                                     snackbarHostState.showSnackbar(
-                                        context.getString(R.string.export_failed, e.message ?: "Unknown error")
+                                        context.getString(R.string.export_failed, SyncErrorKind.safeCode("export", e))
                                     )
                                 }
                         }

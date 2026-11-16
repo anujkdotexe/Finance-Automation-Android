@@ -646,9 +646,12 @@ class DashboardViewModel(
     }
 
     private fun handleSyncFailure(stageCode: String, throwable: Throwable) {
-        Diagnostics.record("DashboardViewModel", "$stageCode: ${throwable.javaClass.simpleName}")
+        Diagnostics.record(
+            "DashboardViewModel",
+            "$stageCode: ${com.financeautomation.core.utils.SyncErrorKind.safeCode("dashboard sync", throwable)} ${com.financeautomation.core.utils.PrivacyScrubber.scrub(throwable.message.orEmpty())}"
+        )
         _uiState.update {
-            it.copy(errorMessage = UiText.res(R.string.err_sync_failed_generic))
+            it.copy(errorMessage = UiText.dynamic(com.financeautomation.core.utils.SyncErrorKind.formatUserMessage("dashboard sync", throwable)))
         }
     }
 

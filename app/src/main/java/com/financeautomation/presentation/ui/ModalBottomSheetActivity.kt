@@ -34,6 +34,8 @@ import androidx.lifecycle.lifecycleScope
 import com.financeautomation.FinanceApplication
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion as FriendCompanion
 import com.financeautomation.domain.model.TripTag
@@ -244,7 +246,8 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                             }
                                             is Result.Error -> {
                                                 isSubmitting.set(false)
-                                                val errMsg = res.message?.ifBlank { null } ?: "Failed to record income"
+                                                Diagnostics.record("ModalBottomSheetActivity", "logCredit: ${SyncErrorKind.safeCode("income", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
+                                                val errMsg = SyncErrorKind.formatUserMessage("income", res.throwable)
                                                 Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
                                             }
                                             is Result.Loading -> Unit
@@ -253,9 +256,10 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                 } catch (e: Exception) {
                                     isSubmitting.set(false)
                                     if (e is CancellationException) throw e
-                                    Diagnostics.record("ModalBottomSheetActivity", "${e.javaClass.simpleName}: logCredit failed")
+                                    Diagnostics.record("ModalBottomSheetActivity", "logCredit_exception: ${SyncErrorKind.safeCode("income", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(this@ModalBottomSheetActivity, "Failed to record income: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+                                        val errMsg = SyncErrorKind.formatUserMessage("income", e)
+                                        Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -281,7 +285,8 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                             }
                                             is Result.Error -> {
                                                 isSubmitting.set(false)
-                                                val errMsg = res.message?.ifBlank { null } ?: "Failed to record payable"
+                                                Diagnostics.record("ModalBottomSheetActivity", "logPayable: ${SyncErrorKind.safeCode("payable", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
+                                                val errMsg = SyncErrorKind.formatUserMessage("payable", res.throwable)
                                                 Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
                                             }
                                             is Result.Loading -> Unit
@@ -290,9 +295,10 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                 } catch (e: Exception) {
                                     isSubmitting.set(false)
                                     if (e is CancellationException) throw e
-                                    Diagnostics.record("ModalBottomSheetActivity", "${e.javaClass.simpleName}: logPayable failed")
+                                    Diagnostics.record("ModalBottomSheetActivity", "logPayable_exception: ${SyncErrorKind.safeCode("payable", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(this@ModalBottomSheetActivity, "Failed to record payable: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+                                        val errMsg = SyncErrorKind.formatUserMessage("payable", e)
+                                        Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -317,7 +323,8 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                             }
                                             is Result.Error -> {
                                                 isSubmitting.set(false)
-                                                val errMsg = res.message?.ifBlank { null } ?: "Failed to record repayment"
+                                                Diagnostics.record("ModalBottomSheetActivity", "logRepayment: ${SyncErrorKind.safeCode("repayment", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
+                                                val errMsg = SyncErrorKind.formatUserMessage("repayment", res.throwable)
                                                 Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
                                             }
                                             is Result.Loading -> Unit
@@ -326,9 +333,10 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                 } catch (e: Exception) {
                                     isSubmitting.set(false)
                                     if (e is CancellationException) throw e
-                                    Diagnostics.record("ModalBottomSheetActivity", "${e.javaClass.simpleName}: logRepayment failed")
+                                    Diagnostics.record("ModalBottomSheetActivity", "logRepayment_exception: ${SyncErrorKind.safeCode("repayment", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(this@ModalBottomSheetActivity, "Failed to record repayment: ${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+                                        val errMsg = SyncErrorKind.formatUserMessage("repayment", e)
+                                        Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }

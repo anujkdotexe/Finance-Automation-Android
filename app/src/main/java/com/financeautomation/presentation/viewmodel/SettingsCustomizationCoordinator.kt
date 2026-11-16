@@ -1,6 +1,9 @@
 package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.R
+import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.domain.model.Account
@@ -367,11 +370,12 @@ class SettingsCustomizationCoordinator(
             when (val result = repo.removeTripTag(name)) {
                 is com.financeautomation.core.model.Result.Success ->
                     uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_trip_removed)) }
-                is com.financeautomation.core.model.Result.Error ->
+                is com.financeautomation.core.model.Result.Error -> {
+                    Diagnostics.record("SettingsCustomizationCoordinator", "removeTripTag: ${SyncErrorKind.safeCode("remove trip", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
                     uiState.update {
-                        it.copy(errorMessage = result.message?.let { m -> UiText.dynamic(m) }
-                            ?: UiText.res(R.string.settings_err_trip_remove_failed))
+                        it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("remove trip", result.throwable)))
                     }
+                }
                 else -> Unit
             }
         }
@@ -391,9 +395,12 @@ class SettingsCustomizationCoordinator(
             when (val result = peopleRepository.removePerson(targetName)) {
                 is com.financeautomation.core.model.Result.Success ->
                     uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_companion_removed)) }
-                is com.financeautomation.core.model.Result.Error ->
-                    uiState.update { it.copy(errorMessage = result.message?.let { m -> UiText.dynamic(m) }
-                        ?: UiText.res(R.string.settings_err_cannot_remove_open_balance, targetName)) }
+                is com.financeautomation.core.model.Result.Error -> {
+                    Diagnostics.record("SettingsCustomizationCoordinator", "removeCompanion: ${SyncErrorKind.safeCode("remove companion", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
+                    uiState.update {
+                        it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("remove companion", result.throwable)))
+                    }
+                }
                 else -> Unit
             }
         }

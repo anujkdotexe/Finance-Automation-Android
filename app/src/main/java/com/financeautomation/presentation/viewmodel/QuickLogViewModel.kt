@@ -9,6 +9,8 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.core.utils.PrivacyScrubber
+import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.core.utils.formatAmountInput
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -364,15 +366,15 @@ class QuickLogViewModel(
                             onSaved(msg, txnId)
                         }
                         is Result.Error -> {
-                            Diagnostics.record("QuickLogViewModel", "update_error: ${res.message}")
-                            _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_update_failed_generic)) }
+                            Diagnostics.record("QuickLogViewModel", "update_error: ${SyncErrorKind.safeCode("quicklog update", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
+                            _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", res.throwable))) }
                         }
                         is Result.Loading -> Unit
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    Diagnostics.record("QuickLogViewModel", "update_exception: ${e.javaClass.simpleName}")
-                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_update_failed_generic)) }
+                    Diagnostics.record("QuickLogViewModel", "update_exception: ${SyncErrorKind.safeCode("quicklog update", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
+                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", e))) }
                 }
             }
             return
@@ -397,15 +399,15 @@ class QuickLogViewModel(
                         onSaved(message, loggedTxn.id)
                     }
                     is Result.Error -> {
-                        Diagnostics.record("QuickLogViewModel", "save_error: ${result.message}")
-                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_save_failed_generic)) }
+                        Diagnostics.record("QuickLogViewModel", "save_error: ${SyncErrorKind.safeCode("quicklog save", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
+                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog save", result.throwable))) }
                     }
                     is Result.Loading -> Unit
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                Diagnostics.record("QuickLogViewModel", "save_exception: ${e.javaClass.simpleName}")
-                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_save_failed_generic)) }
+                Diagnostics.record("QuickLogViewModel", "save_exception: ${SyncErrorKind.safeCode("quicklog save", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog save", e))) }
             }
         }
     }
@@ -451,15 +453,15 @@ class QuickLogViewModel(
                         onVoided()
                     }
                     is Result.Error -> {
-                        Diagnostics.record("QuickLogViewModel", "void_error: ${res.message}")
-                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_void_failed_generic)) }
+                        Diagnostics.record("QuickLogViewModel", "void_error: ${SyncErrorKind.safeCode("quicklog void", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
+                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog void", res.throwable))) }
                     }
                     is Result.Loading -> Unit
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                Diagnostics.record("QuickLogViewModel", "void_exception: ${e.javaClass.simpleName}")
-                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.res(R.string.err_void_failed_generic)) }
+                Diagnostics.record("QuickLogViewModel", "void_exception: ${SyncErrorKind.safeCode("quicklog void", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
+                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog void", e))) }
             }
         }
     }

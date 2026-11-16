@@ -612,8 +612,12 @@ class SettingsViewModelTest {
         assertEquals("sheet_123", prefs.activeSpreadsheetId)
         assertEquals("sheet_123", state.value.spreadsheetId)
         assertFalse(state.value.isProvisioning)
-        assertEquals(R.string.settings_err_fresh_workbook_failed, state.value.errorMessage?.resId)
-        assertTrue(state.value.errorMessage?.args?.get(0)?.toString()?.contains("Drive quota") == true)
+        val error = state.value.errorMessage
+        assertNotNull(error)
+        assertTrue(error is UiText.DynamicString)
+        val msg = (error as UiText.DynamicString).value
+        assertTrue("Expected safe code, got: $msg", msg.contains("fresh workbook, IOException"))
+        assertFalse("Raw message must never appear in errorMessage", msg.contains("Drive quota"))
     }
 
     @Test
