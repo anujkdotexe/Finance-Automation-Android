@@ -3,11 +3,13 @@ package com.financeautomation.presentation.screens
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Icon
@@ -166,26 +168,50 @@ fun ReviewTransactionCard(
 
             // Action buttons: Keep both / Keep one / Dismiss for duplicates; Edit / Confirm for normal
             if (transaction.isPossibleDuplicate && onKeepBoth != null && onKeepOne != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledButton(
-                        text = stringResource(R.string.action_keep_both),
-                        onClick = { onKeepBoth.invoke() },
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedButton(
-                        text = stringResource(R.string.action_keep_one),
-                        onClick = { onKeepOne.invoke() },
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedButton(
-                        text = stringResource(R.string.action_dismiss),
-                        onClick = { onDismissDuplicate?.invoke() ?: onConfirm() },
-                        modifier = Modifier.weight(1f)
-                    )
+                val isLargeFont = LocalConfiguration.current.fontScale >= 1.3f
+                if (isLargeFont) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                    ) {
+                        FilledButton(
+                            text = stringResource(R.string.action_keep_both),
+                            onClick = { onKeepBoth.invoke() },
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        )
+                        OutlinedButton(
+                            text = stringResource(R.string.action_keep_one),
+                            onClick = { onKeepOne.invoke() },
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        )
+                        OutlinedButton(
+                            text = stringResource(R.string.action_dismiss),
+                            onClick = { onDismissDuplicate?.invoke() ?: onConfirm() },
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledButton(
+                            text = stringResource(R.string.action_keep_both),
+                            onClick = { onKeepBoth.invoke() },
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        )
+                        OutlinedButton(
+                            text = stringResource(R.string.action_keep_one),
+                            onClick = { onKeepOne.invoke() },
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        )
+                        OutlinedButton(
+                            text = stringResource(R.string.action_dismiss),
+                            onClick = { onDismissDuplicate?.invoke() ?: onConfirm() },
+                            modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        )
+                    }
                 }
             } else {
                 ButtonPair(
@@ -334,28 +360,52 @@ fun ReviewNewAccountCard(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val hint = capture.detectedAccountHint ?: capture.inferredAccount ?: ""
-                val digits = hint.filter { it.isDigit() }.takeLast(4)
-                FilledButton(
-                    text = stringResource(R.string.action_add_account),
-                    onClick = { onAddAccount(hint, digits) },
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(
-                    text = stringResource(R.string.action_confirm),
-                    onClick = onConfirm,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(
-                    text = stringResource(R.string.action_dismiss),
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                )
+            val hint = capture.detectedAccountHint ?: capture.inferredAccount ?: ""
+            val digits = hint.filter { it.isDigit() }.takeLast(4)
+            val isLargeFont = LocalConfiguration.current.fontScale >= 1.3f
+            if (isLargeFont) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    FilledButton(
+                        text = stringResource(R.string.action_add_account),
+                        onClick = { onAddAccount(hint, digits) },
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_confirm),
+                        onClick = onConfirm,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_dismiss),
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledButton(
+                        text = stringResource(R.string.action_add_account),
+                        onClick = { onAddAccount(hint, digits) },
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_confirm),
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_dismiss),
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                }
             }
         }
     }
@@ -399,26 +449,50 @@ fun SubscriptionDueCard(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilledButton(
-                    text = stringResource(R.string.action_yes),
-                    onClick = onYes,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(
-                    text = stringResource(R.string.action_not_yet),
-                    onClick = onNotYet,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(
-                    text = stringResource(R.string.action_skip_this_time),
-                    onClick = onSkipThisTime,
-                    modifier = Modifier.weight(1.3f)
-                )
+            val isLargeFont = LocalConfiguration.current.fontScale >= 1.3f
+            if (isLargeFont) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    FilledButton(
+                        text = stringResource(R.string.action_yes),
+                        onClick = onYes,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_not_yet),
+                        onClick = onNotYet,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_skip_this_time),
+                        onClick = onSkipThisTime,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledButton(
+                        text = stringResource(R.string.action_yes),
+                        onClick = onYes,
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_not_yet),
+                        onClick = onNotYet,
+                        modifier = Modifier.weight(1f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                    OutlinedButton(
+                        text = stringResource(R.string.action_skip_this_time),
+                        onClick = onSkipThisTime,
+                        modifier = Modifier.weight(1.3f).defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    )
+                }
             }
         }
     }

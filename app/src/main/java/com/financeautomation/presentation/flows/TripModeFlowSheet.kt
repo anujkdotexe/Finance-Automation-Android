@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -490,6 +491,7 @@ fun TripModeFlowSheet(
                         showEndTripConfirm = false
                         onEndTrip()
                     },
+                    modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
@@ -499,7 +501,10 @@ fun TripModeFlowSheet(
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showEndTripConfirm = false }) {
+                OutlinedButton(
+                    onClick = { showEndTripConfirm = false },
+                    modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                ) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }

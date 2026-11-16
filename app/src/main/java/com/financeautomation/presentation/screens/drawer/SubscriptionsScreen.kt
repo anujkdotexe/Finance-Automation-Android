@@ -337,7 +337,7 @@ fun SubscriptionsScreen(
                             editingSubscription = sub
                             selectedSubscriptionForAction = null
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.sub_action_edit))
                     }
@@ -346,7 +346,7 @@ fun SubscriptionsScreen(
                             if (sub.active) viewModel.pauseSubscription(sub.id) else viewModel.resumeSubscription(sub.id)
                             selectedSubscriptionForAction = null
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(if (sub.active) stringResource(R.string.sub_action_pause) else stringResource(R.string.sub_action_resume))
                     }
@@ -355,7 +355,7 @@ fun SubscriptionsScreen(
                             deletingSubscription = sub
                             selectedSubscriptionForAction = null
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.sub_action_delete), color = MaterialTheme.colorScheme.error)
                     }
@@ -363,7 +363,10 @@ fun SubscriptionsScreen(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { selectedSubscriptionForAction = null }) {
+                TextButton(
+                    onClick = { selectedSubscriptionForAction = null },
+                    modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                ) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -393,6 +396,7 @@ fun SubscriptionsScreen(
                         viewModel.deleteSubscription(sub.id)
                         deletingSubscription = null
                     },
+                    modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
@@ -402,7 +406,10 @@ fun SubscriptionsScreen(
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { deletingSubscription = null }) {
+                OutlinedButton(
+                    onClick = { deletingSubscription = null },
+                    modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                ) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
