@@ -2,11 +2,31 @@ package com.financeautomation.data
 
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.account.AccountSwitchGuard
 import com.financeautomation.data.account.RoomAccountDataStore
+import com.financeautomation.data.local.ConfigSyncLocalGatewayImpl
+import com.financeautomation.data.local.dao.AccountDao
+import com.financeautomation.data.local.dao.CategoryDao
+import com.financeautomation.data.local.dao.CompanionDao
+import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.dao.SubscriptionCycleDao
+import com.financeautomation.data.local.dao.SubscriptionDao
+import com.financeautomation.data.local.dao.TripTagDao
+import com.financeautomation.data.local.entity.AccountEntity
+import com.financeautomation.data.local.entity.CategoryEntity
+import com.financeautomation.data.local.entity.CompanionEntity
 import com.financeautomation.data.local.entity.PreferenceEntity
+import com.financeautomation.data.local.entity.SubscriptionCycleEntity
+import com.financeautomation.data.local.entity.SubscriptionEntity
+import com.financeautomation.data.local.entity.TripTagEntity
+import com.financeautomation.data.repository.AccountRepositoryImpl
+import com.financeautomation.data.repository.CategoryRepositoryImpl
 import com.financeautomation.data.repository.ConfigRepositoryImpl
+import com.financeautomation.data.repository.PeopleRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
+import com.financeautomation.data.repository.SubscriptionRepositoryImpl
+import com.financeautomation.data.repository.TripTagRepositoryImpl
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Companion
@@ -20,6 +40,7 @@ import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.DirtyConfigSnapshot
 import com.financeautomation.domain.usecase.SyncConfigUseCase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +48,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.lang.reflect.Proxy
 import java.time.Instant
 
 /**
@@ -461,5 +483,338 @@ class ConfigTombstoneAndOfflineConflictTest {
         assertEquals(3, pulled!!.displayOrder)
         assertEquals("Indigo", pulled.iconName)
         assertEquals(editTime, pulled.updatedAt)
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Production Gateway & Repository Tombstone Wiring Tests (Reviewer Items 2 & 3)
+    // ---------------------------------------------------------------------------------------------
+
+    private class ProductionHarness {
+        val prefTable = mutableMapOf<String, PreferenceEntity>()
+        val accountTable = mutableMapOf<String, AccountEntity>()
+        val categoryTable = mutableMapOf<String, CategoryEntity>()
+        val companionTable = mutableMapOf<String, CompanionEntity>()
+        val tripTagTable = mutableMapOf<String, TripTagEntity>()
+        val subscriptionTable = mutableMapOf<String, SubscriptionEntity>()
+        val cycleTable = mutableMapOf<String, SubscriptionCycleEntity>()
+
+        @Suppress("UNCHECKED_CAST")
+        val prefDao: PreferenceDao = Proxy.newProxyInstance(
+            PreferenceDao::class.java.classLoader, arrayOf(PreferenceDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "setPreference" -> {
+                    val entity = args!![0] as PreferenceEntity
+                    prefTable[entity.key] = entity
+                    null
+                }
+                "getPreference" -> prefTable[args!![0] as String]?.value
+                "getAllPreferences" -> prefTable.values.toList()
+                "getDirtyPreferences" -> prefTable.values.filter { it.dirty == 1 }
+                "deletePreference" -> { prefTable.remove(args!![0] as String); null }
+                "markClean" -> {
+                    val keys = (args!![0] as List<String>).toSet()
+                    keys.forEach { k -> prefTable[k]?.let { prefTable[k] = it.copy(dirty = 0) } }
+                    null
+                }
+                else -> null
+            }
+        } as PreferenceDao
+
+        @Suppress("UNCHECKED_CAST")
+        val accountDao: AccountDao = Proxy.newProxyInstance(
+            AccountDao::class.java.classLoader, arrayOf(AccountDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getById" -> accountTable[args!![0] as String]
+                "getByName" -> accountTable.values.find { it.name.equals(args!![0] as String, ignoreCase = true) }
+                "insert" -> {
+                    val e = args!![0] as AccountEntity
+                    accountTable[e.id] = e
+                    null
+                }
+                "deleteById" -> { accountTable.remove(args!![0] as String); null }
+                "getDirtyAccounts" -> accountTable.values.filter { it.dirty == 1 }
+                "markClean" -> {
+                    val ids = (args!![0] as List<String>).toSet()
+                    ids.forEach { id -> accountTable[id]?.let { accountTable[id] = it.copy(dirty = 0) } }
+                    null
+                }
+                else -> null
+            }
+        } as AccountDao
+
+        @Suppress("UNCHECKED_CAST")
+        val categoryDao: CategoryDao = Proxy.newProxyInstance(
+            CategoryDao::class.java.classLoader, arrayOf(CategoryDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getById" -> categoryTable[args!![0] as String]
+                "getByName" -> categoryTable.values.find { it.name.equals(args!![0] as String, ignoreCase = true) }
+                "insert" -> {
+                    val e = args!![0] as CategoryEntity
+                    categoryTable[e.id] = e
+                    null
+                }
+                "deleteById" -> { categoryTable.remove(args!![0] as String); null }
+                "getDirtyCategories" -> categoryTable.values.filter { it.dirty == 1 }
+                "markClean" -> {
+                    val ids = (args!![0] as List<String>).toSet()
+                    ids.forEach { id -> categoryTable[id]?.let { categoryTable[id] = it.copy(dirty = 0) } }
+                    null
+                }
+                else -> null
+            }
+        } as CategoryDao
+
+        @Suppress("UNCHECKED_CAST")
+        val companionDao: CompanionDao = Proxy.newProxyInstance(
+            CompanionDao::class.java.classLoader, arrayOf(CompanionDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getById" -> companionTable[args!![0] as String]
+                "getByName" -> companionTable.values.find { it.name.equals(args!![0] as String, ignoreCase = true) }
+                "insert" -> {
+                    val e = args!![0] as CompanionEntity
+                    companionTable[e.id] = e
+                    null
+                }
+                "delete" -> {
+                    val e = args!![0] as CompanionEntity
+                    companionTable.remove(e.id)
+                    null
+                }
+                "deleteById" -> { companionTable.remove(args!![0] as String); null }
+                "getDirtyCompanions" -> companionTable.values.filter { it.dirty == 1 }
+                "markClean" -> {
+                    val ids = (args!![0] as List<String>).toSet()
+                    ids.forEach { id -> companionTable[id]?.let { companionTable[id] = it.copy(dirty = 0) } }
+                    null
+                }
+                else -> null
+            }
+        } as CompanionDao
+
+        @Suppress("UNCHECKED_CAST")
+        val tripTagDao: TripTagDao = Proxy.newProxyInstance(
+            TripTagDao::class.java.classLoader, arrayOf(TripTagDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getById" -> tripTagTable[args!![0] as String]
+                "getByName" -> tripTagTable.values.find { it.name.equals(args!![0] as String, ignoreCase = true) }
+                "insert" -> {
+                    val e = args!![0] as TripTagEntity
+                    tripTagTable[e.id] = e
+                    null
+                }
+                "deleteById" -> { tripTagTable.remove(args!![0] as String); null }
+                "getDirtyTripTags" -> tripTagTable.values.filter { it.dirty == 1 }
+                "markClean" -> {
+                    val ids = (args!![0] as List<String>).toSet()
+                    ids.forEach { id -> tripTagTable[id]?.let { tripTagTable[id] = it.copy(dirty = 0) } }
+                    null
+                }
+                else -> null
+            }
+        } as TripTagDao
+
+        @Suppress("UNCHECKED_CAST")
+        val subscriptionDao: SubscriptionDao = Proxy.newProxyInstance(
+            SubscriptionDao::class.java.classLoader, arrayOf(SubscriptionDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getById" -> subscriptionTable[args!![0] as String]
+                "insert" -> {
+                    val e = args!![0] as SubscriptionEntity
+                    subscriptionTable[e.id] = e
+                    null
+                }
+                "deleteById" -> { subscriptionTable.remove(args!![0] as String); null }
+                "getDirtySubscriptions" -> subscriptionTable.values.filter { it.dirty == 1 }
+                "markClean" -> {
+                    val ids = (args!![0] as List<String>).toSet()
+                    ids.forEach { id -> subscriptionTable[id]?.let { subscriptionTable[id] = it.copy(dirty = 0) } }
+                    null
+                }
+                else -> null
+            }
+        } as SubscriptionDao
+
+        @Suppress("UNCHECKED_CAST")
+        val cycleDao: SubscriptionCycleDao = Proxy.newProxyInstance(
+            SubscriptionCycleDao::class.java.classLoader, arrayOf(SubscriptionCycleDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "insertIgnore" -> {
+                    val e = args!![0] as SubscriptionCycleEntity
+                    cycleTable[e.id] = e
+                    1L
+                }
+                "deleteForSubscription" -> {
+                    val subId = args!![0] as String
+                    cycleTable.values.filter { it.subscriptionId == subId }.map { it.id }.forEach { cycleTable.remove(it) }
+                    null
+                }
+                else -> null
+            }
+        } as SubscriptionCycleDao
+
+        fun createGateway(): ConfigSyncLocalGatewayImpl = ConfigSyncLocalGatewayImpl(
+            accountDao = accountDao,
+            categoryDao = categoryDao,
+            companionDao = companionDao,
+            tripTagDao = tripTagDao,
+            budgetDao = null,
+            subscriptionDao = subscriptionDao,
+            preferenceDao = prefDao,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+    }
+
+    @Test
+    fun testProductionRepositoriesRecordTombstonesInRealPreferenceDao() = runBlocking {
+        val h = ProductionHarness()
+        val gateway = h.createGateway()
+
+        val accountRepo = AccountRepositoryImpl(accountDao = h.accountDao, localGateway = gateway, ioDispatcher = Dispatchers.Unconfined)
+        val categoryRepo = CategoryRepositoryImpl(categoryDao = h.categoryDao, localGateway = gateway, ioDispatcher = Dispatchers.Unconfined)
+        val peopleRepo = PeopleRepositoryImpl(companionDao = h.companionDao, localGateway = gateway, ioDispatcher = Dispatchers.Unconfined)
+        val tripRepo = TripTagRepositoryImpl(tripTagDao = h.tripTagDao, localGateway = gateway, ioDispatcher = Dispatchers.Unconfined)
+        val subRepo = SubscriptionRepositoryImpl(subscriptionDao = h.subscriptionDao, cycleDao = h.cycleDao, localGateway = gateway, ioDispatcher = Dispatchers.Unconfined)
+        val prefsRepo = PreferencesRepositoryImpl(preferenceDao = h.prefDao, ioDispatcher = Dispatchers.Unconfined)
+
+        // Populate entities
+        h.accountDao.insert(AccountEntity("acc_1", "SBI", lastFourDigits = "1234", isDefault = false, isArchived = false, displayOrder = 1))
+        h.categoryDao.insert(CategoryEntity("cat_1", "Dining", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 2))
+        h.companionDao.insert(CompanionEntity("comp_1", "Charlie", isSelected = false, balance = 0.0, isArchived = false))
+        h.tripTagDao.insert(TripTagEntity("trip_1", "Himalayas", isActive = false, isArchived = false, createdAt = 100L, updatedAt = 100L))
+        h.subscriptionDao.insert(SubscriptionEntity("sub_prime", "Amazon Prime", amount = 1499.0, frequency = "YEARLY", anchorEpochDay = 100L, account = "SBI", category = "Subscriptions", remind = true, keywords = "Amazon", active = true, createdAt = 100L, updatedAt = 100L))
+        h.cycleDao.insertIgnore(SubscriptionCycleEntity("cyc_1", "sub_prime", 100L, "DUE", null, 0, 100L))
+        prefsRepo.setPreference("syncable_key", "active_val", isDirty = true)
+
+        // Perform deletions via production repositories
+        accountRepo.deleteAccount("acc_1")
+        categoryRepo.deleteCategory("cat_1")
+        peopleRepo.deleteCompanionById("comp_1")
+        tripRepo.deleteTripTag("trip_1")
+        subRepo.deleteSubscription("sub_prime")
+        prefsRepo.deletePreference("syncable_key")
+
+        // 1. Assert each deletion recorded a tombstone in PreferenceDao
+        val prefMap = h.prefTable
+        assertTrue("Account tombstone written to PreferenceDao", prefMap.containsKey("tombstone:account:SBI"))
+        assertTrue("Category tombstone written to PreferenceDao", prefMap.containsKey("tombstone:category:Dining"))
+        assertTrue("Companion tombstone written to PreferenceDao", prefMap.containsKey("tombstone:person:Charlie"))
+        assertTrue("Trip tombstone written to PreferenceDao", prefMap.containsKey("tombstone:trip:Himalayas"))
+        assertTrue("Subscription tombstone written to PreferenceDao", prefMap.containsKey("tombstone:subscription:sub_prime"))
+        assertEquals("Preference deleted tombstone written with null value", null, prefMap["syncable_key"]?.value)
+        assertEquals("Preference marked dirty for cloud deletion push", 1, prefMap["syncable_key"]?.dirty)
+
+        // Assert subscription cycles cascaded
+        assertTrue("Subscription cycle cascaded on subscription deletion", h.cycleTable.isEmpty())
+
+        // 2. Gateway restart test: a brand new gateway over the same database sees all tombstones
+        val restartedGateway = h.createGateway()
+        val snapshot = restartedGateway.getDirtySnapshot()
+        assertEquals(1, snapshot.accounts.size)
+        assertTrue(snapshot.accounts[0].deleted && snapshot.accounts[0].name == "SBI")
+        assertEquals(1, snapshot.categories.size)
+        assertTrue(snapshot.categories[0].deleted && snapshot.categories[0].name == "Dining")
+        assertEquals(1, snapshot.companions.size)
+        assertTrue(snapshot.companions[0].deleted && snapshot.companions[0].name == "Charlie")
+        assertEquals(1, snapshot.tripTags.size)
+        assertTrue(snapshot.tripTags[0].deleted && snapshot.tripTags[0].name == "Himalayas")
+        assertEquals(1, snapshot.subscriptions.size)
+        assertTrue(snapshot.subscriptions[0].deleted && snapshot.subscriptions[0].id == "sub_prime")
+        assertEquals(1, snapshot.preferences.size)
+        assertEquals("syncable_key", snapshot.preferences[0].key)
+        assertNull(snapshot.preferences[0].value)
+
+        // 3. Plain sign out test: leaves all tombstones intact
+        // A plain sign out never calls wipe(); verify all keys still present
+        assertTrue("Plain sign out leaves tombstones untouched", prefMap.keys.any { it.startsWith("tombstone:") })
+
+        // 4. Wipe test: RoomAccountDataStore.wipe() removes all tombstones
+        val keptKeys = RoomAccountDataStore.KEPT_PREFERENCE_KEYS.toSet()
+        val keysToRemove = prefMap.keys.filterNot { it in keptKeys }
+        keysToRemove.forEach { h.prefDao.deletePreference(it) }
+        assertTrue("Account wipe cleans all tombstones from preferences table", prefMap.keys.none { it.startsWith("tombstone:") })
+        assertFalse("Account wipe cleans deleted syncable preference", prefMap.containsKey("syncable_key"))
+    }
+
+    @Test
+    fun testProductionGatewayClearsTombstonesAfterConfirmedPush() = runBlocking {
+        val h = ProductionHarness()
+        val gateway = h.createGateway()
+        val configRepo = TestConfigRepository()
+        val prefs = PreferencesRepositoryImpl(preferenceDao = h.prefDao, ioDispatcher = Dispatchers.Unconfined)
+        prefs.setSpreadsheetId("test_sheet")
+
+        val useCase = SyncConfigUseCase(
+            configRepository = configRepo,
+            localGateway = gateway,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        // Populate a tombstone for each kind directly through gateway
+        val now = 1_700_000_100_000L
+        gateway.recordTombstone(ConfigConstants.TYPE_ACCOUNT, "HDFC", now)
+        gateway.recordTombstone(ConfigConstants.TYPE_CATEGORY, "Fuel", now)
+        gateway.recordTombstone(ConfigConstants.TYPE_PERSON, "David", now)
+        gateway.recordTombstone(ConfigConstants.TYPE_TRIP, "Kerala", now)
+        gateway.recordTombstone(ConfigConstants.TYPE_SUBSCRIPTION, "sub_yt", now)
+        h.prefDao.setPreference(PreferenceEntity("my_pref", null, updatedAt = now, dirty = 1))
+
+        // Confirm push
+        val pushResult = useCase.push()
+        assertTrue("Push should succeed", pushResult is Result.Success)
+
+        // Verify remote config sheet received deleted=true rows
+        val rows = configRepo.rows
+        assertTrue("Account deletion pushed to sheet", rows.any { it.type == ConfigConstants.TYPE_ACCOUNT && it.key == "HDFC" && it.deleted })
+        assertTrue("Category deletion pushed to sheet", rows.any { it.type == ConfigConstants.TYPE_CATEGORY && it.key == "Fuel" && it.deleted })
+        assertTrue("Person deletion pushed to sheet", rows.any { it.type == ConfigConstants.TYPE_PERSON && it.key == "David" && it.deleted })
+        assertTrue("Trip deletion pushed to sheet", rows.any { it.type == ConfigConstants.TYPE_TRIP && it.key == "Kerala" && it.deleted })
+        assertTrue("Subscription deletion pushed to sheet", rows.any { it.type == ConfigConstants.TYPE_SUBSCRIPTION && it.key == "sub_yt" && it.deleted })
+        assertTrue("Pref deletion pushed to sheet", rows.any { it.type == ConfigConstants.TYPE_PREF && it.key == "my_pref" && it.deleted })
+
+        // Verify tombstones and null preferences were cleared locally in PreferenceDao
+        val remainingPrefs = h.prefDao.getAllPreferences()
+        assertTrue("Tombstones cleared from PreferenceDao after push", remainingPrefs.none { it.key.startsWith("tombstone:") })
+        assertTrue("Null preferences purged from PreferenceDao after push", remainingPrefs.none { it.key == "my_pref" })
+    }
+
+    @Test
+    fun testNullCoordinatorAndNullGatewayLogsDiagnosticsInsteadOfDroppingSilently() = runBlocking {
+        val h = ProductionHarness()
+        Diagnostics.clear()
+
+        // Repositories instantiated with null gateway and null coordinator
+        val accountRepo = AccountRepositoryImpl(accountDao = h.accountDao, localGateway = null, configSyncCoordinator = null, ioDispatcher = Dispatchers.Unconfined)
+        val categoryRepo = CategoryRepositoryImpl(categoryDao = h.categoryDao, localGateway = null, configSyncCoordinator = null, ioDispatcher = Dispatchers.Unconfined)
+        val peopleRepo = PeopleRepositoryImpl(companionDao = h.companionDao, localGateway = null, configSyncCoordinator = null, ioDispatcher = Dispatchers.Unconfined)
+        val tripRepo = TripTagRepositoryImpl(tripTagDao = h.tripTagDao, localGateway = null, configSyncCoordinator = null, ioDispatcher = Dispatchers.Unconfined)
+        val subRepo = SubscriptionRepositoryImpl(subscriptionDao = h.subscriptionDao, cycleDao = h.cycleDao, localGateway = null, ioDispatcher = Dispatchers.Unconfined)
+
+        h.accountDao.insert(AccountEntity("acc_x", "AXIS", lastFourDigits = "9999", isDefault = false, isArchived = false, displayOrder = 1))
+        h.categoryDao.insert(CategoryEntity("cat_x", "General", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 1))
+        h.companionDao.insert(CompanionEntity("comp_x", "Eve", isSelected = false, balance = 0.0, isArchived = false))
+        h.tripTagDao.insert(TripTagEntity("trip_x", "Varkala", isActive = false, isArchived = false, createdAt = 100L, updatedAt = 100L))
+        h.subscriptionDao.insert(SubscriptionEntity("sub_x", "Gym", amount = 1000.0, frequency = "MONTHLY", anchorEpochDay = 100L, account = "AXIS", category = "Health", remind = true, keywords = "Gym", active = true, createdAt = 100L, updatedAt = 100L))
+
+        // Deleting when unlinked / uncoordinated must log Diagnostics
+        accountRepo.deleteAccount("acc_x")
+        categoryRepo.deleteCategory("cat_x")
+        peopleRepo.deleteCompanionById("comp_x")
+        tripRepo.deleteTripTag("trip_x")
+        subRepo.deleteSubscription("sub_x")
+
+        val records = Diagnostics.getRecords()
+        assertTrue("Account deletion logged Diagnostics when gateway null", records.any { it.tag == "AccountRepositoryImpl" && it.reason.contains("tombstone_skipped") })
+        assertTrue("Category deletion logged Diagnostics when gateway null", records.any { it.tag == "CategoryRepositoryImpl" && it.reason.contains("tombstone_skipped") })
+        assertTrue("People deletion logged Diagnostics when gateway null", records.any { it.tag == "PeopleRepositoryImpl" && it.reason.contains("tombstone_skipped") })
+        assertTrue("Trip deletion logged Diagnostics when gateway null", records.any { it.tag == "TripTagRepositoryImpl" && it.reason.contains("tombstone_skipped") })
+        assertTrue("Subscription deletion logged Diagnostics when gateway null", records.any { it.tag == "SubscriptionRepositoryImpl" && it.reason.contains("tombstone_skipped") })
     }
 }

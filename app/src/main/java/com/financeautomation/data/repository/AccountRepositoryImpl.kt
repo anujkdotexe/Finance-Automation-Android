@@ -1,12 +1,14 @@
 package com.financeautomation.data.repository
 
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.AccountEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.repository.AccountRepository
+import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +26,7 @@ class AccountRepositoryImpl(
     private val accountDao: AccountDao? = null,
     private val accountDaoProvider: (suspend () -> AccountDao)? = null,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
+    private val localGatewayProvider: (() -> ConfigSyncLocalGateway)? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AccountRepository {
@@ -31,16 +34,21 @@ class AccountRepositoryImpl(
     constructor(
         accountDao: AccountDao,
         configSyncCoordinator: ConfigSyncCoordinator? = null,
+        localGateway: ConfigSyncLocalGateway? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         accountDao = accountDao,
         accountDaoProvider = null,
         configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
+        localGatewayProvider = localGateway?.let { { it } },
         ioDispatcher = ioDispatcher
     )
 
     private val configSyncCoordinator: ConfigSyncCoordinator?
         get() = configSyncCoordinatorProvider?.invoke()
+
+    private val localGateway: ConfigSyncLocalGateway?
+        get() = localGatewayProvider?.invoke() ?: configSyncCoordinator?.localGateway
 
     private suspend fun resolveDao(): AccountDao =
         accountDao ?: accountDaoProvider?.invoke()
@@ -135,13 +143,17 @@ class AccountRepositoryImpl(
                 account.name.equals(CategoryConstants.ACCOUNT_OTHER, ignoreCase = true))) {
             return@withContext
         }
-        val coordinator = configSyncCoordinator
+        val gateway = localGateway
         val now = System.currentTimeMillis()
         if (account != null) {
-            coordinator?.localGateway?.recordTombstone(com.financeautomation.core.constants.ConfigConstants.TYPE_ACCOUNT, account.name, now)
+            if (gateway != null) {
+                gateway.recordTombstone(com.financeautomation.core.constants.ConfigConstants.TYPE_ACCOUNT, account.name, now)
+            } else {
+                Diagnostics.record("AccountRepositoryImpl", "tombstone_skipped: no gateway or coordinator")
+            }
         }
         dao.deleteById(id)
-        coordinator?.schedulePush()
+        configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun reorderAccounts(accountIds: List<String>): Unit = withContext(ioDispatcher) {

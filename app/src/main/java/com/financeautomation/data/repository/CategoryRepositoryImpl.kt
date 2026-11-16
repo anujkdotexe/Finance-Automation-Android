@@ -1,10 +1,12 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.entity.CategoryEntity
 import com.financeautomation.data.remote.ConfigSyncCoordinator
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.repository.CategoryRepository
+import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -22,22 +24,28 @@ class CategoryRepositoryImpl(
     private val categoryDao: CategoryDao? = null,
     private val categoryDaoProvider: (suspend () -> CategoryDao)? = null,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
+    private val localGatewayProvider: (() -> ConfigSyncLocalGateway)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : CategoryRepository {
 
     constructor(
         categoryDao: CategoryDao,
         configSyncCoordinator: ConfigSyncCoordinator? = null,
+        localGateway: ConfigSyncLocalGateway? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         categoryDao = categoryDao,
         categoryDaoProvider = null,
         configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
+        localGatewayProvider = localGateway?.let { { it } },
         ioDispatcher = ioDispatcher
     )
 
     private val configSyncCoordinator: ConfigSyncCoordinator?
         get() = configSyncCoordinatorProvider?.invoke()
+
+    private val localGateway: ConfigSyncLocalGateway?
+        get() = localGatewayProvider?.invoke() ?: configSyncCoordinator?.localGateway
 
     private suspend fun resolveDao(): CategoryDao =
         categoryDao ?: categoryDaoProvider?.invoke()
@@ -103,17 +111,21 @@ class CategoryRepositoryImpl(
     override suspend fun deleteCategory(id: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val cat = dao.getById(id)
-        val coordinator = configSyncCoordinator
+        val gateway = localGateway
         val now = System.currentTimeMillis()
         if (cat != null) {
-            coordinator?.localGateway?.recordTombstone(
-                com.financeautomation.core.constants.ConfigConstants.TYPE_CATEGORY,
-                cat.name,
-                now
-            )
+            if (gateway != null) {
+                gateway.recordTombstone(
+                    com.financeautomation.core.constants.ConfigConstants.TYPE_CATEGORY,
+                    cat.name,
+                    now
+                )
+            } else {
+                Diagnostics.record("CategoryRepositoryImpl", "tombstone_skipped: no gateway or coordinator")
+            }
         }
         dao.deleteById(id)
-        coordinator?.schedulePush()
+        configSyncCoordinator?.schedulePush()
     }
 
     override suspend fun reorderCategories(categoryIds: List<String>): Unit = withContext(ioDispatcher) {

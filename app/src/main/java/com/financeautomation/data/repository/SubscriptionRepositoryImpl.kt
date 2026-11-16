@@ -1,5 +1,6 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.SubscriptionCycleDao
 import com.financeautomation.data.local.dao.SubscriptionDao
 import com.financeautomation.data.local.entity.SubscriptionCycleEntity
@@ -9,6 +10,7 @@ import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionCycle
 import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.model.SubscriptionCycleWithSubscription
+import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.SubscriptionRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +31,7 @@ class SubscriptionRepositoryImpl(
     private val subscriptionDaoProvider: suspend () -> SubscriptionDao,
     private val cycleDaoProvider: suspend () -> SubscriptionCycleDao,
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
+    private val localGatewayProvider: (() -> ConfigSyncLocalGateway)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) : SubscriptionRepository {
@@ -36,15 +39,20 @@ class SubscriptionRepositoryImpl(
     constructor(
         subscriptionDao: SubscriptionDao,
         cycleDao: SubscriptionCycleDao,
+        localGateway: ConfigSyncLocalGateway? = null,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
         clock: () -> Long = { System.currentTimeMillis() }
     ) : this(
         subscriptionDaoProvider = { subscriptionDao },
         cycleDaoProvider = { cycleDao },
         configSyncCoordinatorProvider = null,
+        localGatewayProvider = localGateway?.let { { it } },
         ioDispatcher = ioDispatcher,
         clock = clock
     )
+
+    private val localGateway: ConfigSyncLocalGateway?
+        get() = localGatewayProvider?.invoke() ?: configSyncCoordinatorProvider?.invoke()?.localGateway
 
     override fun observeSubscriptions(): Flow<List<Subscription>> = flow {
         val dao = subscriptionDaoProvider()
@@ -90,16 +98,20 @@ class SubscriptionRepositoryImpl(
     }
 
     override suspend fun deleteSubscription(id: String): Unit = withContext(ioDispatcher) {
-        val coordinator = configSyncCoordinatorProvider?.invoke()
+        val gateway = localGateway
         val now = clock()
-        coordinator?.localGateway?.recordTombstone(
-            com.financeautomation.core.constants.ConfigConstants.TYPE_SUBSCRIPTION,
-            id,
-            now
-        )
+        if (gateway != null) {
+            gateway.recordTombstone(
+                com.financeautomation.core.constants.ConfigConstants.TYPE_SUBSCRIPTION,
+                id,
+                now
+            )
+        } else {
+            Diagnostics.record("SubscriptionRepositoryImpl", "tombstone_skipped: no gateway or coordinator")
+        }
         cycleDaoProvider().deleteForSubscription(id)
         subscriptionDaoProvider().deleteById(id)
-        coordinator?.schedulePush()
+        configSyncCoordinatorProvider?.invoke()?.schedulePush()
     }
 
     override suspend fun getCycle(id: String): SubscriptionCycle? = withContext(ioDispatcher) {
