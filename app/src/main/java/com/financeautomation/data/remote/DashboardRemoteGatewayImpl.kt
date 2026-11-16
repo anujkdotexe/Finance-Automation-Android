@@ -31,11 +31,11 @@ class DashboardRemoteGatewayImpl(
         try {
             val sheetProperties = fetchSheetProperties(spreadsheetId)
                 ?: return@withContext Result.Error(
-                    IllegalStateException("Failed to fetch sheet properties for spreadsheet $spreadsheetId")
+                    IllegalStateException("Failed to fetch sheet properties for spreadsheet ${com.financeautomation.core.utils.PrivacyScrubber.scrub(spreadsheetId)}")
                 )
             val dashboardSheetId = sheetProperties["Dashboard"]
                 ?: return@withContext Result.Error(
-                    IllegalStateException("Dashboard tab not found in spreadsheet $spreadsheetId")
+                    IllegalStateException("Dashboard tab not found in spreadsheet ${com.financeautomation.core.utils.PrivacyScrubber.scrub(spreadsheetId)}")
                 )
 
             val dashboardRequests = DashboardFormulaBuilder.buildDashboardFormulaRequests(

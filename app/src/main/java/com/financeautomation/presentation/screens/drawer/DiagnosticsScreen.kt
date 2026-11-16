@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +67,17 @@ fun DiagnosticsScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     var showSyncLog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.userMessage) {
+        state.userMessage?.let {
+            Toast.makeText(context, it.asString(context), Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(state.errorMessage) {
+        state.errorMessage?.let {
+            Toast.makeText(context, it.asString(context), Toast.LENGTH_LONG).show()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -136,10 +148,7 @@ fun DiagnosticsScreen(
                         icon = Icons.Rounded.Sync,
                         title = stringResource(R.string.diag_run_sync_now),
                         subtitle = stringResource(R.string.diag_run_sync_now_desc),
-                        onClick = {
-                            onSyncNow()
-                            Toast.makeText(context, context.getString(R.string.sync_syncing), Toast.LENGTH_SHORT).show()
-                        }
+                        onClick = onSyncNow
                     )
 
                     HorizontalDivider(
