@@ -805,7 +805,8 @@ fun AppNavHost(
                             state = settingsState,
                             setupHealthViewModel = setupHealthViewModel,
                             overlayControllerProvider = overlayControllerProvider,
-                            onReRunSetup = onReRunSetup
+                            onReRunSetup = onReRunSetup,
+                            onNavigateGoogleSignIn = { navController.navigateTop(AppRoutes.SYNC_BACKUP) }
                         )
                     }
 
@@ -827,7 +828,10 @@ fun AppNavHost(
                     }
 
                     composable(AppRoutes.DIAGNOSTICS) {
-                        DiagnosticsScreen(state = settingsState)
+                        DiagnosticsScreen(
+                            state = settingsState,
+                            onSyncNow = settingsViewModel::onSyncNow
+                        )
                     }
 
                     composable(AppRoutes.ABOUT) {
