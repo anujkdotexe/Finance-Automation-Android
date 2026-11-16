@@ -116,6 +116,8 @@ import com.financeautomation.presentation.screens.drawer.AccountsScreen
 import com.financeautomation.presentation.screens.drawer.CategoriesScreen
 import com.financeautomation.presentation.screens.drawer.CapturePermissionsScreen
 import com.financeautomation.presentation.screens.drawer.DiagnosticsScreen
+import com.financeautomation.presentation.screens.drawer.OpenSourceLicencesScreen
+import com.financeautomation.presentation.screens.drawer.PrivacyPolicyScreen
 import com.financeautomation.presentation.screens.drawer.PeopleTripsScreen
 import com.financeautomation.presentation.screens.drawer.PreferencesScreen
 import com.financeautomation.presentation.screens.drawer.SubscriptionsScreen
@@ -147,6 +149,8 @@ object AppRoutes {
     const val PREFERENCES = "preferences"
     const val DIAGNOSTICS = "diagnostics"
     const val ABOUT = "about"
+    const val PRIVACY_POLICY = "privacyPolicy"
+    const val OPEN_SOURCE_LICENCES = "openSourceLicences"
     const val ONBOARDING = "onboarding"
     const val NOTIFICATION_ACCESS = "notificationAccess"
     const val ERROR_API_NOT_ENABLED = "errorApiNotEnabled"
@@ -829,7 +833,21 @@ fun AppNavHost(
                     composable(AppRoutes.ABOUT) {
                         AboutScreen(
                             viewModel = settingsViewModel,
-                            state = settingsState
+                            state = settingsState,
+                            onNavigateToPrivacy = { navController.navigate(AppRoutes.PRIVACY_POLICY) },
+                            onNavigateToLicences = { navController.navigate(AppRoutes.OPEN_SOURCE_LICENCES) }
+                        )
+                    }
+
+                    composable(AppRoutes.PRIVACY_POLICY) {
+                        PrivacyPolicyScreen(
+                            onNavigateBack = { navController.goBackOrDashboard() }
+                        )
+                    }
+
+                    composable(AppRoutes.OPEN_SOURCE_LICENCES) {
+                        OpenSourceLicencesScreen(
+                            onNavigateBack = { navController.goBackOrDashboard() }
                         )
                     }
 

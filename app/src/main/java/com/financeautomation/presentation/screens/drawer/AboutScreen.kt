@@ -52,6 +52,8 @@ import com.financeautomation.presentation.viewmodel.SettingsViewModel
 fun AboutScreen(
     viewModel: SettingsViewModel,
     state: SettingsUiState,
+    onNavigateToPrivacy: () -> Unit = {},
+    onNavigateToLicences: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -279,6 +281,8 @@ fun AboutScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .clip(FinanceShapes.medium)
+                        .clickable(onClick = onNavigateToPrivacy)
                         .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -301,16 +305,11 @@ fun AboutScreen(
                                 modifier = Modifier.size(FinanceTheme.sizes.icon18)
                             )
                         }
-                        LinkButton(
+                        Text(
                             text = stringResource(R.string.about_link_privacy),
-                            onClick = {
-                                val url = "https://financeautomation.app/privacy"
-                                try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    })
-                                } catch (_: Exception) {}
-                            }
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Icon(
@@ -331,6 +330,8 @@ fun AboutScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .clip(FinanceShapes.medium)
+                        .clickable(onClick = onNavigateToLicences)
                         .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -353,16 +354,11 @@ fun AboutScreen(
                                 modifier = Modifier.size(FinanceTheme.sizes.icon18)
                             )
                         }
-                        LinkButton(
+                        Text(
                             text = stringResource(R.string.about_link_licences),
-                            onClick = {
-                                val url = "https://financeautomation.app/licenses"
-                                try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    })
-                                } catch (_: Exception) {}
-                            }
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Icon(

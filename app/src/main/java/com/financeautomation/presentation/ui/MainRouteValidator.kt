@@ -21,6 +21,8 @@ object MainRouteValidator {
         AppRoutes.PREFERENCES,
         AppRoutes.DIAGNOSTICS,
         AppRoutes.ABOUT,
+        AppRoutes.PRIVACY_POLICY,
+        AppRoutes.OPEN_SOURCE_LICENCES,
         AppRoutes.ONBOARDING,
         AppRoutes.NOTIFICATION_ACCESS,
         AppRoutes.ERROR_API_NOT_ENABLED,

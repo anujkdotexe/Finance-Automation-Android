@@ -443,6 +443,21 @@
     <string name="about_link_licences">Open source licences</string>
     <string name="about_footer">Built for local-first Android finance automation with Google Sheets.</string>
 
+    <!-- Privacy Policy Screen -->
+    <string name="privacy_title">Privacy policy</string>
+    <string name="privacy_section_data_title">Your data stays yours</string>
+    <string name="privacy_section_data_desc">Finance Automation operates strictly local-first. All financial notifications are parsed entirely on your device. Transaction records are written directly to your private Google Sheets spreadsheet and never pass through any third-party backend servers.</string>
+    <string name="privacy_section_notifications_title">Notification interception</string>
+    <string name="privacy_section_notifications_desc">The notification listener strictly checks incoming alerts against a whitelist of verified financial applications: Google Pay, PhonePe, Paytm, BHIM, Supermoney, and official bank debit SMS. Personal messaging applications (WhatsApp, Telegram, Signal) and OTP messages are never inspected, parsed, or logged.</string>
+    <string name="privacy_section_permissions_title">Minimal permissions</string>
+    <string name="privacy_section_permissions_desc">We only request Google Drive and Sheets scopes necessary to read and update your designated ledger file (drive.file). The app cannot access your other Drive documents.</string>
+    <string name="privacy_open_online">View policy online</string>
+
+    <!-- Open Source Licences Screen -->
+    <string name="licences_title">Open source licences</string>
+    <string name="licences_intro">This application is built with open source software:</string>
+    <string name="err_open_link_failed">Could not open link in a web browser</string>
+
     <!-- Error Screens (U12) -->
     <string name="error_53_top_bar">Sync failure</string>
     <string name="error_53_title">Google Sheets API not enabled</string>
