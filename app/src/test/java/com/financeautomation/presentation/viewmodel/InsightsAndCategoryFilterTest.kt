@@ -116,9 +116,10 @@ class InsightsAndCategoryFilterTest {
         advanceUntilIdle()
         assertEquals("Books & Learning", vm.uiState.value.activeFilter.category)
 
-        vm.setCategoryFilter("gifts")
+        // Unknown category is ignored
+        vm.setCategoryFilter("unknown_category_xyz")
         advanceUntilIdle()
-        assertEquals("gifts", vm.uiState.value.activeFilter.category)
+        assertEquals("Books & Learning", vm.uiState.value.activeFilter.category)
 
         vm.setCategoryFilter(null)
         advanceUntilIdle()

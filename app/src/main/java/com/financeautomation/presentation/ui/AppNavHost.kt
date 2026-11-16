@@ -834,8 +834,8 @@ fun AppNavHost(
                         AboutScreen(
                             viewModel = settingsViewModel,
                             state = settingsState,
-                            onNavigateToPrivacy = { navController.navigate(AppRoutes.PRIVACY_POLICY) },
-                            onNavigateToLicences = { navController.navigate(AppRoutes.OPEN_SOURCE_LICENCES) }
+                            onNavigateToPrivacy = { navController.navigateTop(AppRoutes.PRIVACY_POLICY) },
+                            onNavigateToLicences = { navController.navigateTop(AppRoutes.OPEN_SOURCE_LICENCES) }
                         )
                     }
 
