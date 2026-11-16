@@ -124,6 +124,18 @@ class OnboardingSignInFlowTest {
     }
 
     @Test
+    fun startSignIn_whenCandidateIsClearedOrCancelled_doesNotCrash() = runTest(dispatcher) {
+        val auth = FakeAuth(AuthResult.Token("tok"))
+        val model = vm(auth)
+        // Candidate cleared or cancelled
+        model.onGoogleAccountDetails("", null, null)
+        model.startSignIn()
+        advanceUntilIdle()
+        assertTrue("No auth requested when candidate is cleared/blank", auth.requestedFor.isEmpty())
+        assertNull(h.googleEmail)
+    }
+
+    @Test
     fun theSetupPageOnlyStartsSignInWhenThePickerReturnedAnAccount() {
         val screen = java.io.File("src/main/java/com/financeautomation/presentation/screens/OnboardingScreen.kt").readText()
         val launcher = screen.substringAfter("val googleSignInLauncher").substringBefore("LaunchedEffect(viewModel)")

@@ -205,4 +205,10 @@ class RecurringDetectorTest {
         assertEquals(setOf("netflix", "cultfitgym"), prefs.getDismissedRecurring())
         assertEquals("cultfitgym,netflix", prefs.getPreference("dismissed_recurring"))
     }
+
+    @Test
+    fun emptyGroupOrSingleTransactionProducesNoSuggestions() {
+        assertTrue(detect(emptyList()).isEmpty())
+        assertTrue(detect(listOf(txn("SingleTransaction", 499.0, 10))).isEmpty())
+    }
 }

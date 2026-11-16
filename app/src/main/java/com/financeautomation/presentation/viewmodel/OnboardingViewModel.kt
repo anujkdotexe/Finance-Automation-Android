@@ -123,7 +123,8 @@ class OnboardingViewModel(
 
     fun startSignIn(skipGuard: Boolean = false) {
         viewModelScope.launch(ioDispatcher) {
-            val picked = candidate?.first?.takeIf { it.isNotBlank() }
+            val pickedCandidate = candidate
+            val picked = pickedCandidate?.first?.takeIf { it.isNotBlank() }
             val stored = preferencesRepository.getGoogleAccountEmailSync()?.takeIf { it.isNotBlank() }
             // Nothing picked and nothing stored (for example the picker was cancelled): do nothing and stay on this step
             if (picked == null && stored == null) return@launch
@@ -132,7 +133,7 @@ class OnboardingViewModel(
             if (guard != null && !skipGuard && picked != null) {
                 val evaluation = guard.evaluate(picked)
                 if (evaluation.decision == com.financeautomation.data.account.SwitchDecision.CONFIRM_SWITCH) {
-                    val (email, name, photo) = candidate!!
+                    val (email, name, photo) = pickedCandidate ?: return@launch
                     _uiState.update {
                         it.copy(pendingAccountSwitch = com.financeautomation.data.account.AccountSwitchPrompt(email.orEmpty(), name, photo, evaluation.pendingCount, evaluation.hasLocalData))
                     }

@@ -65,7 +65,7 @@ class RecurringDetector(private val zone: ZoneId = LivingBurn.KOLKATA) {
 
         val suggestions = mutableListOf<RecurringSuggestion>()
         for ((_, group) in keyedGroups) {
-            val latest = group.maxByOrNull { it.txn.timestamp }!!
+            val latest = group.maxByOrNull { it.txn.timestamp } ?: continue
             val merchantText = latest.txn.merchant.lowercase()
             if (tokens.any { merchantText.contains(it) }) continue
 
@@ -103,7 +103,7 @@ class RecurringDetector(private val zone: ZoneId = LivingBurn.KOLKATA) {
 
     private fun classify(occurrences: List<Occurrence>, allowed: Set<SubscriptionFrequency>): RecurringSuggestion? {
         // Same-day payments count once
-        val byDay = occurrences.groupBy { it.day }.map { (_, list) -> list.minByOrNull { it.txn.timestamp }!! }
+        val byDay = occurrences.groupBy { it.day }.mapNotNull { (_, list) -> list.minByOrNull { it.txn.timestamp } }
             .sortedBy { it.day }
         if (byDay.size < 2) return null
 
