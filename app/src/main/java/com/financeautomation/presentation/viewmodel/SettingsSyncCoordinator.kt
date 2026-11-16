@@ -362,22 +362,18 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
+                        Diagnostics.record("SettingsSyncCoordinator", "sync_error: ${result.throwable.javaClass.simpleName}")
                         uiState.update {
-                            it.copy(
-                                errorMessage = UiText.res(R.string.settings_err_sync_failed, result.throwable.message ?: "")
-                            )
+                            it.copy(errorMessage = UiText.res(R.string.err_sync_failed_generic))
                         }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("SettingsSyncCoordinator", "onSyncNow: ${e.javaClass.simpleName}")
-                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
+                Diagnostics.record("SettingsSyncCoordinator", "sync_exception: ${e.javaClass.simpleName}")
                 uiState.update {
-                    it.copy(
-                        errorMessage = UiText.res(R.string.settings_err_sync_failed, scrubbed)
-                    )
+                    it.copy(errorMessage = UiText.res(R.string.err_sync_failed_generic))
                 }
             } finally {
                 uiState.update { it.copy(isSyncing = false) }
@@ -401,17 +397,16 @@ class SettingsSyncCoordinator(
                         uiState.update { it.copy(userMessage = message) }
                     }
                     is Result.Error -> {
-                        val err = com.financeautomation.core.utils.PrivacyScrubber.scrub(result.throwable.message ?: "Failed to check all months")
-                        uiState.update { it.copy(errorMessage = UiText.dynamic(err)) }
+                        Diagnostics.record("SettingsSyncCoordinator", "check_all_months_error: ${result.throwable.javaClass.simpleName}")
+                        uiState.update { it.copy(errorMessage = UiText.res(R.string.err_check_all_months_failed)) }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("SettingsSyncCoordinator", "onCheckAllMonths: ${e.javaClass.simpleName}")
-                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message ?: "Error checking all months")
+                Diagnostics.record("SettingsSyncCoordinator", "check_all_months_exception: ${e.javaClass.simpleName}")
                 uiState.update {
-                    it.copy(errorMessage = UiText.dynamic(scrubbed))
+                    it.copy(errorMessage = UiText.res(R.string.err_check_all_months_failed))
                 }
             } finally {
                 uiState.update { it.copy(isCheckingAllMonths = false) }
@@ -433,23 +428,18 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
-                        val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(res.throwable.message.orEmpty())
+                        Diagnostics.record("SettingsSyncCoordinator", "mirror_config_error: ${res.throwable.javaClass.simpleName}")
                         uiState.update {
-                            it.copy(
-                                errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, scrubbed)
-                            )
+                            it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
                         }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("SettingsSyncCoordinator", "onMirrorConfigToCloud: ${e.javaClass.simpleName}")
-                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
+                Diagnostics.record("SettingsSyncCoordinator", "mirror_config_exception: ${e.javaClass.simpleName}")
                 uiState.update {
-                    it.copy(
-                        errorMessage = UiText.res(R.string.settings_err_config_mirror_failed, scrubbed)
-                    )
+                    it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
                 }
             } finally {
                 uiState.update { it.copy(isConfigSyncing = false) }
@@ -471,23 +461,18 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
-                        val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(res.throwable.message.orEmpty())
+                        Diagnostics.record("SettingsSyncCoordinator", "restore_config_error: ${res.throwable.javaClass.simpleName}")
                         uiState.update {
-                            it.copy(
-                                errorMessage = UiText.res(R.string.settings_err_config_restore_failed, scrubbed)
-                            )
+                            it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
                         }
                     }
                     is Result.Loading -> {}
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Diagnostics.record("SettingsSyncCoordinator", "onRestoreConfigFromCloud: ${e.javaClass.simpleName}")
-                val scrubbed = com.financeautomation.core.utils.PrivacyScrubber.scrub(e.message.orEmpty())
+                Diagnostics.record("SettingsSyncCoordinator", "restore_config_exception: ${e.javaClass.simpleName}")
                 uiState.update {
-                    it.copy(
-                        errorMessage = UiText.res(R.string.settings_err_config_restore_failed, scrubbed)
-                    )
+                    it.copy(errorMessage = UiText.res(R.string.err_config_sync_failed))
                 }
             } finally {
                 uiState.update { it.copy(isConfigSyncing = false) }

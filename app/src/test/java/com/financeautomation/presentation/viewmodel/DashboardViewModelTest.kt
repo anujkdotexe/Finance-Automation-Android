@@ -1,8 +1,10 @@
 package com.financeautomation.presentation.viewmodel
 
+import com.financeautomation.R
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.SyncQueueDao
@@ -55,7 +57,7 @@ class DashboardViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private class FakeTransactionRepo : TransactionRepository {
+    private open class FakeTransactionRepo : TransactionRepository {
         val txns = MutableStateFlow<List<Transaction>>(emptyList())
         override fun getTransactions(): Flow<List<Transaction>> = txns
         override fun getNeedsReview(): Flow<List<Transaction>> = flowOf(emptyList())
@@ -1169,5 +1171,69 @@ class DashboardViewModelTest {
         // No row should ever be named Others
         val othersEntry = owedList.find { it.name.equals("Others", ignoreCase = true) }
         assertNull("No row should ever be named Others", othersEntry)
+    }
+
+    @Test
+    fun testSyncNow_whenRepositoryReturnsResultError_recordsDiagnosticsAndShowsFixedFriendlyMessage() = runTest {
+        Diagnostics.clear()
+        val errorRepo = object : FakeTransactionRepo() {
+            override suspend fun syncPendingTransactions(): Result<Int> {
+                return Result.Error(java.io.IOException("Connection refused: 192.168.1.100:8080"))
+            }
+        }
+        val vm = DashboardViewModel(
+            transactionRepository = errorRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            budgetRepository = null,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.syncNow()
+        advanceUntilIdle()
+
+        val error = vm.uiState.value.errorMessage
+        assertNotNull("Error message should be set on failure", error)
+        assertTrue("Error message must use fixed resource text", error is UiText.StringResource)
+        assertEquals(R.string.err_sync_failed_generic, (error as UiText.StringResource).resId)
+        assertTrue("No raw message arguments should be passed to generic error string", error.args.isEmpty())
+
+        val diagRecord = Diagnostics.getRecords().find { it.tag == "DashboardViewModel" && it.reason.contains("sync_error: IOException") }
+        assertNotNull("Diagnostics should record the stage and exception class", diagRecord)
+    }
+
+    @Test
+    fun testSyncNow_whenRepositoryThrowsException_recordsDiagnosticsAndShowsFixedFriendlyMessage() = runTest {
+        Diagnostics.clear()
+        val throwingRepo = object : FakeTransactionRepo() {
+            override suspend fun syncPendingTransactions(): Result<Int> {
+                throw IllegalStateException("Secret token expired at endpoint /auth/token")
+            }
+        }
+        val vm = DashboardViewModel(
+            transactionRepository = throwingRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            directPayableDao = null,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            categoryRepository = FakeCategoryRepo(),
+            budgetRepository = null,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        vm.syncNow()
+        advanceUntilIdle()
+
+        val error = vm.uiState.value.errorMessage
+        assertNotNull("Error message should be set on exception", error)
+        assertTrue("Error message must use fixed resource text", error is UiText.StringResource)
+        assertEquals(R.string.err_sync_failed_generic, (error as UiText.StringResource).resId)
+        assertTrue("No raw message arguments should be passed to generic error string", error.args.isEmpty())
+
+        val diagRecord = Diagnostics.getRecords().find { it.tag == "DashboardViewModel" && it.reason.contains("sync_exception: IllegalStateException") }
+        assertNotNull("Diagnostics should record the stage and exception class", diagRecord)
     }
 }
