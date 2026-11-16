@@ -52,7 +52,9 @@ object LocalCrashRecorder {
             } catch (e: Exception) {
                 // Fail silently without disrupting crash propagation
             } finally {
-                defaultHandler?.uncaughtException(thread, throwable)
+                // The previous handler is Crashlytics when it is enabled: it must never receive exception message text
+                val forwarded = if (com.financeautomation.BuildConfig.DEBUG) throwable else CrashSanitizer.sanitize(throwable)
+                defaultHandler?.uncaughtException(thread, forwarded)
             }
         }
 
