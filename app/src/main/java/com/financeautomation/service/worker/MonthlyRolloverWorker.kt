@@ -35,17 +35,28 @@ class MonthlyRolloverWorker(
         }
 
         val now = ZonedDateTime.now(ZoneId.of("Asia/Kolkata"))
-        executeRollover(now, repository, syncUseCase)
+        executeRollover(now, repository, syncUseCase, runAttemptCount)
     }
 
     companion object {
         const val WORK_NAME: String = "monthly_rollover_periodic"
+        const val MAX_RETRIES: Int = 5
 
         suspend fun executeRollover(
             now: ZonedDateTime,
             repository: com.financeautomation.domain.repository.TransactionRepository,
-            syncUseCase: suspend () -> com.financeautomation.core.model.Result<*>
+            syncUseCase: suspend () -> com.financeautomation.core.model.Result<*>,
+            runAttemptCount: Int = 0
         ): androidx.work.ListenableWorker.Result {
+            // After MAX_RETRIES failed attempts this run ends; the periodic schedule tries again in its next window
+            // (the carry is idempotent), so a permanent error cannot retry forever with backoff.
+            val failed = {
+                if (runAttemptCount < MAX_RETRIES) {
+                    androidx.work.ListenableWorker.Result.retry()
+                } else {
+                    androidx.work.ListenableWorker.Result.failure()
+                }
+            }
             val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
             // Days 1 to 3: catch debts logged after the last run of the month before. Carry is idempotent per row.
             val (targetTab, sourceTab) = when {
@@ -58,11 +69,11 @@ class MonthlyRolloverWorker(
 
                 val cfRes = repository.carryForward(targetTab = nextMonthTab, sourceTab = sourceTab)
                 if (cfRes is com.financeautomation.core.model.Result.Error) {
-                    return androidx.work.ListenableWorker.Result.retry()
+                    return failed()
                 }
                 val syncRes = syncUseCase()
                 if (syncRes is com.financeautomation.core.model.Result.Error) {
-                    return androidx.work.ListenableWorker.Result.retry()
+                    return failed()
                 }
             }
             return androidx.work.ListenableWorker.Result.success()
