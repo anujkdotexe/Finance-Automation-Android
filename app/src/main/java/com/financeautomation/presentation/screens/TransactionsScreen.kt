@@ -121,7 +121,6 @@ fun TransactionsScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
-    var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
     var selectedInflow by remember { mutableStateOf<Inflow?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -182,33 +181,6 @@ fun TransactionsScreen(
                 },
                 onAddExpense = onAddExpense,
                 modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        selectedTransaction?.let { txn ->
-            TransactionDetailSheet(
-                transaction = txn,
-                onDismiss = { selectedTransaction = null },
-                onEdit = {
-                    selectedTransaction = null
-                    onTransactionClick(txn)
-                },
-                onVoid = {
-                    val targetTxn = txn
-                    viewModel.voidTransaction(targetTxn)
-                    selectedTransaction = null
-                    coroutineScope.launch {
-                        val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
-                        val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.txns_voided_named_msg, cleanName),
-                            actionLabel = context.getString(R.string.action_undo),
-                            duration = SnackbarDuration.Short
-                        )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            viewModel.undoVoid()
-                        }
-                    }
-                }
             )
         }
 
@@ -779,135 +751,6 @@ private fun SwipeableTransactionRow(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
         )
-    }
-}
-
-/**
- * Transaction Detail Bottom Sheet Modal.
- * Layout:
- * - Merchant name (18sp SemiBold)
- * - Mono amount (28sp SemiBold)
- * - Category, account, date and time
- * - Split summary ("My share ₹200 · Owed ₹400")
- * - Status chip
- * - Buttons row: OutlinedButton "Void" on left, FilledButton "Edit" on right (equal width, 48dp)
- * - Expandable metadata info on clicking LinkButton "Details"
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TransactionDetailSheet(
-    transaction: Transaction,
-    onDismiss: () -> Unit,
-    onEdit: () -> Unit,
-    onVoid: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showDetails by rememberSaveable { mutableStateOf(false) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = FinanceShapes.sheet,
-        containerColor = FinanceTheme.colors.surfaceContainerLowest,
-        modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = FinanceTheme.spacing.l)
-                .padding(bottom = FinanceTheme.spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-        ) {
-            val isVoid = transaction.status == TransactionStatus.VOID
-            val cleanMerchant = stripVoidPrefix(transaction.merchant.ifBlank { transaction.category })
-
-            // Header: Merchant + Status
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = cleanMerchant,
-                    style = if (isVoid) {
-                        FinanceTheme.typography.titleLarge.copy(textDecoration = TextDecoration.LineThrough)
-                    } else {
-                        FinanceTheme.typography.titleLarge
-                    },
-                    color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                )
-                StatusChip(status = if (isVoid) "VOID" else transaction.status.value)
-            }
-
-            // Big Mono Amount
-            Text(
-                text = formatRupeesAuto(transaction.totalAmount),
-                style = MaterialTheme.typography.headlineLarge,
-                color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-            )
-
-            // Info items: Category, Account, Date & Time
-            AppCard(
-                modifier = Modifier.fillMaxWidth(),
-                containerColor = FinanceTheme.colors.surfaceContainerLow
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-                    DetailRow(label = stringResource(R.string.txn_detail_category), value = transaction.category)
-                    DetailRow(label = stringResource(R.string.txn_detail_account), value = transaction.account)
-                    DetailRow(label = stringResource(R.string.txn_detail_datetime), value = DisplayDateTime.full(transaction.timestamp))
-
-                    val splitSummary = if (transaction.owedToMe > 0.0) {
-                        "My share ${formatRupeesAuto(transaction.myShare)} · Owed ${formatRupeesAuto(transaction.owedToMe)}"
-                    } else {
-                        "Personal (My share ${formatRupeesAuto(transaction.myShare)})"
-                    }
-                    DetailRow(label = stringResource(R.string.txn_detail_split), value = splitSummary)
-                }
-            }
-
-            // Action Buttons: Void on left, Edit on right (equal width, 48dp height)
-            ButtonPair(
-                outlinedText = stringResource(R.string.action_void),
-                onOutlinedClick = onVoid,
-                filledText = stringResource(R.string.action_edit),
-                onFilledClick = onEdit
-            )
-
-            // Subtle "Details" link button
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                LinkButton(
-                    text = if (showDetails) stringResource(R.string.action_hide_details) else stringResource(R.string.action_details),
-                    onClick = { showDetails = !showDetails }
-                )
-
-                if (showDetails) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = FinanceTheme.spacing.s),
-                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
-                    ) {
-                        Text(
-                            text = stringResource(
-                                R.string.txns_sheet_row,
-                                transaction.sheetRowIndex?.toString() ?: stringResource(R.string.txns_unassigned)
-                            ),
-                            style = FinanceTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = stringResource(R.string.txns_id_label, transaction.id),
-                            style = FinanceTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
