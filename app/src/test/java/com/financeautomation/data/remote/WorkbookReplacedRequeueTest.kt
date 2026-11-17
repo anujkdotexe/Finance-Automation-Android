@@ -1003,7 +1003,28 @@ class WorkbookReplacedRequeueTest {
         // Assert (2): netting reduced friend's receivable from 500 to 300
         val nettingCall = server.calls.find { it.method == "POST" && it.url.contains("values:batchUpdate") && it.body.contains("'Nov26'!J4") }
         assertNotNull("Netting edit must be posted to sheet", nettingCall)
-        assertTrue("Netting must reduce Bob's receivable to 300.0", nettingCall!!.body.contains("300"))
+
+        val parsedJson = Json.parseToJsonElement(nettingCall!!.body).jsonObject
+        val dataArray = parsedJson["data"]?.jsonArray
+        assertNotNull("Batch update must contain data array", dataArray)
+
+        val j4Entry = dataArray!!.firstOrNull {
+            it.jsonObject["range"]?.jsonPrimitive?.content == "'Nov26'!J4"
+        }?.jsonObject
+        assertNotNull("Netting edit must target cell 'Nov26'!J4", j4Entry)
+
+        val j4Values = j4Entry!!["values"]?.jsonArray?.get(0)?.jsonArray
+        assertNotNull("Cell J4 must have values", j4Values)
+        assertEquals(1, j4Values!!.size)
+        assertEquals("Bob's remaining receivable in cell J4 must be exactly 300.0", 300.0, j4Values[0].jsonPrimitive.double, 0.001)
+
+        val k4Entry = dataArray.firstOrNull {
+            it.jsonObject["range"]?.jsonPrimitive?.content == "'Nov26'!K4"
+        }?.jsonObject
+        assertNotNull("Status edit must target cell 'Nov26'!K4", k4Entry)
+        val k4Values = k4Entry!!["values"]?.jsonArray?.get(0)?.jsonArray
+        assertNotNull("Cell K4 must have values", k4Values)
+        assertEquals("Pending", k4Values!![0].jsonPrimitive.content)
 
         // Assert (3): payable appears exactly once in the queue
         val payablesInQueue = qDao.getAllPending().filter { it.transactionId == "pay_bob_1" }
