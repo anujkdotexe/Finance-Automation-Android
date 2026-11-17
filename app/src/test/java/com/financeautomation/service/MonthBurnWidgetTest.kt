@@ -21,7 +21,9 @@ class MonthBurnWidgetTest {
         perDayTemplate = "%1\$s a day",
         upToDate = "Up to date",
         waitingTemplate = "%1\$d waiting",
-        descriptionTemplate = "%1\$s living burn %2\$s, %3\$s, %4\$s"
+        descriptionTemplate = "%1\$s living burn %2\$s, %3\$s, %4\$s",
+        signInToView = "Sign in to view",
+        cannotRead = "Open the app to refresh"
     )
 
     private fun summary(burn: Double, perDay: Double, sync: WidgetSyncState = WidgetSyncState.UpToDate, month: Int = 11) =
@@ -67,6 +69,30 @@ class MonthBurnWidgetTest {
     fun theSpokenDescriptionCoversEverythingTheWidgetShows() {
         val content = format(summary(12345.0, 950.0, WidgetSyncState.Waiting(2)))
         assertEquals("November living burn ₹12,345, ₹950 a day, 2 waiting", content.description)
+    }
+
+    @Test
+    fun signedOutShowsSignInTextAndNoFigure() {
+        val content = MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = WidgetUnavailable.NOT_SIGNED_IN)
+        assertEquals("Sign in to view", content.amount)
+        assertEquals("", content.perDay)
+        assertEquals("", content.syncState)
+        assertEquals("November", content.monthName)
+        assertEquals("November Living burn, Sign in to view", content.description)
+        assertFalse(content.amount.contains("₹"))
+    }
+
+    @Test
+    fun failedRefreshTellsTheUserToOpenTheAppNotToSignIn() {
+        val content = MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = WidgetUnavailable.CANNOT_READ)
+        assertEquals("Open the app to refresh", content.amount)
+        assertEquals("", content.perDay)
+        assertEquals("November Living burn, Open the app to refresh", content.description)
+    }
+
+    @Test
+    fun availableSummaryStillShowsFiguresWhenFlagIsOff() {
+        assertEquals("₹0", MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = WidgetUnavailable.NONE).amount)
     }
 
     // --- Manifest, widget info and wiring ----------------------------------------------------------------------

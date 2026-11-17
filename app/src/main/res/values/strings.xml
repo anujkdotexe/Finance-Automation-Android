@@ -569,6 +569,8 @@
     <string name="widget_month_burn_per_day">%1$s a day</string>
     <string name="widget_month_burn_up_to_date">Up to date</string>
     <string name="widget_month_burn_unlock">Unlock to view</string>
+    <string name="widget_month_burn_sign_in">Sign in to view</string>
+    <string name="widget_month_burn_unavailable">Open the app to refresh</string>
     <string name="widget_month_burn_waiting">%1$d waiting</string>
     <string name="widget_month_burn_description">%1$s living burn %2$s, %3$s, %4$s</string>
     <string name="widget_month_burn_placeholder_month">Month</string>

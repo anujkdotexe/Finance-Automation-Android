@@ -1,7 +1,10 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.ConfigNumbers
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.safeCall
 import com.financeautomation.domain.model.EmptyOrMissingConfigTabException
 import com.financeautomation.domain.repository.LegacyConfigGateway
@@ -87,6 +90,11 @@ class SyncConfigUseCase(
                 val epochMilli = row.updatedAt.toEpochMilli()
                 when (row.type) {
                     ConfigConstants.TYPE_ACCOUNT -> {
+                        val archived = row.value3.equals("true", ignoreCase = true)
+                        if (CategoryConstants.isProtectedAccount(row.key) && (row.deleted || archived)) {
+                            Diagnostics.record("SyncConfigUseCase", "CONFIG_PROTECTED_ITEM: account")
+                            continue
+                        }
                         localGateway.applyRemoteAccount(
                             name = row.key,
                             lastFour = row.value1.ifEmpty { null },
@@ -98,6 +106,12 @@ class SyncConfigUseCase(
                         )
                     }
                     ConfigConstants.TYPE_CATEGORY -> {
+                        if (CategoryConstants.isProtectedCategory(row.key) &&
+                            (row.deleted || row.value3.equals("true", ignoreCase = true))
+                        ) {
+                            Diagnostics.record("SyncConfigUseCase", "CONFIG_PROTECTED_ITEM: category")
+                            continue
+                        }
                         val parts = row.value4.split("|")
                         val displayOrder = parts[0].toIntOrNull() ?: 0
                         val colorName = parts.getOrNull(1)?.takeIf { it.isNotBlank() } ?: "Teal"
@@ -140,8 +154,8 @@ class SyncConfigUseCase(
                         }
                     }
                     ConfigConstants.TYPE_BUDGET -> {
-                        val amount = row.value1.replace(",", "").trim().toDoubleOrNull()
-                        if (row.key.isNotBlank() && amount != null && amount > 0.0) {
+                        val amount = ConfigNumbers.parseMoney(row.value1)
+                        if (row.key.isNotBlank() && amount != null) {
                             localGateway.applyRemoteBudget(
                                 category = row.key,
                                 monthlyAmount = amount,
@@ -324,14 +338,17 @@ class SyncConfigUseCase(
                 throw upsertResult.exception
             }
 
-            // Clear dirty flags
-            localGateway.markAccountsClean(dirty.accounts.map { it.id })
-            localGateway.markCategoriesClean(dirty.categories.map { it.id })
-            localGateway.markCompanionsClean(dirty.companions.map { it.id })
-            localGateway.markTripTagsClean(dirty.tripTags.map { it.id })
-            localGateway.markPreferencesClean(dirty.preferences.map { it.key })
-            localGateway.markSubscriptionsClean(dirty.subscriptions.map { it.id })
-            localGateway.markBudgetsClean(dirty.budgets.map { it.category })
+            // Clear dirty flags only for items the sheet really took. A row the sheet already holds in a newer
+            // version was skipped: it stays dirty and the next pull brings the sheet value down.
+            val written = (upsertResult as Result.Success).data
+            fun isWritten(type: String, key: String) = ConfigRow.compositeKeyOf(type, key) in written
+            localGateway.markAccountsClean(dirty.accounts.filter { isWritten(ConfigConstants.TYPE_ACCOUNT, it.name) }.map { it.id })
+            localGateway.markCategoriesClean(dirty.categories.filter { isWritten(ConfigConstants.TYPE_CATEGORY, it.name) }.map { it.id })
+            localGateway.markCompanionsClean(dirty.companions.filter { isWritten(ConfigConstants.TYPE_PERSON, it.name) }.map { it.id })
+            localGateway.markTripTagsClean(dirty.tripTags.filter { isWritten(ConfigConstants.TYPE_TRIP, it.name) }.map { it.id })
+            localGateway.markPreferencesClean(dirty.preferences.filter { isWritten(ConfigConstants.TYPE_PREF, it.key) }.map { it.key })
+            localGateway.markSubscriptionsClean(dirty.subscriptions.filter { isWritten(ConfigConstants.TYPE_SUBSCRIPTION, it.id) }.map { it.id })
+            localGateway.markBudgetsClean(dirty.budgets.filter { isWritten(ConfigConstants.TYPE_BUDGET, it.category) }.map { it.category })
         }
     } }
 

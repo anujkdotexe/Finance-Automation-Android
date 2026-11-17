@@ -60,7 +60,7 @@ class SubscriptionConfigRoundTripTest {
         val maxRunning = java.util.concurrent.atomic.AtomicInteger(0)
         var upsertDelayMs = 0L
         override suspend fun readAll(spreadsheetId: String): Result<List<ConfigRow>> = Result.Success(rows.toList())
-        override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Unit> {
+        override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Set<String>> {
             val now = running.incrementAndGet()
             maxRunning.accumulateAndGet(now) { a, b -> maxOf(a, b) }
             if (upsertDelayMs > 0) kotlinx.coroutines.delay(upsertDelayMs)
@@ -69,7 +69,7 @@ class SubscriptionConfigRoundTripTest {
                 this.rows.removeAll { it.compositeKey == r.compositeKey }
                 this.rows.add(r)
             }
-            return Result.Success(Unit)
+            return Result.Success(rows.map { it.compositeKey }.toSet())
         }
         override suspend fun tombstone(spreadsheetId: String, type: String, key: String, deviceId: String): Result<Unit> =
             Result.Success(Unit)

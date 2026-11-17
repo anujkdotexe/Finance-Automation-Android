@@ -301,18 +301,18 @@ class PreferencesRepositoryImpl(
             emitAll(memSettleDelay.asStateFlow())
         } else {
             emitAll(dao.getPreferenceFlow(KEY_SETTLE_DELAY_SECONDS).map {
-                it?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS
+                settleDelayOf(it)
             })
         }
     }.flowOn(ioDispatcher)
 
     override suspend fun getSettleDelaySecondsSync(): Int = withContext(ioDispatcher) {
         val dao = resolveDao() ?: return@withContext memSettleDelay.value
-        dao.getPreference(KEY_SETTLE_DELAY_SECONDS)?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS
+        settleDelayOf(dao.getPreference(KEY_SETTLE_DELAY_SECONDS))
     }
 
     override suspend fun setSettleDelaySeconds(seconds: Int): Unit = withContext(ioDispatcher) {
-        val bounded = seconds.coerceIn(30, 300)
+        val bounded = seconds.coerceIn(MIN_SETTLE_DELAY_SECONDS, MAX_SETTLE_DELAY_SECONDS)
         val dao = resolveDao()
         if (dao != null) {
             dao.setPreference(PreferenceEntity(KEY_SETTLE_DELAY_SECONDS, bounded.toString(), updatedAt = System.currentTimeMillis(), dirty = 1))
@@ -321,6 +321,10 @@ class PreferencesRepositoryImpl(
         }
         configSyncCoordinator?.schedulePush()
     }
+
+    /** The stored delay, kept inside the allowed range even when the value came from the sheet. */
+    private fun settleDelayOf(stored: String?): Int =
+        (stored?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS).coerceIn(MIN_SETTLE_DELAY_SECONDS, MAX_SETTLE_DELAY_SECONDS)
 
     override suspend fun getOrCreateDeviceId(): String = withContext(ioDispatcher) {
         val existing = getDeviceIdSync()
@@ -507,5 +511,7 @@ class PreferencesRepositoryImpl(
         const val KEY_DEVELOPER_MODE: String = "key_developer_mode"
         const val KEY_THEME_MODE: String = "key_theme_mode"
         const val DEFAULT_SETTLE_DELAY_SECONDS: Int = 120
+        const val MIN_SETTLE_DELAY_SECONDS: Int = 30
+        const val MAX_SETTLE_DELAY_SECONDS: Int = 300
     }
 }

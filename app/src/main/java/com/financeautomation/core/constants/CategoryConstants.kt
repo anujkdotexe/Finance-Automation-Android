@@ -30,6 +30,13 @@ object CategoryConstants {
         CATEGORY_OTHER
     )
 
+    const val CATEGORY_TRANSFER: String = "Transfer"
+
+    /** Categories the sheet may not archive or delete: Savings and Transfer have their own burn rule, Other is the fallback. */
+    val PROTECTED_CATEGORIES: Set<String> = setOf(CATEGORY_SAVINGS, CATEGORY_TRANSFER, CATEGORY_OTHER)
+
+    fun isProtectedCategory(name: String): Boolean = PROTECTED_CATEGORIES.any { it.equals(name.trim(), ignoreCase = true) }
+
     const val ACCOUNT_CASH: String = "Cash"
     const val ACCOUNT_OTHER: String = "Other"
 
@@ -37,6 +44,11 @@ object CategoryConstants {
         ACCOUNT_CASH,
         ACCOUNT_OTHER
     )
+
+    /** Accounts the sheet may not archive or delete: the app itself refuses to delete Cash and Other. */
+    val PROTECTED_ACCOUNTS: Set<String> = setOf(ACCOUNT_CASH, ACCOUNT_OTHER)
+
+    fun isProtectedAccount(name: String): Boolean = PROTECTED_ACCOUNTS.any { it.equals(name.trim(), ignoreCase = true) }
 
     /**
      * Normalizes category name according to master ledger rules.

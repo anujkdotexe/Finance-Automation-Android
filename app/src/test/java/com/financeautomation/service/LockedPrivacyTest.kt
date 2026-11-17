@@ -18,7 +18,9 @@ class LockedPrivacyTest {
         upToDate = "Up to date",
         waitingTemplate = "%1\$d waiting",
         descriptionTemplate = "%1\$s living burn %2\$s, %3\$s, %4\$s",
-        unlockToView = "Unlock to view"
+        unlockToView = "Unlock to view",
+        signInToView = "Sign in to view",
+        cannotRead = "Open the app to refresh"
     )
 
     private val summary = MonthBurnSummary(
