@@ -286,6 +286,11 @@ class ConfigSyncLocalGatewayImpl(
     ): Unit = withContext(ioDispatcher) {
         val accountDao = resolveAccountDao()
         val existing = accountDao.getByName(name)
+        // Only one account may be the default. When the sheet marks two accounts default, the one with the newer
+        // stamp keeps it, whatever order the rows are read in.
+        val currentDefault = accountDao.getDefaultAccount()
+        val takesDefault = isDefault && !deleted &&
+            (currentDefault == null || currentDefault.id == existing?.id || currentDefault.updatedAt <= updatedAt)
         if (existing == null) {
             if (!deleted) {
                 val newId = "acc_${UUID.randomUUID().toString().take(8)}"
@@ -294,13 +299,14 @@ class ConfigSyncLocalGatewayImpl(
                         id = newId,
                         name = name,
                         lastFourDigits = lastFour,
-                        isDefault = isDefault,
+                        isDefault = takesDefault,
                         isArchived = isArchived,
                         displayOrder = displayOrder,
                         updatedAt = updatedAt,
                         dirty = 0
                     )
                 )
+                if (takesDefault) accountDao.makeOnlyDefault(newId)
             }
         } else {
             if (updatedAt > existing.updatedAt) {
@@ -322,13 +328,14 @@ class ConfigSyncLocalGatewayImpl(
                         existing.copy(
                             name = name,
                             lastFourDigits = lastFour,
-                            isDefault = isDefault,
+                            isDefault = takesDefault,
                             isArchived = isArchived,
                             displayOrder = displayOrder,
                             updatedAt = updatedAt,
                             dirty = 0
                         )
                     )
+                    if (takesDefault) accountDao.makeOnlyDefault(existing.id)
                 }
             }
         }
