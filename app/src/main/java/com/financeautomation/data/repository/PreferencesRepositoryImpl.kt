@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -68,6 +69,7 @@ class PreferencesRepositoryImpl(
     private val memDeviceId = MutableStateFlow<String?>(null)
     private val memDeveloperMode = MutableStateFlow(false)
     private val memThemeMode = MutableStateFlow(ThemeMode.SYSTEM)
+    private val memWorkbookReplacedNoticePending = MutableStateFlow(false)
     private val memGenericPrefs = ConcurrentHashMap<String, String>()
 
     var configSyncCoordinator: ConfigSyncCoordinator?
@@ -417,11 +419,25 @@ class PreferencesRepositoryImpl(
         dao.getPreference(key)
     }
 
+    override fun getWorkbookReplacedNoticePending(): Flow<Boolean> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memWorkbookReplacedNoticePending.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING).map {
+                it == "true"
+            }.distinctUntilChanged())
+        }
+    }.flowOn(ioDispatcher)
+
     override suspend fun setPreference(key: String, value: String?, isDirty: Boolean): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val trimmed = value?.trim()
         val isLocalOnly = ConfigConstants.isLocalOnlyPref(key)
         val dirtyFlag = if (isDirty && !isLocalOnly) 1 else 0
+        if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+            memWorkbookReplacedNoticePending.value = (trimmed == "true")
+        }
         if (dao != null) {
             if (trimmed != null) {
                 dao.setPreference(PreferenceEntity(key, trimmed, updatedAt = System.currentTimeMillis(), dirty = dirtyFlag))
@@ -447,6 +463,9 @@ class PreferencesRepositoryImpl(
     override suspend fun deletePreference(key: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val isLocalOnly = ConfigConstants.isLocalOnlyPref(key)
+        if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+            memWorkbookReplacedNoticePending.value = false
+        }
         if (dao != null) {
             if (!isLocalOnly) {
                 dao.setPreference(PreferenceEntity(key, null, updatedAt = System.currentTimeMillis(), dirty = 1))
@@ -462,6 +481,9 @@ class PreferencesRepositoryImpl(
     }
 
     override suspend fun clearKeysWithPrefix(prefix: String): Unit = withContext(ioDispatcher) {
+        if (PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING.startsWith(prefix)) {
+            memWorkbookReplacedNoticePending.value = false
+        }
         val dao = resolveDao()
         if (dao != null) {
             dao.deletePreferencesWithPrefix(prefix)

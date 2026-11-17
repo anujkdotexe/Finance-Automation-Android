@@ -123,7 +123,12 @@ class WorkbookReplacedNoticeTest {
         val notice1 = vm1.uiState.value.syncMessage
         assertNotNull("First run must display replacement notice", notice1)
         assertEquals(R.string.workbook_replaced_notice_partial, notice1?.resId)
-        assertNull("Pending preference must be cleared after display",
+
+        // Dismiss the notice
+        vm1.clearMessages()
+        advanceUntilIdle()
+
+        assertNull("Pending preference must be cleared after dismissal",
             pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
 
         // Second ViewModel launch observes no notice

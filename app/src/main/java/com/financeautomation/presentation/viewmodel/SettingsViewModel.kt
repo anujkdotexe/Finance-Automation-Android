@@ -215,6 +215,22 @@ class SettingsViewModel(
                 _uiState.update { it.copy(subscriptionReminderTime = time) }
             }
         }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getWorkbookReplacedNoticePending().collect { isPending ->
+                if (isPending) {
+                    _uiState.update {
+                        it.copy(
+                            userMessage = UiText.res(
+                                R.string.workbook_replaced_notice_partial,
+                                UiText.res(R.string.workbook_replaced_lost_items)
+                            )
+                        )
+                    }
+                } else if (_uiState.value.userMessage?.resId == R.string.workbook_replaced_notice_partial) {
+                    _uiState.update { it.copy(userMessage = null) }
+                }
+            }
+        }
     }
 
     fun onSubscriptionReminderTimeChanged(time: String) {
@@ -370,6 +386,9 @@ class SettingsViewModel(
 
     fun clearMessages() {
         _uiState.update { it.copy(userMessage = null, errorMessage = null) }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+        }
     }
 
     fun setErrorMessage(message: UiText?) {

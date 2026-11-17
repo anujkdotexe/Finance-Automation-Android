@@ -255,6 +255,12 @@ interface PreferencesRepository {
         setPreference(KEY_NEEDS_REVIEW_HINT_DISMISSED, dismissed.toString(), isDirty = false)
     }
 
+    /**
+     * Observes whether a notice should be displayed alerting the user that their
+     * workbook was replaced (e.g. because it was trashed or missing in Drive).
+     */
+    fun getWorkbookReplacedNoticePending(): Flow<Boolean> = kotlinx.coroutines.flow.flowOf(false)
+
     suspend fun clearKeysWithPrefix(prefix: String) {}
 
     companion object {

@@ -35,6 +35,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -111,12 +112,22 @@ class SettingsViewModelTest {
         override fun getThemeMode(): Flow<ThemeMode> = themeModeFlow.asStateFlow()
         override suspend fun getThemeModeSync(): ThemeMode = themeModeFlow.value
         override suspend fun setThemeMode(mode: ThemeMode) { themeModeFlow.value = mode }
+        val noticePendingFlow = MutableStateFlow(false)
+        override fun getWorkbookReplacedNoticePending(): Flow<Boolean> = noticePendingFlow.asStateFlow()
         private val generic = mutableMapOf<String, String>()
         override suspend fun getPreference(key: String): String? = generic[key]
         override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {
+            if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+                noticePendingFlow.value = (value == "true")
+            }
             if (value == null) generic.remove(key) else generic[key] = value
         }
-        override suspend fun deletePreference(key: String) { generic.remove(key) }
+        override suspend fun deletePreference(key: String) {
+            if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+                noticePendingFlow.value = false
+            }
+            generic.remove(key)
+        }
     }
 
     private class FakeWorkbookResolver(
@@ -905,5 +916,26 @@ class SettingsViewModelTest {
         vm.onSubscriptionReminderTimeChanged("08:30")
         assertEquals("08:30", vm.uiState.value.subscriptionReminderTime)
         assertEquals("08:30", prefs.getSubscriptionReminderTimeSync())
+    }
+
+    @Test
+    fun testSettingsViewModel_collectsWorkbookReplacedNoticeFlow_andClearsOnDismiss() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+        assertNull(vm.uiState.value.userMessage)
+
+        prefs.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+        assertNotNull(vm.uiState.value.userMessage)
+        assertEquals(R.string.workbook_replaced_notice_partial, vm.uiState.value.userMessage?.resId)
+
+        vm.clearMessages()
+        assertNull(vm.uiState.value.userMessage)
+        assertNull(prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+        assertFalse(prefs.noticePendingFlow.value)
     }
 }

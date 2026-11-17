@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -1401,7 +1402,83 @@ class DashboardViewModelTest {
         val firstArg = syncMessage?.args?.firstOrNull() as? UiText
         assertNotNull("Format argument must be a UiText instance", firstArg)
         assertEquals(R.string.workbook_replaced_lost_items, firstArg?.resId)
-        assertNull("Pending notice preference must be cleared after being consumed",
+
+        vm.clearMessages()
+        advanceUntilIdle()
+        assertNull("Pending notice preference must be cleared after being dismissed",
             pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+    }
+
+    @Test
+    fun testDashboardViewModel_collectsTheNoticeFlagFromPreferencesAsAFlow() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+        val cRepo = FakeCategoryRepo()
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertNull("Initially syncMessage should be null", vm.uiState.value.syncMessage)
+
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+        advanceUntilIdle()
+
+        val syncMessage = vm.uiState.value.syncMessage
+        assertNotNull("Sync message must be set when Flow emits pending notice", syncMessage)
+        assertEquals(R.string.workbook_replaced_notice_partial, syncMessage?.resId)
+        val firstArg = syncMessage?.args?.firstOrNull() as? UiText
+        assertNotNull("Format argument must be a UiText instance", firstArg)
+        assertEquals(R.string.workbook_replaced_lost_items, firstArg?.resId)
+    }
+
+    @Test
+    fun testDashboardViewModel_clearsTheNoticeWhenTheUserDismissesIt() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+        val cRepo = FakeCategoryRepo()
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertNotNull(vm.uiState.value.syncMessage)
+
+        vm.clearMessages()
+        advanceUntilIdle()
+
+        assertNull("Sync message in UI state must be cleared after user dismisses it", vm.uiState.value.syncMessage)
+        assertNull("Pending notice preference must be cleared when user dismisses notice",
+            pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+        assertFalse(pRepo.getWorkbookReplacedNoticePending().first())
     }
 }

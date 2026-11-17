@@ -3,6 +3,7 @@ package com.financeautomation.data.repository
 import com.financeautomation.domain.model.ThemeMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import com.financeautomation.domain.repository.PreferencesRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -44,17 +45,22 @@ class PreferencesRepositoryTest {
     @Test
     fun testClearKeysWithPrefix_removesMatchingKeys_andPreservesOthers() = runBlocking {
         val repo = PreferencesRepositoryImpl(isTestHeadless = true)
-        repo.setPreference("key_last_workbook_verified_date_2026", "2026-11-17")
-        repo.setPreference("key_last_workbook_verified_date_2027", "2027-01-01")
-        repo.setPreference("key_last_workbook_verified_different", "other")
-        repo.setPreference("key_spreadsheet_id", "sheet_id_123")
+        val key2026 = PreferencesRepository.keyLastWorkbookVerifiedDate(2026)
+        val key2027 = PreferencesRepository.keyLastWorkbookVerifiedDate(2027)
+        val otherKey = "${PreferencesRepository.KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX}different"
+        val sheetKey = PreferencesRepository.KEY_SPREADSHEET_ID
 
-        repo.clearKeysWithPrefix("key_last_workbook_verified_date_")
+        repo.setPreference(key2026, "2026-11-17")
+        repo.setPreference(key2027, "2027-01-01")
+        repo.setPreference(otherKey, "other")
+        repo.setPreference(sheetKey, "sheet_id_123")
 
-        assertNull(repo.getPreference("key_last_workbook_verified_date_2026"))
-        assertNull(repo.getPreference("key_last_workbook_verified_date_2027"))
-        assertEquals("other", repo.getPreference("key_last_workbook_verified_different"))
-        assertEquals("sheet_id_123", repo.getPreference("key_spreadsheet_id"))
+        repo.clearKeysWithPrefix(PreferencesRepository.KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX)
+
+        assertNull(repo.getPreference(key2026))
+        assertNull(repo.getPreference(key2027))
+        assertNull(repo.getPreference(otherKey))
+        assertEquals("sheet_id_123", repo.getPreference(sheetKey))
     }
 }
 

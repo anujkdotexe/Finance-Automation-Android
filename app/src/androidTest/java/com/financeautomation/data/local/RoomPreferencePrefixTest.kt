@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.financeautomation.data.local.dao.PreferenceDao
 import com.financeautomation.data.local.entity.PreferenceEntity
+import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -42,15 +43,19 @@ class RoomPreferencePrefixTest {
     @Test
     fun deletePreferencesWithPrefix_deletesMatchingPrefix_andPreservesNonMatching() = runBlocking {
         val now = System.currentTimeMillis()
-        preferenceDao.setPreference(PreferenceEntity("key_last_workbook_verified_date_2026", "true", now, 0))
-        preferenceDao.setPreference(PreferenceEntity("key_last_workbook_verified_date_2027", "true", now, 0))
-        preferenceDao.setPreference(PreferenceEntity("key_spreadsheet_id", "sheet_123", now, 0))
+        val key2026 = PreferencesRepository.keyLastWorkbookVerifiedDate(2026)
+        val key2027 = PreferencesRepository.keyLastWorkbookVerifiedDate(2027)
+        val sheetKey = PreferencesRepository.KEY_SPREADSHEET_ID
 
-        preferenceDao.deletePreferencesWithPrefix("key_last_workbook_verified_date_")
+        preferenceDao.setPreference(PreferenceEntity(key2026, "true", now, 0))
+        preferenceDao.setPreference(PreferenceEntity(key2027, "true", now, 0))
+        preferenceDao.setPreference(PreferenceEntity(sheetKey, "sheet_123", now, 0))
 
-        assertNull(preferenceDao.getPreference("key_last_workbook_verified_date_2026"))
-        assertNull(preferenceDao.getPreference("key_last_workbook_verified_date_2027"))
-        assertEquals("sheet_123", preferenceDao.getPreference("key_spreadsheet_id"))
+        preferenceDao.deletePreferencesWithPrefix(PreferencesRepository.KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX)
+
+        assertNull(preferenceDao.getPreference(key2026))
+        assertNull(preferenceDao.getPreference(key2027))
+        assertEquals("sheet_123", preferenceDao.getPreference(sheetKey))
     }
 
     @Test
