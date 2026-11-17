@@ -213,9 +213,69 @@ class WorkbookReplacedRequeueTest {
     }
 
     @Test
-    fun resolverCallsOnWorkbookReplacedWhenNewWorkbookCreated() = runBlocking {
-        yearIds[year] = "unusable_old_id"
+    fun callbackFiresWhenTheSearchFindsAnotherWorkbook() = runBlocking {
+        yearIds[year] = "trashed_old_id"
+        rawPrefs[PreferencesRepository.keySpreadsheetIdForYear(year)] = "trashed_old_id"
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
 
+        var replacedCalls = 0
+        var replacedYear: Int? = null
+        var replacedOld: String? = null
+        var replacedNew: String? = null
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.url.encodedPath.endsWith("/files/trashed_old_id") ->
+                        response(r, 200, """{"id":"trashed_old_id","trashed":true}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[{"id":"found_other_id","name":"Finance$year","trashed":false}]}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"found_other_id","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    else -> response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":0}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            onWorkbookReplaced = { y, old, newId ->
+                replacedCalls++
+                replacedYear = y
+                replacedOld = old
+                replacedNew = newId
+            }
+        )
+
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+        assertTrue(res is Result.Success)
+        assertEquals("found_other_id", (res as Result.Success).data)
+
+        assertEquals("Callback must fire exactly once", 1, replacedCalls)
+        assertEquals(year, replacedYear)
+        assertEquals("trashed_old_id", replacedOld)
+        assertEquals("found_other_id", replacedNew)
+        assertEquals("Notice flag must be set", "true", rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING])
+    }
+
+    @Test
+    fun callbackFiresWhenANewWorkbookIsCreated() = runBlocking {
+        yearIds[year] = "unusable_old_id"
+        rawPrefs[PreferencesRepository.keySpreadsheetIdForYear(year)] = "unusable_old_id"
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+
+        var replacedCalls = 0
         var replacedYear: Int? = null
         var replacedOld: String? = null
         var replacedNew: String? = null
@@ -257,6 +317,7 @@ class WorkbookReplacedRequeueTest {
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
             onWorkbookReplaced = { y, old, newId ->
+                replacedCalls++
                 replacedYear = y
                 replacedOld = old
                 replacedNew = newId
@@ -267,9 +328,109 @@ class WorkbookReplacedRequeueTest {
         assertTrue(res is Result.Success)
         assertEquals("created_sheet_id", (res as Result.Success).data)
 
+        assertEquals("Callback must fire exactly once", 1, replacedCalls)
         assertEquals(year, replacedYear)
         assertEquals("unusable_old_id", replacedOld)
         assertEquals("created_sheet_id", replacedNew)
+        assertEquals("Notice flag must be set", "true", rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING])
+    }
+
+    @Test
+    fun callbackDoesNotFireOnFirstProvisioningWhenNoIdWasStored() = runBlocking {
+        yearIds.remove(year)
+        rawPrefs.remove(PreferencesRepository.keySpreadsheetIdForYear(year))
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+
+        var replacedCalls = 0
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[]}""")
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_1","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"first_provisioned_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, """{"replies":[]}""")
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            onWorkbookReplaced = { _, _, _ -> replacedCalls++ }
+        )
+
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+        assertTrue(res is Result.Success)
+        assertEquals("first_provisioned_id", (res as Result.Success).data)
+
+        assertEquals("onWorkbookReplaced must not be called on first provisioning when no ID was stored", 0, replacedCalls)
+        assertNull("Missing notice must not be set on first provisioning", rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING])
+    }
+
+    @Test
+    fun callbackDoesNotFireWhenTheSameIdComesBack() = runBlocking {
+        yearIds[year] = "same_wb_id"
+        rawPrefs[PreferencesRepository.keySpreadsheetIdForYear(year)] = "same_wb_id"
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+
+        var replacedCalls = 0
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.url.encodedPath.endsWith("/files/same_wb_id") ->
+                        response(r, 200, """{"id":"same_wb_id","trashed":false}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[{"id":"same_wb_id","name":"Finance$year","trashed":false}]}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                val url = r.url.encodedPath
+                when {
+                    r.method == "GET" && url.contains("/values/") ->
+                        response(r, 200, """{"values":[["Date","Time","Account","Merchant","Category","Total","My Share","Owed to Me","Companions","Status"]]}""")
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"same_wb_id","sheets":[{"properties":{"sheetId":0,"title":"Dashboard"}},{"properties":{"sheetId":1,"title":"Jan26"}}]}""")
+                    else -> response(r, 200, """{"replies":[]}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            onWorkbookReplaced = { _, _, _ -> replacedCalls++ }
+        )
+
+        val res = resolver.resolveForYear(year, forceValidateTabs = false)
+        assertTrue(res is Result.Success)
+        assertEquals("same_wb_id", (res as Result.Success).data)
+
+        assertEquals("onWorkbookReplaced must not be called when the same ID comes back", 0, replacedCalls)
+        assertNull("Notice flag must not be set when same ID comes back", rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING])
     }
 
     @Test
