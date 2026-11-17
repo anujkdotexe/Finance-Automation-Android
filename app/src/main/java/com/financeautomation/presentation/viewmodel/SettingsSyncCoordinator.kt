@@ -184,18 +184,11 @@ class SettingsSyncCoordinator(
                         preferencesRepository.setSpreadsheetId(spreadsheetId)
                         regenerateDashboardUseCase?.invoke()
                         syncConfigUseCase?.mirrorToCloud()
-                        val hasNotice = preferencesRepository.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) == "true"
-                        val message = if (hasNotice) {
-                            preferencesRepository.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
-                            UiText.res(R.string.workbook_replaced_notice_partial, UiText.res(R.string.workbook_replaced_lost_items))
-                        } else {
-                            UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
-                        }
                         uiState.update {
                             it.copy(
                                 spreadsheetId = spreadsheetId,
                                 isProvisioning = false,
-                                userMessage = message
+                                userMessage = UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
                             )
                         }
                     }

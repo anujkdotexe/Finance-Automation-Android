@@ -46,6 +46,13 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
                 preferences.keys.filter { it.startsWith(prefix) }.toList().forEach { preferences.remove(it) }
                 null
             }
+            method.name == "getWorkbookReplacedNoticePending" -> flowOf(preferences[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING] == "true")
+            method.name == "getAppLockEnabled" || method.name == "getHideRecentsPreview" -> false
+            method.name == "getDeveloperMode" -> flowOf(false)
+            method.name == "getThemeMode" -> flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
+            method.name == "getSettleDelaySeconds" -> flowOf(60)
+            method.name == "getDefaultAccount" -> flowOf("SBI")
+            method.name == "getSubscriptionReminderTime" -> flowOf("21:00")
             method.name == "getSpreadsheetIdSync" || method.name == "getSpreadsheetIdForYearSync" -> "test_sheet_id"
             Flow::class.java.isAssignableFrom(method.returnType) -> flowOf<Any?>(null)
             method.returnType == java.lang.Boolean.TYPE -> false

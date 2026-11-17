@@ -1481,4 +1481,74 @@ class DashboardViewModelTest {
             pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
         assertFalse(pRepo.getWorkbookReplacedNoticePending().first())
     }
+
+    @Test
+    fun testDashboardViewModel_dismissingTheNoticeClearsTheFlag() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(WorkbookReplacedNotice.text(), vm.uiState.value.syncMessage)
+
+        vm.clearMessages()
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.syncMessage)
+        assertNull(pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+    }
+
+    @Test
+    fun testDashboardViewModel_dismissingAnUnrelatedMessageKeepsThePendingNotice() = runTest {
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+
+        val repo = object : FakeTransactionRepo() {
+            override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(5)
+        }
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        // Set pending notice flag in repo and observe it displayed
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+        advanceUntilIdle()
+        assertEquals(R.string.workbook_replaced_notice_partial, vm.uiState.value.syncMessage?.resId)
+
+        // An unrelated sync operation runs and replaces syncMessage with its own message
+        vm.syncNow()
+        advanceUntilIdle()
+        assertEquals(R.string.dashboard_msg_synced_sheets, vm.uiState.value.syncMessage?.resId)
+
+        // User clears messages while showing only the unrelated message
+        vm.clearMessages()
+        advanceUntilIdle()
+
+        // Pending flag in preferences must NOT be cleared by dismissing an unrelated message
+        assertEquals("true", pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+        assertTrue(pRepo.getWorkbookReplacedNoticePending().first())
+    }
 }

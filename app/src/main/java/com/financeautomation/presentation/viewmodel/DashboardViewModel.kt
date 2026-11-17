@@ -267,13 +267,9 @@ class DashboardViewModel(
         val prefs = preferencesRepository ?: return
         viewModelScope.launch(ioDispatcher) {
             prefs.getWorkbookReplacedNoticePending().collect { isPending ->
-                if (isPending) {
-                    val notice = UiText.res(
-                        R.string.workbook_replaced_notice_partial,
-                        UiText.res(R.string.workbook_replaced_lost_items)
-                    )
-                    _uiState.update { it.copy(syncMessage = notice) }
-                } else if (_uiState.value.syncMessage?.resId == R.string.workbook_replaced_notice_partial) {
+                if (isPending == true) {
+                    _uiState.update { it.copy(syncMessage = WorkbookReplacedNotice.text()) }
+                } else if (WorkbookReplacedNotice.isReplacedNotice(_uiState.value.syncMessage)) {
                     _uiState.update { it.copy(syncMessage = null) }
                 }
             }
@@ -674,16 +670,15 @@ class DashboardViewModel(
     }
 
     fun clearMessages() {
+        val wasShowingReplacedNotice = WorkbookReplacedNotice.isReplacedNotice(_uiState.value.syncMessage)
         _uiState.update { it.copy(syncMessage = null, errorMessage = null) }
-        preferencesRepository?.let { prefs ->
-            viewModelScope.launch(ioDispatcher) {
-                prefs.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+        if (wasShowingReplacedNotice) {
+            preferencesRepository?.let { prefs ->
+                viewModelScope.launch(ioDispatcher) {
+                    prefs.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+                }
             }
         }
-    }
-
-    fun dismissWorkbookReplacedNotice() {
-        clearMessages()
     }
 
     companion object {

@@ -206,8 +206,8 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch(ioDispatcher) {
-            val lockOn = preferencesRepository.getAppLockEnabled()
-            val hide = preferencesRepository.getHideRecentsPreview()
+            val lockOn = try { preferencesRepository.getAppLockEnabled() } catch (_: Exception) { false }
+            val hide = try { preferencesRepository.getHideRecentsPreview() } catch (_: Exception) { false }
             _uiState.update { it.copy(appLockEnabled = lockOn, hideRecentsPreview = hide) }
         }
         viewModelScope.launch(ioDispatcher) {
@@ -217,16 +217,9 @@ class SettingsViewModel(
         }
         viewModelScope.launch(ioDispatcher) {
             preferencesRepository.getWorkbookReplacedNoticePending().collect { isPending ->
-                if (isPending) {
-                    _uiState.update {
-                        it.copy(
-                            userMessage = UiText.res(
-                                R.string.workbook_replaced_notice_partial,
-                                UiText.res(R.string.workbook_replaced_lost_items)
-                            )
-                        )
-                    }
-                } else if (_uiState.value.userMessage?.resId == R.string.workbook_replaced_notice_partial) {
+                if (isPending == true) {
+                    _uiState.update { it.copy(userMessage = WorkbookReplacedNotice.text()) }
+                } else if (WorkbookReplacedNotice.isReplacedNotice(_uiState.value.userMessage)) {
                     _uiState.update { it.copy(userMessage = null) }
                 }
             }
@@ -385,9 +378,12 @@ class SettingsViewModel(
     fun onRegenerateDashboard() = syncCoordinator.onRegenerateDashboard()
 
     fun clearMessages() {
+        val wasShowingReplacedNotice = WorkbookReplacedNotice.isReplacedNotice(_uiState.value.userMessage)
         _uiState.update { it.copy(userMessage = null, errorMessage = null) }
-        viewModelScope.launch(ioDispatcher) {
-            preferencesRepository.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+        if (wasShowingReplacedNotice) {
+            viewModelScope.launch(ioDispatcher) {
+                preferencesRepository.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+            }
         }
     }
 
