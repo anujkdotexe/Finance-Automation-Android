@@ -919,7 +919,7 @@ class WorkbookResolverTest {
             clock = fixedClock
         )
 
-        val res = resolver.resolveForYear(2026, forceValidateTabs = true)
+        val res = resolver.resolveForYear(2026, forceValidateTabs = true, createBackup = true)
 
         assertTrue(res is Result.Success)
         assertTrue("Drive copyFile must be called before repair when data rows exist", copyFileCalled)
@@ -1034,7 +1034,7 @@ class WorkbookResolverTest {
             clock = fixedClock
         )
 
-        val res = resolver.resolveForYear(2026, forceValidateTabs = true)
+        val res = resolver.resolveForYear(2026, forceValidateTabs = true, createBackup = true)
 
         assertTrue(res is Result.Success)
         assertFalse("Drive copyFile must NOT be called when workbook has no data rows", copyFileCalled)

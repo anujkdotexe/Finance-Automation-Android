@@ -236,6 +236,7 @@ class SettingsViewModel(
     fun cancelAccountSwitch() = syncCoordinator.cancelAccountSwitch()
 
     fun autoProvisionMasterSheet() = syncCoordinator.autoProvisionMasterSheet()
+    fun onRepairWorkbook() = syncCoordinator.onRepairWorkbook()
 
     // --- Google Sheets Connection & Sync ---
 

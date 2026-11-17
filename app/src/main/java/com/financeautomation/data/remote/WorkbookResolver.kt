@@ -70,7 +70,11 @@ open class WorkbookResolver(
         }
     }
 
-    open suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean = false): Result<String> = withContext(ioDispatcher) {
+    open suspend fun resolveForYear(
+        year: Int,
+        forceValidateTabs: Boolean = false,
+        createBackup: Boolean = false
+    ): Result<String> = withContext(ioDispatcher) {
         val today = LocalDate.now(clock).toString()
         val lastVerified = preferencesRepository.getPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year))
         val needsVerification = forceValidateTabs || (lastVerified != today)
@@ -114,19 +118,21 @@ open class WorkbookResolver(
             }
 
             if (candidateId != null) {
-                // Check if workbook contains existing data rows before repair
-                val metadataRes = googleSheetsClient.getSheetTabsDetailed(candidateId)
-                if (metadataRes is Result.Success) {
-                    val tabTitles = metadataRes.data.keys.toList()
-                    val hasDataRes = googleSheetsClient.hasDataRows(candidateId, tabTitles)
-                    if (hasDataRes is Result.Success && hasDataRes.data) {
-                        val currentDate = LocalDate.now(ZoneId.of("Asia/Kolkata"))
-                        val backupName = "Finance$year (backup before repair $currentDate)"
-                        val copyRes = googleDriveClient.copyFile(candidateId, backupName)
-                        if (copyRes is Result.Error) {
-                            return@withContext Result.Error(
-                                Exception("Pre-repair backup copy failed: ${copyRes.exception.message}", copyRes.exception)
-                            )
+                if (createBackup) {
+                    // Check if workbook contains existing data rows before repair
+                    val metadataRes = googleSheetsClient.getSheetTabsDetailed(candidateId)
+                    if (metadataRes is Result.Success) {
+                        val tabTitles = metadataRes.data.keys.toList()
+                        val hasDataRes = googleSheetsClient.hasDataRows(candidateId, tabTitles)
+                        if (hasDataRes is Result.Success && hasDataRes.data) {
+                            val currentDate = LocalDate.now(ZoneId.of("Asia/Kolkata"))
+                            val backupName = "Finance$year (backup before repair $currentDate)"
+                            val copyRes = googleDriveClient.copyFile(candidateId, backupName)
+                            if (copyRes is Result.Error) {
+                                return@withContext Result.Error(
+                                    Exception("Pre-repair backup copy failed: ${copyRes.exception.message}", copyRes.exception)
+                                )
+                            }
                         }
                     }
                 }

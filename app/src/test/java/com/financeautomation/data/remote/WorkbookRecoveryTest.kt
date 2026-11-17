@@ -282,4 +282,73 @@ class WorkbookRecoveryTest {
         val res = resolver.findExisting(year)
         assertTrue("expected Result.Error, was $res", res is Result.Error)
     }
+
+    private fun backupTestResolver(
+        storedId: String,
+        hasRows: Boolean,
+        copyRequests: MutableList<String>
+    ): WorkbookResolver {
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.url.encodedPath.endsWith("/copy")) {
+                    copyRequests += "drive ${r.method} ${r.url.encodedPath}"
+                    response(r, 200, """{"id":"backup_copy_id"}""")
+                } else if (r.url.encodedPath.endsWith("/files/$storedId")) {
+                    response(r, 200, """{"id":"$storedId","trashed":false}""")
+                } else {
+                    response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.url.encodedPath.contains("values:batchGet") -> {
+                        val rowData = if (hasRows) """[["expense"]]""" else """[]"""
+                        response(r, 200, """{"valueRanges":[{"range":"'Nov26'!A4:A5","values":$rowData}]}""")
+                    }
+                    r.method == "GET" -> {
+                        response(r, 200, """{"spreadsheetId":"$storedId","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":2,"title":"Nov26","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    }
+                    else -> response(r, 200, """{"replies":[]}""")
+                }
+            }).build(), tokens
+        )
+        return WorkbookResolver(drive, sheets, prefs)
+    }
+
+    @Test
+    fun signInForcedValidationDoesNotCopyTheWorkbook() = runBlocking {
+        yearIds[year] = "valid_id"
+        val copyRequests = mutableListOf<String>()
+        val resolver = backupTestResolver("valid_id", hasRows = true, copyRequests = copyRequests)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true, createBackup = false)
+        assertTrue("expected success but was $res", res is Result.Success)
+        assertEquals("valid_id", (res as Result.Success).data)
+        assertEquals("Sign-in forced validation must not copy workbook", 0, copyRequests.filter { it.endsWith("/copy") }.size)
+    }
+
+    @Test
+    fun explicitRepairCopiesExactlyOnce() = runBlocking {
+        yearIds[year] = "valid_id"
+        val copyRequests = mutableListOf<String>()
+        val resolver = backupTestResolver("valid_id", hasRows = true, copyRequests = copyRequests)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true, createBackup = true)
+        assertTrue("expected success but was $res", res is Result.Success)
+        assertEquals("valid_id", (res as Result.Success).data)
+        assertEquals("Explicit repair must copy exactly once when rows exist", 1, copyRequests.filter { it.endsWith("/copy") }.size)
+    }
+
+    @Test
+    fun repairOfAnEmptyWorkbookDoesNotCopy() = runBlocking {
+        yearIds[year] = "valid_id"
+        val copyRequests = mutableListOf<String>()
+        val resolver = backupTestResolver("valid_id", hasRows = false, copyRequests = copyRequests)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true, createBackup = true)
+        assertTrue("expected success but was $res", res is Result.Success)
+        assertEquals("valid_id", (res as Result.Success).data)
+        assertEquals("Repair of an empty workbook must not copy", 0, copyRequests.filter { it.endsWith("/copy") }.size)
+    }
 }

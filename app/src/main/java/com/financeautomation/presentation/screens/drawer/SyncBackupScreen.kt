@@ -573,7 +573,7 @@ fun SyncBackupScreen(
                 }
 
                 OutlinedButton(
-                    onClick = viewModel::autoProvisionMasterSheet,
+                    onClick = viewModel::onRepairWorkbook,
                     enabled = !state.isProvisioning,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()

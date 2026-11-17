@@ -126,11 +126,17 @@ class SettingsViewModelTest {
     ) : WorkbookResolver(driveClient, sheetsClient, prefs) {
         var resolveCalls = 0
         var lastForceValidateTabs: Boolean? = null
+        var lastCreateBackup: Boolean? = null
         var delayMs: Long = 0
 
-        override suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean): Result<String> {
+        override suspend fun resolveForYear(
+            year: Int,
+            forceValidateTabs: Boolean,
+            createBackup: Boolean
+        ): Result<String> {
             resolveCalls++
             lastForceValidateTabs = forceValidateTabs
+            lastCreateBackup = createBackup
             if (delayMs > 0) {
                 delay(delayMs)
             }
@@ -167,6 +173,42 @@ class SettingsViewModelTest {
 
         assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
         assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
+        assertEquals("Expected createBackup to be false for autoProvisionMasterSheet", false, resolver.lastCreateBackup)
+        assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
+        assertFalse(stateFlow.value.isProvisioning)
+        assertEquals(R.string.settings_msg_provisioned_workbook, stateFlow.value.userMessage?.resId)
+    }
+
+    @Test
+    fun testOnRepairWorkbookCallsResolverWithCreateBackupTrue() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+
+        val stateFlow = MutableStateFlow(SettingsUiState())
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook()
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
+        assertEquals("Expected createBackup to be true for onRepairWorkbook", true, resolver.lastCreateBackup)
         assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
         assertFalse(stateFlow.value.isProvisioning)
         assertEquals(R.string.settings_msg_provisioned_workbook, stateFlow.value.userMessage?.resId)
