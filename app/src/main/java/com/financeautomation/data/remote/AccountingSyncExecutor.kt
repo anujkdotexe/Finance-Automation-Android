@@ -714,23 +714,6 @@ class AccountingSyncExecutor(
             is Result.Loading -> Result.Loading
         }
     }
-
-    /**
-     * Restores a repayment operation if present. Idempotent: checks if already recorded.
-     */
-    suspend fun executeRestoreRepayment(
-        item: SyncQueueEntity,
-        spreadsheetId: String,
-        tabName: String
-    ): Result<Unit> {
-        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AE", item.transactionId)
-        if (existingCheck is Result.Success && existingCheck.data != null) {
-            return Result.Success(Unit)
-        } else if (existingCheck is Result.Error) {
-            return Result.Error(existingCheck.exception)
-        }
-        return Result.Success(Unit)
-    }
 }
 
 /** Replaces the id of the Table 2 append in this plan with [inflowId] (ignored when blank). */

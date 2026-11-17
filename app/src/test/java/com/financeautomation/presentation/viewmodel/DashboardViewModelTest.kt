@@ -148,10 +148,20 @@ class DashboardViewModelTest {
         override suspend fun deleteByUuid(uuid: String) { payables.value = payables.value.filter { it.uuid != uuid } }
         override suspend fun deleteAll() { payables.value = emptyList() }
         override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
-        override suspend fun getAllForYear(startSerial: Int, endSerial: Int): List<PayableEntity> =
+        override suspend fun getAllForYear(
+            startSerial: Int,
+            endSerial: Int,
+            startMillis: Long,
+            endMillis: Long
+        ): List<PayableEntity> =
             payables.value.filter {
                 val serial = it.dateIncurredSerial
-                serial != null && serial in startSerial until endSerial && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+                val matchesYear = if (serial != null) {
+                    serial in startSerial until endSerial
+                } else {
+                    it.updatedAt in startMillis until endMillis
+                }
+                matchesYear && !it.repaymentStatus.equals("VOID", ignoreCase = true)
             }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
     }
 

@@ -202,7 +202,7 @@ class TransactionRepositoryImpl(
 
         val txns = tDao.getAllForYear(startMillis, endMillis)
         val inflows = inDao?.getAllForYear(startMillis, endMillis).orEmpty()
-        val payables = pDao?.getAllForYear(startSerial, endSerial).orEmpty()
+        val payables = pDao?.getAllForYear(startSerial, endSerial, startMillis, endMillis).orEmpty()
         val activeIds = qDao.getActiveTransactionIds().toSet()
 
         val toRequeueTxns = txns.filter { it.id !in activeIds }
@@ -931,8 +931,7 @@ class TransactionRepositoryImpl(
                     item.operationType == SyncQueueEntity.OP_CARRY_FORWARD ||
                     item.operationType == SyncQueueEntity.OP_YEAR_CLOSE ||
                     item.operationType == SyncQueueEntity.OP_RESTORE_INFLOW ||
-                    item.operationType == SyncQueueEntity.OP_RESTORE_PAYABLE ||
-                    item.operationType == SyncQueueEntity.OP_RESTORE_REPAYMENT
+                    item.operationType == SyncQueueEntity.OP_RESTORE_PAYABLE
                 ) {
                     val currentYear = java.time.ZonedDateTime.now(sheetTimeZone).year
                     val opYear = when (item.operationType) {
@@ -960,9 +959,6 @@ class TransactionRepositoryImpl(
                             Instant.ofEpochMilli(req.timestamp).atZone(sheetTimeZone).year
                         }
                         SyncQueueEntity.OP_RESTORE_PAYABLE -> {
-                            AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).year
-                        }
-                        SyncQueueEntity.OP_RESTORE_REPAYMENT -> {
                             AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).year
                         }
                         else -> currentYear
@@ -1017,9 +1013,6 @@ class TransactionRepositoryImpl(
                         SyncQueueEntity.OP_RESTORE_PAYABLE -> {
                             AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).tabName
                         }
-                        SyncQueueEntity.OP_RESTORE_REPAYMENT -> {
-                            AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).tabName
-                        }
                         else -> "Dashboard"
                     }
 
@@ -1056,7 +1049,6 @@ class TransactionRepositoryImpl(
                         SyncQueueEntity.OP_YEAR_CLOSE -> executor.executeYearClose(item, spreadsheetId)
                         SyncQueueEntity.OP_RESTORE_INFLOW -> executor.executeRestoreInflow(item, spreadsheetId, opTabName)
                         SyncQueueEntity.OP_RESTORE_PAYABLE -> executor.executeRestorePayable(item, spreadsheetId, opTabName)
-                        SyncQueueEntity.OP_RESTORE_REPAYMENT -> executor.executeRestoreRepayment(item, spreadsheetId, opTabName)
                         else -> Result.Success(Unit)
                     }
 

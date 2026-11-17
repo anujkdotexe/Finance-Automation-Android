@@ -125,10 +125,20 @@ class InMemoryPayableDao : PayableDao {
         return count
     }
     override suspend fun deleteAll() { storage.clear() }
-    override suspend fun getAllForYear(startSerial: Int, endSerial: Int): List<PayableEntity> =
+    override suspend fun getAllForYear(
+        startSerial: Int,
+        endSerial: Int,
+        startMillis: Long,
+        endMillis: Long
+    ): List<PayableEntity> =
         storage.values.filter {
             val serial = it.dateIncurredSerial
-            serial != null && serial in startSerial until endSerial && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+            val matchesYear = if (serial != null) {
+                serial in startSerial until endSerial
+            } else {
+                it.updatedAt in startMillis until endMillis
+            }
+            matchesYear && !it.repaymentStatus.equals("VOID", ignoreCase = true)
         }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
 }
 

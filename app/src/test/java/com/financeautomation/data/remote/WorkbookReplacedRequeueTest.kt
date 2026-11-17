@@ -14,6 +14,13 @@ import com.financeautomation.testutil.InMemoryPayableDao
 import com.financeautomation.testutil.InMemoryQueueDao
 import com.financeautomation.testutil.InMemoryTransactionDao
 import com.financeautomation.testutil.createTestAccountingSyncExecutor
+import com.financeautomation.core.utils.DateSerialUtils
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -318,13 +325,26 @@ class WorkbookReplacedRequeueTest {
 
         // Must NOT read all debits (Table 1 range A4:K or snapshot)
         assertFalse("Must not read debits for waterfall", recordedCalls.any { it.contains("!A4:K") })
-        // Must append to Table 2
+        // Must append to Table 2 with strict column assertions
         assertEquals("Must make exactly one append call", 1, appendedBodies.size)
         val body = appendedBodies.first()
-        assertTrue("Must contain amount 200.0", body.contains("200"))
-        assertTrue("Must contain account HDFC", body.contains("HDFC"))
-        assertTrue("Must contain source Company", body.contains("Company"))
-        assertTrue("Must contain note Bonus", body.contains("Bonus"))
+        val parsedJson = Json.parseToJsonElement(body).jsonObject
+        val dataArray = parsedJson["data"]?.jsonArray.orEmpty()
+        val table2Entry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!M") == true }?.jsonObject
+        assertNotNull("Must contain table 2 range starting at column M", table2Entry)
+        val t2Values = table2Entry!!["values"]?.jsonArray?.get(0)?.jsonArray
+        assertNotNull(t2Values)
+        assertEquals(8, t2Values!!.size)
+        assertEquals("HDFC", t2Values[2].jsonPrimitive.content)
+        assertEquals("Income / Salary", t2Values[3].jsonPrimitive.content)
+        assertEquals("Company", t2Values[4].jsonPrimitive.content)
+        assertEquals("Bonus", t2Values[5].jsonPrimitive.content)
+        assertEquals(200.0, t2Values[6].jsonPrimitive.double, 0.001)
+
+        val uuidEntry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AD") == true }?.jsonObject
+        assertNotNull("Must write hidden UUID to column AD", uuidEntry)
+        val uuidValue = uuidEntry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content
+        assertEquals("cred_restore_1", uuidValue)
     }
 
     @Test
@@ -403,7 +423,7 @@ class WorkbookReplacedRequeueTest {
     }
 
     @Test
-    fun restorePayableAndRepaymentRows() = runBlocking {
+    fun restorePayableRowsPendingAndRepaid() = runBlocking {
         val pDao = InMemoryPayableDao()
         val p1 = PayableEntity(
             uuid = "pay_p1",
@@ -468,21 +488,45 @@ class WorkbookReplacedRequeueTest {
             "sheet_123",
             "Nov26"
         )
-        val res3 = executor.executeRestoreRepayment(
-            SyncQueueEntity(id = 3L, transactionId = "pay_p2", operationType = SyncQueueEntity.OP_RESTORE_REPAYMENT, payloadJson = "{}"),
-            "sheet_123",
-            "Nov26"
-        )
 
         assertTrue(res1 is Result.Success)
         assertTrue(res2 is Result.Success)
-        assertTrue(res3 is Result.Success)
 
         assertEquals("Must append 2 payable rows", 2, appendedBodies.size)
         val b1 = appendedBodies[0]
+        val json1 = Json.parseToJsonElement(b1).jsonObject
+        val data1 = json1["data"]?.jsonArray.orEmpty()
+        val t3Entry1 = data1.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!V") == true }?.jsonObject
+        assertNotNull("Must contain table 3 range starting at column V", t3Entry1)
+        val v1Values = t3Entry1!!["values"]?.jsonArray?.get(0)?.jsonArray
+        assertNotNull(v1Values)
+        assertEquals(7, v1Values!!.size)
+        assertEquals("Charlie", v1Values[2].jsonPrimitive.content)
+        assertEquals("Dinner", v1Values[3].jsonPrimitive.content)
+        assertEquals(300.0, v1Values[4].jsonPrimitive.double, 0.001)
+        assertEquals("Pending", v1Values[6].jsonPrimitive.content)
+
+        val uuid1Entry = data1.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AE") == true }?.jsonObject
+        assertNotNull("Must write hidden payable UUID to column AE", uuid1Entry)
+        assertEquals("pay_p1", uuid1Entry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content)
+
         val b2 = appendedBodies[1]
-        assertTrue("Pending payable must contain Charlie and 300.0", b1.contains("Charlie") && b1.contains("300"))
-        assertTrue("Repaid payable must contain David, 150.0, and Repaid", b2.contains("David") && b2.contains("150") && b2.contains("Repaid"))
+        val json2 = Json.parseToJsonElement(b2).jsonObject
+        val data2 = json2["data"]?.jsonArray.orEmpty()
+        val t3Entry2 = data2.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!V") == true }?.jsonObject
+        assertNotNull(t3Entry2)
+        val v2Values = t3Entry2!!["values"]?.jsonArray?.get(0)?.jsonArray
+        assertNotNull(v2Values)
+        assertEquals(7, v2Values!!.size)
+        assertEquals("David", v2Values[2].jsonPrimitive.content)
+        assertEquals("Cab", v2Values[3].jsonPrimitive.content)
+        assertEquals(150.0, v2Values[4].jsonPrimitive.double, 0.001)
+        assertEquals(46335, v2Values[5].jsonPrimitive.int)
+        assertEquals("Repaid", v2Values[6].jsonPrimitive.content)
+
+        val uuid2Entry = data2.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AE") == true }?.jsonObject
+        assertNotNull("Must write hidden payable UUID to column AE", uuid2Entry)
+        assertEquals("pay_p2", uuid2Entry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content)
     }
 
     @Test
@@ -583,5 +627,74 @@ class WorkbookReplacedRequeueTest {
         // Assert appends made: Table 1 (2 debits), Table 2 (1 inflow), Table 3 (1 payable)
         assertEquals(4, appendsByRange.size)
         assertEquals("Queue should be empty after sync", 0, qDao.queue.size)
+    }
+
+    @Test
+    fun restorePayableWithNoDateIsStillRestored() = runBlocking {
+        val pDao = InMemoryPayableDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+        val pNullDate = PayableEntity(
+            uuid = "pay_no_date",
+            dateIncurredSerial = null,
+            timeSerial = null,
+            paidBy = "Grace",
+            whatFor = "Snacks",
+            amountIOwe = 75.0,
+            dateRepaidSerial = null,
+            repaymentStatus = "Pending",
+            tabName = "Nov26",
+            sheetRowIndex = null,
+            updatedAt = nov2026
+        )
+        pDao.upsert(pNullDate)
+
+        val startSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(2026, 1, 1))
+        val endSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(2027, 1, 1))
+        val startMillis = ZonedDateTime.of(2026, 1, 1, 0, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+        val endMillis = ZonedDateTime.of(2027, 1, 1, 0, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        val found = pDao.getAllForYear(startSerial, endSerial, startMillis, endMillis)
+        assertEquals(1, found.size)
+        assertEquals("pay_no_date", found[0].uuid)
+
+        val appendedBodies = mutableListOf<String>()
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                val url = r.url.toString()
+                when {
+                    url.contains("!AE4:AE") -> response(r, 200, """{"values":[]}""")
+                    r.method == "POST" && (url.contains(":append") || url.contains("values:batchUpdate")) -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        appendedBodies += buffer.readUtf8()
+                        response(r, 200, """{"responses":[]}""")
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val executor = createTestAccountingSyncExecutor(sheetsClient = sheets, payableDao = pDao)
+        val res = executor.executeRestorePayable(
+            SyncQueueEntity(id = 1L, transactionId = "pay_no_date", operationType = SyncQueueEntity.OP_RESTORE_PAYABLE, payloadJson = "{}"),
+            "sheet_123",
+            "Nov26"
+        )
+        assertTrue(res is Result.Success)
+        assertEquals(1, appendedBodies.size)
+        val json = Json.parseToJsonElement(appendedBodies[0]).jsonObject
+        val dataArray = json["data"]?.jsonArray.orEmpty()
+        val t3Entry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!V") == true }?.jsonObject
+        assertNotNull(t3Entry)
+        val values = t3Entry!!["values"]?.jsonArray?.get(0)?.jsonArray
+        assertNotNull(values)
+        assertEquals("", values!![0].jsonPrimitive.content) // Null date incurred serial rendered as empty string
+        assertEquals("Grace", values[2].jsonPrimitive.content)
+        assertEquals(75.0, values[4].jsonPrimitive.double, 0.001)
+
+        val uuidEntry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AE") == true }?.jsonObject
+        assertNotNull(uuidEntry)
+        assertEquals("pay_no_date", uuidEntry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content)
     }
 }

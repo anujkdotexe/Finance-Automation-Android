@@ -62,7 +62,6 @@ data class SyncQueueEntity(
         const val OP_YEAR_CLOSE: String = "YEAR_CLOSE"
         const val OP_RESTORE_INFLOW: String = "RESTORE_INFLOW"
         const val OP_RESTORE_PAYABLE: String = "RESTORE_PAYABLE"
-        const val OP_RESTORE_REPAYMENT: String = "RESTORE_REPAYMENT"
 
         const val STATUS_PENDING: String = "PENDING"
         const val STATUS_IN_PROGRESS: String = "IN_PROGRESS"
