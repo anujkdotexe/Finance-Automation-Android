@@ -32,8 +32,7 @@ object AmountInput {
             decimals = 0
         }
 
-        for (original in raw) {
-            val c = normalise(original) ?: continue
+        for (c in normaliseAll(raw)) {
             val last = out.lastOrNull()
             when {
                 c in '0'..'9' -> {
@@ -92,11 +91,36 @@ object AmountInput {
         return out.toString()
     }
 
+    /**
+     * Maps the whole text to kept characters. The letter x (or X) counts as a times sign only between two operands:
+     * a digit or closing bracket before it and a digit, dot or opening bracket after it. Anywhere else it is dropped,
+     * so "5 for tax" becomes 5 and not 5*.
+     */
+    private fun normaliseAll(raw: String): List<Char> {
+        val kept = ArrayList<Char>(raw.length)
+        for (ch in raw) {
+            if (ch == 'x' || ch == 'X') kept.add('x') else normalise(ch)?.let { kept.add(it) }
+        }
+        val result = ArrayList<Char>(kept.size)
+        for ((i, ch) in kept.withIndex()) {
+            if (ch != 'x') {
+                result.add(ch)
+                continue
+            }
+            val prev = result.lastOrNull()
+            val next = kept.subList(i + 1, kept.size).firstOrNull { it != 'x' }
+            val leftIsOperand = prev != null && (prev in '0'..'9' || prev == ')')
+            val rightIsOperand = next != null && (next in '0'..'9' || next == '.' || next == '(')
+            if (leftIsOperand && rightIsOperand) result.add('*')
+        }
+        return result
+    }
+
     /** Maps one typed character to a kept character, or null when it must be dropped. */
     private fun normalise(c: Char): Char? = when {
         c in '0'..'9' -> c
         c == '.' || c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' -> c
-        c == 'x' || c == 'X' || c == '×' -> '*'
+        c == '×' -> '*'
         c == '÷' -> '/'
         c == '−' -> '-'
         Character.isDigit(c) -> Character.digit(c, 10).takeIf { it in 0..9 }?.let { '0' + it }

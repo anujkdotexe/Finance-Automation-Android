@@ -110,6 +110,18 @@ class AmountInputTest {
     }
 
     @Test
+    fun theLetterXIsATimesSignOnlyBetweenTwoOperands() {
+        assertEquals("5", clean("5 for tax"))
+        assertEquals("5", clean("5x"))
+        assertEquals("3", clean("x3"))
+        assertEquals("5*3", clean("5 x 3"))
+        assertEquals("(2+3)*4", clean("(2+3)x4"))
+        assertEquals("5*3", clean("5xx3"))
+        assertEquals("5", clean("max 5"))
+        assertEquals("5", clean("5 max"))
+    }
+
+    @Test
     fun lettersCurrencyAndCommasAreDropped() {
         assertEquals("15", clean("1e5"))
         assertEquals("", clean("abc"))
