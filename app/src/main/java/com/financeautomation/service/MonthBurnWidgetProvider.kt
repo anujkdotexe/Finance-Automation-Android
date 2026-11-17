@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import com.financeautomation.data.local.entity.SyncQueueEntity
 
 /**
@@ -35,7 +36,7 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                refresh(context)
+                refreshSafely(load = { refresh(context) })
             } finally {
                 pending.finish()
             }
@@ -54,6 +55,32 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
         /** The only route the widget asks MainActivity to open. It is on the route whitelist. */
         const val ROUTE_EXTRA = "extra_route"
         const val OPEN_ROUTE = AppRoutes.DASHBOARD
+
+        /** Upper limit for one refresh; the system gives a broadcast about 10 seconds when it uses goAsync. */
+        const val REFRESH_TIMEOUT_MS = 8_000L
+
+        /**
+         * Runs [load] without letting a failure or a slow read end the process. A thrown exception and a timeout are
+         * recorded in Diagnostics (class name only, no message) and then [onFailure] runs. Cancellation of the caller
+         * is rethrown.
+         */
+        suspend fun refreshSafely(
+            timeoutMs: Long = REFRESH_TIMEOUT_MS,
+            load: suspend () -> Unit,
+            onFailure: suspend () -> Unit = {}
+        ) {
+            try {
+                val finished = withTimeoutOrNull(timeoutMs) { load() }
+                if (finished == null) {
+                    Diagnostics.record("MonthBurnWidgetProvider", "refresh timed out")
+                    onFailure()
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("MonthBurnWidgetProvider", "${e.javaClass.simpleName}: refresh failed")
+                onFailure()
+            }
+        }
 
         /** Starts a refresh on a background thread. Safe to call from anywhere, including after a sync. */
         fun requestUpdate(context: Context) {
