@@ -24,6 +24,9 @@ interface PayableDao {
     @Query("SELECT * FROM payables")
     suspend fun getAll(): List<PayableEntity>
 
+    @Query("SELECT * FROM payables WHERE (dateIncurredSerial >= :startSerial AND dateIncurredSerial < :endSerial) ORDER BY dateIncurredSerial ASC, timeSerial ASC")
+    suspend fun getAllForYear(startSerial: Int, endSerial: Int): List<PayableEntity>
+
     @Query("SELECT * FROM payables WHERE uuid = :uuid LIMIT 1")
     suspend fun getByUuid(uuid: String): PayableEntity?
 

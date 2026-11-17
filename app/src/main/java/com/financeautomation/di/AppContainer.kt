@@ -526,6 +526,8 @@ class DefaultAppContainer(
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             lineageDaoProvider = { awaitDatabase().lineageDao() },
             transactionDaoProvider = { awaitDatabase().transactionDao() },
+            inflowDaoProvider = { awaitDatabase().inflowDao() },
+            payableDaoProvider = { awaitDatabase().payableDao() },
             accountsProvider = { accountRepository.getAllAccounts(includeArchived = false).map { it.name } },
             categoriesProvider = { categoryRepository.getAllCategories(includeArchived = false).map { it.name } },
             settlementWaterfallUseCase = settlementWaterfallUseCase,

@@ -192,23 +192,56 @@ class TransactionRepositoryImpl(
         val zone = ZoneId.of("Asia/Kolkata")
         val startMillis = ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
         val endMillis = ZonedDateTime.of(year + 1, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val startSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(year, 1, 1))
+        val endSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(year + 1, 1, 1))
 
         val tDao = resolveTransactionDao()
         val qDao = resolveSyncQueueDao()
+        val inDao = resolveInflowDao()
+        val pDao = resolvePayableDao()
 
         val txns = tDao.getAllForYear(startMillis, endMillis)
+        val inflows = inDao?.getAllForYear(startMillis, endMillis).orEmpty()
+        val payables = pDao?.getAllForYear(startSerial, endSerial).orEmpty()
         val activeIds = qDao.getActiveTransactionIds().toSet()
 
-        val toRequeue = txns.filter { it.id !in activeIds }
-        if (toRequeue.isNotEmpty()) {
+        val toRequeueTxns = txns.filter { it.id !in activeIds }
+        val toRequeueInflows = inflows.filter { it.id !in activeIds }
+        val toRequeuePayables = payables.filter { it.uuid !in activeIds }
+
+        if (toRequeueTxns.isNotEmpty() || toRequeueInflows.isNotEmpty() || toRequeuePayables.isNotEmpty()) {
             runInDbTransaction {
-                for (txn in toRequeue) {
+                for (txn in toRequeueTxns) {
                     tDao.resetSyncStateForRequeue(txn.id)
                     qDao.insert(
                         SyncQueueEntity(
                             transactionId = txn.id,
                             operationType = SyncQueueEntity.OP_INSERT,
                             payloadJson = txn.id,
+                            status = SyncQueueEntity.STATUS_PENDING
+                        )
+                    )
+                }
+                for (inflow in toRequeueInflows) {
+                    qDao.insert(
+                        SyncQueueEntity(
+                            transactionId = inflow.id,
+                            operationType = SyncQueueEntity.OP_RESTORE_INFLOW,
+                            payloadJson = AccountingRequestJsonAdapter.restoreInflowRequestToJson(
+                                com.financeautomation.domain.model.RestoreInflowRequest(inflow.id, inflow.timestamp)
+                            ),
+                            status = SyncQueueEntity.STATUS_PENDING
+                        )
+                    )
+                }
+                for (payable in toRequeuePayables) {
+                    qDao.insert(
+                        SyncQueueEntity(
+                            transactionId = payable.uuid,
+                            operationType = SyncQueueEntity.OP_RESTORE_PAYABLE,
+                            payloadJson = AccountingRequestJsonAdapter.restorePayableRequestToJson(
+                                com.financeautomation.domain.model.RestorePayableRequest(payable.uuid, payable.tabName, year)
+                            ),
                             status = SyncQueueEntity.STATUS_PENDING
                         )
                     )
@@ -896,7 +929,10 @@ class TransactionRepositoryImpl(
                     item.operationType == SyncQueueEntity.OP_LOG_PAYABLE ||
                     item.operationType == SyncQueueEntity.OP_LOG_REPAYMENT ||
                     item.operationType == SyncQueueEntity.OP_CARRY_FORWARD ||
-                    item.operationType == SyncQueueEntity.OP_YEAR_CLOSE
+                    item.operationType == SyncQueueEntity.OP_YEAR_CLOSE ||
+                    item.operationType == SyncQueueEntity.OP_RESTORE_INFLOW ||
+                    item.operationType == SyncQueueEntity.OP_RESTORE_PAYABLE ||
+                    item.operationType == SyncQueueEntity.OP_RESTORE_REPAYMENT
                 ) {
                     val currentYear = java.time.ZonedDateTime.now(sheetTimeZone).year
                     val opYear = when (item.operationType) {
@@ -918,6 +954,16 @@ class TransactionRepositoryImpl(
                         SyncQueueEntity.OP_LOG_REPAYMENT -> {
                             val req = AccountingRequestJsonAdapter.repaymentRequestFromJson(item.payloadJson)
                             Instant.ofEpochMilli(req.timestamp).atZone(sheetTimeZone).year
+                        }
+                        SyncQueueEntity.OP_RESTORE_INFLOW -> {
+                            val req = AccountingRequestJsonAdapter.restoreInflowRequestFromJson(item.payloadJson)
+                            Instant.ofEpochMilli(req.timestamp).atZone(sheetTimeZone).year
+                        }
+                        SyncQueueEntity.OP_RESTORE_PAYABLE -> {
+                            AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).year
+                        }
+                        SyncQueueEntity.OP_RESTORE_REPAYMENT -> {
+                            AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).year
                         }
                         else -> currentYear
                     }
@@ -964,6 +1010,16 @@ class TransactionRepositoryImpl(
                         SyncQueueEntity.OP_CARRY_FORWARD -> {
                             AccountingRequestJsonAdapter.carryForwardRequestFromJson(item.payloadJson).targetTab
                         }
+                        SyncQueueEntity.OP_RESTORE_INFLOW -> {
+                            val req = AccountingRequestJsonAdapter.restoreInflowRequestFromJson(item.payloadJson)
+                            formatMonthTabName(req.timestamp)
+                        }
+                        SyncQueueEntity.OP_RESTORE_PAYABLE -> {
+                            AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).tabName
+                        }
+                        SyncQueueEntity.OP_RESTORE_REPAYMENT -> {
+                            AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).tabName
+                        }
                         else -> "Dashboard"
                     }
 
@@ -998,6 +1054,9 @@ class TransactionRepositoryImpl(
                         SyncQueueEntity.OP_LOG_REPAYMENT -> executor.executeLogRepayment(item, spreadsheetId, opTabName)
                         SyncQueueEntity.OP_CARRY_FORWARD -> executor.executeCarryForward(item, spreadsheetId)
                         SyncQueueEntity.OP_YEAR_CLOSE -> executor.executeYearClose(item, spreadsheetId)
+                        SyncQueueEntity.OP_RESTORE_INFLOW -> executor.executeRestoreInflow(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_RESTORE_PAYABLE -> executor.executeRestorePayable(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_RESTORE_REPAYMENT -> executor.executeRestoreRepayment(item, spreadsheetId, opTabName)
                         else -> Result.Success(Unit)
                     }
 

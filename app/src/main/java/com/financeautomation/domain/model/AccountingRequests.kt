@@ -69,3 +69,15 @@ data class YearCloseRequest(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+data class RestoreInflowRequest(
+    val inflowId: String,
+    val timestamp: Long
+)
+
+data class RestorePayableRequest(
+    val payableUuid: String,
+    val tabName: String,
+    val year: Int
+)
+
+

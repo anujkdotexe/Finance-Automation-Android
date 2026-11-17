@@ -703,7 +703,7 @@
 
     <!-- ViewModel and Coordinator user-visible messages -->
     <!-- SettingsSyncCoordinator -->
-    <string name="workbook_replaced_notice">Your Finance workbook was missing, so a new one was created and your entries are being added to it again.</string>
+    <string name="workbook_replaced_notice">Your saved entries and income are being added again. Friend repayments could not be restored.</string>
     <string name="settings_msg_signed_in">Signed in as %1$s</string>
     <string name="settings_msg_signed_out">Signed out of Google account</string>
     <string name="settings_msg_provisioned_workbook">Successfully provisioned %1$s master workbook</string>

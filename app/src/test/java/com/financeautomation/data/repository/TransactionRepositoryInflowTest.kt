@@ -51,6 +51,10 @@ class TransactionRepositoryInflowTest {
         override suspend fun deleteById(id: String) {
             storage.remove(id)
         }
+
+        override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<InflowEntity> =
+            storage.values.filter { it.timestamp in startMillis until endMillis && !it.status.equals("VOID", ignoreCase = true) }
+                .sortedBy { it.timestamp }
     }
 
     private fun mockTransactionDao(): TransactionDao =

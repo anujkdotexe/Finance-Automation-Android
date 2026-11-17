@@ -2,12 +2,15 @@ package com.financeautomation.data.remote
 
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.getByTabAndSheetRowIndex
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import java.time.Instant
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.CarryForwardRequest
 import com.financeautomation.domain.model.LedgerDebit
@@ -40,9 +43,13 @@ class AccountingSyncExecutor(
     private val syncQueueDao: SyncQueueDao? = null,
     private val lineageDao: LineageDao? = null,
     private val transactionDao: TransactionDao? = null,
+    private val inflowDao: InflowDao? = null,
+    private val payableDao: PayableDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
+    private val inflowDaoProvider: (suspend () -> InflowDao)? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val accountsProvider: (suspend () -> List<String>)? = null,
     private val categoriesProvider: (suspend () -> List<String>)? = null,
     private val settlementWaterfallUseCase: SettlementWaterfallUseCase = SettlementWaterfallUseCase(),
@@ -69,9 +76,13 @@ class AccountingSyncExecutor(
         syncQueueDao = syncQueueDao,
         lineageDao = lineageDao,
         transactionDao = null,
+        inflowDao = null,
+        payableDao = null,
         syncQueueDaoProvider = null,
         lineageDaoProvider = null,
         transactionDaoProvider = null,
+        inflowDaoProvider = null,
+        payableDaoProvider = null,
         accountsProvider = null,
         categoriesProvider = null,
         settlementWaterfallUseCase = settlementWaterfallUseCase,
@@ -91,6 +102,12 @@ class AccountingSyncExecutor(
 
     private suspend fun resolveTransactionDao(): TransactionDao? =
         transactionDao ?: transactionDaoProvider?.invoke()
+
+    private suspend fun resolveInflowDao(): InflowDao? =
+        inflowDao ?: inflowDaoProvider?.invoke()
+
+    private suspend fun resolvePayableDao(): PayableDao? =
+        payableDao ?: payableDaoProvider?.invoke()
 
     suspend fun executeLogCredit(
         item: SyncQueueEntity,
@@ -609,6 +626,110 @@ class AccountingSyncExecutor(
         } else {
             availableTabs.firstOrNull { !it.equals(targetTab, ignoreCase = true) }
         }
+    }
+
+    /**
+     * Restores an income / credit row to Table 2 (Cols M-T) without running the settlement waterfall.
+     * Preserves the stored hidden UUID in column AD. Idempotent: skips if row with UUID already exists.
+     */
+    suspend fun executeRestoreInflow(
+        item: SyncQueueEntity,
+        spreadsheetId: String,
+        tabName: String
+    ): Result<Unit> {
+        val inDao = resolveInflowDao()
+            ?: return Result.Error(IllegalStateException("InflowDao or provider must be supplied"))
+        val entity = inDao.getById(item.transactionId)
+            ?: return Result.Success(Unit)
+        if (entity.status.equals("VOID", ignoreCase = true)) {
+            return Result.Success(Unit)
+        }
+
+        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AD", entity.id)
+        if (existingCheck is Result.Success && existingCheck.data != null) {
+            return Result.Success(Unit)
+        } else if (existingCheck is Result.Error) {
+            return Result.Error(existingCheck.exception)
+        }
+
+        val localDate = Instant.ofEpochMilli(entity.timestamp).atZone(DateSerialUtils.SHEET_ZONE).toLocalDate()
+        val localTime = Instant.ofEpochMilli(entity.timestamp).atZone(DateSerialUtils.SHEET_ZONE).toLocalTime()
+        val dateSerial = DateSerialUtils.toDateSerial(localDate)
+        val timeSerial = DateSerialUtils.toTimeSerial(localTime)
+        val cells = listOf(
+            dateSerial,
+            timeSerial,
+            entity.account,
+            entity.inflowType,
+            entity.source,
+            entity.note,
+            entity.amount,
+            ""
+        )
+        val appendRes = googleSheetsClient.appendInflow(spreadsheetId, tabName, cells, uuid = entity.id)
+        return when (appendRes) {
+            is Result.Success -> Result.Success(Unit)
+            is Result.Error -> Result.Error(appendRes.exception)
+            is Result.Loading -> Result.Loading
+        }
+    }
+
+    /**
+     * Restores a payable row to Table 3 (Cols V-AB) without modifying other rows.
+     * Preserves the stored hidden UUID in column AE. Idempotent: skips if row with UUID already exists.
+     */
+    suspend fun executeRestorePayable(
+        item: SyncQueueEntity,
+        spreadsheetId: String,
+        tabName: String
+    ): Result<Unit> {
+        val pDao = resolvePayableDao()
+            ?: return Result.Error(IllegalStateException("PayableDao or provider must be supplied"))
+        val entity = pDao.getByUuid(item.transactionId)
+            ?: return Result.Success(Unit)
+        if (entity.repaymentStatus.equals("VOID", ignoreCase = true)) {
+            return Result.Success(Unit)
+        }
+
+        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AE", entity.uuid)
+        if (existingCheck is Result.Success && existingCheck.data != null) {
+            return Result.Success(Unit)
+        } else if (existingCheck is Result.Error) {
+            return Result.Error(existingCheck.exception)
+        }
+
+        val cells = listOf(
+            entity.dateIncurredSerial ?: "",
+            entity.timeSerial ?: "",
+            entity.paidBy,
+            entity.whatFor,
+            entity.amountIOwe,
+            entity.dateRepaidSerial ?: "",
+            entity.repaymentStatus
+        )
+        val appendRes = googleSheetsClient.appendPayable(spreadsheetId, tabName, cells, uuid = entity.uuid)
+        return when (appendRes) {
+            is Result.Success -> Result.Success(Unit)
+            is Result.Error -> Result.Error(appendRes.exception)
+            is Result.Loading -> Result.Loading
+        }
+    }
+
+    /**
+     * Restores a repayment operation if present. Idempotent: checks if already recorded.
+     */
+    suspend fun executeRestoreRepayment(
+        item: SyncQueueEntity,
+        spreadsheetId: String,
+        tabName: String
+    ): Result<Unit> {
+        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AE", item.transactionId)
+        if (existingCheck is Result.Success && existingCheck.data != null) {
+            return Result.Success(Unit)
+        } else if (existingCheck is Result.Error) {
+            return Result.Error(existingCheck.exception)
+        }
+        return Result.Success(Unit)
     }
 }
 

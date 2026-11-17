@@ -1,6 +1,8 @@
 package com.financeautomation.testutil
 
+import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.remote.AccountingSyncExecutor
@@ -18,7 +20,9 @@ fun createTestAccountingSyncExecutor(
     driveClient: GoogleDriveClient? = null,
     syncQueueDao: SyncQueueDao? = null,
     lineageDao: LineageDao? = null,
-    transactionDao: TransactionDao? = null
+    transactionDao: TransactionDao? = null,
+    inflowDao: InflowDao? = null,
+    payableDao: PayableDao? = null
 ): AccountingSyncExecutor {
     val tokenProvider = object : TokenProvider {
         override fun getAccessToken(): String = "test_token"
@@ -32,6 +36,8 @@ fun createTestAccountingSyncExecutor(
         googleDriveClient = drive,
         syncQueueDao = syncQueueDao,
         lineageDao = lineageDao,
-        transactionDao = transactionDao
+        transactionDao = transactionDao,
+        inflowDao = inflowDao,
+        payableDao = payableDao
     )
 }

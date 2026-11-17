@@ -27,6 +27,9 @@ interface InflowDao {
     @Query("SELECT * FROM inflows WHERE timestamp >= :start AND timestamp < :end ORDER BY timestamp DESC")
     fun getInflowsByRange(start: Long, end: Long): Flow<List<InflowEntity>>
 
+    @Query("SELECT * FROM inflows WHERE timestamp >= :startMillis AND timestamp < :endMillis AND UPPER(status) != 'VOID' ORDER BY timestamp ASC")
+    suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<InflowEntity>
+
     @Query("SELECT * FROM inflows ORDER BY timestamp DESC")
     fun getAllInflows(): Flow<List<InflowEntity>>
 

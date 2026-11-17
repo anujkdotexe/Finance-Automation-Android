@@ -152,4 +152,36 @@ object AccountingRequestJsonAdapter {
             timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
         )
     }
+
+    fun restoreInflowRequestToJson(req: com.financeautomation.domain.model.RestoreInflowRequest): String {
+        return buildJsonObject {
+            put("inflowId", JsonPrimitive(req.inflowId))
+            put("timestamp", JsonPrimitive(req.timestamp))
+        }.toString()
+    }
+
+    fun restoreInflowRequestFromJson(jsonStr: String): com.financeautomation.domain.model.RestoreInflowRequest {
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
+        return com.financeautomation.domain.model.RestoreInflowRequest(
+            inflowId = obj["inflowId"]?.jsonPrimitive?.content.orEmpty(),
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+        )
+    }
+
+    fun restorePayableRequestToJson(req: com.financeautomation.domain.model.RestorePayableRequest): String {
+        return buildJsonObject {
+            put("payableUuid", JsonPrimitive(req.payableUuid))
+            put("tabName", JsonPrimitive(req.tabName))
+            put("year", JsonPrimitive(req.year))
+        }.toString()
+    }
+
+    fun restorePayableRequestFromJson(jsonStr: String): com.financeautomation.domain.model.RestorePayableRequest {
+        val obj = json.parseToJsonElement(jsonStr).jsonObject
+        return com.financeautomation.domain.model.RestorePayableRequest(
+            payableUuid = obj["payableUuid"]?.jsonPrimitive?.content.orEmpty(),
+            tabName = obj["tabName"]?.jsonPrimitive?.content.orEmpty(),
+            year = obj["year"]?.jsonPrimitive?.intOrNull ?: 0
+        )
+    }
 }

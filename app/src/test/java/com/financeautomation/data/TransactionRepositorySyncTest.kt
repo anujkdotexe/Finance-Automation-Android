@@ -196,6 +196,11 @@ class TransactionRepositorySyncTest {
         override suspend fun deleteByUuid(uuid: String) { payables.remove(uuid) }
         override suspend fun deleteAll() { payables.clear() }
         override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(startSerial: Int, endSerial: Int): List<PayableEntity> =
+            payables.values.filter {
+                val serial = it.dateIncurredSerial
+                serial != null && serial in startSerial until endSerial && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+            }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
     }
 
     private class FakeLineageDao : LineageDao {

@@ -3,7 +3,9 @@ package com.financeautomation.testutil
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.entity.LineageEntity
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.InflowEntity
@@ -98,6 +100,36 @@ class InMemoryInflowDao : InflowDao {
         storage[id]?.let { storage[id] = it.copy(status = status) }
     }
     override suspend fun deleteById(id: String) { storage.remove(id) }
+    override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<InflowEntity> =
+        storage.values.filter { it.timestamp in startMillis until endMillis && !it.status.equals("VOID", ignoreCase = true) }
+            .sortedBy { it.timestamp }
+}
+
+/** In-memory payables table. */
+class InMemoryPayableDao : PayableDao {
+    val storage = ConcurrentHashMap<String, PayableEntity>()
+    override fun observeAll(): Flow<List<PayableEntity>> = flowOf(storage.values.toList())
+    override fun observePending(): Flow<List<PayableEntity>> = flowOf(storage.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) })
+    override suspend fun getPending(): List<PayableEntity> = storage.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) }
+    override suspend fun getAll(): List<PayableEntity> = storage.values.toList()
+    override suspend fun getByUuid(uuid: String): PayableEntity? = storage[uuid]
+    override suspend fun upsert(payable: PayableEntity) { storage[payable.uuid] = payable }
+    override suspend fun upsertAll(payables: List<PayableEntity>) { payables.forEach { storage[it.uuid] = it } }
+    override suspend fun deleteByUuid(uuid: String) { storage.remove(uuid) }
+    override suspend fun updatePaidByName(oldName: String, newName: String): Int {
+        var count = 0
+        storage.values.filter { it.paidBy == oldName }.forEach {
+            storage[it.uuid] = it.copy(paidBy = newName)
+            count++
+        }
+        return count
+    }
+    override suspend fun deleteAll() { storage.clear() }
+    override suspend fun getAllForYear(startSerial: Int, endSerial: Int): List<PayableEntity> =
+        storage.values.filter {
+            val serial = it.dateIncurredSerial
+            serial != null && serial in startSerial until endSerial && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+        }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
 }
 
 /** In-memory sync queue that mirrors the Room queries (a FAILED row below the retry cap is still pending). */
