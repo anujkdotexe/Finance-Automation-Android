@@ -40,7 +40,13 @@ data class ConfigRow(
     }
 
     companion object {
-        /** The identity of a Config row: type and key, trimmed and lower-cased. */
-        fun compositeKeyOf(type: String, key: String): String = "${type.trim().lowercase()}|${key.trim().lowercase()}"
+        /**
+         * The identity of a Config row: type and key, trimmed, in Unicode composed form (NFC) and lower-cased, so a
+         * name typed with a combining accent and the same name with the single accented letter are one key.
+         */
+        fun compositeKeyOf(type: String, key: String): String = "${normalise(type)}|${normalise(key)}"
+
+        private fun normalise(text: String): String =
+            java.text.Normalizer.normalize(text.trim(), java.text.Normalizer.Form.NFC).lowercase()
     }
 }

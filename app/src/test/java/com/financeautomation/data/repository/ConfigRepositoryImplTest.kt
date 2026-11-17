@@ -83,4 +83,77 @@ class ConfigRepositoryImplTest {
         assertEquals("false", row[2])
         assertEquals("the bad stamp is replaced by the real edit time", clock.instant().toString(), row[6])
     }
+
+    @Test
+    fun readAllKeepsNewestOfDuplicateKeys() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow("category", "Food", "false", "false", "false", "1|Teal", "2026-11-17T08:00:00Z", "a", "")
+        sheet.addRow("category", "Fuel", "false", "false", "false", "2|Teal", "2026-11-17T08:00:00Z", "a", "")
+        sheet.addRow("category", "food ", "true", "false", "false", "1|Teal", "2026-11-17T09:00:00Z", "b", "")
+        sheet.addRow("category", "FOOD", "false", "false", "false", "1|Teal", "2026-11-17T07:00:00Z", "c", "")
+
+        val rows = repo(sheet).readAll("sheet").ok().filter { it.type == "category" }
+
+        assertEquals(listOf("food", "Fuel"), rows.map { it.key })
+        assertEquals("the newest duplicate wins", "b", rows.first().updatedBy)
+    }
+
+    @Test
+    fun readAllDuplicateTieKeepsTombstone() = runBlocking {
+        val same = "2026-11-17T08:00:00Z"
+        for (tombstoneFirst in listOf(true, false)) {
+            val sheet = FakeConfigSheet()
+            val live = arrayOf("category", "Food", "false", "false", "false", "1|Teal", same, "live", "")
+            val dead = arrayOf("category", "Food", "false", "false", "false", "1|Teal", same, "dead", "true")
+            if (tombstoneFirst) { sheet.addRow(*dead); sheet.addRow(*live) } else { sheet.addRow(*live); sheet.addRow(*dead) }
+
+            val rows = repo(sheet).readAll("sheet").ok().filter { it.type == "category" }
+
+            assertEquals(1, rows.size)
+            assertTrue("tombstone wins a tie (tombstone first: $tombstoneFirst)", rows.single().deleted)
+        }
+    }
+
+    @Test
+    fun readAllNormalisesUnicodeKeys() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow("category", "Cafe\u0301", "false", "false", "false", "1|Teal", "2026-11-17T08:00:00Z", "decomposed", "")
+        sheet.addRow("category", "Caf\u00e9", "false", "false", "false", "1|Teal", "2026-11-17T09:00:00Z", "composed", "")
+
+        val rows = repo(sheet).readAll("sheet").ok().filter { it.type == "category" }
+
+        assertEquals("one key, not two", 1, rows.size)
+        assertEquals("composed", rows.single().updatedBy)
+    }
+
+    @Test
+    fun upsertWritesFirstDuplicateRow() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow("category", "Food", "false", "false", "false", "1|Teal", "2026-11-17T06:00:00Z", "first", "")
+        sheet.addRow("category", "Fuel", "false", "false", "false", "2|Teal", "2026-11-17T06:00:00Z", "x", "")
+        sheet.addRow("category", "food", "false", "false", "false", "1|Teal", "2026-11-17T07:00:00Z", "second", "")
+        val firstIndex = 2
+        val secondIndex = 4
+
+        val local = ConfigRow("category", "Food", listOf("true", "false", "false", "1|Teal"), Instant.parse("2026-11-17T09:00:00Z"), "me", false)
+        val written = repo(sheet).upsert("sheet", listOf(local)).ok()
+
+        assertEquals(setOf("category|food"), written)
+        assertEquals("the first row is written", "me", sheet.cells[firstIndex][7])
+        assertEquals("the later duplicate is left alone", "second", sheet.cells[secondIndex][7])
+        assertEquals(5, sheet.cells.size)
+    }
+
+    @Test
+    fun upsertDoesNotOverwriteWhenALaterDuplicateIsNewer() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow("category", "Food", "false", "false", "false", "1|Teal", "2026-11-17T06:00:00Z", "first", "")
+        sheet.addRow("category", "food", "true", "false", "false", "1|Teal", "2026-11-17T09:00:00Z", "newest", "")
+
+        val local = ConfigRow("category", "Food", listOf("false", "false", "false", "1|Teal"), Instant.parse("2026-11-17T08:00:00Z"), "me", false)
+        val written = repo(sheet).upsert("sheet", listOf(local)).ok()
+
+        assertEquals(emptySet<String>(), written)
+        assertEquals("first", sheet.cells[2][7])
+    }
 }

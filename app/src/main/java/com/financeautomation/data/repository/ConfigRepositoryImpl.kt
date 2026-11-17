@@ -98,8 +98,31 @@ class ConfigRepositoryImpl(
             if (clampedCount > 0) {
                 Diagnostics.record("ConfigRepositoryImpl", "UPDATED_AT_CLAMPED: $clampedCount")
             }
-            configRows
+            keepNewestPerKey(configRows)
         }
+    }
+
+    /**
+     * Two rows with the same key (two devices appended at once, or a hand edit) must not both reach the local
+     * database, because which one wins would depend on the order of the rows. The row with the newest UpdatedAt is
+     * kept; on equal stamps the tombstone is kept.
+     */
+    private fun keepNewestPerKey(rows: List<ConfigRow>): List<ConfigRow> {
+        val byKey = LinkedHashMap<String, ConfigRow>()
+        var dropped = 0
+        for (row in rows) {
+            val current = byKey[row.compositeKey]
+            if (current == null) {
+                byKey[row.compositeKey] = row
+                continue
+            }
+            dropped++
+            val newer = row.updatedAt > current.updatedAt ||
+                (row.updatedAt == current.updatedAt && row.deleted && !current.deleted)
+            if (newer) byKey[row.compositeKey] = row
+        }
+        if (dropped > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_DUPLICATE_KEYS: $dropped")
+        return byKey.values.toList()
     }
 
     override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Set<String>> = withContext(ioDispatcher) {
@@ -114,15 +137,29 @@ class ConfigRepositoryImpl(
 
             data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant, val futureStamped: Boolean)
             val keyToMetaMap = mutableMapOf<String, ExistingRowMeta>()
+            var duplicateRows = 0
             for (i in existingCells.indices) {
                 val row = existingCells[i]
-                val type = row.getOrNull(0)?.toString()?.trim()?.lowercase().orEmpty()
-                val key = row.getOrNull(1)?.toString()?.trim()?.lowercase().orEmpty()
+                val type = row.getOrNull(0)?.toString()?.trim().orEmpty()
+                val key = row.getOrNull(1)?.toString()?.trim().orEmpty()
                 if (type.isNotBlank() && key.isNotBlank()) {
                     val (updatedAt, futureStamped) = parseUpdatedAt(row.getOrNull(6)?.toString().orEmpty())
-                    keyToMetaMap["$type|$key"] = ExistingRowMeta(i + 1, updatedAt, futureStamped)
+                    val compositeKey = ConfigRow.compositeKeyOf(type, key)
+                    val first = keyToMetaMap[compositeKey]
+                    if (first == null) {
+                        keyToMetaMap[compositeKey] = ExistingRowMeta(i + 1, updatedAt, futureStamped)
+                    } else {
+                        // A later duplicate is left alone. Writes go to the first row; the conflict check uses the
+                        // newest stamp of the duplicates so a local edit cannot lose to a row it does not replace.
+                        duplicateRows++
+                        keyToMetaMap[compositeKey] = first.copy(
+                            updatedAt = maxOf(first.updatedAt, updatedAt),
+                            futureStamped = first.futureStamped || futureStamped
+                        )
+                    }
                 }
             }
+            if (duplicateRows > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_DUPLICATE_KEYS: $duplicateRows")
 
             val updatesMap = mutableMapOf<String, List<List<Any?>>>()
             val newRowsToAppend = mutableListOf<List<Any?>>()
