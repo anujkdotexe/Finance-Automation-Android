@@ -1,6 +1,5 @@
 package com.financeautomation.presentation.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.financeautomation.core.constants.CategoryConstants
@@ -150,13 +149,13 @@ fun categoryDotColor(category: com.financeautomation.domain.model.Category, isDa
 /** Composable resolving dot color for a category name observing active dark theme. */
 @Composable
 fun categoryDotColor(categoryName: String): Color {
-    return categoryDotColor(categoryName, isSystemInDarkTheme())
+    return categoryDotColor(categoryName, isAppInDarkTheme())
 }
 
 /** Composable resolving dot color for a domain category observing active dark theme. */
 @Composable
 fun categoryDotColor(category: com.financeautomation.domain.model.Category): Color {
-    return categoryDotColor(category, isSystemInDarkTheme())
+    return categoryDotColor(category, isAppInDarkTheme())
 }
 
 /** Resolves dot color by index for a given dark mode setting. */
@@ -168,7 +167,7 @@ fun categoryDotColorByIndex(index: Int, isDark: Boolean): Color {
 /** Composable resolving dot color by index observing active dark theme. */
 @Composable
 fun categoryDotColorByIndex(index: Int): Color {
-    return categoryDotColorByIndex(index, isSystemInDarkTheme())
+    return categoryDotColorByIndex(index, isAppInDarkTheme())
 }
 
 /** Resolves the category picker palette colors for a given dark mode setting. */
@@ -179,5 +178,5 @@ fun categoryPaletteColors(isDark: Boolean): List<Color> {
 /** Composable resolving the category picker palette colors observing active dark theme. */
 @Composable
 fun categoryPaletteColors(): List<Color> {
-    return categoryPaletteColors(isSystemInDarkTheme())
+    return categoryPaletteColors(isAppInDarkTheme())
 }

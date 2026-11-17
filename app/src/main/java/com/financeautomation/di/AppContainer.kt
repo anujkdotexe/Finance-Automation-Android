@@ -574,7 +574,8 @@ class DefaultAppContainer(
                 appLockManager.isLockedNow()
             },
             hidePreview = { privacySettings.secure.value },
-            subscriptionRepository = subscriptionRepository
+            subscriptionRepository = subscriptionRepository,
+            themeMode = preferencesRepository.getThemeMode()
         )
     }
 

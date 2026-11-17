@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
-import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.theme.FinanceTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -42,7 +42,9 @@ import kotlinx.coroutines.launch
  */
 class ResultPillOverlay(
     private val context: Context,
-    private val hidePreview: () -> Boolean = { false }
+    private val hidePreview: () -> Boolean = { false },
+    private val themeMode: kotlinx.coroutines.flow.Flow<com.financeautomation.domain.model.ThemeMode> =
+        kotlinx.coroutines.flow.flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -115,7 +117,7 @@ class ResultPillOverlay(
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
-                        FinanceAutomationTheme {
+                        SavedThemeHost(themeMode) {
                             Surface(
                                 shape = FinanceTheme.shapes.pill,
                                 color = FinanceTheme.colors.primaryContainer,

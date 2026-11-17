@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.flows
 
+import com.financeautomation.presentation.components.ClearFocusOnUserDrag
 import com.financeautomation.core.constants.CategoryConstants
 
 import androidx.compose.foundation.clickable
@@ -56,12 +57,12 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
-import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
-import com.financeautomation.domain.usecase.ExpressionEvaluator
+import com.financeautomation.presentation.components.AmountEntry
+import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
@@ -134,11 +135,7 @@ fun RepaidFriendFlowSheet(
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
 
-    LaunchedEffect(scrollState.isScrollInProgress) {
-        if (scrollState.isScrollInProgress) {
-            focusManager.clearFocus()
-        }
-    }
+    ClearFocusOnUserDrag(scrollState, focusManager)
 
     Column(
         modifier = modifier
@@ -170,71 +167,19 @@ fun RepaidFriendFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "₹",
-                    style = FinanceTheme.typography.amountHero,
-                    color = FinanceTheme.colors.primary,
-                    modifier = Modifier.padding(end = FinanceTheme.spacing.xs)
-                )
-
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { input ->
-                        if (AmountInputSanitizer.isValidExpressionInput(input)) {
-                            amountText = input
-                        }
-                    },
-                    singleLine = true,
-                    textStyle = FinanceTheme.typography.amountHero.copy(
-                        color = FinanceTheme.colors.onSurface,
-                        textAlign = TextAlign.Center
-                    ),
-                    cursorBrush = SolidColor(FinanceTheme.colors.primary),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Next
-                    ),
-                    modifier = Modifier
-                        .width(IntrinsicSize.Min)
-                        .defaultMinSize(minWidth = FinanceTheme.sizes.emptyStateIllustration)
-                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-                    decorationBox = { innerTextField ->
-                        Box(contentAlignment = Alignment.Center) {
-                            if (amountText.isEmpty()) {
-                                Text(
-                                    text = "0.00",
-                                    style = FinanceTheme.typography.amountHero,
-                                    color = FinanceTheme.colors.outlineVariant
-                                )
-                            }
-                            innerTextField()
-                        }
-                    }
-                )
-            }
-
-            val evaluated = remember(amountText) { ExpressionEvaluator().evaluate(amountText) }
-            if (amountText.any { it in "+-*/" } && evaluated != null && evaluated > 0.0) {
-                Text(
-                    text = "= ${formatRupeesAuto(evaluated)}",
-                    style = FinanceTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = FinanceTheme.spacing.xxs)
-                )
-            }
+            AmountField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                hero = true,
+                onFocusChanged = onKeyboardFocusChanged
+            )
 
             // Quick Amount Chips ("Pay full" / "Custom amount")
             val openBalance = selectedCompanion?.balance?.let { kotlin.math.abs(it) } ?: 0.0
             if (openBalance > 0.0) {
                 Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
                 val formattedBalance = formatRupeesAuto(openBalance)
-                val fullAmountStr = formatRupees(openBalance, includeDecimals = true).removePrefix("₹")
+                val fullAmountStr = AmountEntry().onInput(formatRupees(openBalance, includeDecimals = true).removePrefix("₹")).text
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
@@ -293,7 +238,7 @@ fun RepaidFriendFlowSheet(
                                 focusManager.clearFocus()
                                 personName = companion.name
                                 if (debtBalance > 0.0 && amountText.isEmpty()) {
-                                    amountText = formatRupees(debtBalance, includeDecimals = true).removePrefix("₹")
+                                    amountText = AmountEntry().onInput(formatRupees(debtBalance, includeDecimals = true).removePrefix("₹")).text
                                 }
                             }
                         )
@@ -467,8 +412,9 @@ fun RepaidFriendFlowSheet(
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // 6. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Save" outside scrollable area
-        val parsedAmount = ExpressionEvaluator().evaluate(amountText) ?: 0.0
-        val isValid = parsedAmount > 0.0 && personName.isNotBlank()
+        val amountEntry = AmountEntry(amountText)
+        val parsedAmount = amountEntry.amountOrZero
+        val isValid = amountEntry.canSave && personName.isNotBlank()
 
         ButtonPair(
             outlinedText = stringResource(R.string.action_cancel),

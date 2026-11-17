@@ -528,10 +528,8 @@
     <!-- Budgets -->
     <string name="budget_sheet_title">Monthly budget for %1$s</string>
     <string name="budget_sheet_amount_label">Amount per month</string>
-    <string name="budget_sheet_amount_placeholder">e.g. 5000 or 3000+2000</string>
     <string name="budget_sheet_hint">You can type a sum such as 1,200+300</string>
     <string name="budget_sheet_result">Budget: %1$s a month</string>
-    <string name="budget_sheet_invalid">Enter an amount above zero, for example 5000 or 3000+2000</string>
     <string name="budget_sheet_save_failed">Could not save the budget. Try again.</string>
     <string name="budget_sheet_clear">Clear budget</string>
     <string name="budget_row_none">No budget set</string>
@@ -895,4 +893,17 @@
     <string name="review_msg_void_discarded_returns">Discarded. The sheet still has this entry, so it will come back after the next sync.</string>
     <string name="onboarding_use_other_account">Use a different account</string>
     <string name="account_switch_message_plain">Sign in with this Google account instead of the previous one?</string>
+    <string name="amount_err_unreadable">This amount cannot be read. Check the numbers and signs.</string>
+    <string name="amount_err_too_large">This amount is too large.</string>
+    <string name="amount_err_zero">Enter an amount above zero.</string>
+    <string name="amount_preview">= %1$s</string>
+    <string name="amount_field_description">Amount in rupees</string>
+    <string name="amount_placeholder">0.00</string>
+    <string name="currency_symbol_inr">₹</string>
+    <string name="amount_key_plus">Plus</string>
+    <string name="amount_key_minus">Minus</string>
+    <string name="amount_key_times">Times</string>
+    <string name="amount_key_divide">Divide</string>
+    <string name="amount_key_open">Open bracket</string>
+    <string name="amount_key_close">Close bracket</string>
 </resources>

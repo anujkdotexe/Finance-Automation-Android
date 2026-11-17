@@ -3,6 +3,26 @@ package com.financeautomation.domain.usecase
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+/** What an amount box holds, as the screens must treat it. */
+sealed interface AmountOutcome {
+    /** Nothing typed. */
+    data object Empty : AmountOutcome
+
+    /** Typed but not finished (for example "5+"): no error is shown yet and Save stays disabled. */
+    data object Incomplete : AmountOutcome
+
+    /** A valid amount above zero, rounded half up to 2 decimals. */
+    data class Value(val amount: Double) : AmountOutcome
+
+    data object Unreadable : AmountOutcome
+    data object TooLarge : AmountOutcome
+
+    /** The result is zero or negative. */
+    data object NotPositive : AmountOutcome
+
+    val isError: Boolean get() = this is Unreadable || this is TooLarge || this is NotPositive
+}
+
 /**
  * Evaluates simple amount expressions typed into an amount field, for example "120+80", "450/3", "99.5*2" or
  * "1,200+300". Supports + - * / and parentheses, decimals, thousands commas and spaces. Hand written recursive
@@ -13,19 +33,54 @@ class ExpressionEvaluator {
 
     /** Returns the result rounded to 2 decimals, or null when the input is not a valid amount expression. */
     fun evaluate(input: String): Double? {
-        val cleaned = input.filterNot { it == ',' || it.isWhitespace() }
+        val cleaned = strip(input)
         if (cleaned.isEmpty()) return null
         return try {
-            val parser = Parser(cleaned)
-            val value = parser.parseExpression()
-            if (!parser.atEnd()) return null
+            val value = compute(cleaned) ?: return null
             if (value < BigDecimal.ZERO || value > MAX_AMOUNT) return null
-            value.setScale(2, RoundingMode.HALF_UP).toDouble()
+            round(value)
         } catch (e: ArithmeticException) {
             null
         } catch (e: IllegalArgumentException) {
             null
         }
+    }
+
+    /** Classifies the text for the amount box: the one place that decides the error text and the Save state. */
+    fun evaluateDetailed(input: String): AmountOutcome {
+        val cleaned = strip(input)
+        if (cleaned.isEmpty()) return AmountOutcome.Empty
+        if (isIncomplete(cleaned)) return AmountOutcome.Incomplete
+        return try {
+            val value = compute(cleaned) ?: return AmountOutcome.Unreadable
+            when {
+                value > MAX_AMOUNT -> AmountOutcome.TooLarge
+                round(value) <= 0.0 -> AmountOutcome.NotPositive
+                else -> AmountOutcome.Value(round(value))
+            }
+        } catch (e: ArithmeticException) {
+            AmountOutcome.Unreadable
+        } catch (e: IllegalArgumentException) {
+            AmountOutcome.Unreadable
+        }
+    }
+
+    private fun strip(input: String) = input.filterNot { it == ',' || it.isWhitespace() }
+
+    /** The one rounding rule: half up to 2 decimals. */
+    private fun round(value: BigDecimal): Double = value.setScale(2, RoundingMode.HALF_UP).toDouble()
+
+    private fun isIncomplete(cleaned: String): Boolean {
+        val last = cleaned.last()
+        if (last in "+-*/(") return true
+        if (last == '.' && (cleaned.length == 1 || !cleaned[cleaned.length - 2].isDigit())) return true
+        return cleaned.count { it == '(' } > cleaned.count { it == ')' }
+    }
+
+    private fun compute(cleaned: String): BigDecimal? {
+        val parser = Parser(cleaned)
+        val value = parser.parseExpression()
+        return if (parser.atEnd()) value else null
     }
 
     private class Parser(private val text: String) {

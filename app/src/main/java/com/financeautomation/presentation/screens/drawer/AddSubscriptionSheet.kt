@@ -58,11 +58,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
-import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionFrequency
-import com.financeautomation.domain.usecase.ExpressionEvaluator
+import com.financeautomation.presentation.components.AmountEntry
+import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -88,6 +88,7 @@ fun AddSubscriptionSheet(
                 ?: ""
         )
     }
+    val amountEntry = AmountEntry(amountText)
     var isFixedAmount by rememberSaveable { mutableStateOf(existing?.let { it.amount != null } ?: true) }
     var selectedFrequency by rememberSaveable { mutableStateOf(existing?.frequency ?: prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
     val defaultAccount = existing?.account?.takeIf { it in accounts }
@@ -241,23 +242,10 @@ fun AddSubscriptionSheet(
                                     style = FinanceTheme.typography.amountHero,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                OutlinedTextField(
+                                AmountField(
                                     value = amountText,
-                                    onValueChange = {
-                                        if (AmountInputSanitizer.isValidExpressionInput(it)) {
-                                            amountText = it
-                                        }
-                                    },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                                    singleLine = true,
-                                    textStyle = FinanceTheme.typography.amountHero,
-                                    supportingText = if (amountText.any { it in "+-*/" }) {
-                                        val evaluated = ExpressionEvaluator().evaluate(amountText)
-                                        if (evaluated != null && evaluated > 0.0) {
-                                            { Text(text = "= ${formatRupeesAuto(evaluated)}", color = MaterialTheme.colorScheme.primary) }
-                                        } else null
-                                    } else null,
-                                    modifier = Modifier.fillMaxWidth()
+                                    onValueChange = { amountText = it },
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -580,11 +568,11 @@ fun AddSubscriptionSheet(
                     filledText = stringResource(R.string.action_save),
                     onFilledClick = {
                         if (name.isNotBlank()) {
-                            val amt = if (isFixedAmount) ExpressionEvaluator().evaluate(amountText) else null
+                            val amt = if (isFixedAmount) amountEntry.amountOrZero.takeIf { amountEntry.canSave } else null
                             onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe)
                         }
                     },
-                    filledEnabled = name.isNotBlank(),
+                    filledEnabled = name.isNotBlank() && (!isFixedAmount || amountEntry.canSave),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
