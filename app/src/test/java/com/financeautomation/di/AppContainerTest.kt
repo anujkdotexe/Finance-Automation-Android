@@ -5,8 +5,14 @@ import android.content.ContextWrapper
 import android.view.WindowManager
 import com.financeautomation.data.remote.TokenProvider
 import kotlinx.coroutines.CompletableDeferred
-import org.junit.Assert.assertTrue
+import com.financeautomation.core.model.Result
+import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.repository.TransactionRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Proxy
 
@@ -103,22 +109,35 @@ class AppContainerTest {
             providedDatabaseReady = CompletableDeferred()
         )
 
-        val requeuedYears = mutableListOf<Int>()
-        val recordingRepo = Proxy.newProxyInstance(
-            com.financeautomation.domain.repository.TransactionRepository::class.java.classLoader,
-            arrayOf(com.financeautomation.domain.repository.TransactionRepository::class.java)
-        ) { _, method, args ->
-            if (method.name == "requeueYearForNewWorkbook") {
-                requeuedYears.add(args!![0] as Int)
-                null
-            } else if (kotlinx.coroutines.flow.Flow::class.java.isAssignableFrom(method.returnType)) {
-                kotlinx.coroutines.flow.emptyFlow<Any?>()
-            } else null
-        } as com.financeautomation.domain.repository.TransactionRepository
+        val recordingRepo = RecordingTransactionRepository()
 
         val resolver = container.buildWorkbookResolver(txnRepoProvider = { recordingRepo })
         resolver.onWorkbookReplaced(2026, "old_id", "new_id")
 
-        org.junit.Assert.assertEquals(listOf(2026), requeuedYears)
+        assertEquals(listOf(2026), recordingRepo.requeuedYears)
+    }
+
+    private class RecordingTransactionRepository : TransactionRepository {
+        val requeuedYears = mutableListOf<Int>()
+
+        override fun getTransactions(): Flow<List<Transaction>> = flowOf(emptyList())
+        override fun getNeedsReview(): Flow<List<Transaction>> = flowOf(emptyList())
+        override suspend fun getTransactionById(id: String): Transaction? = null
+        override suspend fun insertTransaction(transaction: Transaction): Result<Unit> = Result.Success(Unit)
+        override suspend fun updateTransaction(transaction: Transaction): Result<Unit> = Result.Success(Unit)
+        override suspend fun voidTransaction(id: String): Result<Unit> = Result.Success(Unit)
+        override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = Result.Success(Unit)
+        override suspend fun undoRecentSave(id: String): Result<Unit> = Result.Success(Unit)
+        override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
+        override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
+        override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
+        override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
+        override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
+        override suspend fun requeueYearForNewWorkbook(year: Int) {
+            requeuedYears.add(year)
+        }
     }
 }
