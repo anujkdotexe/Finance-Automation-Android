@@ -16,7 +16,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,7 +46,7 @@ import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.flows.OpenDebtItem
 import com.financeautomation.presentation.theme.DefaultOverlayScrim
-import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
 import kotlinx.coroutines.CancellationException
@@ -237,8 +236,7 @@ class OverlayController(
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
-                        val mode by themeMode.collectAsState(initial = com.financeautomation.domain.model.ThemeMode.SYSTEM)
-                        FinanceAutomationTheme(themeMode = mode) {
+                        SavedThemeHost(themeMode) {
                             var isVisible by remember { mutableStateOf(false) }
 
                             LaunchedEffect(Unit) {

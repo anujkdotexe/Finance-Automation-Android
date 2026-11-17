@@ -37,13 +37,12 @@ import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PrivacyScrubber
 import com.financeautomation.core.utils.SyncErrorKind
 import com.financeautomation.domain.model.Account
-import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.model.Companion as FriendCompanion
 import com.financeautomation.domain.model.TripTag
 import com.financeautomation.presentation.flows.OpenDebtItem
 import com.financeautomation.presentation.overlay.OverlayContentHost
 import com.financeautomation.presentation.overlay.OverlayFlowScreen
-import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
@@ -95,9 +94,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
 
         setContent {
             val app = application as FinanceApplication
-            val themeMode by app.appContainer.preferencesRepository.getThemeMode()
-                .collectAsState(initial = ThemeMode.SYSTEM)
-            FinanceAutomationTheme(themeMode = themeMode, transparentSystemBars = true) {
+            SavedThemeHost(app.appContainer.preferencesRepository.getThemeMode(), transparentSystemBars = true) {
                 val state by quickLogViewModel.uiState.collectAsState()
 
                 LaunchedEffect(state.isSaved, state.isVoided) {

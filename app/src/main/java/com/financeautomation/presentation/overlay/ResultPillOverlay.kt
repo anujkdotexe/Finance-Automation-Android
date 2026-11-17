@@ -18,8 +18,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -29,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
-import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.theme.FinanceTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -119,8 +117,7 @@ class ResultPillOverlay(
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
-                        val mode by themeMode.collectAsState(initial = com.financeautomation.domain.model.ThemeMode.SYSTEM)
-                        FinanceAutomationTheme(themeMode = mode) {
+                        SavedThemeHost(themeMode) {
                             Surface(
                                 shape = FinanceTheme.shapes.pill,
                                 color = FinanceTheme.colors.primaryContainer,

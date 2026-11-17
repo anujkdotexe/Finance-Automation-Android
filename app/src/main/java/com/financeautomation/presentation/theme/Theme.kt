@@ -8,6 +8,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
@@ -15,6 +16,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.financeautomation.domain.model.ThemeMode
+
+/** The dark flag chosen by [FinanceAutomationTheme] (saved choice applied); null outside a theme. */
+val LocalAppDarkTheme = compositionLocalOf<Boolean?> { null }
+
+/** Dark flag to use in a composable: the app theme's, or the phone's when there is no app theme. */
+fun resolveInheritedDark(appDark: Boolean?, systemDark: Boolean): Boolean = appDark ?: systemDark
+
+@Composable
+@ReadOnlyComposable
+fun isAppInDarkTheme(): Boolean = resolveInheritedDark(LocalAppDarkTheme.current, isSystemInDarkTheme())
 
 /** Whether the dark scheme applies for a saved [ThemeMode] on a phone whose own setting is [systemDark]. */
 fun resolveDarkTheme(themeMode: ThemeMode, systemDark: Boolean): Boolean = when (themeMode) {
@@ -66,6 +77,7 @@ fun FinanceAutomationTheme(
     val financeColors = if (darkTheme) DarkFinanceColors else LightFinanceColors
 
     CompositionLocalProvider(
+        LocalAppDarkTheme provides darkTheme,
         LocalFinanceColors provides financeColors,
         LocalFinanceTypography provides FinanceTypographyTokens,
         LocalSpacing provides Spacing,
