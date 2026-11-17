@@ -47,6 +47,8 @@ data class QuickLogUiState(
         get() {
             if (isSaving || amount <= 0.0 || kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) return false
             if (splitMode == SplitMode.CUSTOM) {
+                // a typed share that cannot be read must not fall back to the full amount silently
+                if (customShareText.isNotBlank() && customShare == null) return false
                 val share = customShare ?: amount
                 val owed = amount - share
                 if (owed > 0.009 && selectedCompanionIds.isEmpty()) {

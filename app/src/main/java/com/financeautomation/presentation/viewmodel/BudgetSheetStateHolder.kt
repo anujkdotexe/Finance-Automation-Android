@@ -1,6 +1,8 @@
 package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.AmountInput
+import com.financeautomation.domain.usecase.AmountOutcome
 import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.usecase.ExpressionEvaluator
 import kotlinx.coroutines.CoroutineDispatcher
@@ -17,7 +19,7 @@ data class BudgetSheetState(
     val input: String = "",
     /** The live result of the expression, or null while the text is empty or not a valid positive amount. */
     val preview: Double? = null,
-    /** True when the field has text that is not a valid positive amount. */
+    /** True when the text is an unreadable, too large or not positive amount (an unfinished sum is not an error yet). */
     val showInvalid: Boolean = false,
     /** True when the category already has a budget, which enables "Clear budget". */
     val hasExisting: Boolean = false,
@@ -48,13 +50,15 @@ class BudgetSheetStateHolder(
         if (existingAmount != null && existingAmount > 0.0) onInputChanged(plainAmount(existingAmount))
     }
 
-    fun onInputChanged(text: String) {
-        val value = evaluator.evaluate(text)?.takeIf { it > 0.0 }
+    fun onInputChanged(raw: String) {
+        val text = AmountInput.clean(raw)
+        val outcome = evaluator.evaluateDetailed(text)
+        val value = (outcome as? AmountOutcome.Value)?.amount
         _state.update {
             it.copy(
                 input = text,
                 preview = value,
-                showInvalid = text.isNotBlank() && value == null,
+                showInvalid = outcome.isError,
                 saveFailed = false
             )
         }

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -774,5 +775,82 @@ class QuickLogViewModelTest {
         assertEquals(TransactionStatus.SETTLED, updated.status)
         assertEquals("Alice", updated.companions)
         assertEquals("Paris 2026", updated.tripTag)
+    }
+
+    private fun TestScope.newAmountVm(): QuickLogViewModel {
+        val vm = QuickLogViewModel(
+            transactionRepository = FakeTransactionRepo(),
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        vm.setManualMode()
+        return vm
+    }
+
+    @Test
+    fun hostileAmountTextIsCleanedAndOnlyAReadablePositiveAmountCanBeSaved() = runTest {
+        val vm = newAmountVm()
+        // text typed or pasted, the text the field then holds, and whether Save is allowed
+        val cases = listOf(
+            Triple(" ".repeat(50) + "5", "5", true),
+            Triple(" 12 34 ", "1234", true),
+            Triple("₹ 1,00,000.50", "100000.50", true),
+            Triple("1.2345", "1.23", true),
+            Triple("5++3", "5+3", true),
+            Triple("((((1))))", "(((1)))", true),
+            Triple("1..2", "1.2", true),
+            Triple("١٢٣", "123", true),
+            Triple("1234567890".repeat(4), "1234567890", true),
+            Triple("007", "7", true),
+            Triple("*5", "5", true),
+            Triple("5​+‎3", "5+3", true),
+            Triple("5+", "5+", false),
+            Triple("0", "0", false),
+            Triple("5/0", "5/0", false),
+            Triple("2-9", "2-9", false),
+            Triple("9999999999*99", "9999999999*99", false),
+            Triple("", "", false)
+        )
+        for ((typed, expectedText, canSave) in cases) {
+            vm.onAmountChanged(typed)
+            assertEquals(typed, expectedText, vm.uiState.value.amountText)
+            assertEquals(typed, canSave, vm.uiState.value.isSaveEnabled)
+            if (!canSave) assertEquals(typed, 0.0, vm.uiState.value.amount, 0.0)
+        }
+    }
+
+    @Test
+    fun hostileCustomShareTextIsCleanedAndAnUnreadableShareBlocksSave() = runTest {
+        val vm = newAmountVm()
+        vm.onAmountChanged("500")
+        vm.onSplitModeChanged(SplitMode.CUSTOM)
+        vm.onCompanionToggled("1")
+        vm.onCustomShareChanged(" 1 50 ")
+        assertEquals("150", vm.uiState.value.customShareText)
+        assertEquals(true, vm.uiState.value.isSaveEnabled)
+        vm.onCustomShareChanged("₹ 1,00.505")
+        assertEquals("100.50", vm.uiState.value.customShareText)
+        vm.onCustomShareChanged("5++3")
+        assertEquals("5+3", vm.uiState.value.customShareText)
+        vm.onCustomShareChanged("((((1))))")
+        assertEquals("(((1)))", vm.uiState.value.customShareText)
+        vm.onCustomShareChanged("١٢٣")
+        assertEquals("123", vm.uiState.value.customShareText)
+        vm.onCustomShareChanged("1234567890".repeat(4))
+        assertEquals("1234567890", vm.uiState.value.customShareText)
+        // an unreadable share must not fall back to the whole amount and enable Save
+        vm.onCustomShareChanged("5/0")
+        assertEquals("5/0", vm.uiState.value.customShareText)
+        assertEquals(false, vm.uiState.value.isSaveEnabled)
+        vm.onCustomShareChanged("5+")
+        assertEquals(false, vm.uiState.value.isSaveEnabled)
+        vm.onCustomShareChanged("")
+        assertEquals(true, vm.uiState.value.isSaveEnabled)
     }
 }

@@ -7,7 +7,8 @@ import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
-import com.financeautomation.core.utils.AmountInputSanitizer
+import com.financeautomation.core.utils.AmountInput
+import com.financeautomation.domain.usecase.AmountOutcome
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PrivacyScrubber
 import com.financeautomation.core.utils.SyncErrorKind
@@ -226,9 +227,10 @@ class QuickLogViewModel(
         refreshPredictedCategories("")
     }
 
-    fun onAmountChanged(text: String) {
-        if (!AmountInputSanitizer.isValidExpressionInput(text)) return
-        val parsed = expressionEvaluator.evaluate(text) ?: 0.0
+    fun onAmountChanged(raw: String) {
+        val text = AmountInput.clean(raw)
+        // An unreadable or zero amount is held as 0.0 only for the totals; Save stays disabled while amount is 0.0
+        val parsed = (expressionEvaluator.evaluateDetailed(text) as? AmountOutcome.Value)?.amount ?: 0.0
         _uiState.update { it.copy(amountText = text, amount = parsed) }
         recalculateSplit()
     }
@@ -290,8 +292,8 @@ class QuickLogViewModel(
         }
     }
 
-    fun onCustomShareChanged(shareText: String) {
-        if (!AmountInputSanitizer.isValidExpressionInput(shareText)) return
+    fun onCustomShareChanged(rawShare: String) {
+        val shareText = AmountInput.clean(rawShare)
         val parsed = expressionEvaluator.evaluate(shareText)
         _uiState.update { it.copy(customShareText = shareText, customShare = parsed) }
         recalculateSplit()
