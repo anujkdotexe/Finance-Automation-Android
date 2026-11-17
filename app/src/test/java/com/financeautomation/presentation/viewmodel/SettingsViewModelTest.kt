@@ -430,6 +430,7 @@ class SettingsViewModelTest {
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
         var reconcileAllMonthsResult: Result<Int> = Result.Success(0)
         override suspend fun reconcileAllMonths(): Result<Int> = reconcileAllMonthsResult
+        override suspend fun requeueYearForNewWorkbook(year: Int) {}
     }
 
     @Test

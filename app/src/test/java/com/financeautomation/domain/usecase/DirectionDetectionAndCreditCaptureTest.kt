@@ -128,6 +128,7 @@ class DirectionDetectionAndCreditCaptureTest {
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
         override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
+        override suspend fun requeueYearForNewWorkbook(year: Int) {}
     }
 
     private class TestPeopleRepo : PeopleRepository {
