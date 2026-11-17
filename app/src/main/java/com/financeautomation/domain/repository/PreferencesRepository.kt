@@ -258,6 +258,8 @@ interface PreferencesRepository {
     companion object {
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
+        const val KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX: String = "last_workbook_verified_date_"
+        fun keyLastWorkbookVerifiedDate(year: Int): String = "$KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX$year"
         const val KEY_SPREADSHEET_TITLE: String = "key_spreadsheet_title"
         const val KEY_DEFAULT_ACCOUNT: String = "key_default_account"
         const val KEY_ACTIVE_TRIP: String = "key_active_trip"

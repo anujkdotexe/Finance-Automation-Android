@@ -50,7 +50,18 @@ open class WorkbookResolver(
     open suspend fun findExisting(year: Int): Result<String?> = withContext(ioDispatcher) {
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
         if (!storedId.isNullOrBlank()) {
-            return@withContext Result.Success(storedId)
+            when (val usableRes = googleDriveClient.isFileUsable(storedId)) {
+                is Result.Success -> {
+                    if (usableRes.data) {
+                        return@withContext Result.Success(storedId)
+                    }
+                    // Stored id is unusable (trashed, deleted, or forbidden); fall through to Drive search below
+                }
+                is Result.Error -> {
+                    return@withContext Result.Error(usableRes.exception)
+                }
+                is Result.Loading -> {}
+            }
         }
         when (val driveSearch = googleDriveClient.findWorkbookForYear(year)) {
             is Result.Success -> Result.Success(driveSearch.data)
@@ -60,24 +71,46 @@ open class WorkbookResolver(
     }
 
     open suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean = false): Result<String> = withContext(ioDispatcher) {
+        val today = LocalDate.now(clock).toString()
+        val lastVerified = preferencesRepository.getPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year))
+        val needsVerification = forceValidateTabs || (lastVerified != today)
+
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
-        if (!storedId.isNullOrBlank() && !forceValidateTabs) {
+        if (!storedId.isNullOrBlank() && !needsVerification) {
             return@withContext Result.Success(storedId)
         }
 
         mutex.withLock {
             val lockedStoredId = preferencesRepository.getSpreadsheetIdForYearSync(year)
-            if (!lockedStoredId.isNullOrBlank() && !forceValidateTabs) {
+            val lockedLastVerified = preferencesRepository.getPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year))
+            val lockedNeedsVerification = forceValidateTabs || (lockedLastVerified != today)
+
+            if (!lockedStoredId.isNullOrBlank() && !lockedNeedsVerification) {
                 return@withContext Result.Success(lockedStoredId)
             }
 
-            val candidateId = if (forceValidateTabs && !lockedStoredId.isNullOrBlank()) {
-                // A stored workbook this account cannot open (403 or 404, for example after another account signed
-                // in) is not repaired; fall through to the Drive search and, failing that, a fresh workbook
-                val probe = googleSheetsClient.getSheetTabsDetailed(lockedStoredId)
-                if (probe is Result.Error && isInaccessible(probe.exception)) null else lockedStoredId
-            } else {
-                null
+            var candidateId: String? = null
+            if (!lockedStoredId.isNullOrBlank()) {
+                when (val usableRes = googleDriveClient.isFileUsable(lockedStoredId)) {
+                    is Result.Success -> {
+                        if (usableRes.data) {
+                            if (!forceValidateTabs) {
+                                preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
+                                return@withContext Result.Success(lockedStoredId)
+                            }
+                            // Valid in Drive; now probe Sheets tabs if forceValidateTabs
+                            val probe = googleSheetsClient.getSheetTabsDetailed(lockedStoredId)
+                            candidateId = if (probe is Result.Error && isInaccessible(probe.exception)) null else lockedStoredId
+                        } else {
+                            // File is trashed, 404, or non-retryable 403 in Drive: unusable!
+                            candidateId = null
+                        }
+                    }
+                    is Result.Error -> {
+                        return@withContext Result.Error(usableRes.exception)
+                    }
+                    is Result.Loading -> {}
+                }
             }
 
             if (candidateId != null) {
@@ -107,11 +140,13 @@ open class WorkbookResolver(
                 if (syncConfigUseCase != null) {
                     when (val restoreRes = syncConfigUseCase.restoreFromCloud(candidateId)) {
                         is Result.Success -> {
+                            preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                             regenerateDashboardUseCase?.invoke()
                             return@withContext Result.Success(candidateId)
                         }
                         is Result.Error -> {
                             if (restoreRes.exception is EmptyOrMissingConfigTabException) {
+                                preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                                 syncConfigUseCase.mirrorToCloud(candidateId)
                                 regenerateDashboardUseCase?.invoke()
                                 return@withContext Result.Success(candidateId)
@@ -127,6 +162,7 @@ open class WorkbookResolver(
                         else -> {}
                     }
                 } else {
+                    preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                     regenerateDashboardUseCase?.invoke()
                     return@withContext Result.Success(candidateId)
                 }
@@ -142,6 +178,7 @@ open class WorkbookResolver(
                         }
 
                         preferencesRepository.setSpreadsheetIdForYear(year, foundId)
+                        preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                         val currentYear = ZonedDateTime.now(clock).year
                         if (year == currentYear) {
                             preferencesRepository.setSpreadsheetId(foundId)
@@ -214,6 +251,7 @@ open class WorkbookResolver(
             }
 
             preferencesRepository.setSpreadsheetIdForYear(year, newSpreadsheetId)
+            preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
             val currentYear = ZonedDateTime.now(clock).year
             if (year == currentYear) {
                 preferencesRepository.setSpreadsheetId(newSpreadsheetId)
@@ -258,6 +296,8 @@ open class WorkbookResolver(
             }
 
             preferencesRepository.setSpreadsheetIdForYear(year, newId)
+            val today = LocalDate.now(clock).toString()
+            preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
             val currentYear = ZonedDateTime.now(clock).year
             if (year == currentYear) {
                 preferencesRepository.setSpreadsheetId(newId)

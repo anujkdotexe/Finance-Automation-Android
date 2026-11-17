@@ -7,6 +7,7 @@ package com.financeautomation.data.remote
  */
 object GoogleEndpoint {
     // Drive: workbook, folder and file calls
+    const val DRIVE_FILES_GET: String = "drive.files.get"
     const val DRIVE_FILES_LIST: String = "drive.files.list"
     const val DRIVE_FILES_CREATE: String = "drive.files.create"
     const val DRIVE_FILES_UPDATE: String = "drive.files.update"
@@ -31,6 +32,7 @@ object GoogleEndpoint {
      * stored (debug and beta builds only): the error text echoes ranges and sheet names, never row values.
      */
     val BODY_ALLOWED: Set<String> = setOf(
+        DRIVE_FILES_GET,
         DRIVE_FILES_LIST,
         DRIVE_FILES_CREATE,
         DRIVE_FILES_UPDATE,

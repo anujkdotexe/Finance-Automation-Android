@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -31,6 +32,7 @@ open class GoogleDriveClient(
 
     private val json = Json { ignoreUnknownKeys = true }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val DRIVE_RATE_LIMIT_REASONS = setOf("ratelimitexceeded", "userratelimitexceeded", "quotaexceeded", "sharingratelimitexceeded")
 
     private fun newRequestBuilder(url: String): Request.Builder {
         val builder = Request.Builder().url(url)
@@ -306,6 +308,51 @@ open class GoogleDriveClient(
                 Result.Success(value)
             }
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Checks if a file exists, is accessible, and is not in the trash.
+     * Calls GET $baseUrl/files/$fileId?fields=id,trashed.
+     * - Returns Result.Success(false) if trashed == true, HTTP 404, or non-retryable 403.
+     * - Returns Result.Success(true) if HTTP 200 and trashed == false.
+     * - Returns Result.Error(exception) on network/server errors (IOException, timeout, 5xx, 429).
+     */
+    open suspend fun isFileUsable(fileId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$baseUrl/files/$fileId".toHttpUrl().newBuilder()
+                .addQueryParameter("fields", "id,trashed")
+                .build()
+            val request = newRequestBuilder(url.toString()).get().build()
+            okHttpClient.newCall(request).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (response.code == 404) {
+                    return@withContext Result.Success(false)
+                }
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_GET, response.code, bodyString)
+                    val isRateLimit = response.code == 403 &&
+                        apiError.reason?.lowercase() in DRIVE_RATE_LIMIT_REASONS
+                    if (response.code == 403 && !isRateLimit) {
+                        return@withContext Result.Success(false)
+                    }
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(
+                            response.code,
+                            apiError.formatExceptionMessage("Failed to check file usability for $fileId"),
+                            apiError
+                        )
+                    )
+                }
+
+                val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
+                val isTrashed = jsonResponse["trashed"]?.jsonPrimitive?.booleanOrNull ?: false
+                Result.Success(!isTrashed)
+            }
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Result.Error(e)

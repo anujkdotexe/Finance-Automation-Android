@@ -246,7 +246,7 @@ class OnboardingViewModel(
                 step1Error = null
             )
         }
-        startWorkspaceProvisioning()
+        startWorkspaceProvisioning(forceValidateTabs = true)
     }
 
     fun startWorkspaceProvisioning(forceValidateTabs: Boolean = false) {

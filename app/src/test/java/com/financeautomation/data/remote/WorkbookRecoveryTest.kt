@@ -83,4 +83,203 @@ class WorkbookRecoveryTest {
         val res = resolver(404, mutableListOf()).resolveForYear(year, forceValidateTabs = true)
         assertEquals(Result.Success("new_id"), res)
     }
+
+    @Test
+    fun aTrashedStoredWorkbookIsReplacedByTheOneDriveFinds() = runBlocking {
+        yearIds[year] = "old_id"
+        val calls = mutableListOf<String>()
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                calls += "drive ${r.method} ${r.url.encodedPath}"
+                when {
+                    r.url.encodedPath.endsWith("/files/old_id") ->
+                        response(r, 200, """{"id":"old_id","trashed":true}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[{"id":"new_id","name":"Finance$year"}]}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        // Sheets API still returns 200 OK for trashed files
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                calls += "sheets ${r.method} ${r.url.encodedPath}"
+                when {
+                    r.method == "GET" -> response(r, 200, """{"spreadsheetId":"any","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    else -> response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":0}""")
+                }
+            }).build(), tokens
+        )
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+        assertTrue("expected success but was $res", res is Result.Success)
+        assertEquals("new_id", (res as Result.Success).data)
+        assertEquals("new_id", yearIds[year])
+        assertTrue("Drive was searched", calls.any { it.startsWith("drive GET") && it.endsWith("/files") })
+    }
+
+    @Test
+    fun aPermanentlyDeletedDriveWorkbookCausesNewWorkbookResolution() = runBlocking {
+        yearIds[year] = "old_id"
+        val calls = mutableListOf<String>()
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                calls += "drive ${r.method} ${r.url.encodedPath}"
+                when {
+                    r.url.encodedPath.endsWith("/files/old_id") ->
+                        response(r, 404, """{"error":{"code":404,"message":"File not found","errors":[{"reason":"notFound"}]}}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[{"id":"new_id","name":"Finance$year"}]}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                calls += "sheets ${r.method} ${r.url.encodedPath}"
+                when {
+                    r.method == "GET" -> response(r, 200, """{"spreadsheetId":"any","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    else -> response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":0}""")
+                }
+            }).build(), tokens
+        )
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+        assertTrue("expected success but was $res", res is Result.Success)
+        assertEquals("new_id", (res as Result.Success).data)
+        assertEquals("new_id", yearIds[year])
+        assertTrue("Drive was searched", calls.any { it.startsWith("drive GET") && it.endsWith("/files") })
+    }
+
+    @Test
+    fun aHealthyWorkbookIsKept() = runBlocking {
+        yearIds[year] = "healthy_id"
+        val calls = mutableListOf<String>()
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                calls += "drive ${r.method} ${r.url.encodedPath}"
+                when {
+                    r.url.encodedPath.endsWith("/files/healthy_id") ->
+                        response(r, 200, """{"id":"healthy_id","trashed":false}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[{"id":"should_not_use","name":"Finance$year"}]}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                calls += "sheets ${r.method} ${r.url.encodedPath}"
+                when {
+                    r.method == "GET" -> response(r, 200, """{"spreadsheetId":"healthy_id","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    else -> response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":0}""")
+                }
+            }).build(), tokens
+        )
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+        assertTrue("expected success but was $res", res is Result.Success)
+        assertEquals("healthy_id", (res as Result.Success).data)
+        assertEquals("healthy_id", yearIds[year])
+        org.junit.Assert.assertFalse("Drive files list search should not be called for healthy id",
+            calls.any { it.startsWith("drive GET") && it.endsWith("/files") })
+    }
+
+    @Test
+    fun driveMetadataNetworkErrorGivesNoNewWorkbook() = runBlocking {
+        yearIds[year] = "old_id"
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.url.encodedPath.endsWith("/files/old_id")) {
+                    throw java.io.IOException("Network timeout")
+                }
+                response(r, 200, "{}")
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+        assertTrue("expected Result.Error on network exception, was $res", res is Result.Error)
+        assertEquals("old_id", yearIds[year])
+    }
+
+    @Test
+    fun driveMetadata500ErrorGivesNoNewWorkbook() = runBlocking {
+        yearIds[year] = "old_id"
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.url.encodedPath.endsWith("/files/old_id")) {
+                    response(r, 500, """{"error":{"code":500,"message":"Internal Server Error"}}""")
+                } else response(r, 200, "{}")
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+        assertTrue("expected Result.Error on 500 error, was $res", res is Result.Error)
+        assertEquals("old_id", yearIds[year])
+    }
+
+    @Test
+    fun trashedIdInFindExistingFallsThroughToDriveSearch() = runBlocking {
+        yearIds[year] = "old_id"
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.url.encodedPath.endsWith("/files/old_id") ->
+                        response(r, 200, """{"id":"old_id","trashed":true}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[{"id":"new_id","name":"Finance$year"}]}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.findExisting(year)
+        assertEquals(Result.Success("new_id"), res)
+    }
+
+    @Test
+    fun networkErrorInFindExistingReturnsError() = runBlocking {
+        yearIds[year] = "old_id"
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.url.encodedPath.endsWith("/files/old_id")) {
+                    throw java.io.IOException("Network timeout")
+                }
+                response(r, 200, "{}")
+            }).build(), tokens
+        )
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.findExisting(year)
+        assertTrue("expected Result.Error, was $res", res is Result.Error)
+    }
 }
