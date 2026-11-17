@@ -200,6 +200,14 @@ class QuickLogViewModelTest {
         override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
         override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
         override suspend fun getActiveTransactionIds(): List<String> = emptyList()
+        override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+            val idSet = transactionIds.toSet()
+            queue.values.filter {
+                it.transactionId in idSet &&
+                it.status == SyncQueueEntity.STATUS_PENDING &&
+                (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+            }.forEach { queue.remove(it.id) }
+        }
     }
 
     @Test

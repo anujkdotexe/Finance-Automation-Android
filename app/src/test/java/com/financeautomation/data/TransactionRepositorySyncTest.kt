@@ -176,6 +176,15 @@ class TransactionRepositorySyncTest {
         override suspend fun getActiveTransactionIds(): List<String> =
             queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS }
                 .map { it.transactionId }
+
+        override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+            val idSet = transactionIds.toSet()
+            queue.values.filter {
+                it.transactionId in idSet &&
+                it.status == SyncQueueEntity.STATUS_PENDING &&
+                (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+            }.forEach { queue.remove(it.id) }
+        }
     }
 
     private class FakePayableDao : PayableDao {

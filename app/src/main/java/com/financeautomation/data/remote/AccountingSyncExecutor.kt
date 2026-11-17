@@ -37,7 +37,7 @@ private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct
  * Friend settlements (OP_LOG_CREDIT), payables (OP_LOG_PAYABLE), repayments (OP_LOG_REPAYMENT),
  * monthly rollover (OP_CARRY_FORWARD), and annual closing (OP_YEAR_CLOSE).
  */
-class AccountingSyncExecutor(
+open class AccountingSyncExecutor(
     private val googleSheetsClient: GoogleSheetsClient,
     private val googleDriveClient: GoogleDriveClient,
     private val syncQueueDao: SyncQueueDao? = null,
@@ -485,7 +485,7 @@ class AccountingSyncExecutor(
         return Result.Success(Unit)
     }
 
-    suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
+    open suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
         try {
             val tDao = resolveTransactionDao() ?: return
             val editsByTabAndRow = plan.edits.groupBy { Pair(it.tab, it.row) }

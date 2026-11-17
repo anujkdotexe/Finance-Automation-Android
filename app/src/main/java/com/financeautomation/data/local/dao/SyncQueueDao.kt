@@ -86,4 +86,7 @@ interface SyncQueueDao {
 
     @Query("SELECT transactionId FROM sync_queue WHERE status = 'PENDING' OR status = 'IN_PROGRESS'")
     suspend fun getActiveTransactionIds(): List<String>
+
+    @Query("DELETE FROM sync_queue WHERE transactionId IN (:transactionIds) AND status = 'PENDING' AND operationType IN ('INSERT', 'UPDATE', 'VOID')")
+    suspend fun deletePendingForTransactions(transactionIds: List<String>)
 }

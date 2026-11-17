@@ -63,18 +63,21 @@ class RoomGetAllForYearTest {
         val boundaryStart = createTxn("t_start", startMillis, status = "CONFIRMED", reviewState = "CONFIRMED")
         val beforeStart = createTxn("t_before", startMillis - 1, status = "CONFIRMED", reviewState = "CONFIRMED")
         val midYear = createTxn("t_mid", startMillis + 100_000, status = "CONFIRMED", reviewState = "CONFIRMED")
-        val atEnd = createTxn("t_end", endMillis, status = "CONFIRMED", reviewState = "CONFIRMED")
+        // Transaction at 31 December 23:59:59.999 IST is included and +1 ms at endMillis is excluded
+        val atEndMinusOne = createTxn("t_end_minus_1", endMillis - 1, status = "CONFIRMED", reviewState = "CONFIRMED")
+        val atEndPlusOneMs = createTxn("t_end_plus_1ms", endMillis, status = "CONFIRMED", reviewState = "CONFIRMED")
         val voidRow = createTxn("t_void", startMillis + 200_000, status = "Void", reviewState = "CONFIRMED")
         val needsReviewRow = createTxn("t_review", startMillis + 300_000, status = "CONFIRMED", reviewState = "NEEDS_REVIEW")
 
-        transactionDao.insertAll(listOf(boundaryStart, beforeStart, midYear, atEnd, voidRow, needsReviewRow))
+        transactionDao.insertAll(listOf(boundaryStart, beforeStart, midYear, atEndMinusOne, atEndPlusOneMs, voidRow, needsReviewRow))
 
         val results = transactionDao.getAllForYear(startMillis, endMillis)
         val ids = results.map { it.id }
 
         assertTrue("1 Jan 00:00 boundary transaction must be included", ids.contains("t_start"))
         assertTrue("Mid-year transaction must be included", ids.contains("t_mid"))
-        assertEquals("Boundary-excluded, void, and needs-review transactions must be omitted", 2, results.size)
+        assertTrue("31 Dec 23:59:59.999 IST transaction must be included", ids.contains("t_end_minus_1"))
+        assertEquals("Boundary-excluded, void, and needs-review transactions must be omitted", 3, results.size)
     }
 
     @Test

@@ -158,7 +158,7 @@ class TransactionRepositoryImpl(
         clock = clock
     )
 
-    private val syncMutex = Mutex()
+    internal val syncMutex = Mutex()
 
     /**
      * Asks for a background sync after something was queued. A failure to schedule must never fail the save,
@@ -185,36 +185,38 @@ class TransactionRepositoryImpl(
 
     val workbookReplacedNotice = MutableStateFlow<UiText?>(null)
 
-    suspend fun onWorkbookReplaced(year: Int, oldId: String, newId: String) = withContext(ioDispatcher) {
-        Diagnostics.record("WorkbookRecovery", "WORKBOOK_REPLACED")
-        workbookReplacedNotice.value = UiText.res(
-            R.string.workbook_replaced_notice_partial,
-            UiText.res(R.string.workbook_replaced_lost_items)
-        )
+    suspend fun requeueYearForNewWorkbook(year: Int) = withContext(ioDispatcher) {
+        syncMutex.withLock {
+            Diagnostics.record("WorkbookRecovery", "WORKBOOK_REPLACED")
 
-        val zone = ZoneId.of("Asia/Kolkata")
-        val startMillis = ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
-        val endMillis = ZonedDateTime.of(year + 1, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
-        val startSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(year, 1, 1))
-        val endSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(year + 1, 1, 1))
+            val zone = ZoneId.of("Asia/Kolkata")
+            val startMillis = ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+            val endMillis = ZonedDateTime.of(year + 1, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+            val startSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(year, 1, 1))
+            val endSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(year + 1, 1, 1))
 
-        val tDao = resolveTransactionDao()
-        val qDao = resolveSyncQueueDao()
-        val inDao = resolveInflowDao()
-        val pDao = resolvePayableDao()
+            val tDao = resolveTransactionDao()
+            val qDao = resolveSyncQueueDao()
+            val inDao = resolveInflowDao()
+            val pDao = resolvePayableDao()
 
-        val txns = tDao.getAllForYear(startMillis, endMillis)
-        val inflows = inDao?.getAllForYear(startMillis, endMillis).orEmpty()
-        val payables = pDao?.getAllForYear(startSerial, endSerial, startMillis, endMillis).orEmpty()
-        val activeIds = qDao.getActiveTransactionIds().toSet()
+            val txns = tDao.getAllForYear(startMillis, endMillis)
+            val inflows = inDao?.getAllForYear(startMillis, endMillis).orEmpty()
+            val payables = pDao?.getAllForYear(startSerial, endSerial, startMillis, endMillis).orEmpty()
+            val activeIds = qDao.getActiveTransactionIds().toSet()
 
-        val toRequeueTxns = txns.filter { it.id !in activeIds }
-        val toRequeueInflows = inflows.filter { it.id !in activeIds }
-        val toRequeuePayables = payables.filter { it.uuid !in activeIds }
+            val voidYearIds = activeIds.filter { id ->
+                val entity = tDao.getById(id)
+                entity != null && entity.timestamp >= startMillis && entity.timestamp < endMillis && entity.status.equals("Void", ignoreCase = true)
+            }
+            val allTxnIdsToDelete = (txns.map { it.id } + voidYearIds).distinct()
 
-        if (toRequeueTxns.isNotEmpty() || toRequeueInflows.isNotEmpty() || toRequeuePayables.isNotEmpty()) {
             runInDbTransaction {
-                for (txn in toRequeueTxns) {
+                if (allTxnIdsToDelete.isNotEmpty()) {
+                    qDao.deletePendingForTransactions(allTxnIdsToDelete)
+                }
+
+                for (txn in txns) {
                     tDao.resetSyncStateForRequeue(txn.id)
                     qDao.insert(
                         SyncQueueEntity(
@@ -225,7 +227,7 @@ class TransactionRepositoryImpl(
                         )
                     )
                 }
-                for (inflow in toRequeueInflows) {
+                for (inflow in inflows) {
                     qDao.insert(
                         SyncQueueEntity(
                             transactionId = inflow.id,
@@ -237,7 +239,7 @@ class TransactionRepositoryImpl(
                         )
                     )
                 }
-                for (payable in toRequeuePayables) {
+                for (payable in payables) {
                     qDao.insert(
                         SyncQueueEntity(
                             transactionId = payable.uuid,
@@ -250,8 +252,16 @@ class TransactionRepositoryImpl(
                     )
                 }
             }
-            requestSync()
         }
+        requestSync()
+    }
+
+    suspend fun onWorkbookReplaced(year: Int, oldId: String, newId: String) = withContext(ioDispatcher) {
+        workbookReplacedNotice.value = UiText.res(
+            R.string.workbook_replaced_notice_partial,
+            UiText.res(R.string.workbook_replaced_lost_items)
+        )
+        requeueYearForNewWorkbook(year)
     }
 
     private suspend fun resolveTransactionDao(): TransactionDao =

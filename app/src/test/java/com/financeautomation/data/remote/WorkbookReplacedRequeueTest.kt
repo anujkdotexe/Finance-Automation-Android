@@ -22,8 +22,13 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.withLock
+import com.financeautomation.domain.model.AccountingPlan
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -698,5 +703,122 @@ class WorkbookReplacedRequeueTest {
         val uuidEntry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AE") == true }?.jsonObject
         assertNotNull(uuidEntry)
         assertEquals("pay_no_date", uuidEntry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun pendingUpdateIsFoldedIntoTheNewInsert() = runBlocking {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        val txn = sampleTransaction("tx_upd", nov2026, status = "Personal", syncState = SyncState.PENDING.name, sheetRowIndex = 7)
+        tDao.insert(txn)
+        val pendingUpdate = SyncQueueEntity(
+            id = 1L,
+            transactionId = "tx_upd",
+            operationType = SyncQueueEntity.OP_UPDATE,
+            payloadJson = "{\"category\":\"Entertainment\"}",
+            status = SyncQueueEntity.STATUS_PENDING
+        )
+        qDao.insert(pendingUpdate)
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        repo.requeueYearForNewWorkbook(2026)
+
+        val queueItems = qDao.queue.values.filter { it.transactionId == "tx_upd" }
+        assertEquals("Pending UPDATE must be deleted and replaced by exactly one OP_INSERT", 1, queueItems.size)
+        val queuedItem = queueItems.first()
+        assertEquals(SyncQueueEntity.OP_INSERT, queuedItem.operationType)
+        assertEquals(SyncQueueEntity.STATUS_PENDING, queuedItem.status)
+        assertEquals("tx_upd", queuedItem.payloadJson)
+
+        val updatedTxn = tDao.getById("tx_upd")
+        assertNotNull(updatedTxn)
+        assertEquals(SyncState.PENDING.name, updatedTxn?.syncState)
+        assertNull(updatedTxn?.sheetRowIndex)
+    }
+
+    @Test
+    fun pendingVoidOfAVoidedRowIsNotInserted() = runBlocking {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        val txnVoid = sampleTransaction("tx_voided", nov2026, status = "Void", syncState = SyncState.VOID.name, sheetRowIndex = 14)
+        tDao.insert(txnVoid)
+        val pendingVoid = SyncQueueEntity(
+            id = 2L,
+            transactionId = "tx_voided",
+            operationType = SyncQueueEntity.OP_VOID,
+            payloadJson = "{\"reason\":\"Mistake\"}",
+            status = SyncQueueEntity.STATUS_PENDING
+        )
+        qDao.insert(pendingVoid)
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        repo.requeueYearForNewWorkbook(2026)
+
+        val queueItems = qDao.queue.values.filter { it.transactionId == "tx_voided" }
+        assertTrue("Voided transaction must have its pending void cleared and must not have OP_INSERT queued", queueItems.isEmpty())
+    }
+
+    @Test
+    fun requeueWaitsForARunningSync() = runBlocking {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        val txn = sampleTransaction("tx_active", nov2026, status = "Personal", syncState = SyncState.PENDING.name, sheetRowIndex = null)
+        tDao.insert(txn)
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = Dispatchers.Default
+        )
+
+        var requeueFinished = false
+        val lockHeld = CompletableDeferred<Unit>()
+        val releaseLock = CompletableDeferred<Unit>()
+
+        val holderJob = launch(Dispatchers.Default) {
+            repo.syncMutex.withLock {
+                lockHeld.complete(Unit)
+                releaseLock.await()
+            }
+        }
+
+        lockHeld.await()
+
+        val requeueJob = launch(Dispatchers.Default) {
+            repo.requeueYearForNewWorkbook(2026)
+            requeueFinished = true
+        }
+
+        delay(100)
+        assertFalse("Requeue must wait while syncMutex is held", requeueFinished)
+        assertTrue("Requeue coroutine must be suspended waiting for syncMutex", requeueJob.isActive)
+
+        releaseLock.complete(Unit)
+        holderJob.join()
+        requeueJob.join()
+
+        assertTrue("Requeue must complete once syncMutex is released", requeueFinished)
     }
 }
