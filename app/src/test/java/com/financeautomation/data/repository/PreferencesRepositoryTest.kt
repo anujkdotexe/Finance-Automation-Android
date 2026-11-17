@@ -1,11 +1,18 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.constants.ConfigConstants
+import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.entity.PreferenceEntity
 import com.financeautomation.domain.model.ThemeMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import com.financeautomation.domain.repository.PreferencesRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,6 +68,42 @@ class PreferencesRepositoryTest {
         assertNull(repo.getPreference(key2027))
         assertNull(repo.getPreference(otherKey))
         assertEquals("sheet_id_123", repo.getPreference(sheetKey))
+    }
+
+    @Test
+    fun requeueMarkerIsNeverMarkedDirty() = runBlocking {
+        assertTrue(
+            "KEY_WORKBOOK_REQUEUE_PENDING_YEAR must be in local-only keys",
+            ConfigConstants.isLocalOnlyPref(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+        )
+        assertTrue(
+            "KEY_WORKBOOK_REPLACED_NOTICE_PENDING must be in local-only keys",
+            ConfigConstants.isLocalOnlyPref(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+        )
+
+        var recordedEntity: PreferenceEntity? = null
+        val fakeDao = object : PreferenceDao {
+            override fun getPreferenceFlow(key: String): Flow<String?> = flowOf(null)
+            override suspend fun getPreference(key: String): String? = null
+            override suspend fun getAllPreferences(): List<PreferenceEntity> = emptyList()
+            override suspend fun setPreference(entity: PreferenceEntity) {
+                recordedEntity = entity
+            }
+            override suspend fun deletePreference(key: String) {}
+            override suspend fun deletePreferencesWithPrefix(prefix: String) {}
+            override suspend fun clearAll() {}
+            override suspend fun getDirtyPreferences(): List<PreferenceEntity> = emptyList()
+            override suspend fun markClean(keys: List<String>) {}
+        }
+        val repo = PreferencesRepositoryImpl(preferenceDao = fakeDao, ioDispatcher = Dispatchers.Unconfined)
+
+        repo.setPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR, "2026", isDirty = true)
+        assertNotNull(recordedEntity)
+        assertEquals("Dirty flag must be 0 for local-only requeue marker", 0, recordedEntity?.dirty)
+
+        repo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true", isDirty = true)
+        assertNotNull(recordedEntity)
+        assertEquals("Dirty flag must be 0 for local-only notice flag", 0, recordedEntity?.dirty)
     }
 }
 

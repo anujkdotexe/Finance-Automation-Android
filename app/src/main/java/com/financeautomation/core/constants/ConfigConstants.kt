@@ -45,7 +45,9 @@ object ConfigConstants {
         "theme_mode",
         "key_theme_mode",
         "app_lock_enabled",
-        "hide_recents_preview"
+        "hide_recents_preview",
+        "key_workbook_requeue_pending_year",
+        "key_workbook_replaced_notice_pending"
     )
 
     fun isLocalOnlyPref(key: String): Boolean {

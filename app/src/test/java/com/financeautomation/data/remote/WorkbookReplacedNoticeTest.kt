@@ -206,6 +206,65 @@ class WorkbookReplacedNoticeTest {
     }
 
     @Test
+    fun requeueMarkerIsClearedOnAccountSwitch() = runBlocking {
+        val harness = SyncHarness()
+        harness.preferences[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR] = "2026"
+        harness.preferences[AccountSwitchGuard.KEY_LEDGER_OWNER] = "old@example.com"
+
+        val store = object : AccountDataStore {
+            override suspend fun pendingCount() = 0
+            override suspend fun hasLocalData() = false
+            override suspend fun wipe() {}
+        }
+        val guard = AccountSwitchGuard(harness.prefs, store, {}, {})
+        guard.switchTo("new@example.com")
+
+        assertNull(
+            "Requeue marker must be cleared on account switch",
+            harness.preferences[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR]
+        )
+    }
+
+    @Test
+    fun requeueMarkerIsClearedOnSignOut() = runBlocking {
+        val harness = SyncHarness()
+        harness.preferences[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR] = "2026"
+        harness.googleEmail = "user@example.com"
+
+        val fakeTokenProvider = object : TokenProvider {
+            override fun getAccessToken(): String = "test_token"
+            override fun refreshAccessToken(): String = "test_token"
+        }
+        val http = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(http, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(http, fakeTokenProvider)
+
+        val uiState = MutableStateFlow(SettingsUiState())
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = harness.prefs,
+            transactionRepository = harness.repo,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = null,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = uiState,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onGoogleSignOut()
+
+        assertNull(
+            "Requeue marker must be cleared on sign out",
+            harness.preferences[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR]
+        )
+    }
+
+    @Test
     fun workbookResolverSetsTheFlagOnlyForMissingOrTrashedReplacement() = runBlocking {
         val clock = Clock.fixed(Instant.parse("2026-11-17T10:00:00Z"), ZoneId.of("Asia/Kolkata"))
         val tokenProvider = object : TokenProvider {
