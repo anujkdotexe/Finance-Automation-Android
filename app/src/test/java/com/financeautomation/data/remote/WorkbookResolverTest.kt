@@ -61,9 +61,15 @@ class WorkbookResolverTest {
         override fun getThemeMode(): Flow<ThemeMode> = flowOf(ThemeMode.SYSTEM)
         override suspend fun getThemeModeSync(): ThemeMode = ThemeMode.SYSTEM
         override suspend fun setThemeMode(mode: ThemeMode) {}
-        override suspend fun getPreference(key: String): String? = null
-        override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {}
-        override suspend fun deletePreference(key: String) {}
+        val rawPrefs = mutableMapOf<String, String?>()
+        override suspend fun getPreference(key: String): String? = rawPrefs[key]
+        override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {
+            if (value != null) rawPrefs[key] = value else rawPrefs.remove(key)
+        }
+        override suspend fun deletePreference(key: String) { rawPrefs.remove(key) }
+        override suspend fun clearKeysWithPrefix(prefix: String) {
+            rawPrefs.keys.filter { it.startsWith(prefix) }.toList().forEach { rawPrefs.remove(it) }
+        }
     }
 
     @Test

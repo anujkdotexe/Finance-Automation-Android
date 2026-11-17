@@ -323,20 +323,34 @@ class DefaultAppContainer(
         )
     }
 
-    override val workbookResolver: WorkbookResolver by lazy {
-        WorkbookResolver(
-            googleDriveClient = googleDriveClient,
-            googleSheetsClient = googleSheetsClient,
-            preferencesRepository = preferencesRepository,
-            accountRepository = accountRepository,
-            categoryRepository = categoryRepository,
-            syncConfigUseCase = syncConfigUseCase,
-            regenerateDashboardUseCase = regenerateDashboardUseCase,
-            ioDispatcher = ioDispatcher,
+    internal fun buildWorkbookResolver(
+        drive: GoogleDriveClient = googleDriveClient,
+        sheets: GoogleSheetsClient = googleSheetsClient,
+        prefs: PreferencesRepository = preferencesRepository,
+        accounts: AccountRepository = accountRepository,
+        categories: CategoryRepository = categoryRepository,
+        syncConfig: SyncConfigUseCase = syncConfigUseCase,
+        regenDashboard: RegenerateDashboardUseCase = regenerateDashboardUseCase,
+        txnRepoProvider: () -> TransactionRepository = { transactionRepository },
+        dispatcher: CoroutineDispatcher = ioDispatcher
+    ): WorkbookResolver {
+        return WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountRepository = accounts,
+            categoryRepository = categories,
+            syncConfigUseCase = syncConfig,
+            regenerateDashboardUseCase = regenDashboard,
+            ioDispatcher = dispatcher,
             onWorkbookReplaced = { year, _, _ ->
-                transactionRepository.requeueYearForNewWorkbook(year)
+                txnRepoProvider().requeueYearForNewWorkbook(year)
             }
         )
+    }
+
+    override val workbookResolver: WorkbookResolver by lazy {
+        buildWorkbookResolver()
     }
 
     override val transactionRepository: TransactionRepository by lazy {

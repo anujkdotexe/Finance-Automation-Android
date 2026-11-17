@@ -138,6 +138,8 @@ class SettingsSyncCoordinator(
             preferencesRepository.setGoogleAccountEmail(null)
             preferencesRepository.setGoogleAccountDisplayName(null)
             preferencesRepository.setGoogleAccountPhotoUrl(null)
+            preferencesRepository.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+            preferencesRepository.clearKeysWithPrefix(PreferencesRepository.KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX)
             profileAvatarManager?.deleteAvatar()
             context?.let { ctx ->
                 try {

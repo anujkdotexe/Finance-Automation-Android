@@ -37,6 +37,9 @@ class YearRolloverMultiWorkbookTest {
         override suspend fun getAllPreferences(): List<PreferenceEntity> = table.values.toList()
         override suspend fun setPreference(entity: PreferenceEntity) { table[entity.key] = entity }
         override suspend fun deletePreference(key: String) { table.remove(key) }
+        override suspend fun deletePreferencesWithPrefix(prefix: String) {
+            table.keys.filter { it.startsWith(prefix) }.forEach { table.remove(it) }
+        }
         override suspend fun clearAll() { table.clear() }
         override suspend fun getDirtyPreferences(): List<PreferenceEntity> = table.values.filter { it.dirty == 1 }
         override suspend fun markClean(keys: List<String>) {

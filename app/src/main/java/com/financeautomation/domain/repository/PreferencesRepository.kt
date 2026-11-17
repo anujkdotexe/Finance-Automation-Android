@@ -255,6 +255,8 @@ interface PreferencesRepository {
         setPreference(KEY_NEEDS_REVIEW_HINT_DISMISSED, dismissed.toString(), isDirty = false)
     }
 
+    suspend fun clearKeysWithPrefix(prefix: String) {}
+
     companion object {
         const val KEY_WORKBOOK_REPLACED_NOTICE_PENDING: String = "key_workbook_replaced_notice_pending"
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"

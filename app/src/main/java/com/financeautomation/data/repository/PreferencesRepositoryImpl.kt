@@ -461,6 +461,16 @@ class PreferencesRepositoryImpl(
         }
     }
 
+    override suspend fun clearKeysWithPrefix(prefix: String): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
+        if (dao != null) {
+            dao.deletePreferencesWithPrefix(prefix)
+        } else {
+            val toRemove = memGenericPrefs.keys.filter { it.startsWith(prefix) }
+            toRemove.forEach { memGenericPrefs.remove(it) }
+        }
+    }
+
     companion object {
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"

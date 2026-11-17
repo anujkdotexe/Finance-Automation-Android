@@ -22,6 +22,9 @@ class ThemePreferenceRoundTripTest {
         override suspend fun getAllPreferences(): List<PreferenceEntity> = rows.value.values.toList()
         override suspend fun setPreference(entity: PreferenceEntity) { rows.value = rows.value + (entity.key to entity) }
         override suspend fun deletePreference(key: String) { rows.value = rows.value - key }
+        override suspend fun deletePreferencesWithPrefix(prefix: String) {
+            rows.value = rows.value.filterKeys { !it.startsWith(prefix) }
+        }
         override suspend fun clearAll() { rows.value = emptyMap() }
         override suspend fun getDirtyPreferences(): List<PreferenceEntity> = rows.value.values.filter { it.dirty == 1 }
         override suspend fun markClean(keys: List<String>) {}

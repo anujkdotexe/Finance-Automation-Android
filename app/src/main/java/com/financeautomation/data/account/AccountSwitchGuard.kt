@@ -56,6 +56,8 @@ class AccountSwitchGuard(
         stopBackgroundWork()
         try {
             store.wipe()
+            preferences.setPreference(com.financeautomation.domain.repository.PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+            preferences.clearKeysWithPrefix(com.financeautomation.domain.repository.PreferencesRepository.KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX)
             // Only after the wipe worked: a failed wipe leaves the previous owner in place
             preferences.setPreference(KEY_LEDGER_OWNER, newEmail.trim(), isDirty = false)
             preferences.setPreference(KEY_LAST_EMAIL, newEmail.trim(), isDirty = false)

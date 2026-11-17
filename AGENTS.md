@@ -126,11 +126,16 @@ The application must faithfully reproduce the proven iOS split calculations:
    * Never add, change or void the owner's live data on a phone or in their sheet while testing. Use unit-test fixtures.
 13. **Licence And Credits:**
    * The project is open source under the MIT License (`LICENSE`). Developer credits and links live in `app/src/main/res/values/developer_info.xml`. Do not add a different licence or an "all rights reserved" notice.
+14. **No Terminal Polling (Daemon & Reactive Notification Only):**
+   * Never poll or repeatedly ping the terminal in loops to check task, build, test, or process completion.
+   * Use daemon processes, watcher scripts (e.g. inbox watcher), or background tasks with notifications.
+   * Yield control and let the environment notify you reactively when the task finishes.
 
 ---
 
 ## 5. Change Log For This Manual
 
+- **2026-11-17:** Added Rule 14 (No Terminal Polling). Agents must never poll the terminal repeatedly in loops; use daemons, watchers, or reactive background notifications instead.
 - **2026-11-16:** Updated after the first full review and fix cycle. What changed and why:
   - Target platform set to API 28 to 36 and the ledger described as 28 visible plus three hidden columns, to match the build files and the sheet layout in the code.
   - Theme path corrected to `presentation/theme/`, where the theme actually lives.

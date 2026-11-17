@@ -94,4 +94,31 @@ class AppContainerTest {
         assertNotNull(container.accountRepository)
         assertNotNull(container.configSyncCoordinator)
     }
+
+    @Test
+    fun appContainerWiresTheReplacementCallbackToTheRepository() = kotlinx.coroutines.runBlocking {
+        val container = DefaultAppContainer(
+            applicationContext = createFakeContext(),
+            providedTokenProvider = fakeTokenProvider,
+            providedDatabaseReady = CompletableDeferred()
+        )
+
+        val requeuedYears = mutableListOf<Int>()
+        val recordingRepo = Proxy.newProxyInstance(
+            com.financeautomation.domain.repository.TransactionRepository::class.java.classLoader,
+            arrayOf(com.financeautomation.domain.repository.TransactionRepository::class.java)
+        ) { _, method, args ->
+            if (method.name == "requeueYearForNewWorkbook") {
+                requeuedYears.add(args!![0] as Int)
+                null
+            } else if (kotlinx.coroutines.flow.Flow::class.java.isAssignableFrom(method.returnType)) {
+                kotlinx.coroutines.flow.emptyFlow<Any?>()
+            } else null
+        } as com.financeautomation.domain.repository.TransactionRepository
+
+        val resolver = container.buildWorkbookResolver(txnRepoProvider = { recordingRepo })
+        resolver.onWorkbookReplaced(2026, "old_id", "new_id")
+
+        org.junit.Assert.assertEquals(listOf(2026), requeuedYears)
+    }
 }

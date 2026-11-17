@@ -41,6 +41,11 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
             method.name == "setGoogleAccountEmail" -> { googleEmail = args!![0] as String?; null }
             method.name == "getPreference" -> preferences[args!![0] as String]
             method.name == "setPreference" -> { preferences[args!![0] as String] = args[1] as String?; null }
+            method.name == "clearKeysWithPrefix" -> {
+                val prefix = args!![0] as String
+                preferences.keys.filter { it.startsWith(prefix) }.toList().forEach { preferences.remove(it) }
+                null
+            }
             method.name == "getSpreadsheetIdSync" || method.name == "getSpreadsheetIdForYearSync" -> "test_sheet_id"
             Flow::class.java.isAssignableFrom(method.returnType) -> flowOf<Any?>(null)
             method.returnType == java.lang.Boolean.TYPE -> false
