@@ -32,7 +32,6 @@ open class GoogleDriveClient(
 
     private val json = Json { ignoreUnknownKeys = true }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val DRIVE_RATE_LIMIT_REASONS = setOf("ratelimitexceeded", "userratelimitexceeded", "quotaexceeded", "sharingratelimitexceeded")
 
     private fun newRequestBuilder(url: String): Request.Builder {
         val builder = Request.Builder().url(url)

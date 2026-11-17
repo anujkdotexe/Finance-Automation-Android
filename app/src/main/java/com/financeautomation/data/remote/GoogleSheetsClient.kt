@@ -44,8 +44,6 @@ class AuthExpiredException(message: String) : GoogleSheetsException(message)
 class MalformedResponseException(message: String, cause: Throwable? = null) : GoogleSheetsException(message, cause)
 class GoogleSheetsApiException(val statusCode: Int, message: String, val apiError: GoogleApiError? = null) : GoogleSheetsException(message)
 
-private val RATE_LIMIT_REASONS = setOf("ratelimitexceeded", "userratelimitexceeded", "quotaexceeded", "sharingratelimitexceeded")
-
 /**
  * True when the same request is worth repeating later: server errors, 408 timeouts, 429 and a 403 whose reason says
  * the quota or rate limit was hit. A plain 403 (permission) is not retryable.
@@ -54,7 +52,7 @@ fun GoogleSheetsApiException.isRetryable(): Boolean = when (statusCode) {
     in 500..599, 408, 429 -> true
     // The grid was too small for the write; the next attempt expands it first
     400 -> message?.contains("exceeds grid limits", ignoreCase = true) == true
-    403 -> apiError?.reason?.lowercase() in RATE_LIMIT_REASONS
+    403 -> apiError?.reason?.lowercase() in DRIVE_RATE_LIMIT_REASONS
     else -> false
 }
 

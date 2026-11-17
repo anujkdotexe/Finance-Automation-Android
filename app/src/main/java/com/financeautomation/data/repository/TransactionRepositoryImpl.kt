@@ -1843,7 +1843,7 @@ class TransactionRepositoryImpl(
         is java.net.ConnectException,
         is java.net.NoRouteToHostException -> true
         is com.financeautomation.data.remote.GoogleSheetsApiException -> err.isRunWideBackoff()
-        is GoogleDriveApiException -> err.statusCode in 500..599 || err.statusCode == 429 || err.statusCode == 408 || (err.statusCode == 403 && err.isRetryable())
+        is GoogleDriveApiException -> err.isRetryable()
         else -> false
     }
 

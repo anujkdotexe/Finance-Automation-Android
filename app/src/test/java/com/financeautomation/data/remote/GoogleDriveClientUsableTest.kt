@@ -97,4 +97,36 @@ class GoogleDriveClientUsableTest {
         assertTrue("200 without trashed field must return Result.Success", res is Result.Success)
         assertTrue("File without trashed field must default to usable", (res as Result.Success).data)
     }
+
+    @Test
+    fun googleDriveApiExceptionIsRetryableTrueCases() {
+        val cases = listOf(
+            GoogleDriveApiException(500, "Internal Server Error"),
+            GoogleDriveApiException(503, "Service Unavailable"),
+            GoogleDriveApiException(408, "Request Timeout"),
+            GoogleDriveApiException(429, "Too Many Requests"),
+            GoogleDriveApiException(403, "Rate Limit", GoogleApiError("drive", 403, reason = "rateLimitExceeded", message = "rate limit")),
+            GoogleDriveApiException(403, "Quota Exceeded", GoogleApiError("drive", 403, reason = "quotaExceeded", message = "quota exceeded")),
+            GoogleDriveApiException(403, "User Rate Limit", GoogleApiError("drive", 403, reason = "userRateLimitExceeded", message = "user rate limit")),
+            GoogleDriveApiException(403, "Sharing Limit", GoogleApiError("drive", 403, reason = "sharingRateLimitExceeded", message = "sharing limit"))
+        )
+        for (ex in cases) {
+            assertTrue("Expected isRetryable=true for status ${ex.statusCode} (${ex.apiError?.reason})", ex.isRetryable())
+        }
+    }
+
+    @Test
+    fun googleDriveApiExceptionIsRetryableFalseCases() {
+        val cases = listOf(
+            GoogleDriveApiException(400, "Bad Request"),
+            GoogleDriveApiException(401, "Unauthorized"),
+            GoogleDriveApiException(404, "Not Found"),
+            GoogleDriveApiException(403, "Forbidden", GoogleApiError("drive", 403, reason = "forbidden", message = "forbidden")),
+            GoogleDriveApiException(403, "Access Denied", GoogleApiError("drive", 403, reason = "insufficientPermissions", message = "access denied")),
+            GoogleDriveApiException(403, "Forbidden without apiError")
+        )
+        for (ex in cases) {
+            assertFalse("Expected isRetryable=false for status ${ex.statusCode} (${ex.apiError?.reason})", ex.isRetryable())
+        }
+    }
 }
