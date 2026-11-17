@@ -16,6 +16,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,11 +85,14 @@ class OverlayController(
     /** True while the app lock is active: the overlay then shows no friend names, balances or flows that list them. */
     private val isLocked: suspend () -> Boolean = { false },
     /** True when windows must hide their content from screenshots and the recents list. */
-    private val hidePreview: () -> Boolean = { false }
+    private val hidePreview: () -> Boolean = { false },
+    /** The saved theme choice, so the overlay follows the app setting and not only the phone setting. */
+    private val themeMode: kotlinx.coroutines.flow.Flow<com.financeautomation.domain.model.ThemeMode> =
+        kotlinx.coroutines.flow.flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val resultPill = ResultPillOverlay(appContext, hidePreview)
+    private val resultPill = ResultPillOverlay(appContext, hidePreview, themeMode)
     private val blurHelper = OverlayBlurHelper(windowManager)
     private val mainScope = CoroutineScope(mainDispatcher + SupervisorJob())
 
@@ -233,7 +237,8 @@ class OverlayController(
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
-                        FinanceAutomationTheme {
+                        val mode by themeMode.collectAsState(initial = com.financeautomation.domain.model.ThemeMode.SYSTEM)
+                        FinanceAutomationTheme(themeMode = mode) {
                             var isVisible by remember { mutableStateOf(false) }
 
                             LaunchedEffect(Unit) {

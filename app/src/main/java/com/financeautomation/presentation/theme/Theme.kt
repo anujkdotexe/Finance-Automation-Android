@@ -16,6 +16,13 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.financeautomation.domain.model.ThemeMode
 
+/** Whether the dark scheme applies for a saved [ThemeMode] on a phone whose own setting is [systemDark]. */
+fun resolveDarkTheme(themeMode: ThemeMode, systemDark: Boolean): Boolean = when (themeMode) {
+    ThemeMode.SYSTEM -> systemDark
+    ThemeMode.LIGHT -> false
+    ThemeMode.DARK -> true
+}
+
 /**
  * Standard Material 3 theme wrapper for Calm Financial Automation.
  * Respects user preferences (System, Light, Dark).
@@ -23,11 +30,7 @@ import com.financeautomation.domain.model.ThemeMode
 @Composable
 fun FinanceAutomationTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
-    darkTheme: Boolean = when (themeMode) {
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-    },
+    darkTheme: Boolean = resolveDarkTheme(themeMode, isSystemInDarkTheme()),
     dynamicColor: Boolean = false,
     transparentSystemBars: Boolean = false,
     content: @Composable () -> Unit

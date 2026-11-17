@@ -18,6 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -42,7 +44,9 @@ import kotlinx.coroutines.launch
  */
 class ResultPillOverlay(
     private val context: Context,
-    private val hidePreview: () -> Boolean = { false }
+    private val hidePreview: () -> Boolean = { false },
+    private val themeMode: kotlinx.coroutines.flow.Flow<com.financeautomation.domain.model.ThemeMode> =
+        kotlinx.coroutines.flow.flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -115,7 +119,8 @@ class ResultPillOverlay(
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
-                        FinanceAutomationTheme {
+                        val mode by themeMode.collectAsState(initial = com.financeautomation.domain.model.ThemeMode.SYSTEM)
+                        FinanceAutomationTheme(themeMode = mode) {
                             Surface(
                                 shape = FinanceTheme.shapes.pill,
                                 color = FinanceTheme.colors.primaryContainer,
