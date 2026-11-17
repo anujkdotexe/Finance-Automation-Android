@@ -73,12 +73,22 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
                 val finished = withTimeoutOrNull(timeoutMs) { load() }
                 if (finished == null) {
                     Diagnostics.record("MonthBurnWidgetProvider", "refresh timed out")
-                    onFailure()
+                    runFailureHandler(onFailure)
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("MonthBurnWidgetProvider", "${e.javaClass.simpleName}: refresh failed")
+                runFailureHandler(onFailure)
+            }
+        }
+
+        /** The failure handler draws on the system widget host and can fail too; that must not end the process. */
+        private suspend fun runFailureHandler(onFailure: suspend () -> Unit) {
+            try {
                 onFailure()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("MonthBurnWidgetProvider", "${e.javaClass.simpleName}: failure handler failed")
             }
         }
 

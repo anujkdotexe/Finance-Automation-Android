@@ -108,4 +108,25 @@ class MonthBurnWidgetRefreshTest {
         year = 2026, month = 11, livingBurn = 10.0, perDayAverage = 1.0, daysElapsed = 10,
         syncState = WidgetSyncState.UpToDate
     )
+
+    @Test
+    fun aFailureHandlerThatThrowsDoesNotEscape() = runTest {
+        MonthBurnWidgetProvider.refreshSafely(
+            load = { throw IllegalStateException("db") },
+            onFailure = { throw IllegalArgumentException("widget host") }
+        )
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue(reasons.any { it.contains("IllegalStateException") })
+        assertTrue(reasons.any { it.contains("IllegalArgumentException") && it.contains("failure handler") })
+    }
+
+    @Test
+    fun aFailureHandlerThatThrowsAfterATimeoutDoesNotEscape() = runTest {
+        MonthBurnWidgetProvider.refreshSafely(
+            timeoutMs = 100L,
+            load = { delay(60_000) },
+            onFailure = { throw IllegalArgumentException("widget host") }
+        )
+        assertTrue(Diagnostics.getRecords().any { it.reason.contains("failure handler") })
+    }
 }
