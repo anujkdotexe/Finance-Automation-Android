@@ -3,6 +3,7 @@ package com.financeautomation.domain.usecase
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.ConfigNumbers
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.safeCall
 import com.financeautomation.domain.model.EmptyOrMissingConfigTabException
@@ -153,8 +154,8 @@ class SyncConfigUseCase(
                         }
                     }
                     ConfigConstants.TYPE_BUDGET -> {
-                        val amount = row.value1.replace(",", "").trim().toDoubleOrNull()
-                        if (row.key.isNotBlank() && amount != null && amount > 0.0) {
+                        val amount = ConfigNumbers.parseMoney(row.value1)
+                        if (row.key.isNotBlank() && amount != null) {
                             localGateway.applyRemoteBudget(
                                 category = row.key,
                                 monthlyAmount = amount,

@@ -33,7 +33,7 @@ class SyncConfigUseCaseTest {
     }
 
     /** Categories only; every other kind is empty. applyRemote follows the real rule: newer updatedAt wins and is clean. */
-    private class CategoryGateway : ConfigSyncLocalGateway {
+    private class CategoryGateway(private val onBudget: (String, Double) -> Unit = { _, _ -> }) : ConfigSyncLocalGateway {
         val categories = mutableMapOf<String, Category>()
         val dirty = mutableSetOf<String>()
 
@@ -57,6 +57,9 @@ class SyncConfigUseCaseTest {
         )
 
         override suspend fun markCategoriesClean(ids: List<String>) { dirty.removeAll(ids.toSet()) }
+        override suspend fun applyRemoteBudget(category: String, monthlyAmount: Double, updatedAt: Long, deleted: Boolean) {
+            if (!deleted) onBudget(category, monthlyAmount)
+        }
         override suspend fun markAccountsClean(ids: List<String>) {}
         override suspend fun markCompanionsClean(ids: List<String>) {}
         override suspend fun markTripTagsClean(ids: List<String>) {}
@@ -88,9 +91,9 @@ class SyncConfigUseCaseTest {
 
     private class Harness(val sheet: FakeConfigSheet, val gateway: CategoryGateway, val useCase: SyncConfigUseCase)
 
-    private fun harness(): Harness {
+    private fun harness(onBudget: (String, Double) -> Unit = { _, _ -> }): Harness {
         val sheet = FakeConfigSheet()
-        val gateway = CategoryGateway()
+        val gateway = CategoryGateway(onBudget)
         val prefs = PreferencesRepositoryImpl(isTestHeadless = true)
         runBlocking { prefs.setSpreadsheetId("sheet") }
         val useCase = SyncConfigUseCase(
@@ -120,6 +123,20 @@ class SyncConfigUseCaseTest {
     }
 
     private val newer = t0.plusSeconds(60).toString()
+
+    /** Budget rows reach the gateway through applyRemoteBudget; this gateway records the amounts it was given. */
+    @Test
+    fun pullIgnoresInfiniteBudget() = runBlocking {
+        val budgets = mutableListOf<Pair<String, Double>>()
+        val h = harness(onBudget = { category, amount -> budgets.add(category to amount) })
+        for ((key, amount) in listOf("Food" to "Infinity", "Fuel" to "1e308", "Rent" to "-100", "Gifts" to "NaN", "Fun" to "1,500.50")) {
+            h.sheet.addRow("budget", key, amount, "", "", "", newer, "other", "")
+        }
+
+        h.useCase.pull("sheet")
+
+        assertEquals(listOf("Fun" to 1500.5), budgets)
+    }
 
     @Test
     fun pullIgnoresTombstoneForSavings() = runBlocking {
