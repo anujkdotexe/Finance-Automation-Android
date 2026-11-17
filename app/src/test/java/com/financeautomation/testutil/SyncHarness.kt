@@ -3,6 +3,8 @@ package com.financeautomation.testutil
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.data.repository.TransactionRepositoryImpl
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PreferencesRepository
@@ -15,7 +17,10 @@ import java.lang.reflect.Proxy
  * A real [TransactionRepositoryImpl] over in-memory tables and a [ScriptedSheetsServer]. Nothing here accepts every
  * call: the server can fail a chosen request, and the tables behave like the Room queries.
  */
-class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())) {
+class SyncHarness(
+    tabs: List<String> = listOf(ScriptedSheetsServer.currentTab()),
+    resolverFactory: ((PreferencesRepository, GoogleSheetsClient) -> WorkbookResolver)? = null
+) {
     val tDao = InMemoryTransactionDao()
     val qDao = InMemoryQueueDao()
     val iDao = InMemoryInflowDao()
@@ -61,6 +66,8 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
         }
     } as PreferencesRepository
 
+    val workbookResolver: WorkbookResolver? = resolverFactory?.invoke(prefs, sheets)
+
     val repo = TransactionRepositoryImpl(
         transactionDao = tDao,
         syncQueueDao = qDao,
@@ -68,6 +75,7 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
         lineageDao = lDao,
         googleSheetsClient = sheets,
         preferencesRepository = prefs,
+        workbookResolver = workbookResolver,
         accountingSyncExecutor = createTestAccountingSyncExecutor(
             sheetsClient = sheets, syncQueueDao = qDao, lineageDao = lDao, transactionDao = tDao
         ),

@@ -24,6 +24,7 @@ import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.remote.AccountingPlanJsonAdapter
 import com.financeautomation.data.remote.AccountingRequestJsonAdapter
 import com.financeautomation.data.remote.AccountingSyncExecutor
+import com.financeautomation.data.remote.GoogleDriveApiException
 import com.financeautomation.data.remote.GoogleSheetsClient
 import com.financeautomation.data.remote.SheetsReadGate
 import com.financeautomation.data.remote.isRetryable
@@ -805,6 +806,7 @@ class TransactionRepositoryImpl(
         is java.net.ConnectException,
         is java.net.NoRouteToHostException -> true
         is com.financeautomation.data.remote.GoogleSheetsApiException -> throwable.isRetryable()
+        is GoogleDriveApiException -> throwable.isRetryable()
         is java.io.IOException -> {
             throwable !is com.financeautomation.data.remote.SheetNotFoundException &&
             throwable !is com.financeautomation.data.remote.MalformedResponseException &&
@@ -1841,6 +1843,7 @@ class TransactionRepositoryImpl(
         is java.net.ConnectException,
         is java.net.NoRouteToHostException -> true
         is com.financeautomation.data.remote.GoogleSheetsApiException -> err.isRunWideBackoff()
+        is GoogleDriveApiException -> err.statusCode in 500..599 || err.statusCode == 429 || err.statusCode == 408 || (err.statusCode == 403 && err.isRetryable())
         else -> false
     }
 

@@ -5,11 +5,21 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.remote.AccountingPlanJsonAdapter
+import com.financeautomation.data.remote.GoogleDriveClient
+import com.financeautomation.data.remote.TokenProvider
+import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.NewRow
 import com.financeautomation.domain.model.TableType
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.testutil.SyncHarness
 import kotlinx.coroutines.runBlocking
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -155,6 +165,49 @@ class SyncErrorHandlingTest {
         val writes = h.server.calls.count { it.method != "GET" }
         assertEquals("nothing may be written after a failed existence check", 0, writes)
         assertNotEquals(SyncState.SYNCED.name, h.tDao.rows["txn_a"]!!.syncState)
+    }
+
+    @Test
+    fun driveCheckErrorLeavesTheQueueItemPendingForRetry() = runBlocking {
+        val currentYear = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year
+        val fakeTokens = object : TokenProvider {
+            override fun getAccessToken(): String = "test_token"
+            override fun refreshAccessToken(): String = "test_token"
+        }
+        val failingDriveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                Response.Builder()
+                    .request(r)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(500)
+                    .message("Internal Server Error")
+                    .body("""{"error":{"code":500,"message":"Drive error"}}""".toResponseBody("application/json".toMediaType()))
+                    .build()
+            }).build(),
+            fakeTokens
+        )
+
+        val h = SyncHarness(resolverFactory = { prefs, sheets ->
+            WorkbookResolver(
+                googleDriveClient = failingDriveClient,
+                googleSheetsClient = sheets,
+                preferencesRepository = prefs
+            )
+        })
+        // Ensure no last verified date is set today so the daily check is triggered
+        h.preferences[PreferencesRepository.keyLastWorkbookVerifiedDate(currentYear)] = null
+        h.preferences[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR] = null
+
+        val res = h.saveAndSync("txn_drive_err")
+        val item = h.queueOf("txn_drive_err")
+
+        assertTrue("Sync run must report error when Drive check fails", res is Result.Error)
+        assertEquals("Queue item must remain in STATUS_PENDING for retry", SyncQueueEntity.STATUS_PENDING, item.status)
+        assertNotEquals("Queue item must not be marked permanently failed (999)", 999, item.retryCount)
+        assertEquals("Retry count must be incremented for retryable server error", 1, item.retryCount)
+        assertEquals("Transaction review state must remain CONFIRMED", ReviewState.CONFIRMED.name, h.tDao.rows["txn_drive_err"]!!.reviewState)
+        assertFalse("Last error detail must not be empty", item.lastErrorDetail.isNullOrBlank())
     }
 }
 
