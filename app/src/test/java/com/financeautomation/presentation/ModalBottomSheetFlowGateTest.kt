@@ -2,79 +2,61 @@ package com.financeautomation.presentation
 
 import com.financeautomation.presentation.overlay.FlowAuthGate
 import com.financeautomation.presentation.overlay.OverlayFlowScreen
+import com.financeautomation.presentation.ui.EntryIntentValidator
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * The sheet activity is not exported, so a flow started from inside the app is used as given (no debug flag, no
+ * caller package, no token needed). Outside callers can only reach it through EntryActivity, which drops the flow.
+ */
 class ModalBottomSheetFlowGateTest {
 
-    private val ownPackage = "com.financeautomation"
-
     @Test
-    fun externalCallerInReleaseBuildCannotSelectArbitraryFlow() {
-        // Case 1: External caller (callingPackage is null, typical for startActivity from outside)
-        val isAuthNull = FlowAuthGate.isAuthorized(
-            hasAuthToken = false,
-            callingPackage = null,
-            ownPackageName = ownPackage,
-            isDebug = false
-        )
-        assertFalse("External caller with null callingPackage must not be authorized in release", isAuthNull)
-        val screenNull = FlowAuthGate.resolveScreen("MENU", isAuthNull)
-        assertEquals("Must fall back to EXPENSE flow", OverlayFlowScreen.EXPENSE, screenNull)
-
-        // Case 2: External caller with explicit spoofed/attacker package
-        val isAuthAttacker = FlowAuthGate.isAuthorized(
-            hasAuthToken = false,
-            callingPackage = "com.attacker.app",
-            ownPackageName = ownPackage,
-            isDebug = false
-        )
-        assertFalse("External attacker app must not be authorized in release", isAuthAttacker)
-        val screenAttacker = FlowAuthGate.resolveScreen("INCOME_RETURN", isAuthAttacker)
-        assertEquals("Must fall back to EXPENSE flow", OverlayFlowScreen.EXPENSE, screenAttacker)
+    fun everySpeedDialFlowOpensItsOwnScreenWithoutAnyDebugFlag() {
+        assertEquals(OverlayFlowScreen.MENU, FlowAuthGate.resolveScreen("MENU"))
+        assertEquals(OverlayFlowScreen.INCOME_RETURN, FlowAuthGate.resolveScreen("INCOME"))
+        assertEquals(OverlayFlowScreen.INCOME_RETURN, FlowAuthGate.resolveScreen("INCOME_RETURN"))
+        assertEquals(OverlayFlowScreen.FRIEND_PAID, FlowAuthGate.resolveScreen("FRIEND_PAID"))
+        assertEquals(OverlayFlowScreen.REPAID_FRIEND, FlowAuthGate.resolveScreen("REPAID"))
+        assertEquals(OverlayFlowScreen.TRIP_MODE, FlowAuthGate.resolveScreen("TRIP"))
     }
 
     @Test
-    fun internalCallerInReleaseBuildCanSelectFlow() {
-        // Case 1: Verified internal package name
-        val isAuthInternal = FlowAuthGate.isAuthorized(
-            hasAuthToken = false,
-            callingPackage = ownPackage,
-            ownPackageName = ownPackage,
-            isDebug = false
-        )
-        assertTrue("Internal app caller must be authorized", isAuthInternal)
-        val screenInternal = FlowAuthGate.resolveScreen("MENU", isAuthInternal)
-        assertEquals(OverlayFlowScreen.MENU, screenInternal)
-
-        // Case 2: Verified internal token (e.g. from internal PendingIntent)
-        val isAuthToken = FlowAuthGate.isAuthorized(
-            hasAuthToken = true,
-            callingPackage = null,
-            ownPackageName = ownPackage,
-            isDebug = false
-        )
-        assertTrue("Caller with verified internal token must be authorized", isAuthToken)
-        val screenToken = FlowAuthGate.resolveScreen("FRIEND_PAID", isAuthToken)
-        assertEquals(OverlayFlowScreen.FRIEND_PAID, screenToken)
+    fun settlementTapsOpenTheirScreens() {
+        val owedToMe = FlowAuthGate.mapSettlementToExtras("Asha", owedToMe = true)
+        val iOwe = FlowAuthGate.mapSettlementToExtras("Asha", owedToMe = false)
+        assertEquals(OverlayFlowScreen.INCOME_RETURN, FlowAuthGate.resolveScreen(owedToMe.flow))
+        assertEquals(OverlayFlowScreen.REPAID_FRIEND, FlowAuthGate.resolveScreen(iOwe.flow))
     }
 
     @Test
-    fun debugBuildAllowsFlowSelectionForAdbAndDevelopment() {
-        val isAuthDebug = FlowAuthGate.isAuthorized(
-            hasAuthToken = false,
-            callingPackage = null,
-            ownPackageName = ownPackage,
-            isDebug = true
-        )
-        assertTrue("Debug build allows flow selection for adb shell and dev testing", isAuthDebug)
+    fun unknownOrBlankFlowFallsBackToExpense() {
+        assertEquals(OverlayFlowScreen.EXPENSE, FlowAuthGate.resolveScreen(null))
+        assertEquals(OverlayFlowScreen.EXPENSE, FlowAuthGate.resolveScreen(""))
+        assertEquals(OverlayFlowScreen.EXPENSE, FlowAuthGate.resolveScreen("DROP_TABLE"))
+    }
 
-        assertEquals(OverlayFlowScreen.INCOME_RETURN, FlowAuthGate.resolveScreen("INCOME_RETURN", isAuthDebug))
-        assertEquals(OverlayFlowScreen.MENU, FlowAuthGate.resolveScreen("MENU", isAuthDebug))
-        assertEquals(OverlayFlowScreen.FRIEND_PAID, FlowAuthGate.resolveScreen("FRIEND_PAID", isAuthDebug))
-        assertEquals(OverlayFlowScreen.REPAID_FRIEND, FlowAuthGate.resolveScreen("REPAID_FRIEND", isAuthDebug))
-        assertEquals(OverlayFlowScreen.TRIP_MODE, FlowAuthGate.resolveScreen("TRIP_MODE", isAuthDebug))
+    @Test
+    fun outsideCallerOfEntryActivityStillGetsTheExpenseScreen() {
+        for (flow in listOf("MENU", "INCOME_RETURN", "FRIEND_PAID", "REPAID", "TRIP")) {
+            val target = EntryIntentValidator.restrictForCaller(
+                isInternal = false,
+                validatedCaptureId = "cap-1",
+                validatedFlow = EntryIntentValidator.validateFlow(flow)
+            )
+            assertEquals(null, target.flow)
+            assertEquals(OverlayFlowScreen.EXPENSE, FlowAuthGate.resolveScreen(target.flow))
+        }
+    }
+
+    @Test
+    fun internalCallerOfEntryActivityKeepsItsFlow() {
+        val target = EntryIntentValidator.restrictForCaller(
+            isInternal = true,
+            validatedCaptureId = null,
+            validatedFlow = EntryIntentValidator.validateFlow("friend_paid")
+        )
+        assertEquals(OverlayFlowScreen.FRIEND_PAID, FlowAuthGate.resolveScreen(target.flow))
     }
 }

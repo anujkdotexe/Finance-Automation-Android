@@ -1,7 +1,6 @@
 package com.financeautomation.presentation.ui
 
 import android.app.Activity
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -71,8 +70,7 @@ object EntryIntentValidator {
     fun buildFallbackIntent(
         context: Context,
         validatedCaptureId: String?,
-        validatedFlow: String?,
-        authIntent: PendingIntent?
+        validatedFlow: String?
     ): Intent {
         return Intent(context, ModalBottomSheetActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -81,9 +79,6 @@ object EntryIntentValidator {
             }
             if (!validatedFlow.isNullOrBlank()) {
                 putExtra(EntryActivity.EXTRA_FLOW, validatedFlow)
-            }
-            if (authIntent != null) {
-                putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
             }
         }
     }
@@ -139,17 +134,10 @@ class EntryActivity : Activity() {
             app.appContainer.overlayController.show(request)
             finish()
         } else {
-            val authIntent = PendingIntent.getActivity(
-                this,
-                0,
-                Intent(),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
             val fallbackIntent = EntryIntentValidator.buildFallbackIntent(
                 this,
                 validatedCaptureId,
-                validatedFlow,
-                authIntent
+                validatedFlow
             )
             startActivity(fallbackIntent)
             finish()

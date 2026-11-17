@@ -169,11 +169,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                 } else if (isCreditCapture) {
                     OverlayFlowScreen.INCOME_RETURN
                 } else {
-                    resolveInitialScreen(
-                        intent = intent,
-                        callingPackage = callingPackage,
-                        ownPackageName = packageName
-                    )
+                    resolveInitialScreen(intent)
                 }
 
                 // Transparent clickable backdrop for 1-tap outside dismiss
@@ -427,33 +423,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
         const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
         const val EXTRA_FLOW: String = "com.financeautomation.extra.FLOW"
         const val EXTRA_PRESELECT_FRIEND: String = "com.financeautomation.extra.PRESELECT_FRIEND"
-        const val EXTRA_INTERNAL_AUTH: String = "com.financeautomation.extra.INTERNAL_AUTH"
 
-        fun resolveInitialScreen(
-            intent: Intent,
-            callingPackage: String?,
-            ownPackageName: String,
-            isDebug: Boolean = com.financeautomation.BuildConfig.DEBUG
-        ): OverlayFlowScreen {
-            val authPendingIntent = try {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(EXTRA_INTERNAL_AUTH, android.app.PendingIntent::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(EXTRA_INTERNAL_AUTH)
-                }
-            } catch (e: Exception) {
-                null
-            }
-            val hasAuthToken = authPendingIntent?.creatorPackage == ownPackageName
-            val isAuth = com.financeautomation.presentation.overlay.FlowAuthGate.isAuthorized(
-                hasAuthToken = hasAuthToken,
-                callingPackage = callingPackage,
-                ownPackageName = ownPackageName,
-                isDebug = isDebug
-            )
-            val rawFlow = if (isAuth) intent.getStringExtra(EXTRA_FLOW) else null
-            return com.financeautomation.presentation.overlay.FlowAuthGate.resolveScreen(rawFlow, isAuth)
-        }
+        /**
+         * The sheet is not exported, so only this app can start it and the flow name comes from our own code.
+         * External callers reach flows only through [EntryActivity], which drops the flow for them.
+         */
+        fun resolveInitialScreen(intent: Intent): OverlayFlowScreen =
+            com.financeautomation.presentation.overlay.FlowAuthGate.resolveScreen(intent.getStringExtra(EXTRA_FLOW))
     }
 }

@@ -1,6 +1,5 @@
 package com.financeautomation.presentation.ui
 
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -292,15 +291,8 @@ fun AppNavHost(
     )
 
     fun launchFlow(flow: String, preselectedFriend: String? = null) {
-        val authIntent = PendingIntent.getActivity(
-            context,
-            0,
-            Intent(),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
         val intent = Intent(context, ModalBottomSheetActivity::class.java).apply {
             putExtra(ModalBottomSheetActivity.EXTRA_FLOW, flow)
-            putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
             if (!preselectedFriend.isNullOrBlank()) {
                 putExtra(ModalBottomSheetActivity.EXTRA_PRESELECT_FRIEND, preselectedFriend)
             }
@@ -659,15 +651,8 @@ fun AppNavHost(
                             reviewInboxViewModel = reviewInboxViewModel,
                             onNavigateToDashboard = { navController.goToDashboard() },
                             onEditTransaction = { txn ->
-                                val authIntent = PendingIntent.getActivity(
-                                    context,
-                                    0,
-                                    Intent(),
-                                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                                )
                                 context.startActivity(Intent(context, ModalBottomSheetActivity::class.java).apply {
                                     putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, txn.id)
-                                    putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
                                 })
                             }
                         )
@@ -710,15 +695,8 @@ fun AppNavHost(
                         TransactionsScreen(
                             viewModel = transactionsViewModel,
                             onTransactionClick = { txn ->
-                                val authIntent = PendingIntent.getActivity(
-                                    context,
-                                    0,
-                                    Intent(),
-                                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                                )
                                 context.startActivity(Intent(context, ModalBottomSheetActivity::class.java).apply {
                                     putExtra(ModalBottomSheetActivity.EXTRA_TRANSACTION_ID, txn.id)
-                                    putExtra(ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
                                 })
                             },
                             onNavigateToSync = {
