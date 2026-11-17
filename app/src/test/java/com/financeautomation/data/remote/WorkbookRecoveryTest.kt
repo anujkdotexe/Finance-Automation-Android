@@ -683,4 +683,189 @@ class WorkbookRecoveryTest {
         assertTrue("Drive must create folder and spreadsheet", createPosts.size >= 2)
         assertTrue("Sheets batchUpdate must be called for provisioning", sheetCalls.any { it.contains("batchUpdate") })
     }
+
+    private class MutableClock(
+        private var currentInstant: java.time.Instant,
+        private val zone: ZoneId = ZoneId.of("Asia/Kolkata")
+    ) : java.time.Clock() {
+        override fun getZone(): ZoneId = zone
+        override fun withZone(zone: ZoneId): java.time.Clock = MutableClock(currentInstant, zone)
+        override fun instant(): java.time.Instant = currentInstant
+        fun advanceDays(days: Long) {
+            currentInstant = currentInstant.plus(days, java.time.temporal.ChronoUnit.DAYS)
+        }
+    }
+
+    @Test
+    fun firstNonForcedResolveOfTheDayChecksDriveOnce() = runBlocking {
+        val clock = MutableClock(java.time.Instant.parse("2026-11-17T06:00:00Z"))
+        val testYear = 2026
+        yearIds[testYear] = "daily_cached_id"
+        legacySpreadsheetId = "daily_cached_id"
+        rawPrefs.remove(PreferencesRepository.keyLastWorkbookVerifiedDate(testYear))
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+
+        val driveGetCalls = mutableListOf<String>()
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.method == "GET" && r.url.encodedPath.endsWith("/files/daily_cached_id")) {
+                    driveGetCalls += r.url.encodedPath
+                    response(r, 200, """{"id":"daily_cached_id","trashed":false}""")
+                } else response(r, 200, "{}")
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            clock = clock
+        )
+
+        val res = resolver.resolveForYear(testYear, forceValidateTabs = false)
+        assertTrue(res is Result.Success)
+        assertEquals("daily_cached_id", (res as Result.Success).data)
+        assertEquals("First non-forced resolve must check Drive exactly once", 1, driveGetCalls.size)
+        val todayStr = java.time.LocalDate.now(clock).toString()
+        assertEquals(todayStr, rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(testYear)])
+    }
+
+    @Test
+    fun secondNonForcedResolveTheSameDayMakesNoDriveCall() = runBlocking {
+        val clock = MutableClock(java.time.Instant.parse("2026-11-17T06:00:00Z"))
+        val testYear = 2026
+        yearIds[testYear] = "daily_cached_id"
+        legacySpreadsheetId = "daily_cached_id"
+        // Already verified today
+        val todayStr = java.time.LocalDate.now(clock).toString()
+        rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(testYear)] = todayStr
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+
+        val driveGetCalls = mutableListOf<String>()
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.method == "GET" && r.url.encodedPath.endsWith("/files/daily_cached_id")) {
+                    driveGetCalls += r.url.encodedPath
+                    response(r, 200, """{"id":"daily_cached_id","trashed":false}""")
+                } else response(r, 200, "{}")
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            clock = clock
+        )
+
+        val res = resolver.resolveForYear(testYear, forceValidateTabs = false)
+        assertTrue(res is Result.Success)
+        assertEquals("daily_cached_id", (res as Result.Success).data)
+        assertEquals("Second non-forced resolve on the same day must make 0 Drive calls", 0, driveGetCalls.size)
+    }
+
+    @Test
+    fun nextDayChecksDriveAgain() = runBlocking {
+        val clock = MutableClock(java.time.Instant.parse("2026-11-17T06:00:00Z"))
+        val testYear = 2026
+        yearIds[testYear] = "daily_cached_id"
+        legacySpreadsheetId = "daily_cached_id"
+        // Verified yesterday (2026-11-17)
+        rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(testYear)] = "2026-11-17"
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+
+        // Advance clock by one day to 2026-11-18
+        clock.advanceDays(1)
+
+        val driveGetCalls = mutableListOf<String>()
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.method == "GET" && r.url.encodedPath.endsWith("/files/daily_cached_id")) {
+                    driveGetCalls += r.url.encodedPath
+                    response(r, 200, """{"id":"daily_cached_id","trashed":false}""")
+                } else response(r, 200, "{}")
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            clock = clock
+        )
+
+        val res = resolver.resolveForYear(testYear, forceValidateTabs = false)
+        assertTrue(res is Result.Success)
+        assertEquals("daily_cached_id", (res as Result.Success).data)
+        assertEquals("Advancing to next day must check Drive again", 1, driveGetCalls.size)
+        assertEquals("2026-11-18", rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(testYear)])
+    }
+
+    @Test
+    fun trashedIdIsDetectedOnTheNonForcedSyncPath() = runBlocking {
+        val clock = MutableClock(java.time.Instant.parse("2026-11-17T06:00:00Z"))
+        val testYear = 2026
+        yearIds[testYear] = "trashed_sync_id"
+        legacySpreadsheetId = "trashed_sync_id"
+        rawPrefs.remove(PreferencesRepository.keyLastWorkbookVerifiedDate(testYear))
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.url.encodedPath.endsWith("/files/trashed_sync_id") ->
+                        response(r, 200, """{"id":"trashed_sync_id","trashed":true}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[{"id":"replacement_sync_id","name":"Finance$testYear","trashed":false}]}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"replacement_sync_id","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    else -> response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":0}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            clock = clock
+        )
+
+        // Non-forced sync path (forceValidateTabs = false)
+        val res = resolver.resolveForYear(testYear, forceValidateTabs = false)
+        assertTrue("Trashed ID must be detected on non-forced path and resolve replacement", res is Result.Success)
+        assertEquals("replacement_sync_id", (res as Result.Success).data)
+        assertEquals("replacement_sync_id", yearIds[testYear])
+    }
 }
