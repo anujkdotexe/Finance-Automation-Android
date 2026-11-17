@@ -337,19 +337,24 @@ class SettingsSyncCoordinator(
      * Creates a new empty workbook and switches the app to it. The old workbook stays in Google Drive.
      * The stored id is changed only on success.
      */
-    fun onCreateFreshWorkbook() {
+    fun onCreateFreshWorkbook(copyHistory: Boolean = false) {
         val resolver = workbookResolver ?: return
         if (uiState.value.isProvisioning) return
         scope.launch(ioDispatcher) {
             uiState.update { it.copy(isProvisioning = true, errorMessage = null) }
             val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
-            when (val res = resolver.createFreshWorkbook(currentYear)) {
+            when (val res = resolver.createFreshWorkbook(currentYear, copyHistory)) {
                 is Result.Success -> {
+                    val msgRes = if (copyHistory) {
+                        R.string.fresh_workbook_msg_copy_history
+                    } else {
+                        R.string.fresh_workbook_msg_empty
+                    }
                     uiState.update {
                         it.copy(
                             spreadsheetId = res.data,
                             isProvisioning = false,
-                            userMessage = UiText.res(R.string.settings_msg_fresh_workbook_switched, currentYear)
+                            userMessage = UiText.res(msgRes)
                         )
                     }
                 }

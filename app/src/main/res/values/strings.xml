@@ -58,8 +58,14 @@
     <string name="action_sign_out">Sign out</string>
     <string name="action_repair_workbook">Repair workbook</string>
     <string name="action_create_fresh_workbook">Create a fresh workbook</string>
-    <string name="create_fresh_workbook_confirm_title">Create a fresh workbook</string>
-    <string name="create_fresh_workbook_confirm_body">This creates a new empty workbook and switches the app to it. Your old workbook stays in Google Drive.</string>
+    <string name="create_fresh_workbook_confirm_title">Create a fresh workbook?</string>
+    <string name="create_fresh_workbook_confirm_body">Your current workbook stays in Drive untouched. Choose what goes into the new one.</string>
+    <string name="fresh_workbook_dialog_title">Create a fresh workbook?</string>
+    <string name="fresh_workbook_dialog_body">Your current workbook stays in Drive untouched. Choose what goes into the new one.</string>
+    <string name="fresh_workbook_action_copy_history">Copy my saved history</string>
+    <string name="fresh_workbook_action_start_empty">Start empty</string>
+    <string name="fresh_workbook_msg_copy_history">A fresh workbook was created. Your saved history is being copied into it.</string>
+    <string name="fresh_workbook_msg_empty">A fresh workbook was created and is empty.</string>
     <string name="action_create">Create</string>
     <string name="raw_http_errors_title">Raw Google API Errors</string>
     <string name="raw_http_errors_notice">Contains Google error text. Shared only if you choose.</string>

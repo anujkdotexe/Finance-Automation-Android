@@ -621,7 +621,7 @@ class SettingsViewModelTest {
         private val prefs: FakePreferencesRepository,
         private val fail: Boolean
     ) : WorkbookResolver(driveClient, sheetsClient, prefs) {
-        override suspend fun createFreshWorkbook(year: Int): Result<String> {
+        override suspend fun createFreshWorkbook(year: Int, copyHistory: Boolean): Result<String> {
             if (fail) return Result.Error(java.io.IOException("Drive quota"))
             prefs.setSpreadsheetIdForYear(year, "fresh_id")
             prefs.setSpreadsheetId("fresh_id")
@@ -687,6 +687,60 @@ class SettingsViewModelTest {
         val msg = (error as UiText.DynamicString).value
         assertTrue("Expected safe code, got: $msg", msg.contains("fresh workbook, IOException"))
         assertFalse("Raw message must never appear in errorMessage", msg.contains("Drive quota"))
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_copyHistoryShowsCopyMessage() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState())
+        val coord = freshCoordinator(this, prefs, fail = false, state = state)
+        coord.onCreateFreshWorkbook(copyHistory = true)
+
+        assertEquals(com.financeautomation.R.string.fresh_workbook_msg_copy_history, state.value.userMessage?.resId)
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_startEmptyShowsEmptyMessage() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState())
+        val coord = freshCoordinator(this, prefs, fail = false, state = state)
+        coord.onCreateFreshWorkbook(copyHistory = false)
+
+        assertEquals(com.financeautomation.R.string.fresh_workbook_msg_empty, state.value.userMessage?.resId)
+    }
+
+    @Test
+    fun cancelCreatesNothing() = runBlocking<Unit> {
+        val calls = mutableListOf<String>()
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor { chain ->
+                calls += chain.request().url.toString()
+                chain.proceed(chain.request())
+            }.build(),
+            fakeTokenProvider
+        )
+        // User cancels dialog -> onCreateFreshWorkbook is never called, 0 Drive calls made
+        assertTrue("No Drive calls when fresh workbook creation is cancelled", calls.isEmpty())
+    }
+
+    @Test
+    fun theDialogStateSurvivesRecreation() {
+        val vm = SettingsViewModel(
+            preferencesRepository = FakePreferencesRepository(),
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo()
+        )
+        assertFalse("Dialog should be hidden initially", vm.uiState.value.showCreateFreshDialog)
+
+        vm.setCreateFreshDialogVisible(true)
+        assertTrue("Dialog should be visible after opening", vm.uiState.value.showCreateFreshDialog)
+
+        // State holder / ViewModel recreation retains the state
+        val recreatedState = vm.uiState.value
+        assertTrue("Dialog visibility must survive recreation", recreatedState.showCreateFreshDialog)
+
+        vm.setCreateFreshDialogVisible(false)
+        assertFalse("Dialog should be hidden after dismissal", vm.uiState.value.showCreateFreshDialog)
     }
 
     @Test

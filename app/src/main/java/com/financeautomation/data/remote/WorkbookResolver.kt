@@ -298,7 +298,10 @@ open class WorkbookResolver(
      * workbook and leaves every old workbook untouched. The stored id changes only after the new workbook
      * is created and provisioned; on any failure the previous id stays as it was.
      */
-    open suspend fun createFreshWorkbook(year: Int): Result<String> = withContext(ioDispatcher) {
+    open suspend fun createFreshWorkbook(
+        year: Int,
+        copyHistory: Boolean = false
+    ): Result<String> = withContext(ioDispatcher) {
         mutex.withLock {
             val oldStoredId = preferencesRepository.getSpreadsheetIdForYearSync(year)
             val folderRes = googleDriveClient.findOrCreateFolder("Personal Finance")
@@ -332,8 +335,18 @@ open class WorkbookResolver(
                 preferencesRepository.setSpreadsheetTitle(workbookName)
             }
 
-            if (!oldStoredId.isNullOrBlank() && newId != oldStoredId) {
-                onWorkbookReplaced(year, oldStoredId, newId)
+            if (copyHistory) {
+                try {
+                    onWorkbookReplaced(year, oldStoredId.orEmpty(), newId)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Diagnostics.record("WorkbookResolver", "REQUEUE_FAILED: ${e.javaClass.simpleName}")
+                    preferencesRepository.setPreference(
+                        PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR,
+                        year.toString(),
+                        isDirty = false
+                    )
+                }
             }
 
             syncConfigUseCase?.mirrorToCloud(newId)

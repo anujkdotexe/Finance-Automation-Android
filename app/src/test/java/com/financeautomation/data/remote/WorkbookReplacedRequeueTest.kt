@@ -1030,4 +1030,204 @@ class WorkbookReplacedRequeueTest {
         val payablesInQueue = qDao.getAllPending().filter { it.transactionId == "pay_bob_1" }
         assertEquals("Payable must appear exactly once in queue", 1, payablesInQueue.size)
     }
+
+    @Test
+    fun freshWorkbookStartEmptyDoesNotRequeue() = runBlocking {
+        yearIds[year] = "old_wb_id"
+        var requeueCalls = 0
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_1","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"fresh_sheet_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, """{"replies":[]}""")
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            onWorkbookReplaced = { _, _, _ -> requeueCalls++ }
+        )
+
+        val res = resolver.createFreshWorkbook(year, copyHistory = false)
+        assertTrue(res is Result.Success)
+        assertEquals("fresh_sheet_id", (res as Result.Success).data)
+        assertEquals("Start empty must not call onWorkbookReplaced", 0, requeueCalls)
+        assertNull(
+            "Notice pending flag must not be set for fresh workbook",
+            rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING]
+        )
+    }
+
+    @Test
+    fun freshWorkbookCopyHistoryRequeuesEverything() = runBlocking {
+        yearIds[year] = "old_wb_id"
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val inDao = InMemoryInflowDao()
+        val pDao = InMemoryPayableDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        tDao.insert(sampleTransaction("tx_fresh_copy", nov2026, status = "Pending", syncState = SyncState.SYNCED.name, sheetRowIndex = 4))
+        inDao.insert(
+            InflowEntity(
+                id = "in_fresh_copy",
+                timestamp = nov2026,
+                amount = 500.0,
+                account = "HDFC",
+                inflowType = "Income / Salary",
+                source = "Company",
+                note = "Salary",
+                status = "CONFIRMED"
+            )
+        )
+        pDao.upsert(
+            PayableEntity(
+                uuid = "pay_fresh_copy",
+                dateIncurredSerial = 46338,
+                timeSerial = 0.5,
+                paidBy = "Bob",
+                whatFor = "Dinner",
+                amountIOwe = 300.0,
+                dateRepaidSerial = null,
+                repaymentStatus = "Pending",
+                tabName = "Nov26",
+                sheetRowIndex = null
+            )
+        )
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_1","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"fresh_sheet_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, """{"replies":[]}""")
+            }).build(), tokens
+        )
+
+        val executor = createTestAccountingSyncExecutor(
+            sheetsClient = sheets,
+            syncQueueDao = qDao,
+            transactionDao = tDao,
+            inflowDao = inDao,
+            payableDao = pDao
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            inflowDao = inDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = executor,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        var requeueCalled = false
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            onWorkbookReplaced = { y, _, _ ->
+                requeueCalled = true
+                repo.requeueYearForNewWorkbook(y)
+            }
+        )
+
+        val res = resolver.createFreshWorkbook(year, copyHistory = true)
+        assertTrue(res is Result.Success)
+        assertTrue("Copy history must trigger onWorkbookReplaced", requeueCalled)
+
+        val pending = qDao.getAllPending()
+        assertTrue("Must requeue transaction", pending.any { it.transactionId == "tx_fresh_copy" && it.operationType == SyncQueueEntity.OP_INSERT })
+        assertTrue("Must requeue inflow", pending.any { it.transactionId == "in_fresh_copy" && it.operationType == SyncQueueEntity.OP_RESTORE_INFLOW })
+        assertTrue("Must requeue payable", pending.any { it.transactionId == "pay_fresh_copy" && it.operationType == SyncQueueEntity.OP_RESTORE_PAYABLE })
+
+        assertNull(
+            "Notice pending flag must not be set for fresh workbook even when copying history",
+            rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING]
+        )
+    }
+
+    @Test
+    fun freshWorkbookNeverShowsTheMissingNotice() = runBlocking {
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_1","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"fresh_sheet_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, """{"replies":[]}""")
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs
+        )
+
+        // 1. copyHistory = false
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+        resolver.createFreshWorkbook(year, copyHistory = false)
+        assertNull("Missing notice must not be set for copyHistory = false",
+            rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING])
+
+        // 2. copyHistory = true
+        rawPrefs.remove(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+        resolver.createFreshWorkbook(year, copyHistory = true)
+        assertNull("Missing notice must not be set for copyHistory = true",
+            rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING])
+    }
 }
