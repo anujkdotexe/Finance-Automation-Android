@@ -27,6 +27,8 @@ class WorkbookRecoveryTest {
     }
     private val year = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
     private val yearIds = mutableMapOf<Int, String>()
+    private var legacySpreadsheetId: String? = null
+    private val rawPrefs = mutableMapOf<String, String?>()
 
     private val prefs: PreferencesRepository = Proxy.newProxyInstance(
         PreferencesRepository::class.java.classLoader, arrayOf(PreferencesRepository::class.java)
@@ -34,6 +36,18 @@ class WorkbookRecoveryTest {
         when (m.name) {
             "getSpreadsheetIdForYearSync" -> yearIds[args!![0] as Int]
             "setSpreadsheetIdForYear" -> { yearIds[args!![0] as Int] = args[1] as String; null }
+            "getSpreadsheetIdSync" -> legacySpreadsheetId
+            "setSpreadsheetId" -> { legacySpreadsheetId = args!![0] as String?; null }
+            "getSpreadsheetTitle" -> flowOf("Finance$year")
+            "setSpreadsheetTitle" -> null
+            "getPreference" -> rawPrefs[args!![0] as String]
+            "setPreference" -> { rawPrefs[args!![0] as String] = args[1] as String?; null }
+            "deletePreference" -> { rawPrefs.remove(args!![0] as String); null }
+            "clearKeysWithPrefix" -> {
+                val prefix = args!![0] as String
+                rawPrefs.keys.filter { it.startsWith(prefix) }.toList().forEach { rawPrefs.remove(it) }
+                null
+            }
             else -> if (kotlinx.coroutines.flow.Flow::class.java.isAssignableFrom(m.returnType)) flowOf<Any?>(null) else null
         }
     } as PreferencesRepository
@@ -350,5 +364,244 @@ class WorkbookRecoveryTest {
         assertTrue("expected success but was $res", res is Result.Success)
         assertEquals("valid_id", (res as Result.Success).data)
         assertEquals("Repair of an empty workbook must not copy", 0, copyRequests.filter { it.endsWith("/copy") }.size)
+    }
+
+    @Test
+    fun aTrashedStoredWorkbookWithNothingInDriveCreatesAndProvisionsANewOne() = runBlocking {
+        yearIds[year] = "old_trashed_id"
+        legacySpreadsheetId = "old_trashed_id"
+        val driveCalls = mutableListOf<String>()
+        val sheetCalls = mutableListOf<String>()
+        val copyCalls = mutableListOf<String>()
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                driveCalls += "${r.method} ${r.url.encodedPath}"
+                if (r.url.encodedPath.endsWith("/copy")) copyCalls += r.url.encodedPath
+                when {
+                    r.url.encodedPath.endsWith("/files/old_trashed_id") ->
+                        response(r, 200, """{"id":"old_trashed_id","trashed":true}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[]}""")
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_created_id","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"created_sheet_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                sheetCalls += "${r.method} ${r.url.encodedPath}"
+                when {
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"created_sheet_id","sheets":[{"properties":{"sheetId":0,"title":"Sheet1"}}]}""")
+                    else ->
+                        response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":10}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+
+        assertTrue("Expected Result.Success, was $res", res is Result.Success)
+        assertEquals("created_sheet_id", (res as Result.Success).data)
+        assertEquals("created_sheet_id", yearIds[year])
+        assertEquals("created_sheet_id", legacySpreadsheetId)
+        assertEquals("No copy call must happen", 0, copyCalls.size)
+        assertTrue("Drive folder must be created", driveCalls.any { it.startsWith("POST") && it.endsWith("/files") })
+        assertTrue("Drive spreadsheet must be created", driveCalls.count { it.startsWith("POST") && it.endsWith("/files") } >= 2)
+        assertTrue("Sheets batchUpdate must be called for provisioning", sheetCalls.any { it.contains("batchUpdate") })
+    }
+
+    @Test
+    fun a404StoredWorkbookWithNothingInDriveCreatesAndProvisionsANewOne() = runBlocking {
+        yearIds[year] = "old_404_id"
+        legacySpreadsheetId = "old_404_id"
+        val driveCalls = mutableListOf<String>()
+        val sheetCalls = mutableListOf<String>()
+        val copyCalls = mutableListOf<String>()
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                driveCalls += "${r.method} ${r.url.encodedPath}"
+                if (r.url.encodedPath.endsWith("/copy")) copyCalls += r.url.encodedPath
+                when {
+                    r.url.encodedPath.endsWith("/files/old_404_id") ->
+                        response(r, 404, """{"error":{"code":404,"message":"File not found","errors":[{"reason":"notFound"}]}}""")
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[]}""")
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_created_id","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"created_sheet_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                sheetCalls += "${r.method} ${r.url.encodedPath}"
+                when {
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"created_sheet_id","sheets":[{"properties":{"sheetId":0,"title":"Sheet1"}}]}""")
+                    else ->
+                        response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":10}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+
+        assertTrue("Expected Result.Success, was $res", res is Result.Success)
+        assertEquals("created_sheet_id", (res as Result.Success).data)
+        assertEquals("created_sheet_id", yearIds[year])
+        assertEquals("created_sheet_id", legacySpreadsheetId)
+        assertEquals("No copy call must happen", 0, copyCalls.size)
+        assertTrue("Drive spreadsheet must be created", driveCalls.count { it.startsWith("POST") && it.endsWith("/files") } >= 2)
+        assertTrue("Sheets batchUpdate must be called for provisioning", sheetCalls.any { it.contains("batchUpdate") })
+    }
+
+    @Test
+    fun aDeletedFolderAndWorkbookWithNothingInDriveCreatesAndProvisionsANewOne() = runBlocking {
+        yearIds[year] = "old_deleted_id"
+        legacySpreadsheetId = "old_deleted_id"
+        val driveCalls = mutableListOf<String>()
+        val sheetCalls = mutableListOf<String>()
+        val copyCalls = mutableListOf<String>()
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                driveCalls += "${r.method} ${r.url.encodedPath}"
+                if (r.url.encodedPath.endsWith("/copy")) copyCalls += r.url.encodedPath
+                when {
+                    r.url.encodedPath.endsWith("/files/old_deleted_id") ->
+                        response(r, 404, """{"error":{"code":404,"message":"File not found","errors":[{"reason":"notFound"}]}}""")
+                    // Folder search and workbook search both return empty: folder and workbook are gone from Drive
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[]}""")
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"recreated_folder_id","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"recreated_sheet_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                sheetCalls += "${r.method} ${r.url.encodedPath}"
+                when {
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"recreated_sheet_id","sheets":[{"properties":{"sheetId":0,"title":"Sheet1"}}]}""")
+                    else ->
+                        response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":10}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+
+        assertTrue("Expected Result.Success, was $res", res is Result.Success)
+        assertEquals("recreated_sheet_id", (res as Result.Success).data)
+        assertEquals("recreated_sheet_id", yearIds[year])
+        assertEquals("recreated_sheet_id", legacySpreadsheetId)
+        assertEquals("No copy call must happen", 0, copyCalls.size)
+        assertTrue("Drive files search must be called", driveCalls.any { it.startsWith("GET") && it.endsWith("/files") })
+        val createPosts = driveCalls.filter { it.startsWith("POST") && it.endsWith("/files") }
+        assertTrue("Drive must create folder and spreadsheet", createPosts.size >= 2)
+        assertTrue("Sheets batchUpdate must be called for provisioning", sheetCalls.any { it.contains("batchUpdate") })
+    }
+
+    @Test
+    fun aFreshWorkbookReplacesTheOldAfterSignOutAndSignIn() = runBlocking {
+        yearIds[year] = "pre_signout_old_id"
+        legacySpreadsheetId = "pre_signout_old_id"
+        rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(year)] = "2026-11-17"
+        rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING] = "true"
+
+        // 1. Sign out clears the per-account workbook state and markers
+        yearIds.remove(year)
+        legacySpreadsheetId = null
+        rawPrefs.clear()
+
+        val driveCalls = mutableListOf<String>()
+        val copyCalls = mutableListOf<String>()
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                driveCalls += "${r.method} ${r.url.encodedPath}"
+                if (r.url.encodedPath.endsWith("/copy")) copyCalls += r.url.encodedPath
+                when {
+                    r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
+                        response(r, 200, """{"files":[]}""")
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_post_signin","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"sheet_post_signin","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"sheet_post_signin","sheets":[{"properties":{"sheetId":0,"title":"Sheet1"}}]}""")
+                    else ->
+                        response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":10}""")
+                }
+            }).build(), tokens
+        )
+
+        // 2. Sign in again triggers resolution with forceValidateTabs = true
+        val resolver = WorkbookResolver(drive, sheets, prefs)
+        val res = resolver.resolveForYear(year, forceValidateTabs = true)
+
+        assertTrue("Expected Result.Success, was $res", res is Result.Success)
+        assertEquals("sheet_post_signin", (res as Result.Success).data)
+        assertEquals("sheet_post_signin", yearIds[year])
+        assertEquals("sheet_post_signin", legacySpreadsheetId)
+        assertEquals("No copy call must happen", 0, copyCalls.size)
     }
 }
