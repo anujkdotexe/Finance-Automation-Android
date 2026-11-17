@@ -1,5 +1,6 @@
 package com.financeautomation.data.local
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.CategoryDao
@@ -312,6 +313,10 @@ class ConfigSyncLocalGatewayImpl(
                             dirty = 0
                         )
                     )
+                    // The default account was removed: Cash becomes the default so there is always one
+                    if (existing.isDefault) {
+                        accountDao.getByName(CategoryConstants.ACCOUNT_CASH)?.let { accountDao.makeOnlyDefault(it.id) }
+                    }
                 } else {
                     accountDao.update(
                         existing.copy(

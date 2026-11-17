@@ -1,5 +1,6 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.repository.ConfigRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
 import com.financeautomation.domain.model.Category
@@ -13,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import java.time.Instant
 
@@ -25,10 +27,18 @@ class SyncConfigUseCaseTest {
     private val t0 = Instant.parse("2026-11-17T10:00:00Z")
     private val clock = MutableTestClock(t0)
 
+    @Before
+    fun clearDiagnostics() {
+        Diagnostics.clear()
+    }
+
     /** Categories only; every other kind is empty. applyRemote follows the real rule: newer updatedAt wins and is clean. */
     private class CategoryGateway : ConfigSyncLocalGateway {
         val categories = mutableMapOf<String, Category>()
         val dirty = mutableSetOf<String>()
+
+        /** Every applyRemote call that reached the gateway, as "kind:name:deleted". */
+        val applied = mutableListOf<String>()
 
         fun edit(name: String, excluded: Boolean, updatedAt: Long) {
             val existing = categories[name]
@@ -56,11 +66,12 @@ class SyncConfigUseCaseTest {
         override suspend fun applyRemoteAccount(
             name: String, lastFour: String?, isDefault: Boolean, isArchived: Boolean,
             displayOrder: Int, updatedAt: Long, deleted: Boolean
-        ) {}
+        ) { applied.add("account:$name:$deleted") }
         override suspend fun applyRemoteCategory(
             name: String, excludedFromBurn: Boolean, isDefault: Boolean, isArchived: Boolean,
             displayOrder: Int, updatedAt: Long, deleted: Boolean, iconName: String
         ) {
+            applied.add("category:$name:$deleted")
             val existing = categories[name]
             if (existing == null || updatedAt > existing.updatedAt) {
                 categories[name] = (existing ?: Category(id = "cat_$name", name = name)).copy(
@@ -106,6 +117,46 @@ class SyncConfigUseCaseTest {
         h.useCase.pull("sheet")
         assertTrue(h.gateway.categories.getValue("Groceries").isExcludedFromLivingBurn)
         assertTrue("cat_Groceries" !in h.gateway.dirty)
+    }
+
+    private val newer = t0.plusSeconds(60).toString()
+
+    @Test
+    fun pullIgnoresTombstoneForSavings() = runBlocking {
+        val h = harness()
+        h.gateway.categories["Savings"] = Category(id = "cat_Savings", name = "Savings", updatedAt = 1L)
+        h.sheet.addRow("category", "Savings", "false", "false", "false", "9|Teal", newer, "other", "true")
+        h.sheet.addRow("category", "Transfer", "false", "false", "true", "9|Teal", newer, "other", "")
+        h.sheet.addRow("category", "other", "false", "false", "false", "9|Teal", newer, "other", "TRUE")
+
+        h.useCase.pull("sheet")
+
+        assertTrue("no protected category row reaches the gateway", h.gateway.applied.isEmpty())
+        assertEquals(false, h.gateway.categories.getValue("Savings").deleted)
+        assertTrue(Diagnostics.getRecords().count { it.reason.contains("CONFIG_PROTECTED_ITEM") } == 3)
+    }
+
+    @Test
+    fun pullIgnoresTombstoneForCash() = runBlocking {
+        val h = harness()
+        h.sheet.addRow("account", "Cash", "", "false", "false", "0", newer, "other", "true")
+        h.sheet.addRow("account", " other ", "", "false", "true", "1", newer, "other", "")
+
+        h.useCase.pull("sheet")
+
+        assertTrue(h.gateway.applied.isEmpty())
+    }
+
+    @Test
+    fun pullStillAppliesTombstonesAndEditsOfOrdinaryItems() = runBlocking {
+        val h = harness()
+        h.sheet.addRow("category", "Gifts", "false", "false", "false", "3|Teal", newer, "other", "true")
+        h.sheet.addRow("account", "SBI", "", "false", "false", "2", newer, "other", "true")
+        h.sheet.addRow("category", "Savings", "true", "false", "false", "9|Teal", newer, "other", "")
+
+        h.useCase.pull("sheet")
+
+        assertEquals(listOf("category:Gifts:true", "account:SBI:true", "category:Savings:false"), h.gateway.applied)
     }
 
     @Test

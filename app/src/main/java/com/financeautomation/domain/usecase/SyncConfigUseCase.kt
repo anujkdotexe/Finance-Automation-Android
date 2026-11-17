@@ -1,7 +1,9 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.safeCall
 import com.financeautomation.domain.model.EmptyOrMissingConfigTabException
 import com.financeautomation.domain.repository.LegacyConfigGateway
@@ -87,6 +89,11 @@ class SyncConfigUseCase(
                 val epochMilli = row.updatedAt.toEpochMilli()
                 when (row.type) {
                     ConfigConstants.TYPE_ACCOUNT -> {
+                        val archived = row.value3.equals("true", ignoreCase = true)
+                        if (CategoryConstants.isProtectedAccount(row.key) && (row.deleted || archived)) {
+                            Diagnostics.record("SyncConfigUseCase", "CONFIG_PROTECTED_ITEM: account")
+                            continue
+                        }
                         localGateway.applyRemoteAccount(
                             name = row.key,
                             lastFour = row.value1.ifEmpty { null },
@@ -98,6 +105,12 @@ class SyncConfigUseCase(
                         )
                     }
                     ConfigConstants.TYPE_CATEGORY -> {
+                        if (CategoryConstants.isProtectedCategory(row.key) &&
+                            (row.deleted || row.value3.equals("true", ignoreCase = true))
+                        ) {
+                            Diagnostics.record("SyncConfigUseCase", "CONFIG_PROTECTED_ITEM: category")
+                            continue
+                        }
                         val parts = row.value4.split("|")
                         val displayOrder = parts[0].toIntOrNull() ?: 0
                         val colorName = parts.getOrNull(1)?.takeIf { it.isNotBlank() } ?: "Teal"
