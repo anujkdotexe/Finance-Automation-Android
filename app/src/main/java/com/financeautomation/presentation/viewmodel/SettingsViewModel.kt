@@ -206,8 +206,8 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch(ioDispatcher) {
-            val lockOn = try { preferencesRepository.getAppLockEnabled() } catch (_: Exception) { false }
-            val hide = try { preferencesRepository.getHideRecentsPreview() } catch (_: Exception) { false }
+            val lockOn = preferencesRepository.getAppLockEnabled()
+            val hide = preferencesRepository.getHideRecentsPreview()
             _uiState.update { it.copy(appLockEnabled = lockOn, hideRecentsPreview = hide) }
         }
         viewModelScope.launch(ioDispatcher) {

@@ -2,11 +2,13 @@ package com.financeautomation.data.remote
 
 import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.repository.AccountRepository
 import com.financeautomation.domain.repository.CategoryRepository
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.usecase.RegenerateDashboardUseCase
 import com.financeautomation.domain.usecase.SyncConfigUseCase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -78,7 +80,9 @@ open class WorkbookResolver(
     ): Result<String> = withContext(ioDispatcher) {
         val today = LocalDate.now(clock).toString()
         val lastVerified = preferencesRepository.getPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year))
-        val needsVerification = forceValidateTabs || (lastVerified != today)
+        val pendingRequeueYear = preferencesRepository.getPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+        val hasPendingRequeue = pendingRequeueYear == year.toString()
+        val needsVerification = forceValidateTabs || hasPendingRequeue || (lastVerified != today)
 
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
         if (!storedId.isNullOrBlank() && !needsVerification) {
@@ -88,7 +92,9 @@ open class WorkbookResolver(
         mutex.withLock {
             val lockedStoredId = preferencesRepository.getSpreadsheetIdForYearSync(year)
             val lockedLastVerified = preferencesRepository.getPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year))
-            val lockedNeedsVerification = forceValidateTabs || (lockedLastVerified != today)
+            val lockedPendingRequeueYear = preferencesRepository.getPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+            val lockedHasPendingRequeue = lockedPendingRequeueYear == year.toString()
+            val lockedNeedsVerification = forceValidateTabs || lockedHasPendingRequeue || (lockedLastVerified != today)
 
             if (!lockedStoredId.isNullOrBlank() && !lockedNeedsVerification) {
                 return@withContext Result.Success(lockedStoredId)
@@ -99,11 +105,11 @@ open class WorkbookResolver(
                 when (val usableRes = googleDriveClient.isFileUsable(lockedStoredId)) {
                     is Result.Success -> {
                         if (usableRes.data) {
-                            if (!forceValidateTabs) {
+                            if (!forceValidateTabs && !lockedHasPendingRequeue) {
                                 preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                                 return@withContext Result.Success(lockedStoredId)
                             }
-                            // Valid in Drive; now probe Sheets tabs if forceValidateTabs
+                            // Valid in Drive; now probe Sheets tabs if forceValidateTabs or has pending requeue
                             val probe = googleSheetsClient.getSheetTabsDetailed(lockedStoredId)
                             candidateId = if (probe is Result.Error && isInaccessible(probe.exception)) null else lockedStoredId
                         } else {
@@ -141,6 +147,10 @@ open class WorkbookResolver(
                 val repairRes = ensureWorkbookTabs(candidateId, year)
                 if (repairRes is Result.Error) {
                     return@withContext Result.Error(repairRes.exception)
+                }
+
+                if (lockedHasPendingRequeue) {
+                    triggerWorkbookReplaced(year, "", candidateId, isMissingOrTrashed = true)
                 }
 
                 // Never unconditionally overwrite cloud config with local defaults on repair
@@ -191,13 +201,9 @@ open class WorkbookResolver(
                             preferencesRepository.setSpreadsheetId(foundId)
                         }
 
-                        if (!lockedStoredId.isNullOrBlank() && foundId != lockedStoredId) {
-                            preferencesRepository.setPreference(
-                                PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING,
-                                "true",
-                                isDirty = false
-                            )
-                            onWorkbookReplaced(year, lockedStoredId, foundId)
+                        val shouldTriggerRequeue = (!lockedStoredId.isNullOrBlank() && foundId != lockedStoredId) || lockedHasPendingRequeue
+                        if (shouldTriggerRequeue) {
+                            triggerWorkbookReplaced(year, lockedStoredId.orEmpty(), foundId, isMissingOrTrashed = true)
                         }
 
                         // Reinstall & new device recovery: pull Config tab FIRST from resolved workbook
@@ -274,13 +280,9 @@ open class WorkbookResolver(
                 preferencesRepository.setSpreadsheetTitle(workbookName)
             }
 
-            if (!lockedStoredId.isNullOrBlank() && newSpreadsheetId != lockedStoredId) {
-                preferencesRepository.setPreference(
-                    PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING,
-                    "true",
-                    isDirty = false
-                )
-                onWorkbookReplaced(year, lockedStoredId, newSpreadsheetId)
+            val shouldTriggerRequeue = (!lockedStoredId.isNullOrBlank() && newSpreadsheetId != lockedStoredId) || lockedHasPendingRequeue
+            if (shouldTriggerRequeue) {
+                triggerWorkbookReplaced(year, lockedStoredId.orEmpty(), newSpreadsheetId, isMissingOrTrashed = true)
             }
 
             // Newly created: mirror local default config to Config tab, then regenerate Dashboard
@@ -402,6 +404,33 @@ open class WorkbookResolver(
             }
         }
         return Result.Success(Unit)
+    }
+
+    private suspend fun triggerWorkbookReplaced(
+        year: Int,
+        oldId: String,
+        newId: String,
+        isMissingOrTrashed: Boolean
+    ) {
+        try {
+            onWorkbookReplaced(year, oldId, newId)
+            preferencesRepository.deletePreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+            if (isMissingOrTrashed) {
+                preferencesRepository.setPreference(
+                    PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING,
+                    "true",
+                    isDirty = false
+                )
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Diagnostics.record("WorkbookResolver", "REQUEUE_FAILED: ${e.javaClass.simpleName}")
+            preferencesRepository.setPreference(
+                PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR,
+                year.toString(),
+                isDirty = false
+            )
+        }
     }
 
     companion object {

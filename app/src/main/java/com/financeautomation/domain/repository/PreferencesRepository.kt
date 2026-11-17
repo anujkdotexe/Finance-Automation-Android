@@ -265,6 +265,7 @@ interface PreferencesRepository {
 
     companion object {
         const val KEY_WORKBOOK_REPLACED_NOTICE_PENDING: String = "key_workbook_replaced_notice_pending"
+        const val KEY_WORKBOOK_REQUEUE_PENDING_YEAR: String = "key_workbook_requeue_pending_year"
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
         const val KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX: String = "last_workbook_verified_date_"
