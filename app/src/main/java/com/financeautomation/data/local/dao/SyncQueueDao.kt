@@ -83,4 +83,7 @@ interface SyncQueueDao {
 
     @Query("UPDATE sync_queue SET planJson = REPLACE(planJson, :oldId, :newId) WHERE planJson IS NOT NULL AND planJson LIKE '%' || :oldId || '%'")
     suspend fun updatePlanJsonId(oldId: String, newId: String)
+
+    @Query("SELECT transactionId FROM sync_queue WHERE status = 'PENDING' OR status = 'IN_PROGRESS'")
+    suspend fun getActiveTransactionIds(): List<String>
 }

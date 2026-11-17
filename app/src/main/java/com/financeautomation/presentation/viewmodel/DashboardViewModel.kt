@@ -260,6 +260,19 @@ class DashboardViewModel(
     init {
         observeData()
         loadHintDismissed()
+        observeWorkbookReplacedNotice()
+    }
+
+    private fun observeWorkbookReplacedNotice() {
+        val repo = transactionRepository as? com.financeautomation.data.repository.TransactionRepositoryImpl ?: return
+        viewModelScope.launch {
+            repo.workbookReplacedNotice.collect { notice ->
+                if (notice != null) {
+                    _uiState.update { it.copy(syncMessage = notice) }
+                    repo.workbookReplacedNotice.value = null
+                }
+            }
+        }
     }
 
     private fun loadHintDismissed() {

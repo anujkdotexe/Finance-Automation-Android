@@ -88,6 +88,12 @@ interface TransactionDao {
     @Query("UPDATE transactions SET companions = REPLACE(companions, :oldName, :newName) WHERE companions LIKE '%' || :oldName || '%'")
     suspend fun updateCompanionName(oldName: String, newName: String): Int
 
+    @Query("SELECT * FROM transactions WHERE timestamp >= :startMillis AND timestamp < :endMillis AND UPPER(status) != 'VOID' AND reviewState != 'NEEDS_REVIEW' ORDER BY timestamp ASC")
+    suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity>
+
+    @Query("UPDATE transactions SET syncState = 'PENDING', sheetRowIndex = NULL WHERE id = :id")
+    suspend fun resetSyncStateForRequeue(id: String)
+
     /** Deletes the row only if it is still void when the delete runs; false when it was not (for example undone). */
     @Transaction
     suspend fun deleteIfVoid(id: String): Boolean {

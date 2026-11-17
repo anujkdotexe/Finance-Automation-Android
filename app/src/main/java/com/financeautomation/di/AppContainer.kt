@@ -332,7 +332,10 @@ class DefaultAppContainer(
             categoryRepository = categoryRepository,
             syncConfigUseCase = syncConfigUseCase,
             regenerateDashboardUseCase = regenerateDashboardUseCase,
-            ioDispatcher = ioDispatcher
+            ioDispatcher = ioDispatcher,
+            onWorkbookReplaced = { year, oldId, newId ->
+                (transactionRepository as? TransactionRepositoryImpl)?.onWorkbookReplaced(year, oldId, newId)
+            }
         )
     }
 

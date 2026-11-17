@@ -143,6 +143,8 @@ class TripModeLeakTest {
         override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
         override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
         override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> = emptyList()
+        override suspend fun resetSyncStateForRequeue(id: String) {}
     }
 
     private class SimpleSyncQueueDao : SyncQueueDao {
@@ -183,6 +185,7 @@ class TripModeLeakTest {
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
         override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
         override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
+        override suspend fun getActiveTransactionIds(): List<String> = emptyList()
     }
 
     @Test

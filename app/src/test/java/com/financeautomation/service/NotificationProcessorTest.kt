@@ -84,6 +84,8 @@ class NotificationProcessorTest {
         override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
         override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
         override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> = emptyList()
+        override suspend fun resetSyncStateForRequeue(id: String) {}
     }
 
     @Test

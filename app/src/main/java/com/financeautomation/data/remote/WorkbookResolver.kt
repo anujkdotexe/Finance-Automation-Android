@@ -39,7 +39,8 @@ open class WorkbookResolver(
     private val syncConfigUseCase: SyncConfigUseCase? = null,
     private val regenerateDashboardUseCase: RegenerateDashboardUseCase? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val clock: java.time.Clock = java.time.Clock.system(ZoneId.of("Asia/Kolkata"))
+    private val clock: java.time.Clock = java.time.Clock.system(ZoneId.of("Asia/Kolkata")),
+    var onWorkbookReplaced: (suspend (year: Int, oldId: String, newId: String) -> Unit)? = null
 ) {
     private val mutex = Mutex()
 
@@ -190,6 +191,10 @@ open class WorkbookResolver(
                             preferencesRepository.setSpreadsheetId(foundId)
                         }
 
+                        if (!lockedStoredId.isNullOrBlank() && foundId != lockedStoredId) {
+                            onWorkbookReplaced?.invoke(year, lockedStoredId, foundId)
+                        }
+
                         // Reinstall & new device recovery: pull Config tab FIRST from resolved workbook
                         if (syncConfigUseCase != null) {
                             when (val restoreRes = syncConfigUseCase.restoreFromCloud(foundId)) {
@@ -264,6 +269,10 @@ open class WorkbookResolver(
                 preferencesRepository.setSpreadsheetTitle(workbookName)
             }
 
+            if (!lockedStoredId.isNullOrBlank() && newSpreadsheetId != lockedStoredId) {
+                onWorkbookReplaced?.invoke(year, lockedStoredId, newSpreadsheetId)
+            }
+
             // Newly created: mirror local default config to Config tab, then regenerate Dashboard
             syncConfigUseCase?.mirrorToCloud(newSpreadsheetId)
             regenerateDashboardUseCase?.invoke()
@@ -279,6 +288,7 @@ open class WorkbookResolver(
      */
     open suspend fun createFreshWorkbook(year: Int): Result<String> = withContext(ioDispatcher) {
         mutex.withLock {
+            val oldStoredId = preferencesRepository.getSpreadsheetIdForYearSync(year)
             val folderRes = googleDriveClient.findOrCreateFolder("Personal Finance")
             if (folderRes is Result.Error) {
                 return@withContext Result.Error(folderRes.exception)
@@ -308,6 +318,10 @@ open class WorkbookResolver(
             if (year == currentYear) {
                 preferencesRepository.setSpreadsheetId(newId)
                 preferencesRepository.setSpreadsheetTitle(workbookName)
+            }
+
+            if (!oldStoredId.isNullOrBlank() && newId != oldStoredId) {
+                onWorkbookReplaced?.invoke(year, oldStoredId, newId)
             }
 
             syncConfigUseCase?.mirrorToCloud(newId)

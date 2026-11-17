@@ -160,6 +160,14 @@ class SettingsSyncCoordinator(
     }
 
     fun autoProvisionMasterSheet() {
+        provisionWorkbook(createBackup = false)
+    }
+
+    fun onRepairWorkbook() {
+        provisionWorkbook(createBackup = true)
+    }
+
+    private fun provisionWorkbook(createBackup: Boolean) {
         if (uiState.value.isProvisioning) return
         val resolver = workbookResolver
         if (resolver != null) {
@@ -167,26 +175,30 @@ class SettingsSyncCoordinator(
                 uiState.update { it.copy(isProvisioning = true, errorMessage = null) }
                 val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                 val workbookName = "Finance$currentYear"
-                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true, createBackup = false)) {
+                val opName = if (createBackup) "repair workbook" else "provision workbook"
+                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true, createBackup = createBackup)) {
                     is Result.Success -> {
                         val spreadsheetId = res.data
                         preferencesRepository.setSpreadsheetId(spreadsheetId)
                         regenerateDashboardUseCase?.invoke()
                         syncConfigUseCase?.mirrorToCloud()
+                        val notice = (transactionRepository as? com.financeautomation.data.repository.TransactionRepositoryImpl)?.workbookReplacedNotice?.value
+                        val message = notice ?: UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
                         uiState.update {
                             it.copy(
                                 spreadsheetId = spreadsheetId,
                                 isProvisioning = false,
-                                userMessage = UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
+                                userMessage = message
                             )
                         }
                     }
                     is Result.Error -> {
-                        Diagnostics.record("SettingsSyncCoordinator", "provision_workbook: ${SyncErrorKind.safeCode("provision workbook", res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
+                        val tag = if (createBackup) "repair_workbook" else "provision_workbook"
+                        Diagnostics.record("SettingsSyncCoordinator", "$tag: ${SyncErrorKind.safeCode(opName, res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
                         uiState.update {
                             it.copy(
                                 isProvisioning = false,
-                                errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("provision workbook", res.throwable))
+                                errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage(opName, res.throwable))
                             )
                         }
                     }
@@ -288,45 +300,6 @@ class SettingsSyncCoordinator(
                 is Result.Loading -> {}
             }
         }
-    }
-
-    fun onRepairWorkbook() {
-        if (uiState.value.isProvisioning) return
-        val resolver = workbookResolver
-        if (resolver != null) {
-            scope.launch(ioDispatcher) {
-                uiState.update { it.copy(isProvisioning = true, errorMessage = null) }
-                val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
-                val workbookName = "Finance$currentYear"
-                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true, createBackup = true)) {
-                    is Result.Success -> {
-                        val spreadsheetId = res.data
-                        preferencesRepository.setSpreadsheetId(spreadsheetId)
-                        regenerateDashboardUseCase?.invoke()
-                        syncConfigUseCase?.mirrorToCloud()
-                        uiState.update {
-                            it.copy(
-                                spreadsheetId = spreadsheetId,
-                                isProvisioning = false,
-                                userMessage = UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
-                            )
-                        }
-                    }
-                    is Result.Error -> {
-                        Diagnostics.record("SettingsSyncCoordinator", "repair_workbook: ${SyncErrorKind.safeCode("repair workbook", res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
-                        uiState.update {
-                            it.copy(
-                                isProvisioning = false,
-                                errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("repair workbook", res.throwable))
-                            )
-                        }
-                    }
-                    is Result.Loading -> {}
-                }
-            }
-            return
-        }
-        autoProvisionMasterSheet()
     }
 
     /**

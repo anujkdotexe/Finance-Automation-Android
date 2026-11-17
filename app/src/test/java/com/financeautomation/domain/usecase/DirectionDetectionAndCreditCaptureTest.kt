@@ -217,6 +217,7 @@ class DirectionDetectionAndCreditCaptureTest {
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
         override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
         override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
+        override suspend fun getActiveTransactionIds(): List<String> = emptyList()
     }
 
     @Test

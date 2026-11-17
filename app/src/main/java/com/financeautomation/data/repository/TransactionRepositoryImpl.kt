@@ -68,7 +68,11 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.ZonedDateTime
 import java.util.Locale
+import com.financeautomation.R
+import com.financeautomation.presentation.viewmodel.UiText
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Production implementation of [TransactionRepository] backed by Room SQLite database,
@@ -176,6 +180,41 @@ class TransactionRepositoryImpl(
             db.withTransaction { block() }
         } else {
             block()
+        }
+    }
+
+    val workbookReplacedNotice = MutableStateFlow<UiText?>(null)
+
+    suspend fun onWorkbookReplaced(year: Int, oldId: String, newId: String) = withContext(ioDispatcher) {
+        Diagnostics.record("WorkbookRecovery", "WORKBOOK_REPLACED")
+        workbookReplacedNotice.value = UiText.res(R.string.workbook_replaced_notice)
+
+        val zone = ZoneId.of("Asia/Kolkata")
+        val startMillis = ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+        val endMillis = ZonedDateTime.of(year + 1, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()
+
+        val tDao = resolveTransactionDao()
+        val qDao = resolveSyncQueueDao()
+
+        val txns = tDao.getAllForYear(startMillis, endMillis)
+        val activeIds = qDao.getActiveTransactionIds().toSet()
+
+        val toRequeue = txns.filter { it.id !in activeIds }
+        if (toRequeue.isNotEmpty()) {
+            runInDbTransaction {
+                for (txn in toRequeue) {
+                    tDao.resetSyncStateForRequeue(txn.id)
+                    qDao.insert(
+                        SyncQueueEntity(
+                            transactionId = txn.id,
+                            operationType = SyncQueueEntity.OP_INSERT,
+                            payloadJson = txn.id,
+                            status = SyncQueueEntity.STATUS_PENDING
+                        )
+                    )
+                }
+            }
+            requestSync()
         }
     }
 

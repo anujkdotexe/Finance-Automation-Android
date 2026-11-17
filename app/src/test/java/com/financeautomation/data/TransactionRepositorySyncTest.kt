@@ -97,6 +97,17 @@ class TransactionRepositorySyncTest {
         override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
         override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
         override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
+
+        override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> =
+            transactions.values.filter {
+                it.timestamp in startMillis until endMillis &&
+                    !it.status.equals("Void", ignoreCase = true) &&
+                    it.reviewState != "NEEDS_REVIEW"
+            }.sortedBy { it.timestamp }
+
+        override suspend fun resetSyncStateForRequeue(id: String) {
+            transactions[id]?.let { transactions[id] = it.copy(syncState = SyncState.PENDING.name, sheetRowIndex = null) }
+        }
     }
 
     private class FakeSyncQueueDao : SyncQueueDao {
@@ -161,6 +172,10 @@ class TransactionRepositorySyncTest {
                 queue[it.id] = it.copy(planJson = it.planJson!!.replace(oldId, newId))
             }
         }
+
+        override suspend fun getActiveTransactionIds(): List<String> =
+            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS }
+                .map { it.transactionId }
     }
 
     private class FakePayableDao : PayableDao {
