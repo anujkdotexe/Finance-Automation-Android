@@ -36,7 +36,7 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                refreshSafely(load = { refresh(context) }, onFailure = { drawUnavailable(context) })
+                refreshSafely(load = { refresh(context) }, onFailure = { drawCannotRead(context) })
             } finally {
                 pending.finish()
             }
@@ -127,7 +127,8 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
                 loadIfAvailable(hasAccountAndWorkbook = { hasAccountAndWorkbook(container) }, load = { loadSummary(context) })
             }
             val content = MonthBurnWidgetFormatter.format(
-                summary ?: emptySummary(), labels(context), appLockOn = appLockOn, unavailable = summary == null
+                summary ?: emptySummary(), labels(context), appLockOn = appLockOn,
+                unavailable = if (summary == null) WidgetUnavailable.NOT_SIGNED_IN else WidgetUnavailable.NONE
             )
             draw(context, manager, ids, content)
         }
@@ -143,11 +144,20 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
 
         private suspend fun hasAccountAndWorkbook(container: com.financeautomation.di.AppContainer): Boolean {
             val prefs = container.preferencesRepository
-            if (prefs.getGoogleAccountEmailSync().isNullOrBlank()) return false
             val year = java.time.LocalDate.now(LivingBurn.KOLKATA).year
-            val id = prefs.getSpreadsheetIdForYearSync(year) ?: prefs.getSpreadsheetIdSync()
-            return !id.isNullOrBlank()
+            return accountAndWorkbookAvailable(
+                email = prefs.getGoogleAccountEmailSync(),
+                yearId = prefs.getSpreadsheetIdForYearSync(year),
+                legacyId = prefs.getSpreadsheetIdSync()
+            )
         }
+
+        /**
+         * True when a Google account is signed in and a workbook is known: the id of this year, or the older single
+         * id when the year id is empty. Blank counts as empty.
+         */
+        fun accountAndWorkbookAvailable(email: String?, yearId: String?, legacyId: String?): Boolean =
+            !email.isNullOrBlank() && (!yearId.isNullOrBlank() || !legacyId.isNullOrBlank())
 
         private fun emptySummary(): MonthBurnSummary {
             val today = java.time.LocalDate.now(LivingBurn.KOLKATA)
@@ -157,12 +167,12 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
             )
         }
 
-        /** Redraws every placed widget with the "sign in to view" text. Used when the refresh failed or timed out. */
-        private fun drawUnavailable(context: Context) {
+        /** Redraws every placed widget with the "open the app" text. Used when the refresh failed or timed out. */
+        private fun drawCannotRead(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, MonthBurnWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            val content = MonthBurnWidgetFormatter.format(emptySummary(), labels(context), unavailable = true)
+            val content = MonthBurnWidgetFormatter.format(emptySummary(), labels(context), unavailable = WidgetUnavailable.CANNOT_READ)
             draw(context, manager, ids, content)
         }
 
@@ -191,7 +201,8 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
             waitingTemplate = context.getString(R.string.widget_month_burn_waiting),
             descriptionTemplate = context.getString(R.string.widget_month_burn_description),
             unlockToView = context.getString(R.string.widget_month_burn_unlock),
-            signInToView = context.getString(R.string.widget_month_burn_sign_in)
+            signInToView = context.getString(R.string.widget_month_burn_sign_in),
+            cannotRead = context.getString(R.string.widget_month_burn_unavailable)
         )
 
         private fun buildViews(context: Context, content: MonthBurnWidgetContent, appWidgetId: Int): RemoteViews {

@@ -22,7 +22,8 @@ class MonthBurnWidgetTest {
         upToDate = "Up to date",
         waitingTemplate = "%1\$d waiting",
         descriptionTemplate = "%1\$s living burn %2\$s, %3\$s, %4\$s",
-        signInToView = "Sign in to view"
+        signInToView = "Sign in to view",
+        cannotRead = "Open the app to refresh"
     )
 
     private fun summary(burn: Double, perDay: Double, sync: WidgetSyncState = WidgetSyncState.UpToDate, month: Int = 11) =
@@ -72,7 +73,7 @@ class MonthBurnWidgetTest {
 
     @Test
     fun signedOutShowsSignInTextAndNoFigure() {
-        val content = MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = true)
+        val content = MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = WidgetUnavailable.NOT_SIGNED_IN)
         assertEquals("Sign in to view", content.amount)
         assertEquals("", content.perDay)
         assertEquals("", content.syncState)
@@ -82,8 +83,16 @@ class MonthBurnWidgetTest {
     }
 
     @Test
+    fun failedRefreshTellsTheUserToOpenTheAppNotToSignIn() {
+        val content = MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = WidgetUnavailable.CANNOT_READ)
+        assertEquals("Open the app to refresh", content.amount)
+        assertEquals("", content.perDay)
+        assertEquals("November Living burn, Open the app to refresh", content.description)
+    }
+
+    @Test
     fun availableSummaryStillShowsFiguresWhenFlagIsOff() {
-        assertEquals("₹0", MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = false).amount)
+        assertEquals("₹0", MonthBurnWidgetFormatter.format(summary(0.0, 0.0), labels, Locale.US, unavailable = WidgetUnavailable.NONE).amount)
     }
 
     // --- Manifest, widget info and wiring ----------------------------------------------------------------------

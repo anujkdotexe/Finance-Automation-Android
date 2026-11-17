@@ -30,9 +30,14 @@ data class MonthBurnWidgetLabels(
     val descriptionTemplate: String,
     /** Shown instead of the amount while the app lock is on. */
     val unlockToView: String = "Unlock to view",
-    /** Shown instead of the amount when there is no signed-in account or no workbook, or the figures cannot be read. */
-    val signInToView: String
+    /** Shown instead of the amount when there is no signed-in account or no workbook. */
+    val signInToView: String,
+    /** Shown instead of the amount when the figures could not be read (failed or timed out refresh). */
+    val cannotRead: String
 )
+
+/** Why the widget has no figure to show. [NONE] means the figures are shown. */
+enum class WidgetUnavailable { NONE, NOT_SIGNED_IN, CANNOT_READ }
 
 /**
  * Turns the month burn figures into the widget texts. Pure Kotlin, so the formatting is covered by plain unit tests.
@@ -45,7 +50,7 @@ object MonthBurnWidgetFormatter {
         labels: MonthBurnWidgetLabels,
         locale: Locale = Locale.getDefault(),
         appLockOn: Boolean = false,
-        unavailable: Boolean = false
+        unavailable: WidgetUnavailable = WidgetUnavailable.NONE
     ): MonthBurnWidgetContent {
         val monthName = Month.of(summary.month).getDisplayName(TextStyle.FULL, locale)
         if (appLockOn) {
@@ -59,15 +64,16 @@ object MonthBurnWidgetFormatter {
                 description = "$monthName ${labels.title}, ${labels.unlockToView}"
             )
         }
-        if (unavailable) {
+        if (unavailable != WidgetUnavailable.NONE) {
             // Never show a figure that was not read from the ledger
+            val text = if (unavailable == WidgetUnavailable.NOT_SIGNED_IN) labels.signInToView else labels.cannotRead
             return MonthBurnWidgetContent(
                 monthName = monthName,
                 title = labels.title,
-                amount = labels.signInToView,
+                amount = text,
                 perDay = "",
                 syncState = "",
-                description = "$monthName ${labels.title}, ${labels.signInToView}"
+                description = "$monthName ${labels.title}, $text"
             )
         }
         val amount = formatRupees(summary.livingBurn)

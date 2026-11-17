@@ -129,4 +129,16 @@ class MonthBurnWidgetRefreshTest {
         )
         assertTrue(Diagnostics.getRecords().any { it.reason.contains("failure handler") })
     }
+
+    @Test
+    fun accountAndWorkbookAvailableCoversTheCases() {
+        val f = MonthBurnWidgetProvider.Companion::accountAndWorkbookAvailable
+        assertEquals("no email", false, f(null, "y", "l"))
+        assertEquals("blank email", false, f("  ", "y", "l"))
+        assertEquals("email with year id", true, f("a@b.c", "y", null))
+        assertEquals("email with only legacy id", true, f("a@b.c", null, "l"))
+        assertEquals("blank year id falls back to legacy id", true, f("a@b.c", "", "l"))
+        assertEquals("email with nothing", false, f("a@b.c", null, null))
+        assertEquals("email with blank ids", false, f("a@b.c", " ", ""))
+    }
 }
