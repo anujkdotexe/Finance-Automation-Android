@@ -7,9 +7,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.PayableDao
+import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.InflowEntity
 import com.financeautomation.data.local.entity.PayableEntity
+import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -33,6 +35,7 @@ class RoomGetAllForYearTest {
     private lateinit var transactionDao: TransactionDao
     private lateinit var inflowDao: InflowDao
     private lateinit var payableDao: PayableDao
+    private lateinit var syncQueueDao: SyncQueueDao
 
     private val zone = ZoneId.of("Asia/Kolkata")
     private val year = 2026
@@ -51,6 +54,7 @@ class RoomGetAllForYearTest {
         transactionDao = db.transactionDao()
         inflowDao = db.inflowDao()
         payableDao = db.payableDao()
+        syncQueueDao = db.syncQueueDao()
     }
 
     @After
@@ -114,6 +118,32 @@ class RoomGetAllForYearTest {
         assertTrue("Start date payable must be included", ids.contains("p_start"))
         assertTrue("Null-date payable with updatedAt inside year must be included", ids.contains("p_null_in"))
         assertEquals("Void, out-of-boundary, and null-date with updatedAt outside year must be omitted", 2, results.size)
+    }
+
+    @Test
+    fun syncQueueDao_deletePendingForTransactions_chunks1500IdsWithoutSQLiteError() = runBlocking {
+        val count = 1500
+        val items = (1..count).map { i ->
+            SyncQueueEntity(
+                id = i.toLong(),
+                transactionId = "tx_$i",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "{}",
+                status = SyncQueueEntity.STATUS_PENDING
+            )
+        }
+        for (item in items) {
+            syncQueueDao.insert(item)
+        }
+        assertEquals(count, syncQueueDao.getAllPending().size)
+
+        val allIds = items.map { it.transactionId }
+        allIds.chunked(500).forEach { chunk ->
+            syncQueueDao.deletePendingForTransactions(chunk)
+        }
+
+        assertTrue("All 1500 pending items must be deleted without SQLite parameter binding limits error",
+            syncQueueDao.getAllPending().isEmpty())
     }
 
     private fun createTxn(id: String, timestamp: Long, status: String, reviewState: String) =

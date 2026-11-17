@@ -821,4 +821,163 @@ class WorkbookReplacedRequeueTest {
 
         assertTrue("Requeue must complete once syncMutex is released", requeueFinished)
     }
+
+    @Test
+    fun deletePendingForTransactionsWith1500TransactionsIsChunked() = runBlocking {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        val count = 1500
+        for (i in 1..count) {
+            val id = "tx_$i"
+            tDao.insert(sampleTransaction(id, nov2026, status = "Personal", syncState = SyncState.PENDING.name))
+            qDao.insert(
+                SyncQueueEntity(
+                    id = i.toLong(),
+                    transactionId = id,
+                    operationType = SyncQueueEntity.OP_INSERT,
+                    payloadJson = id,
+                    status = SyncQueueEntity.STATUS_PENDING
+                )
+            )
+        }
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        repo.requeueYearForNewWorkbook(2026)
+
+        val pending = qDao.getAllPending()
+        assertEquals("All 1500 transactions should be re-queued in chunks of 500", count, pending.size)
+        val queuedTxIds = pending.map { it.transactionId }.toSet()
+        assertEquals(count, queuedTxIds.size)
+    }
+
+    @Test
+    fun pendingCreditLoggedBeforeReplacementRunsAfterTheRestore() = runBlocking {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val inDao = InMemoryInflowDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        val txn = sampleTransaction("tx_earlier", nov2026, status = "Personal", syncState = SyncState.SYNCED.name, sheetRowIndex = 4)
+        tDao.insert(txn)
+
+        val creditReq = com.financeautomation.domain.model.LogCreditRequest(
+            requestId = "cred_pending",
+            settler = "Alice",
+            amount = 100.0,
+            account = "SBI",
+            inflowType = "Settlement",
+            reason = "Debt settlement",
+            timestamp = nov2026
+        )
+        val pendingCredit = SyncQueueEntity(
+            id = 100L,
+            transactionId = "cred_pending",
+            operationType = SyncQueueEntity.OP_LOG_CREDIT,
+            payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.creditRequestToJson(creditReq),
+            status = SyncQueueEntity.STATUS_PENDING,
+            createdAt = 5_000_000L
+        )
+        qDao.insert(pendingCredit)
+        inDao.insert(
+            InflowEntity(
+                id = "cred_pending",
+                timestamp = nov2026,
+                amount = 100.0,
+                account = "SBI",
+                inflowType = "Settlement",
+                source = "Alice",
+                note = "Debt settlement",
+                createdAt = 5_000_000L,
+                status = "CONFIRMED"
+            )
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            inflowDao = inDao,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        repo.requeueYearForNewWorkbook(2026)
+
+        val queueFifo = qDao.getPendingQueueFifo()
+        assertTrue("Queue must contain at least restore items and the pending credit", queueFifo.size >= 2)
+        assertEquals("First item in FIFO must be the restored transaction", "tx_earlier", queueFifo[0].transactionId)
+        assertEquals(SyncQueueEntity.OP_INSERT, queueFifo[0].operationType)
+
+        val lastItem = queueFifo.last()
+        assertEquals("Pending credit must execute AFTER the restored items", "cred_pending", lastItem.transactionId)
+        assertEquals(SyncQueueEntity.OP_LOG_CREDIT, lastItem.operationType)
+
+        val restoreInflows = queueFifo.filter { it.operationType == SyncQueueEntity.OP_RESTORE_INFLOW }
+        assertTrue("Pending credit must not be duplicated into an OP_RESTORE_INFLOW", restoreInflows.isEmpty())
+    }
+
+    @Test
+    fun pendingPayableOpForARestoredPayableIsNotWrittenTwice() = runBlocking {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pDao = InMemoryPayableDao()
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        val payable = PayableEntity(
+            uuid = "pay_already_synced",
+            dateIncurredSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(2026, 11, 1)),
+            timeSerial = 0.5,
+            paidBy = "Bob",
+            whatFor = "Supplies",
+            amountIOwe = 200.0,
+            dateRepaidSerial = null,
+            repaymentStatus = "Pending",
+            tabName = "Nov26",
+            sheetRowIndex = 5,
+            updatedAt = nov2026
+        )
+        pDao.upsertAll(listOf(payable))
+
+        val payableReq = com.financeautomation.domain.model.LogPayableRequest(
+            requestId = "pay_already_synced",
+            creditor = "Bob",
+            amount = 200.0,
+            whatFor = "Supplies",
+            timestamp = nov2026
+        )
+        qDao.insert(
+            SyncQueueEntity(
+                id = 200L,
+                transactionId = "pay_already_synced",
+                operationType = SyncQueueEntity.OP_LOG_PAYABLE,
+                payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.payableRequestToJson(payableReq),
+                status = SyncQueueEntity.STATUS_PENDING,
+                createdAt = 4_000_000L
+            )
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            payableDao = pDao,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        repo.requeueYearForNewWorkbook(2026)
+
+        val queueItems = qDao.getAllPending().filter { it.transactionId == "pay_already_synced" }
+        assertEquals("Payable must only have one queue item (not written twice)", 1, queueItems.size)
+        assertEquals(SyncQueueEntity.OP_RESTORE_PAYABLE, queueItems[0].operationType)
+    }
 }

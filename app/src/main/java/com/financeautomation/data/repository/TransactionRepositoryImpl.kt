@@ -213,8 +213,34 @@ class TransactionRepositoryImpl(
 
             runInDbTransaction {
                 if (allTxnIdsToDelete.isNotEmpty()) {
-                    qDao.deletePendingForTransactions(allTxnIdsToDelete)
+                    allTxnIdsToDelete.chunked(SQLITE_IN_CHUNK).forEach { chunk ->
+                        qDao.deletePendingForTransactions(chunk)
+                    }
                 }
+
+                val currentPending = qDao.getAllPending()
+                val restoredPayableUuids = payables.map { it.uuid }.toSet()
+                val pendingPayablesToDelete = currentPending.filter {
+                    it.operationType == SyncQueueEntity.OP_LOG_PAYABLE && it.transactionId in restoredPayableUuids
+                }
+                for (item in pendingPayablesToDelete) {
+                    qDao.deleteById(item.id)
+                }
+
+                val pendingCreditIds = currentPending.filter {
+                    it.operationType == SyncQueueEntity.OP_LOG_CREDIT
+                }.map { it.transactionId }.toSet()
+                val inflowsToRestore = inflows.filterNot { it.id in pendingCreditIds }
+
+                val remainingPending = qDao.getAllPending()
+                val minPendingCreatedAt = remainingPending.minOfOrNull { it.createdAt }
+                val totalRestoreCount = txns.size + inflowsToRestore.size + payables.size
+                val baseTimestamp = if (minPendingCreatedAt != null) {
+                    minPendingCreatedAt - 1000L - (totalRestoreCount * 10L)
+                } else {
+                    System.currentTimeMillis()
+                }
+                var restoreIndex = 0L
 
                 for (txn in txns) {
                     tDao.resetSyncStateForRequeue(txn.id)
@@ -223,11 +249,12 @@ class TransactionRepositoryImpl(
                             transactionId = txn.id,
                             operationType = SyncQueueEntity.OP_INSERT,
                             payloadJson = txn.id,
-                            status = SyncQueueEntity.STATUS_PENDING
+                            status = SyncQueueEntity.STATUS_PENDING,
+                            createdAt = baseTimestamp + (restoreIndex++) * 10L
                         )
                     )
                 }
-                for (inflow in inflows) {
+                for (inflow in inflowsToRestore) {
                     qDao.insert(
                         SyncQueueEntity(
                             transactionId = inflow.id,
@@ -235,7 +262,8 @@ class TransactionRepositoryImpl(
                             payloadJson = AccountingRequestJsonAdapter.restoreInflowRequestToJson(
                                 com.financeautomation.domain.model.RestoreInflowRequest(inflow.id, inflow.timestamp)
                             ),
-                            status = SyncQueueEntity.STATUS_PENDING
+                            status = SyncQueueEntity.STATUS_PENDING,
+                            createdAt = baseTimestamp + (restoreIndex++) * 10L
                         )
                     )
                 }
@@ -247,7 +275,8 @@ class TransactionRepositoryImpl(
                             payloadJson = AccountingRequestJsonAdapter.restorePayableRequestToJson(
                                 com.financeautomation.domain.model.RestorePayableRequest(payable.uuid, payable.tabName, year)
                             ),
-                            status = SyncQueueEntity.STATUS_PENDING
+                            status = SyncQueueEntity.STATUS_PENDING,
+                            createdAt = baseTimestamp + (restoreIndex++) * 10L
                         )
                     )
                 }
@@ -1855,6 +1884,7 @@ class TransactionRepositoryImpl(
     }
 
     companion object {
+        const val SQLITE_IN_CHUNK = 500
         const val MAX_SYNC_RETRIES: Int = 8
         private const val RECONCILE_KEY = "reconcile"
         private const val CHECK_ALL_MONTHS_KEY = "check_all_months"

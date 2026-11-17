@@ -149,7 +149,7 @@ class InMemoryQueueDao : SyncQueueDao {
 
     private fun pendingList(maxRetries: Int) = queue.values
         .filter { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }
-        .sortedBy { it.id }
+        .sortedWith(compareBy({ it.createdAt }, { it.id }))
 
     override fun getPendingQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING })
     override fun getAllQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(queue.values.toList())
