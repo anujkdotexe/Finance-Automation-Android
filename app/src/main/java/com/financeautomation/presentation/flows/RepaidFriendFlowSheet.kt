@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.flows
 
+import com.financeautomation.presentation.components.ClearFocusOnUserDrag
 import com.financeautomation.core.constants.CategoryConstants
 
 import androidx.compose.foundation.clickable
@@ -134,11 +135,7 @@ fun RepaidFriendFlowSheet(
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
 
-    LaunchedEffect(scrollState.isScrollInProgress) {
-        if (scrollState.isScrollInProgress) {
-            focusManager.clearFocus()
-        }
-    }
+    ClearFocusOnUserDrag(scrollState, focusManager)
 
     Column(
         modifier = modifier

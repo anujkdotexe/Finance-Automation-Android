@@ -124,11 +124,7 @@ fun QuickLogSheet(
         }
     }
 
-    LaunchedEffect(verticalScroll.isScrollInProgress) {
-        if (verticalScroll.isScrollInProgress) {
-            focusManager.clearFocus()
-        }
-    }
+    ClearFocusOnUserDrag(verticalScroll, focusManager)
 
     Column(
         modifier = modifier
