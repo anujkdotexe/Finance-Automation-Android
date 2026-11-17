@@ -294,10 +294,10 @@ class YearRolloverMultiWorkbookTest {
         val fakeConfigRepo = object : com.financeautomation.domain.repository.ConfigRepository {
             override suspend fun readAll(spreadsheetId: String): Result<List<com.financeautomation.domain.model.ConfigRow>> =
                 Result.Success(emptyList())
-            override suspend fun upsert(spreadsheetId: String, rows: List<com.financeautomation.domain.model.ConfigRow>): Result<Unit> {
+            override suspend fun upsert(spreadsheetId: String, rows: List<com.financeautomation.domain.model.ConfigRow>): Result<Set<String>> {
                 mirrorTargetSpreadsheetId = spreadsheetId
                 mirrorCalled = true
-                return Result.Success(Unit)
+                return Result.Success(rows.map { it.compositeKey }.toSet())
             }
             override suspend fun tombstone(spreadsheetId: String, type: String, key: String, deviceId: String): Result<Unit> = Result.Success(Unit)
         }

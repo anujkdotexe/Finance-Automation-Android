@@ -324,14 +324,17 @@ class SyncConfigUseCase(
                 throw upsertResult.exception
             }
 
-            // Clear dirty flags
-            localGateway.markAccountsClean(dirty.accounts.map { it.id })
-            localGateway.markCategoriesClean(dirty.categories.map { it.id })
-            localGateway.markCompanionsClean(dirty.companions.map { it.id })
-            localGateway.markTripTagsClean(dirty.tripTags.map { it.id })
-            localGateway.markPreferencesClean(dirty.preferences.map { it.key })
-            localGateway.markSubscriptionsClean(dirty.subscriptions.map { it.id })
-            localGateway.markBudgetsClean(dirty.budgets.map { it.category })
+            // Clear dirty flags only for items the sheet really took. A row the sheet already holds in a newer
+            // version was skipped: it stays dirty and the next pull brings the sheet value down.
+            val written = (upsertResult as Result.Success).data
+            fun isWritten(type: String, key: String) = ConfigRow.compositeKeyOf(type, key) in written
+            localGateway.markAccountsClean(dirty.accounts.filter { isWritten(ConfigConstants.TYPE_ACCOUNT, it.name) }.map { it.id })
+            localGateway.markCategoriesClean(dirty.categories.filter { isWritten(ConfigConstants.TYPE_CATEGORY, it.name) }.map { it.id })
+            localGateway.markCompanionsClean(dirty.companions.filter { isWritten(ConfigConstants.TYPE_PERSON, it.name) }.map { it.id })
+            localGateway.markTripTagsClean(dirty.tripTags.filter { isWritten(ConfigConstants.TYPE_TRIP, it.name) }.map { it.id })
+            localGateway.markPreferencesClean(dirty.preferences.filter { isWritten(ConfigConstants.TYPE_PREF, it.key) }.map { it.key })
+            localGateway.markSubscriptionsClean(dirty.subscriptions.filter { isWritten(ConfigConstants.TYPE_SUBSCRIPTION, it.id) }.map { it.id })
+            localGateway.markBudgetsClean(dirty.budgets.filter { isWritten(ConfigConstants.TYPE_BUDGET, it.category) }.map { it.category })
         }
     } }
 

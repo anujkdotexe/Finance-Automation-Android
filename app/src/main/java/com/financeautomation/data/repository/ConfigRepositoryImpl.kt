@@ -10,6 +10,8 @@ import com.financeautomation.domain.repository.ConfigRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
@@ -22,8 +24,25 @@ import java.time.format.DateTimeParseException
  */
 class ConfigRepositoryImpl(
     private val googleSheetsClient: GoogleSheetsClient,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: Clock = Clock.systemUTC()
 ) : ConfigRepository {
+
+    /**
+     * Parses an UpdatedAt cell. A value later than now plus [MAX_FUTURE_SKEW] (typed by hand or written by a phone with
+     * a wrong clock) is cut to that limit, so one such row cannot block every later edit of its item. Returns the
+     * parsed instant and whether it was cut.
+     */
+    private fun parseUpdatedAt(text: String): Pair<Instant, Boolean> {
+        val parsed = try {
+            if (text.isNotBlank()) Instant.parse(text.trim()) else Instant.EPOCH
+        } catch (e: DateTimeParseException) {
+            Diagnostics.record("ConfigRepositoryImpl", "parseUpdatedAt: ${e.javaClass.simpleName}")
+            Instant.EPOCH
+        }
+        val limit = clock.instant().plus(MAX_FUTURE_SKEW)
+        return if (parsed.isAfter(limit)) limit to true else parsed to false
+    }
 
     override suspend fun readAll(spreadsheetId: String): Result<List<ConfigRow>> = withContext(ioDispatcher) {
         safeCall {
@@ -40,6 +59,7 @@ class ConfigRepositoryImpl(
             }
 
             val configRows = mutableListOf<ConfigRow>()
+            var clampedCount = 0
 
             // Row index is 1-based; row 1 is header, row 2 is meta, data rows start at row 3 (index 2)
             for (i in 1 until rows.size) {
@@ -58,12 +78,8 @@ class ConfigRepositoryImpl(
                 val updatedBy = rowCells.getOrNull(7)?.toString().orEmpty()
                 val deletedStr = rowCells.getOrNull(8)?.toString()?.trim().orEmpty()
 
-                val updatedAt = try {
-                    if (updatedStr.isNotBlank()) Instant.parse(updatedStr) else Instant.EPOCH
-                } catch (e: DateTimeParseException) {
-                    Diagnostics.record("ConfigRepositoryImpl", "parseUpdatedAt: ${e.javaClass.simpleName}")
-                    Instant.EPOCH
-                }
+                val (updatedAt, clamped) = parseUpdatedAt(updatedStr)
+                if (clamped) clampedCount++
 
                 val isDeleted = deletedStr.equals("true", ignoreCase = true)
 
@@ -79,13 +95,16 @@ class ConfigRepositoryImpl(
                 )
             }
 
+            if (clampedCount > 0) {
+                Diagnostics.record("ConfigRepositoryImpl", "UPDATED_AT_CLAMPED: $clampedCount")
+            }
             configRows
         }
     }
 
-    override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Set<String>> = withContext(ioDispatcher) {
         safeCall {
-            if (rows.isEmpty()) return@safeCall
+            if (rows.isEmpty()) return@safeCall emptySet<String>()
 
             ensureConfigTabInitialized(spreadsheetId)
 
@@ -93,37 +112,37 @@ class ConfigRepositoryImpl(
             val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:G")
             val existingCells = if (rangeResult is Result.Success) rangeResult.data else emptyList()
 
-            data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant)
+            data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant, val futureStamped: Boolean)
             val keyToMetaMap = mutableMapOf<String, ExistingRowMeta>()
             for (i in existingCells.indices) {
                 val row = existingCells[i]
                 val type = row.getOrNull(0)?.toString()?.trim()?.lowercase().orEmpty()
                 val key = row.getOrNull(1)?.toString()?.trim()?.lowercase().orEmpty()
                 if (type.isNotBlank() && key.isNotBlank()) {
-                    val updatedStr = row.getOrNull(6)?.toString()?.trim().orEmpty()
-                    val updatedAt = try {
-                        if (updatedStr.isNotBlank()) Instant.parse(updatedStr) else Instant.EPOCH
-                    } catch (e: Exception) {
-                        Instant.EPOCH
-                    }
-                    keyToMetaMap["$type|$key"] = ExistingRowMeta(i + 1, updatedAt)
+                    val (updatedAt, futureStamped) = parseUpdatedAt(row.getOrNull(6)?.toString().orEmpty())
+                    keyToMetaMap["$type|$key"] = ExistingRowMeta(i + 1, updatedAt, futureStamped)
                 }
             }
 
             val updatesMap = mutableMapOf<String, List<List<Any?>>>()
             val newRowsToAppend = mutableListOf<List<Any?>>()
+            val writtenKeys = mutableSetOf<String>()
 
             for (row in rows) {
                 val compositeKey = row.compositeKey
                 val existingMeta = keyToMetaMap[compositeKey]
                 if (existingMeta != null) {
-                    // Conflict resolution: only overwrite if local row is as new or newer than remote row
-                    if (row.updatedAt >= existingMeta.updatedAt) {
+                    // Conflict resolution: only overwrite if local row is as new or newer than remote row. A remote
+                    // stamp beyond the allowed future skew is not a real edit time: the local row replaces it, which
+                    // also repairs the cell. Without this a local edit (stamped now) could never beat it.
+                    if (existingMeta.futureStamped || row.updatedAt >= existingMeta.updatedAt) {
                         updatesMap["'${ConfigConstants.CONFIG_TAB_NAME}'!A${existingMeta.rowIndex}:I${existingMeta.rowIndex}"] = listOf(row.toRowCells())
+                        writtenKeys.add(compositeKey)
                     }
                 } else {
                     // New row to append
                     newRowsToAppend.add(row.toRowCells())
+                    writtenKeys.add(compositeKey)
                 }
             }
 
@@ -142,6 +161,7 @@ class ConfigRepositoryImpl(
                 )
                 if (appendRes is Result.Error) throw appendRes.exception
             }
+            writtenKeys
         }
     }
 
@@ -156,7 +176,7 @@ class ConfigRepositoryImpl(
                 type = type,
                 key = key,
                 values = listOf("", "", "", ""),
-                updatedAt = Instant.now(),
+                updatedAt = clock.instant(),
                 updatedBy = deviceId,
                 deleted = true
             )
@@ -186,7 +206,7 @@ class ConfigRepositoryImpl(
             // Write Row 1 header and Row 2 metadata
             val initialRows = listOf(
                 listOf("Type", "Key", "Value1", "Value2", "Value3", "Value4", "UpdatedAt", "UpdatedBy", "Deleted"),
-                listOf(ConfigConstants.TYPE_META, ConfigConstants.KEY_SCHEMA_VERSION, ConfigConstants.CONFIG_SCHEMA_VERSION, "", "", "", Instant.now().toString(), "system", "")
+                listOf(ConfigConstants.TYPE_META, ConfigConstants.KEY_SCHEMA_VERSION, ConfigConstants.CONFIG_SCHEMA_VERSION, "", "", "", clock.instant().toString(), "system", "")
             )
             val initUpdate = mapOf(
                 "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:I2" to initialRows
@@ -194,5 +214,9 @@ class ConfigRepositoryImpl(
             googleSheetsClient.batchUpdateValues(spreadsheetId, initUpdate, valueInputOption = "RAW")
         }
     }
-}
 
+    companion object {
+        /** A Config UpdatedAt later than now by more than this is treated as now plus this. */
+        val MAX_FUTURE_SKEW: Duration = Duration.ofMinutes(5)
+    }
+}

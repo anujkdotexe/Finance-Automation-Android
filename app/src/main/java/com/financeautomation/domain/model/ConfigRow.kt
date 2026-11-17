@@ -20,7 +20,7 @@ data class ConfigRow(
     val value3: String get() = values.getOrElse(2) { "" }
     val value4: String get() = values.getOrElse(3) { "" }
 
-    val compositeKey: String get() = "${type.trim().lowercase()}|${key.trim().lowercase()}"
+    val compositeKey: String get() = compositeKeyOf(type, key)
 
     /**
      * Converts to row cells for RAW Sheets write.
@@ -38,5 +38,9 @@ data class ConfigRow(
             if (deleted) "true" else ""
         )
     }
-}
 
+    companion object {
+        /** The identity of a Config row: type and key, trimmed and lower-cased. */
+        fun compositeKeyOf(type: String, key: String): String = "${type.trim().lowercase()}|${key.trim().lowercase()}"
+    }
+}
