@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
+import com.financeautomation.core.utils.Diagnostics
 import org.junit.Test
 import java.time.Instant
 
@@ -22,6 +24,13 @@ class ConfigRepositoryImplTest {
 
     private fun categoryRow(updatedAt: Instant, value1: String = "false") =
         ConfigRow("category", "Groceries", listOf(value1, "false", "false", "1|Teal"), updatedAt, "dev", false)
+
+    @Before
+    fun clearDiagnostics() {
+        Diagnostics.clear()
+    }
+
+    private fun diagnostic(code: String) = Diagnostics.getRecords().any { it.reason.contains(code) }
 
     private fun <T> Result<T>.ok(): T = (this as Result.Success).data
 
@@ -155,5 +164,75 @@ class ConfigRepositoryImplTest {
 
         assertEquals(emptySet<String>(), written)
         assertEquals("first", sheet.cells[2][7])
+    }
+
+    private fun row(key: String, value1: String = "false", updatedBy: String = "dev") =
+        arrayOf("category", key, value1, "false", "false", "1|Teal", "2026-11-17T08:00:00Z", updatedBy, "")
+
+    @Test
+    fun readAllSkipsOversizedKey() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow(*row("k".repeat(81)))
+        sheet.addRow(*row("k".repeat(80)))
+        sheet.addRow(*row("Fine", value1 = "v".repeat(401)))
+        sheet.addRow(*row("AlsoFine", value1 = "v".repeat(400)))
+
+        val keys = repo(sheet).readAll("sheet").ok().filter { it.type == "category" }.map { it.key }
+
+        assertEquals(listOf("k".repeat(80), "AlsoFine"), keys)
+        assertTrue(diagnostic("CONFIG_ROW_TOO_LONG: 2"))
+    }
+
+    @Test
+    fun readAllAllowsALongSubscriptionValue() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow("subscription", "sub_1", "x".repeat(1500), "", "", "", "2026-11-17T08:00:00Z", "dev", "")
+        sheet.addRow("subscription", "sub_2", "x".repeat(2001), "", "", "", "2026-11-17T08:00:00Z", "dev", "")
+
+        val keys = repo(sheet).readAll("sheet").ok().filter { it.type == "subscription" }.map { it.key }
+
+        assertEquals(listOf("sub_1"), keys)
+    }
+
+    @Test
+    fun readAllSkipsControlCharacters() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow(*row("New\nLine"))
+        sheet.addRow(*row("Right\u202Eleft"))
+        sheet.addRow(*row("Zero\u200Bwidth"))
+        sheet.addRow(*row("Tab\there"))
+        sheet.addRow(*row("Clean", value1 = "bad\u0007value").also { it[2] = "bad\u0007value" })
+        sheet.addRow(*row("Plain name with spaces & symbols"))
+
+        val keys = repo(sheet).readAll("sheet").ok().filter { it.type == "category" }.map { it.key }
+
+        assertEquals(listOf("Plain name with spaces & symbols"), keys)
+        assertTrue(diagnostic("CONFIG_ROW_BAD_CHARS: 5"))
+    }
+
+    @Test
+    fun readAllStopsAtRowLimit() = runBlocking {
+        val sheet = FakeConfigSheet()
+        repeat(2500) { sheet.addRow(*row("k$it")) }
+
+        val keys = repo(sheet).readAll("sheet").ok().filter { it.type == "category" }.map { it.key }
+
+        // Rows 1 and 2 are the header and meta rows, so 1998 data rows fit in the 2000 requested
+        assertEquals(1998, keys.size)
+        assertEquals("k1997", keys.last())
+        assertTrue(diagnostic("CONFIG_ROW_LIMIT"))
+    }
+
+    @Test
+    fun readAllShortRowStillParses() = runBlocking {
+        val sheet = FakeConfigSheet()
+        sheet.addRow("category", "OnlyKey")
+        sheet.addRow("person", "Asha", "0")
+
+        val rows = repo(sheet).readAll("sheet").ok().filter { it.type != "meta" }
+
+        assertEquals(listOf("OnlyKey", "Asha"), rows.map { it.key })
+        assertEquals(Instant.EPOCH, rows.first().updatedAt)
+        assertEquals(listOf("", "", "", ""), rows.first().values)
     }
 }

@@ -48,7 +48,7 @@ class ConfigRepositoryImpl(
         safeCall {
             ensureConfigTabInitialized(spreadsheetId)
 
-            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:I")
+            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:I${ConfigConstants.MAX_CONFIG_ROWS}")
             if (rangeResult is Result.Error) {
                 throw rangeResult.exception
             }
@@ -60,6 +60,11 @@ class ConfigRepositoryImpl(
 
             val configRows = mutableListOf<ConfigRow>()
             var clampedCount = 0
+            var tooLongCount = 0
+            var badCharsCount = 0
+            if (rows.size >= ConfigConstants.MAX_CONFIG_ROWS) {
+                Diagnostics.record("ConfigRepositoryImpl", "CONFIG_ROW_LIMIT: ${ConfigConstants.MAX_CONFIG_ROWS}")
+            }
 
             // Row index is 1-based; row 1 is header, row 2 is meta, data rows start at row 3 (index 2)
             for (i in 1 until rows.size) {
@@ -77,6 +82,24 @@ class ConfigRepositoryImpl(
                 val updatedStr = rowCells.getOrNull(6)?.toString().orEmpty()
                 val updatedBy = rowCells.getOrNull(7)?.toString().orEmpty()
                 val deletedStr = rowCells.getOrNull(8)?.toString()?.trim().orEmpty()
+
+                // A cell that is too long or holds control or direction-changing characters is not a name or value the
+                // app wrote. The whole row is skipped and counted, never partly used.
+                val valueLimit = if (type.equals(ConfigConstants.TYPE_SUBSCRIPTION, ignoreCase = true)) {
+                    ConfigConstants.MAX_SUBSCRIPTION_VALUE_LENGTH
+                } else {
+                    ConfigConstants.MAX_VALUE_LENGTH
+                }
+                if (type.length > ConfigConstants.MAX_KEY_LENGTH || key.length > ConfigConstants.MAX_KEY_LENGTH ||
+                    listOf(v1, v2, v3, v4, updatedBy).any { it.length > valueLimit }
+                ) {
+                    tooLongCount++
+                    continue
+                }
+                if (listOf(type, key, v1, v2, v3, v4, updatedBy).any { hasUnsafeCharacters(it) }) {
+                    badCharsCount++
+                    continue
+                }
 
                 val (updatedAt, clamped) = parseUpdatedAt(updatedStr)
                 if (clamped) clampedCount++
@@ -98,7 +121,17 @@ class ConfigRepositoryImpl(
             if (clampedCount > 0) {
                 Diagnostics.record("ConfigRepositoryImpl", "UPDATED_AT_CLAMPED: $clampedCount")
             }
+            if (tooLongCount > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_ROW_TOO_LONG: $tooLongCount")
+            if (badCharsCount > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_ROW_BAD_CHARS: $badCharsCount")
             keepNewestPerKey(configRows)
+        }
+    }
+
+    /** True for control characters, line and paragraph separators, and format characters such as direction marks. */
+    private fun hasUnsafeCharacters(text: String): Boolean = text.any {
+        when (Character.getType(it).toByte()) {
+            Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR -> true
+            else -> false
         }
     }
 
@@ -132,7 +165,7 @@ class ConfigRepositoryImpl(
             ensureConfigTabInitialized(spreadsheetId)
 
             // Read existing rows to map composite keys to row indices and remote edit timestamps
-            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:G")
+            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:G${ConfigConstants.MAX_CONFIG_ROWS}")
             val existingCells = if (rangeResult is Result.Success) rangeResult.data else emptyList()
 
             data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant, val futureStamped: Boolean)

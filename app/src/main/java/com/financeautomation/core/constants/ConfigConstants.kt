@@ -20,6 +20,16 @@ object ConfigConstants {
     /** Monthly category budget: key = category name, Value1 = amount. */
     const val TYPE_BUDGET = "budget"
 
+    // Limits for what is read from the Config tab. The tab can be edited by hand or by another device, so nothing in it
+    // is trusted to be small or clean.
+    /** Rows requested from the Config tab (header and meta rows included). Rows below this are not read. */
+    const val MAX_CONFIG_ROWS = 2000
+    const val MAX_KEY_LENGTH = 80
+    const val MAX_VALUE_LENGTH = 400
+
+    /** A subscription travels as one JSON object in Value1 (name, keywords and more), so it gets a larger limit. */
+    const val MAX_SUBSCRIPTION_VALUE_LENGTH = 2000
+
     // Meta Keys
     const val KEY_SCHEMA_VERSION = "schemaVersion"
 
