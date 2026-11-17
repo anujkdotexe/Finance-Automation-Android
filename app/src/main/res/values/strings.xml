@@ -703,7 +703,6 @@
 
     <!-- ViewModel and Coordinator user-visible messages -->
     <!-- SettingsSyncCoordinator -->
-    <string name="workbook_replaced_notice">Your saved entries and income are being added again. Friend repayments could not be restored.</string>
     <string name="workbook_replaced_notice_partial">Your Finance workbook was missing, so a new one was created. Your saved entries are being added again. %1$s could not be restored automatically.</string>
     <string name="workbook_replaced_lost_items">The repayment history and the links between income and debts</string>
     <string name="settings_msg_signed_in">Signed in as %1$s</string>

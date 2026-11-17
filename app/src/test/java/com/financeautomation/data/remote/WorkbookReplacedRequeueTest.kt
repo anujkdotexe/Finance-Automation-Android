@@ -132,8 +132,10 @@ class WorkbookReplacedRequeueTest {
         assertTrue("requestSync must be called on workbook replacement", syncRequested)
 
         // Assert notice shown
-        assertNotNull("workbookReplacedNotice must be set", repo.workbookReplacedNotice.value)
-        assertEquals(R.string.workbook_replaced_notice, repo.workbookReplacedNotice.value?.resId)
+        val notice = repo.workbookReplacedNotice.value
+        assertNotNull("workbookReplacedNotice must be set", notice)
+        assertEquals(R.string.workbook_replaced_notice_partial, notice?.resId)
+        assertEquals(listOf(com.financeautomation.presentation.viewmodel.UiText.res(R.string.workbook_replaced_lost_items)), notice?.args)
 
         // Assert exactly 2 items queued (txn1 and txn2)
         val queued = qDao.queue.values.toList()

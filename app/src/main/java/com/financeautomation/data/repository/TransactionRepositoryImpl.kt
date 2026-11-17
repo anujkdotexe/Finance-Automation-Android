@@ -187,7 +187,10 @@ class TransactionRepositoryImpl(
 
     suspend fun onWorkbookReplaced(year: Int, oldId: String, newId: String) = withContext(ioDispatcher) {
         Diagnostics.record("WorkbookRecovery", "WORKBOOK_REPLACED")
-        workbookReplacedNotice.value = UiText.res(R.string.workbook_replaced_notice)
+        workbookReplacedNotice.value = UiText.res(
+            R.string.workbook_replaced_notice_partial,
+            UiText.res(R.string.workbook_replaced_lost_items)
+        )
 
         val zone = ZoneId.of("Asia/Kolkata")
         val startMillis = ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, zone).toInstant().toEpochMilli()

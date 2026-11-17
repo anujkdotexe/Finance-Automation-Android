@@ -34,8 +34,8 @@ interface PayableDao {
     suspend fun getAllForYear(
         startSerial: Int,
         endSerial: Int,
-        startMillis: Long = 0L,
-        endMillis: Long = Long.MAX_VALUE
+        startMillis: Long,
+        endMillis: Long
     ): List<PayableEntity>
 
     @Query("SELECT * FROM payables WHERE uuid = :uuid LIMIT 1")

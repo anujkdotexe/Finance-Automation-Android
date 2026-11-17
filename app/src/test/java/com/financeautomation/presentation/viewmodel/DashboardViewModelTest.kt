@@ -12,6 +12,10 @@ import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
+import com.financeautomation.data.repository.TransactionRepositoryImpl
+import com.financeautomation.testutil.InMemoryQueueDao
+import com.financeautomation.testutil.InMemoryTransactionDao
+import com.financeautomation.testutil.createTestAccountingSyncExecutor
 import com.financeautomation.domain.model.Budget
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Transaction
@@ -1353,5 +1357,41 @@ class DashboardViewModelTest {
 
         val diagRecord = Diagnostics.getRecords().find { it.tag == "DashboardViewModel" && it.reason.contains("sync_exception: dashboard sync, IllegalStateException") }
         assertNotNull("Diagnostics should record the stage and safe code", diagRecord)
+    }
+
+    @Test
+    fun testDashboardViewModel_workbookReplacedNotice_showsPartialWithLostItemsArgument() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+        val cRepo = FakeCategoryRepo()
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        // Trigger workbook replaced notice
+        repo.workbookReplacedNotice.value = UiText.res(
+            R.string.workbook_replaced_notice_partial,
+            UiText.res(R.string.workbook_replaced_lost_items)
+        )
+        advanceUntilIdle()
+
+        val syncMessage = vm.uiState.value.syncMessage
+        assertNotNull("Sync message must be set when workbook is replaced", syncMessage)
+        assertEquals(R.string.workbook_replaced_notice_partial, syncMessage?.resId)
+        val firstArg = syncMessage?.args?.firstOrNull() as? UiText
+        assertNotNull("Format argument must be a UiText instance", firstArg)
+        assertEquals(R.string.workbook_replaced_lost_items, firstArg?.resId)
+        assertNull("Repository notice state must be cleared after being consumed", repo.workbookReplacedNotice.value)
     }
 }
