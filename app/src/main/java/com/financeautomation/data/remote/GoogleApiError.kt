@@ -141,7 +141,7 @@ class GoogleDriveApiException(
     val apiError: GoogleApiError? = null
 ) : IOException(message)
 
-val DRIVE_RATE_LIMIT_REASONS: Set<String> = setOf("ratelimitexceeded", "userratelimitexceeded", "quotaexceeded", "sharingratelimitexceeded")
+val API_RATE_LIMIT_REASONS: Set<String> = setOf("ratelimitexceeded", "userratelimitexceeded", "quotaexceeded", "sharingratelimitexceeded")
 
 /**
  * True when the Drive request is worth repeating later: server errors (5xx), 408, 429,
@@ -149,6 +149,6 @@ val DRIVE_RATE_LIMIT_REASONS: Set<String> = setOf("ratelimitexceeded", "userrate
  */
 fun GoogleDriveApiException.isRetryable(): Boolean = when (statusCode) {
     in 500..599, 408, 429 -> true
-    403 -> apiError?.reason?.lowercase() in DRIVE_RATE_LIMIT_REASONS
+    403 -> apiError?.reason?.lowercase() in API_RATE_LIMIT_REASONS
     else -> false
 }

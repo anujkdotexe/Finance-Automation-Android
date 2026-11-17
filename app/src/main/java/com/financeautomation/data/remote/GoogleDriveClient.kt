@@ -334,7 +334,7 @@ open class GoogleDriveClient(
                 if (!response.isSuccessful) {
                     val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_GET, response.code, bodyString)
                     val isRateLimit = response.code == 403 &&
-                        apiError.reason?.lowercase() in DRIVE_RATE_LIMIT_REASONS
+                        apiError.reason?.lowercase() in API_RATE_LIMIT_REASONS
                     if (response.code == 403 && !isRateLimit) {
                         return@withContext Result.Success(false)
                     }
