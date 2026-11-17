@@ -29,7 +29,9 @@ data class MonthBurnWidgetLabels(
     /** Template for the spoken summary: month, amount, per day text, sync text. */
     val descriptionTemplate: String,
     /** Shown instead of the amount while the app lock is on. */
-    val unlockToView: String = "Unlock to view"
+    val unlockToView: String = "Unlock to view",
+    /** Shown instead of the amount when there is no signed-in account or no workbook, or the figures cannot be read. */
+    val signInToView: String
 )
 
 /**
@@ -42,7 +44,8 @@ object MonthBurnWidgetFormatter {
         summary: MonthBurnSummary,
         labels: MonthBurnWidgetLabels,
         locale: Locale = Locale.getDefault(),
-        appLockOn: Boolean = false
+        appLockOn: Boolean = false,
+        unavailable: Boolean = false
     ): MonthBurnWidgetContent {
         val monthName = Month.of(summary.month).getDisplayName(TextStyle.FULL, locale)
         if (appLockOn) {
@@ -54,6 +57,17 @@ object MonthBurnWidgetFormatter {
                 perDay = "",
                 syncState = "",
                 description = "$monthName ${labels.title}, ${labels.unlockToView}"
+            )
+        }
+        if (unavailable) {
+            // Never show a figure that was not read from the ledger
+            return MonthBurnWidgetContent(
+                monthName = monthName,
+                title = labels.title,
+                amount = labels.signInToView,
+                perDay = "",
+                syncState = "",
+                description = "$monthName ${labels.title}, ${labels.signInToView}"
             )
         }
         val amount = formatRupees(summary.livingBurn)

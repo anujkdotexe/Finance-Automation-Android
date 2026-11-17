@@ -8,7 +8,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import com.financeautomation.domain.usecase.MonthBurnSummary
+import com.financeautomation.domain.usecase.WidgetSyncState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -82,4 +85,27 @@ class MonthBurnWidgetRefreshTest {
         assertEquals(0, failureCalls)
         assertTrue(Diagnostics.getRecords().isEmpty())
     }
+
+    @Test
+    fun noAccountDoesNotQueryTransactions() = runTest {
+        var loads = 0
+        val result = MonthBurnWidgetProvider.loadIfAvailable(
+            hasAccountAndWorkbook = { false },
+            load = { loads++; summary() }
+        )
+        assertNull(result)
+        assertEquals(0, loads)
+    }
+
+    @Test
+    fun accountAndWorkbookLoadsTheFigures() = runTest {
+        val expected = summary()
+        val result = MonthBurnWidgetProvider.loadIfAvailable(hasAccountAndWorkbook = { true }, load = { expected })
+        assertEquals(expected, result)
+    }
+
+    private fun summary() = MonthBurnSummary(
+        year = 2026, month = 11, livingBurn = 10.0, perDayAverage = 1.0, daysElapsed = 10,
+        syncState = WidgetSyncState.UpToDate
+    )
 }
