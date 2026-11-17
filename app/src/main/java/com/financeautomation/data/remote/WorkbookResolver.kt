@@ -40,7 +40,7 @@ open class WorkbookResolver(
     private val regenerateDashboardUseCase: RegenerateDashboardUseCase? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val clock: java.time.Clock = java.time.Clock.system(ZoneId.of("Asia/Kolkata")),
-    var onWorkbookReplaced: (suspend (year: Int, oldId: String, newId: String) -> Unit)? = null
+    val onWorkbookReplaced: suspend (year: Int, oldId: String, newId: String) -> Unit = { _, _, _ -> }
 ) {
     private val mutex = Mutex()
 
@@ -192,7 +192,12 @@ open class WorkbookResolver(
                         }
 
                         if (!lockedStoredId.isNullOrBlank() && foundId != lockedStoredId) {
-                            onWorkbookReplaced?.invoke(year, lockedStoredId, foundId)
+                            preferencesRepository.setPreference(
+                                PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING,
+                                "true",
+                                isDirty = false
+                            )
+                            onWorkbookReplaced(year, lockedStoredId, foundId)
                         }
 
                         // Reinstall & new device recovery: pull Config tab FIRST from resolved workbook
@@ -270,7 +275,12 @@ open class WorkbookResolver(
             }
 
             if (!lockedStoredId.isNullOrBlank() && newSpreadsheetId != lockedStoredId) {
-                onWorkbookReplaced?.invoke(year, lockedStoredId, newSpreadsheetId)
+                preferencesRepository.setPreference(
+                    PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING,
+                    "true",
+                    isDirty = false
+                )
+                onWorkbookReplaced(year, lockedStoredId, newSpreadsheetId)
             }
 
             // Newly created: mirror local default config to Config tab, then regenerate Dashboard
@@ -321,7 +331,7 @@ open class WorkbookResolver(
             }
 
             if (!oldStoredId.isNullOrBlank() && newId != oldStoredId) {
-                onWorkbookReplaced?.invoke(year, oldStoredId, newId)
+                onWorkbookReplaced(year, oldStoredId, newId)
             }
 
             syncConfigUseCase?.mirrorToCloud(newId)

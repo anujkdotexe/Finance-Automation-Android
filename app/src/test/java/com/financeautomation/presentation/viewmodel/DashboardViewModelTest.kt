@@ -21,6 +21,7 @@ import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.repository.CategoryRepository
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.BudgetState
 import kotlinx.coroutines.Dispatchers
@@ -1372,9 +1373,13 @@ class DashboardViewModelTest {
     fun testDashboardViewModel_workbookReplacedNotice_showsPartialWithLostItemsArgument() = runTest {
         val tDao = InMemoryTransactionDao()
         val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+
         val repo = TransactionRepositoryImpl(
             transactionDao = tDao,
             syncQueueDao = qDao,
+            preferencesRepository = pRepo,
             accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
             ioDispatcher = testDispatcher
         )
@@ -1383,15 +1388,9 @@ class DashboardViewModelTest {
         val vm = DashboardViewModel(
             transactionRepository = repo,
             directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
             categoryRepository = cRepo,
             ioDispatcher = testDispatcher
-        )
-        advanceUntilIdle()
-
-        // Trigger workbook replaced notice
-        repo.workbookReplacedNotice.value = UiText.res(
-            R.string.workbook_replaced_notice_partial,
-            UiText.res(R.string.workbook_replaced_lost_items)
         )
         advanceUntilIdle()
 
@@ -1401,6 +1400,7 @@ class DashboardViewModelTest {
         val firstArg = syncMessage?.args?.firstOrNull() as? UiText
         assertNotNull("Format argument must be a UiText instance", firstArg)
         assertEquals(R.string.workbook_replaced_lost_items, firstArg?.resId)
-        assertNull("Repository notice state must be cleared after being consumed", repo.workbookReplacedNotice.value)
+        assertNull("Pending notice preference must be cleared after being consumed",
+            pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
     }
 }

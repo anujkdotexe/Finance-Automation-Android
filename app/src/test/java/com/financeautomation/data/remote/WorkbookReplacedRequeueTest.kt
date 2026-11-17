@@ -13,6 +13,7 @@ import com.financeautomation.testutil.InMemoryInflowDao
 import com.financeautomation.testutil.InMemoryPayableDao
 import com.financeautomation.testutil.InMemoryQueueDao
 import com.financeautomation.testutil.InMemoryTransactionDao
+import com.financeautomation.testutil.ScriptedSheetsServer
 import com.financeautomation.testutil.createTestAccountingSyncExecutor
 import com.financeautomation.core.utils.DateSerialUtils
 import kotlinx.serialization.json.Json
@@ -55,6 +56,8 @@ class WorkbookReplacedRequeueTest {
     private val year = 2026
     private val yearIds = mutableMapOf<Int, String>()
 
+    private val rawPrefs = mutableMapOf<String, String?>()
+
     private val prefs: PreferencesRepository = Proxy.newProxyInstance(
         PreferencesRepository::class.java.classLoader, arrayOf(PreferencesRepository::class.java)
     ) { _, m, args ->
@@ -65,8 +68,8 @@ class WorkbookReplacedRequeueTest {
             "setSpreadsheetId" -> { yearIds[year] = args!![0] as String; null }
             "getGoogleAccountEmailSync" -> "test@example.com"
             "setSpreadsheetTitle" -> null
-            "getPreference" -> null
-            "setPreference" -> null
+            "getPreference" -> rawPrefs[args!![0] as String]
+            "setPreference" -> { rawPrefs[args!![0] as String] = args[1] as? String; null }
             else -> if (kotlinx.coroutines.flow.Flow::class.java.isAssignableFrom(m.returnType)) flowOf<Any?>(null) else null
         }
     } as PreferencesRepository
@@ -131,16 +134,10 @@ class WorkbookReplacedRequeueTest {
             ioDispatcher = Dispatchers.Unconfined
         )
 
-        repo.onWorkbookReplaced(2026, "old_id_123", "new_id_456")
+        repo.requeueYearForNewWorkbook(2026)
 
         // Assert sync requested
         assertTrue("requestSync must be called on workbook replacement", syncRequested)
-
-        // Assert notice shown
-        val notice = repo.workbookReplacedNotice.value
-        assertNotNull("workbookReplacedNotice must be set", notice)
-        assertEquals(R.string.workbook_replaced_notice_partial, notice?.resId)
-        assertEquals(listOf(com.financeautomation.presentation.viewmodel.UiText.res(R.string.workbook_replaced_lost_items)), notice?.args)
 
         // Assert exactly 2 items queued (txn1 and txn2)
         val queued = qDao.queue.values.toList()
@@ -169,7 +166,7 @@ class WorkbookReplacedRequeueTest {
 
         // Second call must NOT duplicate items
         syncRequested = false
-        repo.onWorkbookReplaced(2026, "old_id_123", "new_id_456")
+        repo.requeueYearForNewWorkbook(2026)
         assertEquals("Duplicate call must not add extra items to queue", 2, qDao.queue.size)
     }
 
@@ -617,7 +614,7 @@ class WorkbookReplacedRequeueTest {
             ioDispatcher = Dispatchers.Unconfined
         )
 
-        repo.onWorkbookReplaced(2026, "old_wb", "new_wb")
+        repo.requeueYearForNewWorkbook(2026)
 
         // Assert 4 items queued: 2 transactions, 1 inflow, 1 payable
         val queued = qDao.queue.values.toList()
@@ -926,58 +923,90 @@ class WorkbookReplacedRequeueTest {
     }
 
     @Test
-    fun pendingPayableOpForARestoredPayableIsNotWrittenTwice() = runBlocking {
+    fun pendingPayableLoggedBeforeReplacementRunsAfterTheRestoreAndNets() = runBlocking {
         val tDao = InMemoryTransactionDao()
         val qDao = InMemoryQueueDao()
         val pDao = InMemoryPayableDao()
         val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
 
-        val payable = PayableEntity(
-            uuid = "pay_already_synced",
-            dateIncurredSerial = DateSerialUtils.toDateSerial(java.time.LocalDate.of(2026, 11, 1)),
-            timeSerial = 0.5,
-            paidBy = "Bob",
-            whatFor = "Supplies",
-            amountIOwe = 200.0,
-            dateRepaidSerial = null,
-            repaymentStatus = "Pending",
-            tabName = "Nov26",
-            sheetRowIndex = 5,
-            updatedAt = nov2026
-        )
-        pDao.upsertAll(listOf(payable))
+        // 1. Transaction where Bob owes 500
+        val txn = sampleTransaction("tx_earlier", nov2026, status = "Pending", syncState = SyncState.SYNCED.name, sheetRowIndex = 4)
+            .copy(owedToMe = 500.0, companions = "Bob")
+        tDao.insert(txn)
 
+        // 2. Queue pending OP_LOG_PAYABLE for Bob (Bob paid 200)
         val payableReq = com.financeautomation.domain.model.LogPayableRequest(
-            requestId = "pay_already_synced",
+            requestId = "pay_bob_1",
             creditor = "Bob",
             amount = 200.0,
-            whatFor = "Supplies",
+            whatFor = "Dinner",
             timestamp = nov2026
         )
-        qDao.insert(
-            SyncQueueEntity(
-                id = 200L,
-                transactionId = "pay_already_synced",
-                operationType = SyncQueueEntity.OP_LOG_PAYABLE,
-                payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.payableRequestToJson(payableReq),
-                status = SyncQueueEntity.STATUS_PENDING,
-                createdAt = 4_000_000L
-            )
+        val queueItem = SyncQueueEntity(
+            id = 200L,
+            transactionId = "pay_bob_1",
+            operationType = SyncQueueEntity.OP_LOG_PAYABLE,
+            payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.payableRequestToJson(payableReq),
+            status = SyncQueueEntity.STATUS_PENDING,
+            createdAt = 5_000_000L
+        )
+        qDao.insert(queueItem)
+
+        val server = ScriptedSheetsServer(listOf("Nov26"))
+        // Script batchGet to return Bob's restored debit row in Nov26 Table 1
+        server.customRead = { call ->
+            if (call.url.contains("values:batchGet")) {
+                """{"valueRanges":[
+                    {"range":"'Nov26'!A4:K","majorDimension":"ROWS","values":[
+                        [46337, 0.5, "Cash", "Dinner", "", "Food", 1000.0, "Bob", 500.0, 500.0, "Pending"]
+                    ]},
+                    {"range":"'Nov26'!AC4:AC","majorDimension":"ROWS","values":[["tx_earlier"]]},
+                    {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                ]}"""
+            } else null
+        }
+
+        val executor = createTestAccountingSyncExecutor(
+            sheetsClient = server.client(),
+            syncQueueDao = qDao,
+            transactionDao = tDao,
+            payableDao = pDao
         )
 
         val repo = TransactionRepositoryImpl(
             transactionDao = tDao,
             syncQueueDao = qDao,
             payableDao = pDao,
+            googleSheetsClient = server.client(),
             preferencesRepository = prefs,
-            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            accountingSyncExecutor = executor,
             ioDispatcher = Dispatchers.Unconfined
         )
 
         repo.requeueYearForNewWorkbook(2026)
 
-        val queueItems = qDao.getAllPending().filter { it.transactionId == "pay_already_synced" }
-        assertEquals("Payable must only have one queue item (not written twice)", 1, queueItems.size)
-        assertEquals(SyncQueueEntity.OP_RESTORE_PAYABLE, queueItems[0].operationType)
+        // Assert (1): restore items ran first in FIFO queue order
+        val queueFifo = qDao.getPendingQueueFifo()
+        assertEquals(2, queueFifo.size)
+        assertEquals("tx_earlier", queueFifo[0].transactionId)
+        assertEquals(SyncQueueEntity.OP_INSERT, queueFifo[0].operationType)
+        assertEquals("pay_bob_1", queueFifo[1].transactionId)
+        assertEquals(SyncQueueEntity.OP_LOG_PAYABLE, queueFifo[1].operationType)
+
+        // Execute the pending OP_LOG_PAYABLE against the restored sheet
+        val syncResult = executor.executeLogPayable(queueFifo[1], "test_sheet_id", "Nov26")
+        assertTrue("executeLogPayable should succeed", syncResult is Result.Success)
+
+        // Assert (2): netting reduced friend's receivable from 500 to 300
+        val nettingCall = server.calls.find { it.method == "POST" && it.url.contains("values:batchUpdate") && it.body.contains("'Nov26'!J4") }
+        assertNotNull("Netting edit must be posted to sheet", nettingCall)
+        assertTrue("Netting must reduce Bob's receivable to 300.0", nettingCall!!.body.contains("300"))
+
+        // Assert (3): payable appears exactly once in the queue
+        val payablesInQueue = qDao.getAllPending().filter { it.transactionId == "pay_bob_1" }
+        assertEquals("Payable must appear exactly once in queue", 1, payablesInQueue.size)
     }
 }

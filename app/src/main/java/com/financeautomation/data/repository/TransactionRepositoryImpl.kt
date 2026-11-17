@@ -70,9 +70,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.ZonedDateTime
 import java.util.Locale
-import com.financeautomation.R
-import com.financeautomation.presentation.viewmodel.UiText
-import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Production implementation of [TransactionRepository] backed by Room SQLite database,
@@ -183,9 +180,7 @@ class TransactionRepositoryImpl(
         }
     }
 
-    val workbookReplacedNotice = MutableStateFlow<UiText?>(null)
-
-    suspend fun requeueYearForNewWorkbook(year: Int) = withContext(ioDispatcher) {
+    override suspend fun requeueYearForNewWorkbook(year: Int) = withContext(ioDispatcher) {
         syncMutex.withLock {
             Diagnostics.record("WorkbookRecovery", "WORKBOOK_REPLACED")
 
@@ -219,13 +214,6 @@ class TransactionRepositoryImpl(
                 }
 
                 val currentPending = qDao.getAllPending()
-                val restoredPayableUuids = payables.map { it.uuid }.toSet()
-                val pendingPayablesToDelete = currentPending.filter {
-                    it.operationType == SyncQueueEntity.OP_LOG_PAYABLE && it.transactionId in restoredPayableUuids
-                }
-                for (item in pendingPayablesToDelete) {
-                    qDao.deleteById(item.id)
-                }
 
                 val pendingCreditIds = currentPending.filter {
                     it.operationType == SyncQueueEntity.OP_LOG_CREDIT
@@ -283,14 +271,6 @@ class TransactionRepositoryImpl(
             }
         }
         requestSync()
-    }
-
-    suspend fun onWorkbookReplaced(year: Int, oldId: String, newId: String) = withContext(ioDispatcher) {
-        workbookReplacedNotice.value = UiText.res(
-            R.string.workbook_replaced_notice_partial,
-            UiText.res(R.string.workbook_replaced_lost_items)
-        )
-        requeueYearForNewWorkbook(year)
     }
 
     private suspend fun resolveTransactionDao(): TransactionDao =

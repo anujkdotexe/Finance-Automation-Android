@@ -159,4 +159,10 @@ interface TransactionRepository {
      * subject to a 10-minute cooldown.
      */
     suspend fun reconcileAllMonths(): Result<Int>
+
+    /**
+     * Requeues all local non-void, non-review transactions, inflows, and payables for [year]
+     * so they are appended to a newly provisioned or replaced workbook.
+     */
+    suspend fun requeueYearForNewWorkbook(year: Int) {}
 }

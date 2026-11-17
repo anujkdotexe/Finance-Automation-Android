@@ -264,13 +264,16 @@ class DashboardViewModel(
     }
 
     private fun observeWorkbookReplacedNotice() {
-        val repo = transactionRepository as? com.financeautomation.data.repository.TransactionRepositoryImpl ?: return
-        viewModelScope.launch {
-            repo.workbookReplacedNotice.collect { notice ->
-                if (notice != null) {
-                    _uiState.update { it.copy(syncMessage = notice) }
-                    repo.workbookReplacedNotice.value = null
-                }
+        val prefs = preferencesRepository ?: return
+        viewModelScope.launch(ioDispatcher) {
+            val isPending = prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) == "true"
+            if (isPending) {
+                prefs.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+                val notice = UiText.res(
+                    R.string.workbook_replaced_notice_partial,
+                    UiText.res(R.string.workbook_replaced_lost_items)
+                )
+                _uiState.update { it.copy(syncMessage = notice) }
             }
         }
     }
