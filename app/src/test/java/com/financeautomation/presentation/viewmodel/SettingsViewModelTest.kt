@@ -724,23 +724,14 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun theDialogStateSurvivesRecreation() {
-        val vm = SettingsViewModel(
-            preferencesRepository = FakePreferencesRepository(),
-            peopleRepository = FakePeopleRepo(),
-            transactionRepository = FakeTransactionRepo()
-        )
-        assertFalse("Dialog should be hidden initially", vm.uiState.value.showCreateFreshDialog)
+    fun testCreateFreshWorkbook_copyHistoryWithRequeueFailureShowsRetryMessage() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        prefs.setPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR, "2026")
+        val state = MutableStateFlow(SettingsUiState())
+        val coord = freshCoordinator(this, prefs, fail = false, state = state)
+        coord.onCreateFreshWorkbook(copyHistory = true)
 
-        vm.setCreateFreshDialogVisible(true)
-        assertTrue("Dialog should be visible after opening", vm.uiState.value.showCreateFreshDialog)
-
-        // State holder / ViewModel recreation retains the state
-        val recreatedState = vm.uiState.value
-        assertTrue("Dialog visibility must survive recreation", recreatedState.showCreateFreshDialog)
-
-        vm.setCreateFreshDialogVisible(false)
-        assertFalse("Dialog should be hidden after dismissal", vm.uiState.value.showCreateFreshDialog)
+        assertEquals(com.financeautomation.R.string.fresh_workbook_msg_copy_history_retry, state.value.userMessage?.resId)
     }
 
     @Test

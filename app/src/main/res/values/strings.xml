@@ -58,14 +58,13 @@
     <string name="action_sign_out">Sign out</string>
     <string name="action_repair_workbook">Repair workbook</string>
     <string name="action_create_fresh_workbook">Create a fresh workbook</string>
-    <string name="create_fresh_workbook_confirm_title">Create a fresh workbook?</string>
-    <string name="create_fresh_workbook_confirm_body">Your current workbook stays in Drive untouched. Choose what goes into the new one.</string>
     <string name="fresh_workbook_dialog_title">Create a fresh workbook?</string>
     <string name="fresh_workbook_dialog_body">Your current workbook stays in Drive untouched. Choose what goes into the new one.</string>
     <string name="fresh_workbook_action_copy_history">Copy my saved history</string>
     <string name="fresh_workbook_action_start_empty">Start empty</string>
     <string name="fresh_workbook_msg_copy_history">A fresh workbook was created. Your saved history is being copied into it.</string>
-    <string name="fresh_workbook_msg_empty">A fresh workbook was created and is empty.</string>
+    <string name="fresh_workbook_msg_copy_history_retry">A fresh workbook was created. Copying your saved history will retry automatically.</string>
+    <string name="fresh_workbook_msg_empty">A fresh workbook was created and is empty. Queued entries will still be added.</string>
     <string name="action_create">Create</string>
     <string name="raw_http_errors_title">Raw Google API Errors</string>
     <string name="raw_http_errors_notice">Contains Google error text. Shared only if you choose.</string>
@@ -722,7 +721,6 @@
     <string name="settings_err_drive_search">Google Drive search failed: %1$s</string>
     <string name="settings_msg_spreadsheet_id_saved">Spreadsheet ID saved</string>
     <string name="settings_err_spreadsheet_id_rejected">The app can only open workbooks it created. Use Create a fresh workbook, or ask Google Drive to open the file with this app.</string>
-    <string name="settings_msg_fresh_workbook_switched">Created a fresh Finance%1$d workbook and switched to it</string>
     <string name="settings_err_fresh_workbook_failed">Failed to create a fresh workbook: %1$s</string>
     <string name="settings_msg_sync_completed">Sync completed successfully</string>
     <string name="settings_msg_reconciled_all_months">Reconciled %1$d change(s) across all months</string>

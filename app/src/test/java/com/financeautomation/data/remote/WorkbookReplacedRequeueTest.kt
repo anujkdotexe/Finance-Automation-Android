@@ -1230,4 +1230,134 @@ class WorkbookReplacedRequeueTest {
         assertNull("Missing notice must not be set for copyHistory = true",
             rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING])
     }
+
+    @Test
+    fun startEmptyWithPendingItemsPreservesThemAndSyncsToNewWorkbook() = runBlocking {
+        yearIds[year] = "old_wb_id"
+        rawPrefs[PreferencesRepository.keySpreadsheetIdForYear(year)] = "old_wb_id"
+
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val inDao = InMemoryInflowDao()
+        val pDao = InMemoryPayableDao()
+
+        val nov2026 = ZonedDateTime.of(2026, 11, 11, 12, 0, 0, 0, ZoneId.of("Asia/Kolkata")).toInstant().toEpochMilli()
+
+        // 2 pending transactions
+        val txn1 = sampleTransaction("tx_p1", nov2026, syncState = SyncState.PENDING.name, sheetRowIndex = null)
+        val txn2 = sampleTransaction("tx_p2", nov2026 + 1000, syncState = SyncState.PENDING.name, sheetRowIndex = null)
+        tDao.insert(txn1)
+        tDao.insert(txn2)
+
+        qDao.insert(
+            SyncQueueEntity(
+                id = 1L,
+                transactionId = "tx_p1",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "tx_p1",
+                status = SyncQueueEntity.STATUS_PENDING,
+                createdAt = 1000L
+            )
+        )
+        qDao.insert(
+            SyncQueueEntity(
+                id = 2L,
+                transactionId = "tx_p2",
+                operationType = SyncQueueEntity.OP_INSERT,
+                payloadJson = "tx_p2",
+                status = SyncQueueEntity.STATUS_PENDING,
+                createdAt = 2000L
+            )
+        )
+
+        // An older already-synced transaction that should NOT be re-synced to fresh workbook
+        val oldSynced = sampleTransaction("tx_old_synced", nov2026 - 100000, syncState = SyncState.SYNCED.name, sheetRowIndex = 4)
+        tDao.insert(oldSynced)
+
+        val server = ScriptedSheetsServer(listOf("Nov26"))
+        val sheets = server.client()
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
+                        val buffer = okio.Buffer()
+                        r.body?.writeTo(buffer)
+                        val text = buffer.readUtf8()
+                        if (text.contains("application/vnd.google-apps.folder")) {
+                            response(r, 200, """{"id":"folder_1","name":"Personal Finance"}""")
+                        } else {
+                            response(r, 200, """{"id":"fresh_sheet_id","name":"Finance$year"}""")
+                        }
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val executor = createTestAccountingSyncExecutor(
+            sheetsClient = sheets,
+            syncQueueDao = qDao,
+            transactionDao = tDao,
+            inflowDao = inDao,
+            payableDao = pDao
+        )
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            inflowDao = inDao,
+            payableDao = pDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = executor,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            onWorkbookReplaced = { y, _, _ ->
+                repo.requeueYearForNewWorkbook(y)
+            }
+        )
+
+        // Create fresh workbook with Start empty (copyHistory = false)
+        val res = resolver.createFreshWorkbook(year, copyHistory = false)
+        assertTrue(res is Result.Success)
+        assertEquals("fresh_sheet_id", (res as Result.Success).data)
+
+        // 1. Pending items are preserved (not cleared)
+        val pendingBeforeSync = qDao.getAllPending()
+        assertEquals("2 pending items must be preserved in queue", 2, pendingBeforeSync.size)
+
+        // 2. Run sync with production repository
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue(syncRes is Result.Success)
+        assertEquals("Both pending items must be synced", 2, (syncRes as Result.Success).data)
+
+        // 3. Assert what the new workbook receives: appends and writes targeted fresh_sheet_id
+        val appendsAndWrites = server.calls.filter {
+            (it.method == "POST" && it.url.contains(":append")) ||
+                (it.method == "PUT" && it.url.contains("/values/")) ||
+                (it.method == "POST" && it.url.contains("values:batchUpdate"))
+        }
+        assertTrue("Requests must be recorded", appendsAndWrites.isNotEmpty())
+        assertTrue(
+            "All sync writes must target the new fresh workbook",
+            appendsAndWrites.all { it.url.contains("fresh_sheet_id") }
+        )
+
+        val recordedBodies = appendsAndWrites.map { it.body }
+        assertTrue("New workbook must receive tx_p1", recordedBodies.any { it.contains("tx_p1") })
+        assertTrue("New workbook must receive tx_p2", recordedBodies.any { it.contains("tx_p2") })
+        assertFalse("New workbook must NOT receive old synced transaction", recordedBodies.any { it.contains("tx_old_synced") })
+
+        // 4. Queue is now empty and transactions marked SYNCED
+        assertEquals(0, qDao.getAllPending().size)
+        assertEquals(SyncState.SYNCED.name, tDao.getById("tx_p1")?.syncState)
+        assertEquals(SyncState.SYNCED.name, tDao.getById("tx_p2")?.syncState)
+    }
 }

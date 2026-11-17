@@ -65,7 +65,6 @@ data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val appLockEnabled: Boolean = false,
     val hideRecentsPreview: Boolean = false,
-    val showCreateFreshDialog: Boolean = false,
     val subscriptionReminderTime: String = PreferencesRepository.DEFAULT_SUBSCRIPTION_REMINDER_TIME
 )
 
@@ -253,10 +252,6 @@ class SettingsViewModel(
     fun onSpreadsheetIdChanged(newId: String) = syncCoordinator.onSpreadsheetIdChanged(newId)
 
     fun onCreateFreshWorkbook(copyHistory: Boolean = false) = syncCoordinator.onCreateFreshWorkbook(copyHistory)
-
-    fun setCreateFreshDialogVisible(visible: Boolean) {
-        _uiState.update { it.copy(showCreateFreshDialog = visible) }
-    }
 
     fun onSyncNow() = syncCoordinator.onSyncNow()
     fun onCheckAllMonths() = syncCoordinator.onCheckAllMonths()

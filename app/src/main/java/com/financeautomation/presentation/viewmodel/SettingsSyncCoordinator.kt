@@ -345,8 +345,15 @@ class SettingsSyncCoordinator(
             val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
             when (val res = resolver.createFreshWorkbook(currentYear, copyHistory)) {
                 is Result.Success -> {
+                    val retryPending = preferencesRepository.getPreference(
+                        PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR
+                    ) != null
                     val msgRes = if (copyHistory) {
-                        R.string.fresh_workbook_msg_copy_history
+                        if (retryPending) {
+                            R.string.fresh_workbook_msg_copy_history_retry
+                        } else {
+                            R.string.fresh_workbook_msg_copy_history
+                        }
                     } else {
                         R.string.fresh_workbook_msg_empty
                     }
