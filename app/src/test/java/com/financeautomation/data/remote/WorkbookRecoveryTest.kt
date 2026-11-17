@@ -2,6 +2,10 @@ package com.financeautomation.data.remote
 
 import com.financeautomation.core.model.Result
 import com.financeautomation.domain.repository.PreferencesRepository
+import com.financeautomation.presentation.viewmodel.SettingsSyncCoordinator
+import com.financeautomation.presentation.viewmodel.SettingsUiState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
@@ -11,6 +15,7 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Proxy
@@ -545,18 +550,85 @@ class WorkbookRecoveryTest {
     }
 
     @Test
-    fun aFreshWorkbookReplacesTheOldAfterSignOutAndSignIn() = runBlocking {
-        yearIds[year] = "pre_signout_old_id"
-        legacySpreadsheetId = "pre_signout_old_id"
+    fun afterSignOutTheStoredWorkbookIdIsStillThere() = runBlocking {
+        yearIds[year] = "stored_id"
+        legacySpreadsheetId = "stored_id"
         rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(year)] = "2026-11-17"
         rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING] = "true"
+        rawPrefs[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR] = year.toString()
 
-        // 1. Sign out clears the per-account workbook state and markers
-        yearIds.remove(year)
-        legacySpreadsheetId = null
-        rawPrefs.clear()
+        val uiState = MutableStateFlow(SettingsUiState())
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = null,
+            googleSheetsClient = null,
+            googleAuthTokenProvider = null,
+            workbookResolver = null,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = uiState,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onGoogleSignOut()
+
+        // Stored workbook ID for the year and legacy key must remain unchanged
+        assertEquals("stored_id", yearIds[year])
+        assertEquals("stored_id", legacySpreadsheetId)
+        assertEquals("stored_id", prefs.getSpreadsheetIdForYearSync(year))
+        assertEquals("stored_id", prefs.getSpreadsheetIdSync())
+
+        // Notice flag, verified date keys, and requeue marker must be cleared
+        assertNull(
+            "Notice pending flag must be cleared on sign out",
+            rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING]
+        )
+        assertNull(
+            "Verified date markers must be cleared on sign out",
+            rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(year)]
+        )
+        assertNull(
+            "Requeue marker must be cleared on sign out",
+            rawPrefs[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR]
+        )
+    }
+
+    @Test
+    fun signInAfterSignOutVerifiesTheStoredIdWithDrive() = runBlocking {
+        yearIds[year] = "stored_id"
+        legacySpreadsheetId = "stored_id"
+        rawPrefs[PreferencesRepository.keyLastWorkbookVerifiedDate(year)] = "2026-11-17"
+        rawPrefs[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING] = "true"
+        rawPrefs[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR] = year.toString()
+
+        val uiState = MutableStateFlow(SettingsUiState())
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = null,
+            googleSheetsClient = null,
+            googleAuthTokenProvider = null,
+            workbookResolver = null,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = uiState,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onGoogleSignOut()
+
+        // Stored ID is still "stored_id"
+        assertEquals("stored_id", yearIds[year])
 
         val driveCalls = mutableListOf<String>()
+        val sheetCalls = mutableListOf<String>()
         val copyCalls = mutableListOf<String>()
 
         val drive = GoogleDriveClient(
@@ -565,6 +637,8 @@ class WorkbookRecoveryTest {
                 driveCalls += "${r.method} ${r.url.encodedPath}"
                 if (r.url.encodedPath.endsWith("/copy")) copyCalls += r.url.encodedPath
                 when {
+                    r.url.encodedPath.endsWith("/files/stored_id") ->
+                        response(r, 200, """{"id":"stored_id","trashed":true}""")
                     r.method == "GET" && r.url.encodedPath.endsWith("/files") ->
                         response(r, 200, """{"files":[]}""")
                     r.method == "POST" && r.url.encodedPath.endsWith("/files") -> {
@@ -585,6 +659,7 @@ class WorkbookRecoveryTest {
         val sheets = GoogleSheetsClient(
             OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
                 val r = chain.request()
+                sheetCalls += "${r.method} ${r.url.encodedPath}"
                 when {
                     r.method == "GET" ->
                         response(r, 200, """{"spreadsheetId":"sheet_post_signin","sheets":[{"properties":{"sheetId":0,"title":"Sheet1"}}]}""")
@@ -594,7 +669,7 @@ class WorkbookRecoveryTest {
             }).build(), tokens
         )
 
-        // 2. Sign in again triggers resolution with forceValidateTabs = true
+        // Sign in triggers resolution with forceValidateTabs = true
         val resolver = WorkbookResolver(drive, sheets, prefs)
         val res = resolver.resolveForYear(year, forceValidateTabs = true)
 
@@ -603,5 +678,9 @@ class WorkbookRecoveryTest {
         assertEquals("sheet_post_signin", yearIds[year])
         assertEquals("sheet_post_signin", legacySpreadsheetId)
         assertEquals("No copy call must happen", 0, copyCalls.size)
+        assertTrue("Drive files search must be called", driveCalls.any { it.startsWith("GET") && it.endsWith("/files") })
+        val createPosts = driveCalls.filter { it.startsWith("POST") && it.endsWith("/files") }
+        assertTrue("Drive must create folder and spreadsheet", createPosts.size >= 2)
+        assertTrue("Sheets batchUpdate must be called for provisioning", sheetCalls.any { it.contains("batchUpdate") })
     }
 }
