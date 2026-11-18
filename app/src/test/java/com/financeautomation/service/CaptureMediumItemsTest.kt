@@ -116,6 +116,192 @@ class CaptureMediumItemsTest {
         assertEquals("Amount must match", 250.0, capture.amount!!, 0.001)
     }
 
+    @Test
+    fun sameAppSmsPairWithin180sWithCompatiblePayeesMergesAndEnrichesPayee() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "An amount of INR 450.00 has been DEBITED to your account XXX1824 on 15/03/2026. Total Avail.bal INR 4,100.00.Dial 1930 to report cyber fraud - Canara Bank",
+            sbnKey = "0|sms|101",
+            postTime = t0
+        )
+        assertTrue("Generic debit should be captured", r1 is NotificationProcessingOutcome.Captured)
+        assertEquals(1, captureDao.captures.size)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 450.00 to Swiggy on 15/03/2026 from A/c *1824. Ref 123456789012 - Canara Bank",
+            sbnKey = "0|sms|102",
+            postTime = t0 + 60_000L
+        )
+        assertTrue("Second SMS within 180s with compatible payee must merge", r2 is NotificationProcessingOutcome.Merged)
+        assertEquals("Exactly one row must exist in DB after merge", 1, captureDao.captures.size)
+
+        val merged = captureDao.captures.values.first()
+        assertEquals("Enriched payee must be Swiggy", "Swiggy", merged.payee)
+        assertEquals(450.0, merged.amount!!, 0.001)
+    }
+
+    @Test
+    fun sameAppSmsPairWithin180sWithIncompatiblePayeesDoNotMerge() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 500.00 to Alpha Tech on 15/03/2026 from A/c *1824. Ref 111111 - Canara Bank",
+            sbnKey = "0|sms|201",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 500.00 to Beta Bakery on 15/03/2026 from A/c *1824. Ref 222222 - Canara Bank",
+            sbnKey = "0|sms|202",
+            postTime = t0 + 60_000L
+        )
+        assertTrue("Different payees of same amount must NOT merge", r2 is NotificationProcessingOutcome.Captured)
+        assertEquals("Two distinct rows must exist in DB", 2, captureDao.captures.size)
+    }
+
+    @Test
+    fun sameAppSmsPairExceeding180sWindowDoNotMerge() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 500.00 to Store Alpha on 15/03/2026 from A/c *1824. Ref 111111 - Canara Bank",
+            sbnKey = "0|sms|301",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 500.00 to Store Alpha on 15/03/2026 from A/c *1824. Ref 333333 - Canara Bank",
+            sbnKey = "0|sms|302",
+            postTime = t0 + 240_000L // 4 minutes later (> 180s)
+        )
+        assertTrue("Payment after 4 minutes must NOT merge", r2 is NotificationProcessingOutcome.Captured)
+        assertEquals("Two distinct rows must exist in DB", 2, captureDao.captures.size)
+    }
+
+    @Test
+    fun z2RechargeLanguageTripletFromSameBillerCollapsesIntoSingleCapture() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "JioPay-S",
+            text = "Recharge successful of Rs 899.00 for Jio number 9876543210. Plan Name: 899. Ref: JIO111.",
+            sbnKey = "0|sms|401",
+            postTime = t0
+        )
+        assertTrue("English recharge alert should be captured", r1 is NotificationProcessingOutcome.Captured)
+        assertEquals(1, captureDao.captures.size)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "JioPay-S",
+            text = "जियो नंबर 9876543210 के लिए रु 899.00 का रिचार्ज सफल रहा। प्लान का नाम: 899. Ref: JIO222.",
+            sbnKey = "0|sms|402",
+            postTime = t0 + 5_000L
+        )
+        assertTrue("Hindi recharge alert must merge", r2 is NotificationProcessingOutcome.Merged)
+        assertEquals(1, captureDao.captures.size)
+
+        val r3 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "JioPay-S",
+            text = "जिओ नंबर 9876543210 साठी रु 899.00 चा रिचार्ज यशस्वी झाला. प्लॅन चे नाव: 899. Ref: JIO333.",
+            sbnKey = "0|sms|403",
+            postTime = t0 + 10_000L
+        )
+        assertTrue("Marathi recharge alert must merge", r3 is NotificationProcessingOutcome.Merged)
+        assertEquals("All 3 language alerts must collapse into exactly 1 row", 1, captureDao.captures.size)
+
+        val capture = captureDao.captures.values.first()
+        assertEquals(899.0, capture.amount!!, 0.001)
+        assertEquals("Jio", capture.payee)
+    }
+
+    @Test
+    fun exactDuplicateTextRepeatedWithin24hDroppedAsContentHashDuplicate() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val text = "Paid ₹250 to Fresh Fruits"
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = text,
+            sbnKey = "0|gpay|501",
+            postTime = t0
+        )
+        assertTrue("First alert should be captured", r1 is NotificationProcessingOutcome.Captured)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = text,
+            sbnKey = "0|gpay|502",
+            postTime = t0 + 3600_000L // 1 hour later
+        )
+        assertTrue("Exact duplicate text within 24h must be dropped", r2 is NotificationProcessingOutcome.Ignored)
+        assertEquals("Only one capture should exist in DB", 1, captureDao.captures.size)
+    }
+
     private class FakeTestHandledDao : HandledNotificationDao {
         val handled = ConcurrentHashMap<String, HandledNotificationEntity>()
         override suspend fun insert(handled: HandledNotificationEntity) {

@@ -24,7 +24,7 @@ object RegexPatterns {
     )
 
     private val INVALID_MERCHANT_REGEX: Regex = Regex(
-        """(?i)^(?:[#\d\s\-+]+|.*your\s+account.*|.*your\s+a/c.*|.*blockupi.*|.*call\b.*)$"""
+        """(?i)^(?:[#\d\s\-+]+|.*your\s+account.*|.*your\s+a/c.*|.*blockupi.*|.*call\b.*|.*report\s+(?:cyber\s+)?fraud.*|.*dial\s+\d+.*)$"""
     )
 
     private val OWN_VPA_CONTEXT_REGEX: Regex = Regex("""(?i)\b(?:into|using|via|through|from|your\s+vpa|my\s+vpa|linked\s+to)\s+$""")

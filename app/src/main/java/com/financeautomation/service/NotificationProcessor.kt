@@ -332,25 +332,36 @@ class NotificationProcessor(
 
         var activeFlags = flags
 
-        // Cross-source deduplication within 90 seconds
+        // Deduplication within 180 seconds (cross-source and same-source)
         if (pendingCaptureDao != null && amount != null && amount > 0.0) {
-            val minTime = postTime - 90_000L
-            val maxTime = postTime + 90_000L
+            val minTime = postTime - WINDOW_CROSS_SOURCE_MERGE_MS
+            val maxTime = postTime + WINDOW_CROSS_SOURCE_MERGE_MS
             val similarCaptures = pendingCaptureDao.findSimilarByAmountAndTime(amount, minTime, maxTime)
                 .filter {
-                    // Same amount alone is not enough: the payee must also be compatible, so two real payments
-                    // of the same amount to different payees within 90 seconds stay separate
-                    it.sourcePackage != sourcePackage &&
+                    // Must be the same transaction kind (debits merge with debits)
+                    it.kind == kind &&
+                        // Same-package merge is allowed for debits (P1-10 same SMS app bank/biller pairs)
+                        (it.sourcePackage != sourcePackage || kind == PendingCaptureEntity.KIND_DEBIT) &&
+                        // Account digits must be compatible if both are present
+                        areAccountsCompatible(it.inferredAccount, it.detectedAccountHint, inferredAccount, detectedAccountHint) &&
+                        // Payees must be compatible, so two real payments of the same amount to different payees stay separate
                         com.financeautomation.core.utils.MerchantSimilarity.compatible(it.payee, payee)
                 }
 
             if (similarCaptures.isNotEmpty()) {
                 val mergeTarget = similarCaptures.firstOrNull {
-                    it.state == PendingCaptureEntity.STATE_WAITING || it.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS
+                    it.state == PendingCaptureEntity.STATE_WAITING ||
+                        it.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS ||
+                        it.state == PendingCaptureEntity.STATE_NEEDS_REVIEW
                 }
                 if (mergeTarget != null) {
+                    val richerPayee = when {
+                        mergeTarget.payee == "Unknown Payee" && payee != "Unknown Payee" -> payee
+                        payee != "Unknown Payee" && payee.length > mergeTarget.payee.length && payee.contains(mergeTarget.payee, ignoreCase = true) -> payee
+                        else -> mergeTarget.payee
+                    }
                     val merged = mergeTarget.copy(
-                        payee = if (mergeTarget.payee == "Unknown Payee" && payee != "Unknown Payee") payee else mergeTarget.payee,
+                        payee = richerPayee,
                         inferredAccount = if (mergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else mergeTarget.inferredAccount,
                         detectedAccountHint = mergeTarget.detectedAccountHint ?: detectedAccountHint,
                         updatedAt = System.currentTimeMillis()
@@ -417,6 +428,28 @@ class NotificationProcessor(
     }
 
     companion object {
+        const val WINDOW_CROSS_SOURCE_MERGE_MS: Long = 180_000L
+
+        fun areAccountsCompatible(
+            targetAcc: String?,
+            targetHint: String?,
+            incomingAcc: String?,
+            incomingHint: String?
+        ): Boolean {
+            val d1 = extractAccountDigits(targetAcc) ?: extractAccountDigits(targetHint)
+            val d2 = extractAccountDigits(incomingAcc) ?: extractAccountDigits(incomingHint)
+            if (d1 != null && d2 != null) {
+                return d1 == d2 || d1.endsWith(d2) || d2.endsWith(d1)
+            }
+            return true
+        }
+
+        private fun extractAccountDigits(raw: String?): String? {
+            if (raw.isNullOrBlank()) return null
+            val match = Regex("""(?i)(?:xx|ending\s+|a/c\s*no\.?\s*|\.\.)*(\d{3,4})\b""").find(raw)
+            return match?.groupValues?.get(1)
+        }
+
         /** Maps a drop reason to its diagnostics counter code. */
         fun pipelineCodeFor(reason: com.financeautomation.domain.usecase.DropReason): PipelineCode = when (reason) {
             com.financeautomation.domain.usecase.DropReason.OTP_MESSAGE -> PipelineCode.DROPPED_OTP

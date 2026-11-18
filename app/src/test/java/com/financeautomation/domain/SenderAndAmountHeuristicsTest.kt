@@ -35,13 +35,13 @@ class SenderAndAmountHeuristicsTest {
     @Test
     fun theParserAndThePreFilterAgree() {
         val friendText = "paid to you Rs 500 for dinner, received?"
-        for (name in listOf("Rahul", "Mom", "Ravi Kumar")) {
+        for (name in listOf("Rahul", "Mom", "Ravi Kumar", "Rahul-K", "Dr-Rao")) {
             assertFalse(NotificationPreFilter.shouldReadFullText(sms, name, friendText))
             val r = parser(sourcePackage = sms, title = name, text = friendText)
             assertTrue("$name -> $r", r is NotificationParseResult.Dropped)
         }
         val bank = "Rs 649.00 debited from A/c XX1234 to VPA shop@okaxis"
-        for (header in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "5676766")) {
+        for (header in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "5676766", "JioPay-S")) {
             assertTrue("prefilter $header", NotificationPreFilter.shouldReadFullText(sms, header, bank))
             val pr = parser(sourcePackage = sms, title = header, text = bank)
             assertTrue("parse $header -> $pr", pr is NotificationParseResult.Success)
