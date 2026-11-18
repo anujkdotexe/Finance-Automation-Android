@@ -227,7 +227,7 @@ fun CategoriesScreen(
                                 .size(FinanceTheme.sizes.iconLarge)
                                 .clip(CircleShape)
                                 .border(
-                                    width = FinanceTheme.sizes.strokeMedium,
+                                    width = FinanceTheme.sizes.strokeThick,
                                     color = if (isNoColorSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     shape = CircleShape
                                 ),
