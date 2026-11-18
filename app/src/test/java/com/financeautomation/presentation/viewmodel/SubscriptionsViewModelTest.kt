@@ -1,8 +1,10 @@
 package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.domain.model.Subscription
+import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.model.SubscriptionFrequency
 import com.financeautomation.domain.usecase.FakeSubscriptionRepository
+import com.financeautomation.domain.usecase.SubscriptionScheduleUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -233,6 +235,40 @@ class SubscriptionsViewModelTest {
         val retrieved = repo.getSubscription("sub_upd")
         assertEquals("Gym Premium", retrieved?.name)
         assertEquals(1500.0, retrieved?.amount ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun resumeSkipsDueDatesInsidePause() = runTest {
+        val may10 = java.time.LocalDate.of(2026, 5, 10).toEpochDay()
+        val may20Millis = java.time.LocalDate.of(2026, 5, 20).atStartOfDay(SubscriptionScheduleUseCase.IST).toInstant().toEpochMilli()
+
+        val customVm = SubscriptionsViewModel(
+            subscriptionRepository = repo,
+            clock = { may20Millis }
+        )
+
+        val sub = Subscription(
+            id = "sub_netflix_pause",
+            name = "Netflix",
+            amount = 649.0,
+            frequency = SubscriptionFrequency.MONTHLY,
+            anchorEpochDay = may10,
+            account = "HDFC",
+            active = false
+        )
+        repo.addSubscription(sub)
+        advanceUntilIdle()
+
+        customVm.resumeSubscription("sub_netflix_pause")
+        advanceUntilIdle()
+
+        assertTrue(repo.getSubscription("sub_netflix_pause")!!.active)
+
+        val cycles = repo.cycles.value.values.filter { it.subscriptionId == "sub_netflix_pause" }
+        assertEquals(1, cycles.size)
+        val cycle = cycles.first()
+        assertEquals(may10, cycle.dueEpochDay)
+        assertEquals(SubscriptionCycleState.SKIPPED, cycle.state)
     }
 }
 

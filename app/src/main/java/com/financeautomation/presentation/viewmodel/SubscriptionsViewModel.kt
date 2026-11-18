@@ -144,18 +144,32 @@ class SubscriptionsViewModel(
     }
 
     fun toggleSubscriptionActive(id: String, active: Boolean) {
-        viewModelScope.launch {
-            val current = subscriptionRepository.getSubscription(id) ?: return@launch
-            subscriptionRepository.upsertSubscription(current.copy(active = active))
+        if (active) {
+            resumeSubscription(id)
+        } else {
+            pauseSubscription(id)
         }
     }
 
     fun pauseSubscription(id: String) {
-        toggleSubscriptionActive(id, false)
+        viewModelScope.launch {
+            val current = subscriptionRepository.getSubscription(id) ?: return@launch
+            subscriptionRepository.upsertSubscription(current.copy(active = false))
+        }
     }
 
     fun resumeSubscription(id: String) {
-        toggleSubscriptionActive(id, true)
+        viewModelScope.launch {
+            val current = subscriptionRepository.getSubscription(id) ?: return@launch
+            if (!current.active) {
+                val today = todayEpochDay()
+                val monthStart = java.time.LocalDate.ofEpochDay(today).withDayOfMonth(1).toEpochDay()
+                if (monthStart < today) {
+                    subscriptionRepository.skipPausedCycles(current.id, monthStart, today - 1)
+                }
+                subscriptionRepository.upsertSubscription(current.copy(active = true))
+            }
+        }
     }
 
     fun deleteSubscription(id: String) {
