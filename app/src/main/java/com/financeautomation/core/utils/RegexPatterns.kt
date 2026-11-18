@@ -31,7 +31,7 @@ object RegexPatterns {
 
     // Financial transaction keywords check for SMS filtering
     val FINANCIAL_KEYWORDS_REGEX: Regex = Regex(
-        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c|account|acct|spent|paid\s+thru|paid\s+to|received|dr\.?|cr\.?|debit|credit|payment\s+of|successfully\s+paid|upi\s*ref|upi:)(?=\W|$)"""
+        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c(?:\s+no)?|account|acct|ac|spent|paid\s+thru|paid\s+to|received|dr\.?|cr\.?|debit|debits|credit|credits|payment\s+of|successfully\s+paid|upi\s*ref|upi:)(?=\W|$)"""
     )
 
     // UPI Virtual Payment Address (VPA) regex
