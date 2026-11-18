@@ -40,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -349,113 +350,115 @@ internal fun CategoryList(
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
     ) {
         localCategories.forEachIndexed { index, category ->
-            val isLocked = CategoryConstants.isProtectedCategory(category.name)
-            val dotColor = categoryDotColor(category)
-            val isDragging = category.id == draggingCategoryId
+            key(category.id) {
+                val isLocked = CategoryConstants.isProtectedCategory(category.name)
+                val dotColor = categoryDotColor(category)
+                val isDragging = category.id == draggingCategoryId
 
-            CategoryItemCard(
-                category = category,
-                dotColor = dotColor,
-                isLocked = isLocked,
-                isDragging = isDragging,
-                budgetAmount = budgetByName[category.name.trim().lowercase()],
-                onOpenBudget = { onOpenBudget(category) },
-                onToggleBurn = { enabled -> onToggleBurn(category.id, enabled) },
-                onClick = { onClick(category) },
-                onChangeColor = { onChangeColor(category) },
-                onArchive = { onArchive(category.id) },
-                onMoveUp = if (index > 0) {
-                    {
-                        val mutable = localCategories.toMutableList()
-                        val item = mutable.removeAt(index)
-                        mutable.add(index - 1, item)
-                        localCategories = mutable
-                        onReorderCategories(mutable.map { it.id })
-                    }
-                } else null,
-                onMoveDown = if (index < localCategories.size - 1) {
-                    {
-                        val mutable = localCategories.toMutableList()
-                        val item = mutable.removeAt(index)
-                        mutable.add(index + 1, item)
-                        localCategories = mutable
-                        onReorderCategories(mutable.map { it.id })
-                    }
-                } else null,
-                modifier = Modifier
-                    .onSizeChanged { size ->
-                        if (size.height > 0) {
-                            measuredRowHeightPx = size.height.toFloat()
+                CategoryItemCard(
+                    category = category,
+                    dotColor = dotColor,
+                    isLocked = isLocked,
+                    isDragging = isDragging,
+                    budgetAmount = budgetByName[category.name.trim().lowercase()],
+                    onOpenBudget = { onOpenBudget(category) },
+                    onToggleBurn = { enabled -> onToggleBurn(category.id, enabled) },
+                    onClick = { onClick(category) },
+                    onChangeColor = { onChangeColor(category) },
+                    onArchive = { onArchive(category.id) },
+                    onMoveUp = if (index > 0) {
+                        {
+                            val mutable = localCategories.toMutableList()
+                            val item = mutable.removeAt(index)
+                            mutable.add(index - 1, item)
+                            localCategories = mutable
+                            onReorderCategories(mutable.map { it.id })
                         }
-                    }
-                    .semantics {
-                        customActions = buildList {
-                            if (index > 0) {
-                                add(CustomAccessibilityAction(label = "Move up") {
-                                    val mutable = localCategories.toMutableList()
-                                    val item = mutable.removeAt(index)
-                                    mutable.add(index - 1, item)
-                                    localCategories = mutable
-                                    onReorderCategories(mutable.map { it.id })
-                                    true
-                                })
-                            }
-                            if (index < localCategories.size - 1) {
-                                add(CustomAccessibilityAction(label = "Move down") {
-                                    val mutable = localCategories.toMutableList()
-                                    val item = mutable.removeAt(index)
-                                    mutable.add(index + 1, item)
-                                    localCategories = mutable
-                                    onReorderCategories(mutable.map { it.id })
-                                    true
-                                })
+                    } else null,
+                    onMoveDown = if (index < localCategories.size - 1) {
+                        {
+                            val mutable = localCategories.toMutableList()
+                            val item = mutable.removeAt(index)
+                            mutable.add(index + 1, item)
+                            localCategories = mutable
+                            onReorderCategories(mutable.map { it.id })
+                        }
+                    } else null,
+                    modifier = Modifier
+                        .onSizeChanged { size ->
+                            if (size.height > 0) {
+                                measuredRowHeightPx = size.height.toFloat()
                             }
                         }
-                    },
-                dragHandleModifier = Modifier.pointerInput(category.id) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = {
-                            draggingCategoryId = category.id
-                            dragOffsetY = 0f
-                        },
-                        onDragEnd = {
-                            val finalIds = localCategories.map { it.id }
-                            if (finalIds != categories.map { it.id }) {
-                                onReorderCategories(finalIds)
-                            }
-                            draggingCategoryId = null
-                            dragOffsetY = 0f
-                        },
-                        onDragCancel = {
-                            draggingCategoryId = null
-                            dragOffsetY = 0f
-                            localCategories = categories
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            dragOffsetY += dragAmount.y
-                            val rowHeight = if (measuredRowHeightPx > 0f) measuredRowHeightPx else 56f * density
-                            val swapThreshold = rowHeight * 0.5f
-                            val currentIndex = localCategories.indexOfFirst { it.id == draggingCategoryId }
-                            if (currentIndex != -1) {
-                                if (dragOffsetY > swapThreshold && currentIndex < localCategories.size - 1) {
-                                    val mutable = localCategories.toMutableList()
-                                    val item = mutable.removeAt(currentIndex)
-                                    mutable.add(currentIndex + 1, item)
-                                    localCategories = mutable
-                                    dragOffsetY -= rowHeight
-                                } else if (dragOffsetY < -swapThreshold && currentIndex > 0) {
-                                    val mutable = localCategories.toMutableList()
-                                    val item = mutable.removeAt(currentIndex)
-                                    mutable.add(currentIndex - 1, item)
-                                    localCategories = mutable
-                                    dragOffsetY += rowHeight
+                        .semantics {
+                            customActions = buildList {
+                                if (index > 0) {
+                                    add(CustomAccessibilityAction(label = "Move up") {
+                                        val mutable = localCategories.toMutableList()
+                                        val item = mutable.removeAt(index)
+                                        mutable.add(index - 1, item)
+                                        localCategories = mutable
+                                        onReorderCategories(mutable.map { it.id })
+                                        true
+                                    })
+                                }
+                                if (index < localCategories.size - 1) {
+                                    add(CustomAccessibilityAction(label = "Move down") {
+                                        val mutable = localCategories.toMutableList()
+                                        val item = mutable.removeAt(index)
+                                        mutable.add(index + 1, item)
+                                        localCategories = mutable
+                                        onReorderCategories(mutable.map { it.id })
+                                        true
+                                    })
                                 }
                             }
-                        }
-                    )
-                }
-            )
+                        },
+                    dragHandleModifier = Modifier.pointerInput(category.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggingCategoryId = category.id
+                                dragOffsetY = 0f
+                            },
+                            onDragEnd = {
+                                val finalIds = localCategories.map { it.id }
+                                if (finalIds != categories.map { it.id }) {
+                                    onReorderCategories(finalIds)
+                                }
+                                draggingCategoryId = null
+                                dragOffsetY = 0f
+                            },
+                            onDragCancel = {
+                                draggingCategoryId = null
+                                dragOffsetY = 0f
+                                localCategories = categories
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffsetY += dragAmount.y
+                                val rowHeight = if (measuredRowHeightPx > 0f) measuredRowHeightPx else 56f * density
+                                val swapThreshold = rowHeight * 0.5f
+                                val currentIndex = localCategories.indexOfFirst { it.id == draggingCategoryId }
+                                if (currentIndex != -1) {
+                                    if (dragOffsetY > swapThreshold && currentIndex < localCategories.size - 1) {
+                                        val mutable = localCategories.toMutableList()
+                                        val item = mutable.removeAt(currentIndex)
+                                        mutable.add(currentIndex + 1, item)
+                                        localCategories = mutable
+                                        dragOffsetY -= rowHeight
+                                    } else if (dragOffsetY < -swapThreshold && currentIndex > 0) {
+                                        val mutable = localCategories.toMutableList()
+                                        val item = mutable.removeAt(currentIndex)
+                                        mutable.add(currentIndex - 1, item)
+                                        localCategories = mutable
+                                        dragOffsetY += rowHeight
+                                    }
+                                }
+                            }
+                        )
+                    }
+                )
+            }
         }
     }
 }
