@@ -34,7 +34,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,91 +128,89 @@ fun AccountsScreen(
                         .padding(FinanceTheme.spacing.xs)
                 ) {
                     localAccounts.forEachIndexed { index, account ->
-                        key(account.id) {
-                            val isDefault = account.isDefault || account.name == state.defaultAccount
-                            val txCount = state.accountTransactionCounts[account.name] ?: 0
-                            val isLocked = CategoryConstants.isProtectedAccount(account.name)
-                            val isDragging = account.id == draggingAccountId
+                        val isDefault = account.isDefault || account.name == state.defaultAccount
+                        val txCount = state.accountTransactionCounts[account.name] ?: 0
+                        val isLocked = CategoryConstants.isProtectedAccount(account.name)
+                        val isDragging = account.id == draggingAccountId
 
-                            AccountListItem(
-                                account = account,
-                                isDefault = isDefault,
-                                isLocked = isLocked,
-                                isDragging = isDragging,
-                                transactionCount = txCount,
-                                onEdit = { selectedAccountForEdit = account },
-                                onSetDefault = { viewModel.onDefaultAccountChanged(account.name) },
-                                onArchive = { viewModel.onArchiveAccount(account.id) },
-                                onDelete = { viewModel.onDeleteAccount(account.id) },
-                                modifier = Modifier
-                                    .semantics {
-                                        customActions = buildList {
-                                            if (index > 0) {
-                                                add(CustomAccessibilityAction(label = "Move up") {
-                                                    val mutable = localAccounts.toMutableList()
-                                                    val item = mutable.removeAt(index)
-                                                    mutable.add(index - 1, item)
-                                                    localAccounts = mutable
-                                                    viewModel.onReorderAccounts(mutable.map { it.id })
-                                                    true
-                                                })
-                                            }
-                                            if (index < localAccounts.size - 1) {
-                                                add(CustomAccessibilityAction(label = "Move down") {
-                                                    val mutable = localAccounts.toMutableList()
-                                                    val item = mutable.removeAt(index)
-                                                    mutable.add(index + 1, item)
-                                                    localAccounts = mutable
-                                                    viewModel.onReorderAccounts(mutable.map { it.id })
-                                                    true
-                                                })
-                                            }
+                        AccountListItem(
+                            account = account,
+                            isDefault = isDefault,
+                            isLocked = isLocked,
+                            isDragging = isDragging,
+                            transactionCount = txCount,
+                            onEdit = { selectedAccountForEdit = account },
+                            onSetDefault = { viewModel.onDefaultAccountChanged(account.name) },
+                            onArchive = { viewModel.onArchiveAccount(account.id) },
+                            onDelete = { viewModel.onDeleteAccount(account.id) },
+                            modifier = Modifier
+                                .semantics {
+                                    customActions = buildList {
+                                        if (index > 0) {
+                                            add(CustomAccessibilityAction(label = "Move up") {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(index)
+                                                mutable.add(index - 1, item)
+                                                localAccounts = mutable
+                                                viewModel.onReorderAccounts(mutable.map { it.id })
+                                                true
+                                            })
                                         }
+                                        if (index < localAccounts.size - 1) {
+                                            add(CustomAccessibilityAction(label = "Move down") {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(index)
+                                                mutable.add(index + 1, item)
+                                                localAccounts = mutable
+                                                viewModel.onReorderAccounts(mutable.map { it.id })
+                                                true
+                                            })
+                                        }
+                                    }
+                                },
+                            dragHandleModifier = Modifier.pointerInput(account.id) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggingAccountId = account.id
+                                        dragOffsetY = 0f
                                     },
-                                dragHandleModifier = Modifier.pointerInput(account.id) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            draggingAccountId = account.id
-                                            dragOffsetY = 0f
-                                        },
-                                        onDragEnd = {
-                                            val finalIds = localAccounts.map { it.id }
-                                            if (finalIds != state.accounts.map { it.id }) {
-                                                viewModel.onReorderAccounts(finalIds)
-                                            }
-                                            draggingAccountId = null
-                                            dragOffsetY = 0f
-                                        },
-                                        onDragCancel = {
-                                            draggingAccountId = null
-                                            dragOffsetY = 0f
-                                            localAccounts = state.accounts
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            dragOffsetY += dragAmount.y
-                                            val itemHeightPx = 68f * density
-                                            val currentIndex = localAccounts.indexOfFirst { it.id == draggingAccountId }
-                                            if (currentIndex != -1) {
-                                                if (dragOffsetY > itemHeightPx && currentIndex < localAccounts.size - 1) {
-                                                    val mutable = localAccounts.toMutableList()
-                                                    val item = mutable.removeAt(currentIndex)
-                                                    mutable.add(currentIndex + 1, item)
-                                                    localAccounts = mutable
-                                                    dragOffsetY -= itemHeightPx
-                                                } else if (dragOffsetY < -itemHeightPx && currentIndex > 0) {
-                                                    val mutable = localAccounts.toMutableList()
-                                                    val item = mutable.removeAt(currentIndex)
-                                                    mutable.add(currentIndex - 1, item)
-                                                    localAccounts = mutable
-                                                    dragOffsetY += itemHeightPx
-                                                }
+                                    onDragEnd = {
+                                        val finalIds = localAccounts.map { it.id }
+                                        if (finalIds != state.accounts.map { it.id }) {
+                                            viewModel.onReorderAccounts(finalIds)
+                                        }
+                                        draggingAccountId = null
+                                        dragOffsetY = 0f
+                                    },
+                                    onDragCancel = {
+                                        draggingAccountId = null
+                                        dragOffsetY = 0f
+                                        localAccounts = state.accounts
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffsetY += dragAmount.y
+                                        val itemHeightPx = 68f * density
+                                        val currentIndex = localAccounts.indexOfFirst { it.id == draggingAccountId }
+                                        if (currentIndex != -1) {
+                                            if (dragOffsetY > itemHeightPx && currentIndex < localAccounts.size - 1) {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(currentIndex)
+                                                mutable.add(currentIndex + 1, item)
+                                                localAccounts = mutable
+                                                dragOffsetY -= itemHeightPx
+                                            } else if (dragOffsetY < -itemHeightPx && currentIndex > 0) {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(currentIndex)
+                                                mutable.add(currentIndex - 1, item)
+                                                localAccounts = mutable
+                                                dragOffsetY += itemHeightPx
                                             }
                                         }
-                                    )
-                                }
-                            )
-                        }
+                                    }
+                                )
+                            }
+                        )
                     }
                 }
             }

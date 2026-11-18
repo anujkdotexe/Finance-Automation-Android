@@ -106,12 +106,11 @@ class CategoriesAndAccountsUiTest {
         composeTestRule.onNodeWithContentDescription("Reorder Food & Drink")
             .performTouchInput {
                 down(center)
-                advanceEventTime(viewConfiguration.longPressTimeoutMillis + 200L)
+                advanceEventTime(600)
                 repeat(steps) {
                     moveBy(androidx.compose.ui.geometry.Offset(0f, stepDistance))
                     advanceEventTime(50)
                 }
-                advanceEventTime(100)
                 up()
             }
 
