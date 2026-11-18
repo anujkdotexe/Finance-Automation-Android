@@ -125,7 +125,7 @@ class ProductionTelemetryWiringTest {
         val h = SyncHarness()
         val coordinator = createCoordinator(h.prefs, this, Result.Success(3))
 
-        coordinator.syncPendingTransactions()
+        coordinator.onSyncNow()
         advanceUntilIdle()
 
         assertEquals("Exactly one sync_result event should be logged", 1, capturedEvents.size)
@@ -141,7 +141,7 @@ class ProductionTelemetryWiringTest {
         val h = SyncHarness()
         val coordinator = createCoordinator(h.prefs, this, Result.Error(IOException("Connection failed")))
 
-        coordinator.syncPendingTransactions()
+        coordinator.onSyncNow()
         advanceUntilIdle()
 
         assertEquals("Exactly one sync_result event should be logged", 1, capturedEvents.size)
@@ -157,7 +157,7 @@ class ProductionTelemetryWiringTest {
         val h = SyncHarness()
         val coordinator = createCoordinator(h.prefs, this, Result.Success(5))
 
-        coordinator.syncPendingTransactions()
+        coordinator.onSyncNow()
         advanceUntilIdle()
 
         assertTrue("No events must reach listener when opted out", capturedEvents.isEmpty())
