@@ -191,25 +191,25 @@ object RegexPatterns {
         return cleaned.startsWith("+") || (cleaned.length >= 7 && cleaned.all { it.isDigit() })
     }
 
-    private val DLT_OPERATOR_PREFIX_REGEX: Regex = Regex("""^[A-Za-z]{2}-[A-Za-z0-9]{3,16}(?:-[A-Za-z0-9]{1,2})?$""")
-    private val DLT_CHANNEL_SUFFIX_REGEX: Regex = Regex("""^[A-Za-z0-9]{3,16}-[A-Za-z0-9]{1,2}$""")
-    private val BANK_SENDER_UPPER_REGEX: Regex = Regex("""^[A-Z0-9][A-Z0-9]{2,19}$""")
+    private val MIXED_CASE_BILLER_REGISTRY: Set<String> = setOf(
+        "JioPay-S", "JioSvc-S", "iPaytm-S", "blnkit-S", "IRCTCi-S", "IRSMSa-S"
+    )
+
+    private val BANK_SENDER_UPPER_REGEX: Regex = Regex("""^[A-Z0-9][A-Z0-9-]{2,19}$""")
 
     /**
      * True for sender ids that look like a bank or payment header: letters and digits in capitals with dashes and no
-     * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK, JioPay-S), or a 4 to 9 digit short code (56161, 5676766). Contact names such as
-     * "Rahul", "Mom", "Mary-Jane", or "Smith-Jones", and personal phone numbers are not bank senders.
+     * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK, JIOPAY-S), a 4 to 9 digit short code (56161, 5676766), or a registered
+     * mixed-case biller header (JioPay-S). Contact names such as "Rahul", "Mom", "Dr-Rao", "Mr-Sharma", "Rahul-K",
+     * "Mom-S", "Raj-Mo", "Mary-Jane", or "Smith-Jones", and personal phone numbers are not bank senders.
      */
     fun isBankSenderId(sender: String): Boolean {
         val s = sender.trim()
         if (s.isEmpty() || s.any { it.isWhitespace() } || s.startsWith("+")) return false
         if (s.all { it.isDigit() }) return s.length in 4..9
         if (!s.any { it.isLetter() }) return false
-        return if (s.contains("-")) {
-            DLT_OPERATOR_PREFIX_REGEX.matches(s) || DLT_CHANNEL_SUFFIX_REGEX.matches(s)
-        } else {
-            BANK_SENDER_UPPER_REGEX.matches(s)
-        }
+        if (MIXED_CASE_BILLER_REGISTRY.contains(s)) return true
+        return BANK_SENDER_UPPER_REGEX.matches(s)
     }
 
     private val TOWARDS_BILLER_REGEX: Regex = Regex(

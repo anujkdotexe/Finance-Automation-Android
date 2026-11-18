@@ -27,7 +27,7 @@ class SenderAndAmountHeuristicsTest {
 
     @Test
     fun contactNamesAndPersonalNumbersAreRejected() {
-        for (id in listOf("Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", "98123 45678", "", "  ", "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma")) {
+        for (id in listOf("Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", "98123 45678", "", "  ", "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma", "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo")) {
             assertFalse("$id must not be read", RegexPatterns.isBankSenderId(id))
         }
     }

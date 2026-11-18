@@ -179,6 +179,7 @@ class RegexPatternsTest {
         // Z1: Hyphenated personal contact names and numbers must be rejected
         val rejectedContacts = listOf(
             "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma", "Ali-Khan",
+            "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo",
             "Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", ""
         )
         for (contact in rejectedContacts) {
