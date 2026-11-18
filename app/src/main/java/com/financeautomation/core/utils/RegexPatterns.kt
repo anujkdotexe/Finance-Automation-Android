@@ -191,13 +191,14 @@ object RegexPatterns {
         return cleaned.startsWith("+") || (cleaned.length >= 7 && cleaned.all { it.isDigit() })
     }
 
-    private val BANK_SENDER_HYPHEN_REGEX: Regex = Regex("""^[A-Za-z0-9][A-Za-z0-9-]{2,19}$""")
+    private val DLT_OPERATOR_PREFIX_REGEX: Regex = Regex("""^[A-Za-z]{2}-[A-Za-z0-9]{3,16}(?:-[A-Za-z0-9]{1,2})?$""")
+    private val DLT_CHANNEL_SUFFIX_REGEX: Regex = Regex("""^[A-Za-z0-9]{3,16}-[A-Za-z0-9]{1,2}$""")
     private val BANK_SENDER_UPPER_REGEX: Regex = Regex("""^[A-Z0-9][A-Z0-9]{2,19}$""")
 
     /**
      * True for sender ids that look like a bank or payment header: letters and digits in capitals with dashes and no
      * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK, JioPay-S), or a 4 to 9 digit short code (56161, 5676766). Contact names such as
-     * "Rahul" or "Ravi Kumar", mixed or lower case words without dashes, and personal phone numbers are not bank senders.
+     * "Rahul", "Mom", "Mary-Jane", or "Smith-Jones", and personal phone numbers are not bank senders.
      */
     fun isBankSenderId(sender: String): Boolean {
         val s = sender.trim()
@@ -205,7 +206,7 @@ object RegexPatterns {
         if (s.all { it.isDigit() }) return s.length in 4..9
         if (!s.any { it.isLetter() }) return false
         return if (s.contains("-")) {
-            BANK_SENDER_HYPHEN_REGEX.matches(s)
+            DLT_OPERATOR_PREFIX_REGEX.matches(s) || DLT_CHANNEL_SUFFIX_REGEX.matches(s)
         } else {
             BANK_SENDER_UPPER_REGEX.matches(s)
         }
