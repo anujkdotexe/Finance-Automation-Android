@@ -40,12 +40,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesCompact
+import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.usecase.InsightsSlice
 import com.financeautomation.domain.usecase.MonthlyBurn
 import com.financeautomation.presentation.components.AppCard
 import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
+import com.financeautomation.presentation.theme.categoryChartColor
+import com.financeautomation.presentation.theme.isAppInDarkTheme
 import com.financeautomation.presentation.viewmodel.InsightsViewModel
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -108,6 +111,7 @@ fun InsightsScreen(
                         slices = state.slices,
                         total = state.total,
                         palette = palette,
+                        categories = state.categories,
                         onSliceClick = { slice -> if (!slice.isOther) onOpenCategory(state.selectedMonth, slice.category) },
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
@@ -116,6 +120,7 @@ fun InsightsScreen(
                     Legend(
                         slices = state.slices,
                         palette = palette,
+                        categories = state.categories,
                         onClick = { slice -> if (!slice.isOther) onOpenCategory(state.selectedMonth, slice.category) }
                     )
                 }
@@ -145,20 +150,35 @@ private fun insightsPalette(): List<Color> = listOf(
     FinanceTheme.colors.outline
 )
 
-private fun sliceColor(palette: List<Color>, index: Int, slice: InsightsSlice): Color =
-    if (slice.isOther) palette.last() else palette[index.coerceAtMost(palette.size - 2)]
+internal fun sliceColor(
+    palette: List<Color>,
+    index: Int,
+    slice: InsightsSlice,
+    categories: List<Category> = emptyList(),
+    isDark: Boolean = false
+): Color {
+    if (slice.isOther) return palette.last()
+    val match = categories.firstOrNull { it.name.trim().equals(slice.category.trim(), ignoreCase = true) }
+    return if (match != null) {
+        categoryChartColor(match, isDark)
+    } else {
+        palette[index.coerceAtMost(palette.size - 2)]
+    }
+}
 
 @Composable
 private fun DonutChart(
     slices: List<InsightsSlice>,
     total: Double,
     palette: List<Color>,
+    categories: List<Category> = emptyList(),
     onSliceClick: (InsightsSlice) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val summary = stringResource(R.string.insights_donut_cd, formatRupees(total), slices.size)
     val track = FinanceTheme.colors.surfaceContainerHigh
-    val colors = slices.mapIndexed { i, s -> sliceColor(palette, i, s) }
+    val isDark = isAppInDarkTheme()
+    val colors = slices.mapIndexed { i, s -> sliceColor(palette, i, s, categories, isDark) }
     Box(
         modifier = modifier
             .size(FinanceTheme.sizes.emptyStateIllustration * 2)
@@ -243,8 +263,10 @@ private fun DonutChart(
 private fun Legend(
     slices: List<InsightsSlice>,
     palette: List<Color>,
+    categories: List<Category> = emptyList(),
     onClick: (InsightsSlice) -> Unit
 ) {
+    val isDark = isAppInDarkTheme()
     Column(modifier = Modifier.fillMaxWidth()) {
         slices.forEachIndexed { index, slice ->
             val percent = slice.percent.roundToInt()
@@ -267,7 +289,7 @@ private fun Legend(
                     modifier = Modifier
                         .size(FinanceTheme.spacing.compact)
                         .clip(CircleShape)
-                        .background(sliceColor(palette, index, slice))
+                        .background(sliceColor(palette, index, slice, categories, isDark))
                 )
                 Text(
                     text = if (slice.isOther) stringResource(R.string.insights_other) else slice.category,
