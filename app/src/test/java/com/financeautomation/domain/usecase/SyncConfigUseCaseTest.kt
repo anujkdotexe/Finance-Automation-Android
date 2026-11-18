@@ -1,12 +1,15 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.repository.ConfigRepositoryImpl
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
+import com.financeautomation.domain.model.AppConfigSnapshot
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.DirtyConfigSnapshot
+import com.financeautomation.domain.repository.LegacyConfigGateway
 import com.financeautomation.domain.repository.SyncedPreference
 import com.financeautomation.testutil.FakeConfigSheet
 import com.financeautomation.testutil.MutableTestClock
@@ -86,12 +89,17 @@ class SyncConfigUseCaseTest {
         override suspend fun applyRemoteCompanion(name: String, isArchived: Boolean, updatedAt: Long, deleted: Boolean) {}
         override suspend fun applyRemoteTripTag(name: String, isActive: Boolean, isArchived: Boolean, updatedAt: Long, deleted: Boolean) {}
         override suspend fun applyRemotePreference(key: String, value: String?, updatedAt: Long, deleted: Boolean) {}
-        override suspend fun markAllLocalItemsDirty() {}
+        override suspend fun markAllLocalItemsDirty() {
+            dirty.addAll(categories.values.map { it.id })
+        }
     }
 
     private class Harness(val sheet: FakeConfigSheet, val gateway: CategoryGateway, val useCase: SyncConfigUseCase)
 
-    private fun harness(onBudget: (String, Double) -> Unit = { _, _ -> }): Harness {
+    private fun harness(
+        onBudget: (String, Double) -> Unit = { _, _ -> },
+        legacyGateway: LegacyConfigGateway? = null
+    ): Harness {
         val sheet = FakeConfigSheet()
         val gateway = CategoryGateway(onBudget)
         val prefs = PreferencesRepositoryImpl(isTestHeadless = true)
@@ -100,6 +108,7 @@ class SyncConfigUseCaseTest {
             configRepository = ConfigRepositoryImpl(sheet.client(), ioDispatcher = Dispatchers.Unconfined, clock = clock),
             localGateway = gateway,
             preferencesRepository = prefs,
+            legacyConfigGateway = legacyGateway,
             ioDispatcher = Dispatchers.Unconfined
         )
         return Harness(sheet, gateway, useCase)
@@ -203,5 +212,58 @@ class SyncConfigUseCaseTest {
         assertEquals("the later local edit reached the sheet", "false", row[2])
         assertEquals(clock.instant().toString(), row[6])
         assertTrue("and the item is clean", h.gateway.dirty.isEmpty())
+    }
+
+    @Test
+    fun legacyGridIsAppliedBeforeMirroring() = runBlocking {
+        val fakeLegacyGateway = object : LegacyConfigGateway {
+            override suspend fun readLegacyConfig(spreadsheetId: String): Result<AppConfigSnapshot> {
+                return Result.Success(
+                    AppConfigSnapshot(
+                        categories = listOf(
+                            Category(id = "cat_Books", name = "Books", isExcludedFromLivingBurn = true)
+                        )
+                    )
+                )
+            }
+        }
+        val h = harness(legacyGateway = fakeLegacyGateway)
+        h.sheet.cells.clear()
+
+        // Config tab is initially empty
+        h.useCase.pull("sheet")
+
+        // 1. Legacy category was applied to local gateway
+        val booksCat = h.gateway.categories["Books"]
+        assertTrue("Books category was restored from legacy grid", booksCat != null)
+        assertTrue("Books isExcludedFromLivingBurn preserved", booksCat!!.isExcludedFromLivingBurn)
+
+        // 2. Local gateway pushed the restored config to the sheet
+        val index = h.sheet.indexOfKey("category", "Books")
+        assertTrue("Books exists in modernized sheet", index >= 0)
+        assertEquals("true", h.sheet.cells[index][2])
+    }
+
+    @Test
+    fun legacyRestoreDoesNotOverwriteSheetWithDefaults() = runBlocking {
+        val fakeLegacyGateway = object : LegacyConfigGateway {
+            override suspend fun readLegacyConfig(spreadsheetId: String): Result<AppConfigSnapshot> {
+                return Result.Success(
+                    AppConfigSnapshot(
+                        categories = listOf(
+                            Category(id = "cat_Custom", name = "CustomCategory", isExcludedFromLivingBurn = false)
+                        )
+                    )
+                )
+            }
+        }
+        val h = harness(legacyGateway = fakeLegacyGateway)
+        h.sheet.cells.clear()
+
+        h.useCase.pull("sheet")
+
+        assertTrue("Restored category exists in gateway", "CustomCategory" in h.gateway.categories)
+        val index = h.sheet.indexOfKey("category", "CustomCategory")
+        assertTrue("CustomCategory was pushed to sheet instead of blank defaults", index >= 0)
     }
 }

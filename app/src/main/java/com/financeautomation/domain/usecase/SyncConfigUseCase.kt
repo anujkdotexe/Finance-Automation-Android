@@ -6,6 +6,7 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.ConfigNumbers
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.safeCall
+import com.financeautomation.domain.model.AppConfigSnapshot
 import com.financeautomation.domain.model.EmptyOrMissingConfigTabException
 import com.financeautomation.domain.repository.LegacyConfigGateway
 import com.financeautomation.domain.model.ConfigRow
@@ -64,18 +65,26 @@ class SyncConfigUseCase(
             }
 
             val rows = (readResult as Result.Success).data
-            if (rows.isEmpty()) {
+            val hasDataRows = rows.any { it.type != ConfigConstants.TYPE_META }
+            if (rows.isEmpty() || !hasDataRows) {
                 // Check if legacy fixed-grid Config!A1:P50 exists for backwards compatibility
                 if (legacyConfigGateway != null) {
                     val legacyResult = legacyConfigGateway.readLegacyConfig(spreadsheetId)
-                    if (legacyResult is Result.Success) {
+                    if (legacyResult is Result.Success &&
+                        (legacyResult.data.accounts.isNotEmpty() ||
+                         legacyResult.data.categories.isNotEmpty() ||
+                         legacyResult.data.companions.isNotEmpty())
+                    ) {
+                        applyLegacySnapshot(legacyResult.data)
                         localGateway.markAllLocalItemsDirty()
                         push(spreadsheetId)
                         lastPullTimestamp = System.currentTimeMillis()
                         return@safeCall
                     }
                 }
-                throw EmptyOrMissingConfigTabException("Config tab is empty or absent")
+                if (rows.isEmpty()) {
+                    throw EmptyOrMissingConfigTabException("Config tab is empty or absent")
+                }
             }
 
             // Inspect schema version
@@ -351,6 +360,60 @@ class SyncConfigUseCase(
             localGateway.markBudgetsClean(dirty.budgets.filter { isWritten(ConfigConstants.TYPE_BUDGET, it.category) }.map { it.category })
         }
     } }
+
+    private suspend fun applyLegacySnapshot(snapshot: AppConfigSnapshot) {
+        val legacyUpdatedAt = 1L
+        for (acc in snapshot.accounts) {
+            localGateway.applyRemoteAccount(
+                name = acc.name,
+                lastFour = acc.lastFourDigits,
+                isDefault = acc.isDefault,
+                isArchived = acc.isArchived,
+                displayOrder = acc.displayOrder,
+                updatedAt = legacyUpdatedAt,
+                deleted = false
+            )
+        }
+        for (cat in snapshot.categories) {
+            localGateway.applyRemoteCategory(
+                name = cat.name,
+                excludedFromBurn = cat.isExcludedFromLivingBurn,
+                isDefault = cat.isDefault,
+                isArchived = cat.isArchived,
+                displayOrder = cat.displayOrder,
+                updatedAt = legacyUpdatedAt,
+                deleted = false,
+                iconName = cat.iconName
+            )
+        }
+        for (p in snapshot.companions) {
+            localGateway.applyRemoteCompanion(
+                name = p.name,
+                isArchived = p.isArchived,
+                updatedAt = legacyUpdatedAt,
+                deleted = false
+            )
+        }
+        for (trip in snapshot.tripTags) {
+            localGateway.applyRemoteTripTag(
+                name = trip.name,
+                isActive = trip.isActive,
+                isArchived = trip.isArchived,
+                updatedAt = legacyUpdatedAt,
+                deleted = false
+            )
+        }
+        for ((key, value) in snapshot.preferences) {
+            if (ConfigConstants.isSyncedPref(key)) {
+                localGateway.applyRemotePreference(
+                    key = key,
+                    value = value,
+                    updatedAt = legacyUpdatedAt,
+                    deleted = false
+                )
+            }
+        }
+    }
 
     /**
      * Marks all local items dirty and pushes them to populate an initially empty Config tab.

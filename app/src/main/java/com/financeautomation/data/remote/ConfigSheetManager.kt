@@ -28,17 +28,7 @@ import java.net.URLEncoder
  */
 typealias EmptyOrMissingConfigTabException = com.financeautomation.domain.model.EmptyOrMissingConfigTabException
 
-/**
- * Encapsulates full configuration state snapshot for cloud mirroring and restore.
- * Strictly contains ZERO financial data (zero amounts, zero merchant descriptions, zero timestamps).
- */
-data class AppConfigSnapshot(
-    val accounts: List<Account>,
-    val categories: List<Category>,
-    val companions: List<DomainCompanion>,
-    val tripTags: List<TripTag>,
-    val preferences: Map<String, String>
-)
+typealias AppConfigSnapshot = com.financeautomation.domain.model.AppConfigSnapshot
 
 /**
  * Manages the hidden 'Config' tab in Google Sheets (range A1:P50).
@@ -52,12 +42,8 @@ class ConfigSheetManager(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : com.financeautomation.domain.repository.LegacyConfigGateway {
 
-    override suspend fun readLegacyConfig(spreadsheetId: String): Result<Unit> {
-        return when (val res = readConfig(spreadsheetId)) {
-            is Result.Success -> Result.Success(Unit)
-            is Result.Error -> Result.Error(res.throwable)
-            is Result.Loading -> Result.Loading
-        }
+    override suspend fun readLegacyConfig(spreadsheetId: String): Result<AppConfigSnapshot> {
+        return readConfig(spreadsheetId)
     }
 
     private val json = Json { ignoreUnknownKeys = true }
