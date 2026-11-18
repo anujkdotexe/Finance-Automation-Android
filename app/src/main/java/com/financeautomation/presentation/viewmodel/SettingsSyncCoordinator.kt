@@ -193,11 +193,20 @@ class SettingsSyncCoordinator(
                         preferencesRepository.setSpreadsheetId(spreadsheetId)
                         regenerateDashboardUseCase?.invoke()
                         syncConfigUseCase?.mirrorToCloud()
+                        val archiveOutcome = resolver.lastArchiveOutcome
+                        val userMsg = when {
+                            archiveOutcome != null && archiveOutcome.failedCount > 0 ->
+                                UiText.res(R.string.repair_backup_msg_partial_archive, archiveOutcome.failedCount)
+                            archiveOutcome != null && archiveOutcome.movedCount > 0 ->
+                                UiText.res(R.string.repair_backup_msg_archived, archiveOutcome.movedCount)
+                            else ->
+                                UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
+                        }
                         uiState.update {
                             it.copy(
                                 spreadsheetId = spreadsheetId,
                                 isProvisioning = false,
-                                userMessage = UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
+                                userMessage = userMsg
                             )
                         }
                     }

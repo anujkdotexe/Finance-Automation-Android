@@ -403,4 +403,178 @@ class WorkbookBackupArchiveTest {
         assertTrue("URL must add new parent", recordedUrl.contains("addParents=new_parent_id"))
         assertTrue("URL must remove old parent", recordedUrl.contains("removeParents=old_parent_id"))
     }
+
+    @Test
+    fun repairSkipsBackupsAlreadyInArchive() = runBlocking {
+        val requests = mutableListOf<String>()
+        var movedCount = 0
+
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                val path = r.url.encodedPath
+                requests.add("${r.method} $path")
+
+                when {
+                    r.method == "GET" && path.endsWith("/files/candidate_id") ->
+                        response(r, 200, """{"id":"candidate_id","trashed":false}""")
+                    // Return 2 backups: old_1 in root, old_2 already in Archive folder
+                    r.method == "GET" && path.endsWith("/files") && r.url.queryParameter("q")?.contains("FinanceAutomationBackup") == true ->
+                        response(r, 200, """{"files":[
+                            {"id":"old_1","name":"Finance$testYear (backup 1)","parents":["pf_root_id"],"appProperties":{"app":"FinanceAutomationBackup","backupYear":"2026"}},
+                            {"id":"old_2","name":"Finance$testYear (backup 2)","parents":["archive_folder_id"],"appProperties":{"app":"FinanceAutomationBackup","backupYear":"2026"}}
+                        ]}""")
+                    r.method == "POST" && path.contains("/files/candidate_id/copy") ->
+                        response(r, 200, """{"id":"new_backup_3","name":"Finance$testYear (backup before repair 2026-11-18)"}""")
+                    r.method == "GET" && path.endsWith("/files") && r.url.queryParameter("q")?.contains("Personal Finance") == true ->
+                        response(r, 200, """{"files":[{"id":"pf_root_id","name":"Personal Finance"}]}""")
+                    r.method == "GET" && path.endsWith("/files") && r.url.queryParameter("q")?.contains("name = 'Archive'") == true ->
+                        response(r, 200, """{"files":[{"id":"archive_folder_id","name":"Archive"}]}""")
+                    r.method == "PATCH" && path.contains("/files/old_1") -> {
+                        movedCount++
+                        response(r, 200, """{"id":"old_1"}""")
+                    }
+                    r.method == "PATCH" && path.contains("/files/old_2") -> {
+                        org.junit.Assert.fail("old_2 is already in Archive and must never be moved again")
+                        response(r, 200, """{"id":"old_2"}""")
+                    }
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "GET" && r.url.encodedPath.contains("values:batchGet") ->
+                        response(r, 200, """{"valueRanges":[{"range":"'Nov26'!A4:A5","values":[["2026-11-01"]]}]}""")
+                    r.method == "GET" && r.url.encodedPath.contains("values") ->
+                        response(r, 200, """{"values":[["Header"],["DataRow"]]}""")
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"candidate_id","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":2,"title":"Nov26","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    else -> response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":1}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            clock = fixedClock
+        )
+
+        yearIds[testYear] = "candidate_id"
+
+        val res = resolver.resolveForYear(
+            year = testYear,
+            forceValidateTabs = true,
+            createBackup = true,
+            archiveOlderBackups = true
+        )
+
+        assertTrue(res is Result.Success)
+        assertEquals("Only root backup must be moved", 1, movedCount)
+        val outcome = resolver.lastArchiveOutcome
+        org.junit.Assert.assertNotNull(outcome)
+        assertEquals("Moved count must be 1", 1, outcome!!.movedCount)
+        assertEquals("Already archived count must be 1", 1, outcome.alreadyInArchiveCount)
+        assertEquals("Failed count must be 0", 0, outcome.failedCount)
+    }
+
+    @Test
+    fun repairReportsPartialFailureWhenArchiveFolderFails() = runBlocking {
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                val path = r.url.encodedPath
+
+                when {
+                    r.method == "GET" && path.endsWith("/files/candidate_id") ->
+                        response(r, 200, """{"id":"candidate_id","trashed":false}""")
+                    r.method == "GET" && path.endsWith("/files") && r.url.queryParameter("q")?.contains("FinanceAutomationBackup") == true ->
+                        response(r, 200, """{"files":[{"id":"old_1","name":"Finance$testYear (backup)","parents":["pf_root_id"],"appProperties":{"app":"FinanceAutomationBackup","backupYear":"2026"}}]}""")
+                    r.method == "POST" && path.contains("/files/candidate_id/copy") ->
+                        response(r, 200, """{"id":"new_backup","name":"Finance$testYear (backup before repair 2026-11-18)"}""")
+                    r.method == "GET" && path.endsWith("/files") && r.url.queryParameter("q")?.contains("Personal Finance") == true ->
+                        response(r, 200, """{"files":[{"id":"pf_root_id","name":"Personal Finance"}]}""")
+                    // findOrCreateArchiveFolder fails with 500
+                    r.method == "GET" && path.endsWith("/files") && r.url.queryParameter("q")?.contains("name = 'Archive'") == true ->
+                        response(r, 500, """{"error":{"code":500,"message":"Archive query failed"}}""")
+                    else -> response(r, 200, "{}")
+                }
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                when {
+                    r.method == "GET" && r.url.encodedPath.contains("values:batchGet") ->
+                        response(r, 200, """{"valueRanges":[{"range":"'Nov26'!A4:A5","values":[["2026-11-01"]]}]}""")
+                    r.method == "GET" && r.url.encodedPath.contains("values") ->
+                        response(r, 200, """{"values":[["Header"],["DataRow"]]}""")
+                    r.method == "GET" ->
+                        response(r, 200, """{"spreadsheetId":"candidate_id","sheets":[{"properties":{"sheetId":0,"title":"Dashboard","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":1,"title":"Config","gridProperties":{"rowCount":1000,"columnCount":35}}},{"properties":{"sheetId":2,"title":"Nov26","gridProperties":{"rowCount":1000,"columnCount":35}}}]}""")
+                    else -> response(r, 200, """{"replies":[{"addSheet":{"properties":{"sheetId":7,"title":"Tab"}}}],"totalUpdatedCells":1}""")
+                }
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            clock = fixedClock
+        )
+
+        yearIds[testYear] = "candidate_id"
+
+        val res = resolver.resolveForYear(
+            year = testYear,
+            forceValidateTabs = true,
+            createBackup = true,
+            archiveOlderBackups = true
+        )
+
+        // Workbook repair itself succeeds because backup copy succeeded
+        assertTrue(res is Result.Success)
+        val outcome = resolver.lastArchiveOutcome
+        org.junit.Assert.assertNotNull(outcome)
+        assertEquals("Failed count must be 1 because archive folder failed", 1, outcome!!.failedCount)
+        assertEquals("Moved count must be 0", 0, outcome.movedCount)
+        org.junit.Assert.assertNotNull("Error must be captured", outcome.error)
+    }
+
+    @Test
+    fun repairCancelMakesNoDriveCalls() = runBlocking {
+        var copyCalls = 0
+        val drive = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val r = chain.request()
+                if (r.url.encodedPath.contains("/copy")) {
+                    copyCalls++
+                }
+                response(r, 200, "{}")
+            }).build(), tokens
+        )
+
+        val sheets = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                response(chain.request(), 200, "{}")
+            }).build(), tokens
+        )
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            clock = fixedClock
+        )
+
+        // When user cancels dialog, no repair is invoked
+        assertEquals("No copy calls on cancel", 0, copyCalls)
+        assertNull(resolver.lastArchiveOutcome)
+    }
 }

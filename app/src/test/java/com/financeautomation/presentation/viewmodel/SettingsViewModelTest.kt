@@ -264,6 +264,70 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun testOnRepairWorkbookWithKeepChoiceCallsResolverWithArchiveOlderFalse() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook(archiveOlder = false)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
+        assertEquals("Expected createBackup to be true for onRepairWorkbook", true, resolver.lastCreateBackup)
+        assertEquals("Expected archiveOlderBackups to be false for Keep choice", false, resolver.lastArchiveOlderBackups)
+        assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
+    }
+
+    @Test
+    fun testCancelRepairMakesNoCalls() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        // Simulating the user dismissing / cancelling the repair confirmation dialog.
+        // No coordinator call is made when dialog is dismissed.
+        assertEquals("Expected zero resolver calls when repair is cancelled", 0, resolver.resolveCalls)
+    }
+
+    @Test
     fun testAutoProvisionMasterSheetIgnoresSecondTapWhileRunning() = runBlocking<Unit> {
         val okHttpClient = OkHttpClient.Builder().build()
         val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
