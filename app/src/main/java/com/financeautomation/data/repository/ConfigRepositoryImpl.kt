@@ -216,21 +216,17 @@ class ConfigRepositoryImpl(
                 }
             }
 
+            if (newRowsToAppend.isNotEmpty()) {
+                val startRow = existingCells.size + 1
+                val endRow = startRow + newRowsToAppend.size - 1
+                updatesMap["'${ConfigConstants.CONFIG_TAB_NAME}'!A$startRow:I$endRow"] = newRowsToAppend
+            }
+
             if (updatesMap.isNotEmpty()) {
                 val updateRes = googleSheetsClient.batchUpdateValues(spreadsheetId, updatesMap, valueInputOption = "RAW")
                 if (updateRes is Result.Error) throw updateRes.exception
             }
 
-            for (appendCells in newRowsToAppend) {
-                val appendRes = googleSheetsClient.appendTableScoped(
-                    spreadsheetId = spreadsheetId,
-                    tabName = ConfigConstants.CONFIG_TAB_NAME,
-                    tableRange = "A:I",
-                    row = appendCells,
-                    valueInputOption = "RAW"
-                )
-                if (appendRes is Result.Error) throw appendRes.exception
-            }
             writtenKeys
         }
     }

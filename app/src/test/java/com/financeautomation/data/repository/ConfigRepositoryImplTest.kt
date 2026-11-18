@@ -235,4 +235,19 @@ class ConfigRepositoryImplTest {
         assertEquals(Instant.EPOCH, rows.first().updatedAt)
         assertEquals(listOf("", "", "", ""), rows.first().values)
     }
+
+    @Test
+    fun upsertSendsNewRowsInOneAppend() = runBlocking {
+        val sheet = FakeConfigSheet()
+        val rows = listOf(
+            ConfigRow("category", "Fuel", listOf("false", "false", "false", "1|Teal"), now, "dev", false),
+            ConfigRow("category", "Rent", listOf("false", "false", "false", "2|Teal"), now, "dev", false),
+            ConfigRow("category", "Gifts", listOf("false", "false", "false", "3|Teal"), now, "dev", false)
+        )
+
+        val written = repo(sheet).upsert("sheet", rows).ok()
+
+        assertEquals(setOf("category|fuel", "category|rent", "category|gifts"), written)
+        assertEquals(3, sheet.cells.filter { it.getOrNull(0) == "category" }.size)
+    }
 }
