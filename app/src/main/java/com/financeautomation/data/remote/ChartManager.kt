@@ -116,12 +116,15 @@ object ChartManager {
 
     /**
      * Builds addChart batchUpdate requests for the Clustered Column Chart and Doughnut Chart.
+     * The Doughnut Chart dynamically scales its row range to match [categoryCount] (minimum 10 rows).
      */
     fun buildChartRequests(
         dashboardSheetId: Int,
         columnChartColorPrimary: Map<String, Float>,
-        columnChartColorSecondary: Map<String, Float>
+        columnChartColorSecondary: Map<String, Float>,
+        categoryCount: Int = 10
     ): List<Map<String, Any?>> {
+        val categoryEndRow = 5 + maxOf(10, categoryCount)
         return listOf(
             // 1. Clustered Column Chart (A7, 520x266)
             mapOf(
@@ -217,7 +220,7 @@ object ChartManager {
                                             mapOf(
                                                 "sheetId" to dashboardSheetId,
                                                 "startRowIndex" to 5,
-                                                "endRowIndex" to 15,
+                                                "endRowIndex" to categoryEndRow,
                                                 "startColumnIndex" to 24,
                                                 "endColumnIndex" to 25
                                             )
@@ -230,7 +233,7 @@ object ChartManager {
                                             mapOf(
                                                 "sheetId" to dashboardSheetId,
                                                 "startRowIndex" to 5,
-                                                "endRowIndex" to 15,
+                                                "endRowIndex" to categoryEndRow,
                                                 "startColumnIndex" to 25,
                                                 "endColumnIndex" to 26
                                             )

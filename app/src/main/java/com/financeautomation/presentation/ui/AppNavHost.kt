@@ -492,6 +492,13 @@ fun AppNavHost(
                                                 }
                                             )
                                             DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.nav_preferences_title)) },
+                                                onClick = {
+                                                    accountMenuExpanded = false
+                                                    navController.navigateTop(AppRoutes.PREFERENCES)
+                                                }
+                                            )
+                                            DropdownMenuItem(
                                                 text = { Text(stringResource(R.string.action_sign_out), color = MaterialTheme.colorScheme.error) },
                                                 onClick = {
                                                     accountMenuExpanded = false
@@ -794,7 +801,17 @@ fun AppNavHost(
                     composable(AppRoutes.PREFERENCES) {
                         PreferencesScreen(
                             viewModel = settingsViewModel,
-                            state = settingsState
+                            state = settingsState,
+                            onNavigateToCategories = {
+                                navController.navigate(AppRoutes.CATEGORIES) {
+                                    launchSingleTop = true
+                                }
+                            },
+                            onNavigateToAccounts = {
+                                navController.navigate(AppRoutes.ACCOUNTS) {
+                                    launchSingleTop = true
+                                }
+                            }
                         )
                     }
 

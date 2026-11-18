@@ -600,6 +600,18 @@
     <string name="categories_edit_title">Edit category</string>
     <string name="categories_field_name">Category name</string>
     <string name="categories_hide">Hide category</string>
+    <string name="categories_menu_rename">Rename</string>
+    <string name="categories_menu_color">Change colour</string>
+    <string name="categories_color_dialog_title">Choose category colour</string>
+    <string name="categories_empty_message">No categories yet. Tap \'+ Add category\' in the top bar to create your first category.</string>
+    <string name="cd_reorder_category">Reorder %1$s</string>
+    <string name="cd_reorder_account">Reorder %1$s</string>
+    <string name="cd_category_options">Category options for %1$s</string>
+    <string name="cd_account_options">Account options for %1$s</string>
+    <string name="pref_section_customization_title">Categories and accounts</string>
+    <string name="pref_section_customization_subtitle">Manage spending categories and payment sources</string>
+    <string name="pref_categories_count">%1$d categories</string>
+    <string name="pref_accounts_count">%1$d accounts</string>
     <string name="trips_isolate_hint">Isolate living burn with a dedicated trip ledger</string>
     <string name="trips_end_trip">End trip</string>
     <string name="trips_reactivate">Reactivate</string>
@@ -744,6 +756,7 @@
     <string name="settings_err_account_exists">Account \'%1$s\' already exists</string>
     <string name="settings_msg_added_account">Added account %1$s</string>
     <string name="settings_msg_account_archived">Account archived</string>
+    <string name="settings_msg_account_deleted">Account deleted</string>
     <string name="settings_err_category_blank">Category name cannot be blank</string>
     <string name="settings_err_category_exists">Category \'%1$s\' already exists</string>
     <string name="settings_msg_added_category">Added category %1$s</string>

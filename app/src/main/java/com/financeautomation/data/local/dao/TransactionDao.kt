@@ -79,8 +79,14 @@ interface TransactionDao {
     @Query("UPDATE transactions SET reviewState = :reviewState, category = COALESCE(:category, category) WHERE id = :id")
     suspend fun updateReviewState(id: String, reviewState: String, category: String? = null)
 
+    @Query("SELECT * FROM transactions WHERE account = :account")
+    suspend fun getByAccount(account: String): List<TransactionEntity> = emptyList()
+
     @Query("UPDATE transactions SET account = :newName WHERE account = :oldName")
     suspend fun updateAccountName(oldName: String, newName: String): Int
+
+    @Query("SELECT * FROM transactions WHERE category = :category")
+    suspend fun getByCategory(category: String): List<TransactionEntity> = emptyList()
 
     @Query("UPDATE transactions SET category = :newName WHERE category = :oldName")
     suspend fun updateCategoryName(oldName: String, newName: String): Int

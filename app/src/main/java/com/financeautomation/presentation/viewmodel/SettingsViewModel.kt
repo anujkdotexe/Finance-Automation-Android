@@ -276,6 +276,10 @@ class SettingsViewModel(
 
     fun onArchiveAccount(accountId: String) = customizationCoordinator.onArchiveAccount(accountId)
 
+    fun onDeleteAccount(accountId: String) = customizationCoordinator.onDeleteAccount(accountId)
+
+    fun onReorderAccounts(accountIds: List<String>) = customizationCoordinator.onReorderAccounts(accountIds)
+
     // --- Expense Categories & Living Burn ---
 
     fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false, colorName: String = "default_tag") =
@@ -286,6 +290,10 @@ class SettingsViewModel(
     fun onToggleCategoryLivingBurnExclusion(categoryId: String, isExcluded: Boolean) = customizationCoordinator.onToggleCategoryLivingBurnExclusion(categoryId, isExcluded)
 
     fun onArchiveCategory(categoryId: String) = customizationCoordinator.onArchiveCategory(categoryId)
+
+    fun onReorderCategories(categoryIds: List<String>) = customizationCoordinator.onReorderCategories(categoryIds)
+
+    fun onUpdateCategoryColor(categoryId: String, colorName: String) = customizationCoordinator.onUpdateCategoryColor(categoryId, colorName)
 
     // --- Trip & Event Tags ---
 

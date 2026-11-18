@@ -49,6 +49,9 @@ class InMemoryTransactionDao : TransactionDao {
     override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {
         rows[id]?.let { rows[id] = it.copy(reviewState = reviewState) }
     }
+    override suspend fun getByAccount(account: String): List<TransactionEntity> {
+        return rows.values.filter { it.account.equals(account, ignoreCase = true) }
+    }
     override suspend fun updateAccountName(oldName: String, newName: String): Int {
         var count = 0
         rows.values.filter { it.account.equals(oldName, ignoreCase = true) }.forEach {
@@ -56,6 +59,9 @@ class InMemoryTransactionDao : TransactionDao {
             count++
         }
         return count
+    }
+    override suspend fun getByCategory(category: String): List<TransactionEntity> {
+        return rows.values.filter { it.category.equals(category, ignoreCase = true) }
     }
     override suspend fun updateCategoryName(oldName: String, newName: String): Int {
         var count = 0

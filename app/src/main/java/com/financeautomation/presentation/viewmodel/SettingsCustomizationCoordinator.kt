@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.viewmodel
 
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PrivacyScrubber
 import com.financeautomation.core.utils.SyncErrorKind
@@ -199,8 +200,33 @@ class SettingsCustomizationCoordinator(
 
     fun onArchiveAccount(accountId: String) {
         scope.launch(ioDispatcher) {
-            accountRepository?.archiveAccount(accountId)
+            val repo = accountRepository ?: return@launch
+            val acc = repo.getAccountById(accountId) ?: return@launch
+            if (CategoryConstants.isProtectedAccount(acc.name)) {
+                uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in account ${acc.name} cannot be archived.")) }
+                return@launch
+            }
+            repo.archiveAccount(accountId)
             uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_account_archived)) }
+        }
+    }
+
+    fun onDeleteAccount(accountId: String) {
+        scope.launch(ioDispatcher) {
+            val repo = accountRepository ?: return@launch
+            val acc = repo.getAccountById(accountId) ?: return@launch
+            if (CategoryConstants.isProtectedAccount(acc.name)) {
+                uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in account ${acc.name} cannot be deleted.")) }
+                return@launch
+            }
+            repo.deleteAccount(accountId)
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_account_deleted)) }
+        }
+    }
+
+    fun onReorderAccounts(accountIds: List<String>) {
+        scope.launch(ioDispatcher) {
+            accountRepository?.reorderAccounts(accountIds)
         }
     }
 
@@ -244,8 +270,28 @@ class SettingsCustomizationCoordinator(
 
     fun onArchiveCategory(categoryId: String) {
         scope.launch(ioDispatcher) {
-            categoryRepository?.archiveCategory(categoryId)
+            val repo = categoryRepository ?: return@launch
+            val cat = repo.getCategoryById(categoryId) ?: return@launch
+            if (CategoryConstants.isProtectedCategory(cat.name)) {
+                uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in category ${cat.name} cannot be hidden or archived.")) }
+                return@launch
+            }
+            repo.archiveCategory(categoryId)
             uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_category_archived)) }
+        }
+    }
+
+    fun onReorderCategories(categoryIds: List<String>) {
+        scope.launch(ioDispatcher) {
+            categoryRepository?.reorderCategories(categoryIds)
+        }
+    }
+
+    fun onUpdateCategoryColor(categoryId: String, colorName: String) {
+        scope.launch(ioDispatcher) {
+            val repo = categoryRepository ?: return@launch
+            val cat = repo.getCategoryById(categoryId) ?: return@launch
+            repo.updateCategory(cat.copy(iconName = colorName))
         }
     }
 
@@ -338,6 +384,11 @@ class SettingsCustomizationCoordinator(
     }
 
     fun onRenameAccount(accountId: String, newName: String, lastFourDigits: String? = null) {
+        val current = uiState.value.accounts.firstOrNull { it.id == accountId }
+        if (current != null && CategoryConstants.isProtectedAccount(current.name)) {
+            uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in account ${current.name} cannot be renamed.")) }
+            return
+        }
         val existing = uiState.value.accounts.filter { it.id != accountId }.map { it.name }
         val validation = com.financeautomation.core.utils.InputPolicy.validateName(newName, existing)
         if (!validation.isValid) {
@@ -352,6 +403,10 @@ class SettingsCustomizationCoordinator(
             val repo = accountRepository ?: return@launch
             val acc = repo.getAccountById(accountId) ?: return@launch
             val oldName = acc.name
+            if (CategoryConstants.isProtectedAccount(oldName)) {
+                uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in account $oldName cannot be renamed.")) }
+                return@launch
+            }
             repo.updateAccount(acc.copy(name = cleanName, lastFourDigits = cleanDigits))
             if (!oldName.equals(cleanName, ignoreCase = true)) {
                 transactionRepository?.updateAccountName(oldName, cleanName)
@@ -361,6 +416,11 @@ class SettingsCustomizationCoordinator(
     }
 
     fun onRenameCategory(categoryId: String, newName: String) {
+        val current = uiState.value.categories.firstOrNull { it.id == categoryId }
+        if (current != null && CategoryConstants.isProtectedCategory(current.name)) {
+            uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in category ${current.name} cannot be renamed.")) }
+            return
+        }
         val existing = uiState.value.categories.filter { it.id != categoryId }.map { it.name }
         val validation = com.financeautomation.core.utils.InputPolicy.validateName(newName, existing)
         if (!validation.isValid) {
@@ -373,6 +433,10 @@ class SettingsCustomizationCoordinator(
             val repo = categoryRepository ?: return@launch
             val cat = repo.getCategoryById(categoryId) ?: return@launch
             val oldName = cat.name
+            if (CategoryConstants.isProtectedCategory(oldName)) {
+                uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in category $oldName cannot be renamed.")) }
+                return@launch
+            }
             repo.updateCategory(cat.copy(name = cleanName))
             if (!oldName.equals(cleanName, ignoreCase = true)) {
                 transactionRepository?.updateCategoryName(oldName, cleanName)

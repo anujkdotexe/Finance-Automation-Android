@@ -844,7 +844,26 @@ class TransactionRepositoryImpl(
 
     override suspend fun updateAccountName(oldName: String, newName: String): Result<Int> = withContext(ioDispatcher) {
         try {
-            val count = resolveTransactionDao().updateAccountName(oldName, newName)
+            val dao = resolveTransactionDao()
+            val matching = dao.getByAccount(oldName)
+            val count = dao.updateAccountName(oldName, newName)
+            val syncedTxns = matching.filter { it.sheetRowIndex != null && it.sheetRowIndex >= 4 }
+            if (syncedTxns.isNotEmpty()) {
+                val qDao = resolveSyncQueueDao()
+                val waiting = qDao.getAllQueueFlow().first().map { it.transactionId to it.operationType }.toSet()
+                for (txn in syncedTxns) {
+                    if (!waiting.contains(txn.id to SyncQueueEntity.OP_INSERT) && !waiting.contains(txn.id to SyncQueueEntity.OP_UPDATE)) {
+                        qDao.insert(
+                            SyncQueueEntity(
+                                transactionId = txn.id,
+                                operationType = SyncQueueEntity.OP_UPDATE,
+                                payloadJson = txn.id
+                            )
+                        )
+                    }
+                }
+                requestSync()
+            }
             Result.Success(count)
         } catch (e: Exception) {
             Result.Error(e)
@@ -853,7 +872,26 @@ class TransactionRepositoryImpl(
 
     override suspend fun updateCategoryName(oldName: String, newName: String): Result<Int> = withContext(ioDispatcher) {
         try {
-            val count = resolveTransactionDao().updateCategoryName(oldName, newName)
+            val dao = resolveTransactionDao()
+            val matching = dao.getByCategory(oldName)
+            val count = dao.updateCategoryName(oldName, newName)
+            val syncedTxns = matching.filter { it.sheetRowIndex != null && it.sheetRowIndex >= 4 }
+            if (syncedTxns.isNotEmpty()) {
+                val qDao = resolveSyncQueueDao()
+                val waiting = qDao.getAllQueueFlow().first().map { it.transactionId to it.operationType }.toSet()
+                for (txn in syncedTxns) {
+                    if (!waiting.contains(txn.id to SyncQueueEntity.OP_INSERT) && !waiting.contains(txn.id to SyncQueueEntity.OP_UPDATE)) {
+                        qDao.insert(
+                            SyncQueueEntity(
+                                transactionId = txn.id,
+                                operationType = SyncQueueEntity.OP_UPDATE,
+                                payloadJson = txn.id
+                            )
+                        )
+                    }
+                }
+                requestSync()
+            }
             Result.Success(count)
         } catch (e: Exception) {
             Result.Error(e)

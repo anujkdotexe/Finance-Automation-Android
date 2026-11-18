@@ -182,8 +182,34 @@ object DashboardFormulaBuilder {
             )
         }
 
-        // 8. Category Table Y5:Z15 (Row 5 header, Rows 6 to 15 for 10 categories including Savings and Other)
-        val activeCategories = categories.filter { !it.isArchived }
+        // 8. Category Table Y5:Z... (Row 5 header, Rows 6 to (5 + categoryCount))
+        // Preserves user displayOrder, guarantees Savings and Other are never dropped, and scales dynamically (min 10 rows)
+        val activeCategories = categories.filter { !it.isArchived }.sortedBy { it.displayOrder }.toMutableList()
+        if (!activeCategories.any { it.name.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true) }) {
+            activeCategories.add(
+                Category(
+                    id = "savings",
+                    name = CategoryConstants.CATEGORY_SAVINGS,
+                    isDefault = false,
+                    isExcludedFromLivingBurn = true,
+                    isArchived = false,
+                    displayOrder = 998
+                )
+            )
+        }
+        if (!activeCategories.any { it.name.equals(CategoryConstants.CATEGORY_OTHER, ignoreCase = true) }) {
+            activeCategories.add(
+                Category(
+                    id = "other",
+                    name = CategoryConstants.CATEGORY_OTHER,
+                    isDefault = false,
+                    isExcludedFromLivingBurn = false,
+                    isArchived = false,
+                    displayOrder = 999
+                )
+            )
+        }
+        val categoryCount = maxOf(10, activeCategories.size)
         val categoryRows = mutableListOf<Map<String, Any?>>()
 
         // Row 5: Header
@@ -196,8 +222,7 @@ object DashboardFormulaBuilder {
             )
         )
 
-        // Rows 6 to 15: Exactly 10 categories
-        for (i in 0 until 10) {
+        for (i in 0 until categoryCount) {
             val rowNum = 6 + i
             if (i < activeCategories.size) {
                 val cat = activeCategories[i]
@@ -226,8 +251,8 @@ object DashboardFormulaBuilder {
                 "updateCells" to mapOf(
                     "range" to mapOf(
                         "sheetId" to dashboardSheetId,
-                        "startRowIndex" to 4, // Row 5
-                        "endRowIndex" to 15, // Row 15 + 1
+                        "startRowIndex" to 4, // Row 5 (header)
+                        "endRowIndex" to 5 + categoryCount, // Row 5 + categoryCount
                         "startColumnIndex" to 24, // Col Y
                         "endColumnIndex" to 26 // Col Z + 1
                     ),

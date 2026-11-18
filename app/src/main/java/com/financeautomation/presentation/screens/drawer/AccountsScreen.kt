@@ -2,33 +2,39 @@ package com.financeautomation.presentation.screens.drawer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,10 +42,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Account
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.EmptyState
@@ -61,6 +73,11 @@ fun AccountsScreen(
     var selectedAccountForEdit by remember { mutableStateOf<Account?>(null) }
     var newAccountName by rememberSaveable { mutableStateOf("") }
     var newAccountDigits by rememberSaveable { mutableStateOf("") }
+
+    var localAccounts by remember(state.accounts) { mutableStateOf(state.accounts) }
+    var draggingAccountId by remember { mutableStateOf<String?>(null) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current.density
 
     Column(
         modifier = modifier
@@ -94,7 +111,7 @@ fun AccountsScreen(
             )
         }
 
-        if (state.accounts.isEmpty()) {
+        if (localAccounts.isEmpty()) {
             EmptyState(
                 message = stringResource(R.string.accounts_empty_title)
             )
@@ -110,15 +127,89 @@ fun AccountsScreen(
                         .fillMaxWidth()
                         .padding(FinanceTheme.spacing.xs)
                 ) {
-                    state.accounts.forEach { account ->
+                    localAccounts.forEachIndexed { index, account ->
                         val isDefault = account.isDefault || account.name == state.defaultAccount
                         val txCount = state.accountTransactionCounts[account.name] ?: 0
+                        val isLocked = CategoryConstants.isProtectedAccount(account.name)
+                        val isDragging = account.id == draggingAccountId
 
                         AccountListItem(
                             account = account,
                             isDefault = isDefault,
+                            isLocked = isLocked,
+                            isDragging = isDragging,
                             transactionCount = txCount,
-                            onClick = { selectedAccountForEdit = account }
+                            onEdit = { selectedAccountForEdit = account },
+                            onSetDefault = { viewModel.onDefaultAccountChanged(account.name) },
+                            onArchive = { viewModel.onArchiveAccount(account.id) },
+                            onDelete = { viewModel.onDeleteAccount(account.id) },
+                            modifier = Modifier
+                                .semantics {
+                                    customActions = buildList {
+                                        if (index > 0) {
+                                            add(CustomAccessibilityAction(label = "Move up") {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(index)
+                                                mutable.add(index - 1, item)
+                                                localAccounts = mutable
+                                                viewModel.onReorderAccounts(mutable.map { it.id })
+                                                true
+                                            })
+                                        }
+                                        if (index < localAccounts.size - 1) {
+                                            add(CustomAccessibilityAction(label = "Move down") {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(index)
+                                                mutable.add(index + 1, item)
+                                                localAccounts = mutable
+                                                viewModel.onReorderAccounts(mutable.map { it.id })
+                                                true
+                                            })
+                                        }
+                                    }
+                                },
+                            dragHandleModifier = Modifier.pointerInput(account.id) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggingAccountId = account.id
+                                        dragOffsetY = 0f
+                                    },
+                                    onDragEnd = {
+                                        val finalIds = localAccounts.map { it.id }
+                                        if (finalIds != state.accounts.map { it.id }) {
+                                            viewModel.onReorderAccounts(finalIds)
+                                        }
+                                        draggingAccountId = null
+                                        dragOffsetY = 0f
+                                    },
+                                    onDragCancel = {
+                                        draggingAccountId = null
+                                        dragOffsetY = 0f
+                                        localAccounts = state.accounts
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffsetY += dragAmount.y
+                                        val itemHeightPx = 68f * density
+                                        val currentIndex = localAccounts.indexOfFirst { it.id == draggingAccountId }
+                                        if (currentIndex != -1) {
+                                            if (dragOffsetY > itemHeightPx && currentIndex < localAccounts.size - 1) {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(currentIndex)
+                                                mutable.add(currentIndex + 1, item)
+                                                localAccounts = mutable
+                                                dragOffsetY -= itemHeightPx
+                                            } else if (dragOffsetY < -itemHeightPx && currentIndex > 0) {
+                                                val mutable = localAccounts.toMutableList()
+                                                val item = mutable.removeAt(currentIndex)
+                                                mutable.add(currentIndex - 1, item)
+                                                localAccounts = mutable
+                                                dragOffsetY += itemHeightPx
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                         )
                     }
                 }
@@ -308,10 +399,18 @@ fun AccountsScreen(
 private fun AccountListItem(
     account: Account,
     isDefault: Boolean,
+    isLocked: Boolean,
+    isDragging: Boolean = false,
     transactionCount: Int,
-    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onSetDefault: () -> Unit,
+    onArchive: () -> Unit,
+    onDelete: () -> Unit,
+    dragHandleModifier: Modifier = Modifier,
     modifier: Modifier = Modifier
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     val displayName = remember(account.name, account.lastFourDigits) {
         if (!account.lastFourDigits.isNullOrBlank()) {
             "${account.name} ••${account.lastFourDigits}"
@@ -334,84 +433,164 @@ private fun AccountListItem(
             .fillMaxWidth()
             .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
             .clip(FinanceShapes.medium)
-            .clickable(onClick = onClick)
-            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .background(if (isDragging) FinanceTheme.colors.surfaceContainerHigh else FinanceTheme.colors.surfaceContainerLowest)
+            .padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+        // 1. Drag Handle
+        Box(
+            modifier = dragHandleModifier
+                .size(FinanceTheme.sizes.minTouchTarget)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(FinanceTheme.sizes.buttonHeightMedium)
-                    .clip(CircleShape)
-                    .background(FinanceTheme.colors.surfaceContainerHigh),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
-                ) {
-                    Text(
-                        text = displayName,
-                        style = FinanceTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (isDefault) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs),
-                            modifier = Modifier.padding(start = FinanceTheme.spacing.xs)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(FinanceTheme.spacing.compact)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                            Text(
-                                text = stringResource(R.string.accounts_badge_default),
-                                style = FinanceTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-                Text(
-                    text = if (transactionCount > 0) {
-                        stringResource(R.string.accounts_tx_count, transactionCount)
-                    } else {
-                        "Active account"
-                    },
-                    style = FinanceTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Icon(
+                imageVector = Icons.Rounded.DragHandle,
+                contentDescription = stringResource(R.string.cd_reorder_account, account.name),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        IconButton(onClick = onClick) {
+        // 2. Account type Icon
+        Box(
+            modifier = Modifier
+                .size(FinanceTheme.sizes.buttonHeightMedium)
+                .clip(CircleShape)
+                .background(FinanceTheme.colors.surfaceContainerHigh),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
             )
+        }
+
+        Spacer(modifier = Modifier.width(FinanceTheme.spacing.m))
+
+        // 3. Account details
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                .clickable(enabled = !isLocked, onClick = onEdit),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+            ) {
+                Text(
+                    text = displayName,
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isDefault) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs),
+                        modifier = Modifier.padding(start = FinanceTheme.spacing.xs)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(FinanceTheme.spacing.compact)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Text(
+                            text = stringResource(R.string.accounts_badge_default),
+                            style = FinanceTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            Text(
+                text = if (transactionCount > 0) {
+                    stringResource(R.string.accounts_tx_count, transactionCount)
+                } else {
+                    "Active account"
+                },
+                style = FinanceTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // 4. Trailing overflow menu
+        Box {
+            IconButton(
+                onClick = { menuExpanded = true },
+                modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = stringResource(R.string.cd_account_options, account.name),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                if (isLocked) {
+                    DropdownMenuItem(
+                        text = { Text("System account (locked)") },
+                        onClick = { menuExpanded = false },
+                        enabled = false
+                    )
+                } else {
+                    if (!isDefault) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.accounts_set_default)) },
+                            onClick = {
+                                menuExpanded = false
+                                onSetDefault()
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Rename") },
+                        onClick = {
+                            menuExpanded = false
+                            onEdit()
+                        }
+                    )
+                    if (!isDefault) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.accounts_archive),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onArchive()
+                            }
+                        )
+                    }
+                    if (!isDefault && transactionCount == 0) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "Delete",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onDelete()
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }

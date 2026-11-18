@@ -2,21 +2,31 @@ package com.financeautomation.presentation.screens.drawer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,7 +36,9 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -35,12 +47,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.domain.model.Category
+import com.financeautomation.presentation.components.EmptyState
 import com.financeautomation.presentation.components.HeaderActionButton
+import com.financeautomation.presentation.theme.CategoryColorTokens
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.theme.categoryDotColor
@@ -56,11 +77,17 @@ fun CategoriesScreen(
     val scrollState = rememberScrollState()
     var showAddCategorySheet by rememberSaveable { mutableStateOf(false) }
     var selectedCategoryForEdit by remember { mutableStateOf<Category?>(null) }
+    var selectedCategoryForColor by remember { mutableStateOf<Category?>(null) }
     var budgetCategory by rememberSaveable { mutableStateOf<String?>(null) }
     val budgetRepository = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.financeautomation.FinanceApplication)
         .appContainer.budgetRepository
     val budgets by budgetRepository.observeBudgets().collectAsState(initial = emptyList())
     val budgetByName = remember(budgets) { budgets.associateBy { it.category.trim().lowercase() } }
+
+    var localCategories by remember(state.categories) { mutableStateOf(state.categories) }
+    var draggingCategoryId by remember { mutableStateOf<String?>(null) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current.density
 
     Column(
         modifier = modifier
@@ -94,31 +121,121 @@ fun CategoriesScreen(
             )
         }
 
-        // List of Categories
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-        ) {
-            state.categories.forEachIndexed { index, category ->
-                val isLocked = category.name.equals("Savings", ignoreCase = true) ||
-                    category.name.equals("Transfer", ignoreCase = true)
-                val dotColor = categoryDotColor(category)
+        if (localCategories.isEmpty()) {
+            EmptyState(
+                message = stringResource(R.string.categories_empty_message)
+            )
+        } else {
+            // List of Categories
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+            ) {
+                localCategories.forEachIndexed { index, category ->
+                    val isLocked = CategoryConstants.isProtectedCategory(category.name)
+                    val dotColor = categoryDotColor(category)
+                    val isDragging = category.id == draggingCategoryId
 
-                CategoryItemCard(
-                    category = category,
-                    dotColor = dotColor,
-                    isLocked = isLocked,
-                    onClick = {
-                        if (!isLocked) {
-                            selectedCategoryForEdit = category
+                    CategoryItemCard(
+                        category = category,
+                        dotColor = dotColor,
+                        isLocked = isLocked,
+                        isDragging = isDragging,
+                        budgetAmount = budgetByName[category.name.trim().lowercase()]?.monthlyAmount,
+                        onOpenBudget = { budgetCategory = category.name },
+                        onToggleBurn = { enabled ->
+                            viewModel.onToggleCategoryLivingBurnExclusion(category.id, !enabled)
+                        },
+                        onClick = { selectedCategoryForEdit = category },
+                        onChangeColor = { selectedCategoryForColor = category },
+                        onArchive = { viewModel.onArchiveCategory(category.id) },
+                        onMoveUp = if (index > 0) {
+                            {
+                                val mutable = localCategories.toMutableList()
+                                val item = mutable.removeAt(index)
+                                mutable.add(index - 1, item)
+                                localCategories = mutable
+                                viewModel.onReorderCategories(mutable.map { it.id })
+                            }
+                        } else null,
+                        onMoveDown = if (index < localCategories.size - 1) {
+                            {
+                                val mutable = localCategories.toMutableList()
+                                val item = mutable.removeAt(index)
+                                mutable.add(index + 1, item)
+                                localCategories = mutable
+                                viewModel.onReorderCategories(mutable.map { it.id })
+                            }
+                        } else null,
+                        modifier = Modifier
+                            .semantics {
+                                customActions = buildList {
+                                    if (index > 0) {
+                                        add(CustomAccessibilityAction(label = "Move up") {
+                                            val mutable = localCategories.toMutableList()
+                                            val item = mutable.removeAt(index)
+                                            mutable.add(index - 1, item)
+                                            localCategories = mutable
+                                            viewModel.onReorderCategories(mutable.map { it.id })
+                                            true
+                                        })
+                                    }
+                                    if (index < localCategories.size - 1) {
+                                        add(CustomAccessibilityAction(label = "Move down") {
+                                            val mutable = localCategories.toMutableList()
+                                            val item = mutable.removeAt(index)
+                                            mutable.add(index + 1, item)
+                                            localCategories = mutable
+                                            viewModel.onReorderCategories(mutable.map { it.id })
+                                            true
+                                        })
+                                    }
+                                }
+                            },
+                        dragHandleModifier = Modifier.pointerInput(category.id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    draggingCategoryId = category.id
+                                    dragOffsetY = 0f
+                                },
+                                onDragEnd = {
+                                    val finalIds = localCategories.map { it.id }
+                                    if (finalIds != state.categories.map { it.id }) {
+                                        viewModel.onReorderCategories(finalIds)
+                                    }
+                                    draggingCategoryId = null
+                                    dragOffsetY = 0f
+                                },
+                                onDragCancel = {
+                                    draggingCategoryId = null
+                                    dragOffsetY = 0f
+                                    localCategories = state.categories
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragOffsetY += dragAmount.y
+                                    val itemHeightPx = 68f * density
+                                    val currentIndex = localCategories.indexOfFirst { it.id == draggingCategoryId }
+                                    if (currentIndex != -1) {
+                                        if (dragOffsetY > itemHeightPx && currentIndex < localCategories.size - 1) {
+                                            val mutable = localCategories.toMutableList()
+                                            val item = mutable.removeAt(currentIndex)
+                                            mutable.add(currentIndex + 1, item)
+                                            localCategories = mutable
+                                            dragOffsetY -= itemHeightPx
+                                        } else if (dragOffsetY < -itemHeightPx && currentIndex > 0) {
+                                            val mutable = localCategories.toMutableList()
+                                            val item = mutable.removeAt(currentIndex)
+                                            mutable.add(currentIndex - 1, item)
+                                            localCategories = mutable
+                                            dragOffsetY += itemHeightPx
+                                        }
+                                    }
+                                }
+                            )
                         }
-                    },
-                    budgetAmount = budgetByName[category.name.trim().lowercase()]?.monthlyAmount,
-                    onOpenBudget = { budgetCategory = category.name },
-                    onToggleBurn = { enabled ->
-                        viewModel.onToggleCategoryLivingBurnExclusion(category.id, !enabled)
-                    }
-                )
+                    )
+                }
             }
         }
     }
@@ -138,6 +255,54 @@ fun CategoriesScreen(
             onSave = { name, colorName ->
                 viewModel.onAddCategory(name, isExcludedFromLivingBurn = false, colorName = colorName)
                 showAddCategorySheet = false
+            }
+        )
+    }
+
+    selectedCategoryForColor?.let { cat ->
+        AlertDialog(
+            onDismissRequest = { selectedCategoryForColor = null },
+            title = {
+                Text(
+                    text = stringResource(R.string.categories_color_dialog_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    val palette = CategoryColorTokens.PALETTE
+                    val chunked = palette.chunked(4)
+                    chunked.forEach { rowTokens ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            rowTokens.forEach { token ->
+                                val isSelected = cat.iconName.equals(token.name, ignoreCase = true)
+                                Box(
+                                    modifier = Modifier
+                                        .size(FinanceTheme.sizes.iconLarge)
+                                        .clip(CircleShape)
+                                        .background(token.light)
+                                        .clickable {
+                                            viewModel.onUpdateCategoryColor(cat.id, token.name)
+                                            selectedCategoryForColor = null
+                                        }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { selectedCategoryForColor = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             }
         )
     }
@@ -214,16 +379,24 @@ private fun CategoryItemCard(
     category: Category,
     dotColor: Color,
     isLocked: Boolean,
+    isDragging: Boolean = false,
     onClick: () -> Unit = {},
     budgetAmount: Double?,
     onOpenBudget: () -> Unit,
     onToggleBurn: (Boolean) -> Unit,
+    onChangeColor: () -> Unit = {},
+    onArchive: () -> Unit = {},
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
+    dragHandleModifier: Modifier = Modifier,
     modifier: Modifier = Modifier
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Surface(
-        color = FinanceTheme.colors.surfaceContainerLowest,
+        color = if (isDragging) FinanceTheme.colors.surfaceContainerHigh else FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
-        shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+        shadowElevation = if (isDragging) 8.dp else FinanceTheme.sizes.shadowElevationSmall,
         modifier = modifier
             .fillMaxWidth()
             .clip(FinanceShapes.large)
@@ -233,10 +406,24 @@ private fun CategoryItemCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(start = FinanceTheme.spacing.s, end = FinanceTheme.spacing.xs, top = FinanceTheme.spacing.xs, bottom = FinanceTheme.spacing.xs),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // 1. Drag Handle
+            Box(
+                modifier = dragHandleModifier
+                    .size(FinanceTheme.sizes.minTouchTarget)
+                    .clip(CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.DragHandle,
+                    contentDescription = stringResource(R.string.cd_reorder_category, category.name),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // 2 & 3. Category info (dot, name and budget)
             val editDescription = stringResource(R.string.budget_row_edit_cd, category.name)
             Row(
                 modifier = Modifier
@@ -289,6 +476,7 @@ private fun CategoryItemCard(
                 }
             }
 
+            // 4. Living Burn Switch
             Switch(
                 checked = if (isLocked) false else !category.isExcludedFromLivingBurn,
                 onCheckedChange = { if (!isLocked) onToggleBurn(it) },
@@ -300,6 +488,60 @@ private fun CategoryItemCard(
                     uncheckedTrackColor = FinanceTheme.colors.surfaceContainerHighest
                 )
             )
+
+            // 5. Overflow Menu (Rename, Colour, Archive)
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(FinanceTheme.sizes.minTouchTarget)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = stringResource(R.string.cd_category_options, category.name),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    if (isLocked) {
+                        DropdownMenuItem(
+                            text = { Text("System category (locked)") },
+                            onClick = { menuExpanded = false },
+                            enabled = false
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.categories_menu_rename)) },
+                            onClick = {
+                                menuExpanded = false
+                                onClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.categories_menu_color)) },
+                            onClick = {
+                                menuExpanded = false
+                                onChangeColor()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.categories_hide),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onArchive()
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }

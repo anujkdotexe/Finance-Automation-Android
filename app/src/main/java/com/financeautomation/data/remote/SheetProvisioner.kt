@@ -719,26 +719,36 @@ object SheetProvisioner {
             )
         )
 
-        // Active Categories rows (10 categories Y6:Y15 including Savings and Other)
+        // Active Categories rows (all active categories, minimum 10 rows for clean layout, including Savings and Other)
+        val defaultCats = listOf(
+            CategoryConstants.CATEGORY_FOOD_AND_DRINK,
+            CategoryConstants.CATEGORY_GROCERIES,
+            CategoryConstants.CATEGORY_TRANSIT,
+            CategoryConstants.CATEGORY_SUBSCRIPTIONS,
+            CategoryConstants.CATEGORY_SHOPPING,
+            CategoryConstants.CATEGORY_TRIP_TRAVEL,
+            CategoryConstants.CATEGORY_HEALTH,
+            CategoryConstants.CATEGORY_FAMILY,
+            CategoryConstants.CATEGORY_SAVINGS,
+            CategoryConstants.CATEGORY_OTHER
+        )
         val displayCategories = if (categories.isNotEmpty()) {
-            categories.take(10)
+            val list = categories.toMutableList()
+            if (!list.any { it.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true) }) {
+                list.add(CategoryConstants.CATEGORY_SAVINGS)
+            }
+            if (!list.any { it.equals(CategoryConstants.CATEGORY_OTHER, ignoreCase = true) }) {
+                list.add(CategoryConstants.CATEGORY_OTHER)
+            }
+            list
         } else {
-            listOf(
-                CategoryConstants.CATEGORY_FOOD_AND_DRINK,
-                CategoryConstants.CATEGORY_GROCERIES,
-                CategoryConstants.CATEGORY_TRANSIT,
-                CategoryConstants.CATEGORY_SUBSCRIPTIONS,
-                CategoryConstants.CATEGORY_SHOPPING,
-                CategoryConstants.CATEGORY_TRIP_TRAVEL,
-                CategoryConstants.CATEGORY_HEALTH,
-                CategoryConstants.CATEGORY_FAMILY,
-                CategoryConstants.CATEGORY_SAVINGS,
-                CategoryConstants.CATEGORY_OTHER
-            )
+            defaultCats
         }
+        val categoryCount = maxOf(10, displayCategories.size)
 
-        displayCategories.forEachIndexed { idx, catName ->
+        for (idx in 0 until categoryCount) {
             val rowNum = 6 + idx
+            val catName = displayCategories.getOrNull(idx) ?: ""
             // Category Name (Col Y)
             requests.add(
                 createCellRequest(
@@ -755,13 +765,13 @@ object SheetProvisioner {
                 )
             )
             // Category Spend Formula (Col Z)
-            val spendFormula = DashboardFormulaBuilder.buildCategorySpendFormula(rowNum)
+            val spendFormula = if (catName.isNotBlank()) DashboardFormulaBuilder.buildCategorySpendFormula(rowNum) else ""
             requests.add(
                 createCellRequest(
                     sheetId = dashboardSheetId,
                     rowIndex = rowNum - 1,
                     colIndex = 25,
-                    value = mapOf("formulaValue" to spendFormula),
+                    value = if (catName.isNotBlank()) mapOf("formulaValue" to spendFormula) else mapOf("stringValue" to ""),
                     format = mapOf(
                         "backgroundColor" to bodyAltRowBg,
                         "horizontalAlignment" to "RIGHT",
@@ -942,7 +952,8 @@ object SheetProvisioner {
             ChartManager.buildChartRequests(
                 dashboardSheetId = dashboardSheetId,
                 columnChartColorPrimary = hexToColorMap("1465BF"),
-                columnChartColorSecondary = hexToColorMap("90CAF8")
+                columnChartColorSecondary = hexToColorMap("90CAF8"),
+                categoryCount = categoryCount
             )
         )
 

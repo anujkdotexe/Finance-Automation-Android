@@ -33,8 +33,8 @@ object CategoryConstants {
 
     const val CATEGORY_TRANSFER: String = "Transfer"
 
-    /** Categories the sheet may not archive or delete: Savings and Transfer have their own burn rule, Other is the fallback. */
-    val PROTECTED_CATEGORIES: Set<String> = setOf(CATEGORY_SAVINGS, CATEGORY_TRANSFER, CATEGORY_OTHER)
+    /** Categories the sheet may not rename, archive or delete: Savings and Transfer have their own burn rule, Subscriptions drives the KPI, Other is the fallback. */
+    val PROTECTED_CATEGORIES: Set<String> = setOf(CATEGORY_SAVINGS, CATEGORY_TRANSFER, CATEGORY_OTHER, CATEGORY_SUBSCRIPTIONS)
 
     fun isProtectedCategory(name: String): Boolean = PROTECTED_CATEGORIES.any { it.equals(name.trim(), ignoreCase = true) }
 

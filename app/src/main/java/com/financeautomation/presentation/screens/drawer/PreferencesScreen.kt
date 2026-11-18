@@ -1,7 +1,9 @@
 package com.financeautomation.presentation.screens.drawer
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -10,9 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.SettingsBrightness
@@ -46,6 +51,8 @@ import com.financeautomation.presentation.viewmodel.SettingsViewModel
 fun PreferencesScreen(
     viewModel: SettingsViewModel,
     state: SettingsUiState,
+    onNavigateToCategories: () -> Unit = {},
+    onNavigateToAccounts: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -74,6 +81,120 @@ fun PreferencesScreen(
                 style = FinanceTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        // Categories & Accounts Management Card
+        Surface(
+            color = FinanceTheme.colors.surfaceContainerLowest,
+            shape = FinanceShapes.large,
+            shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // ROW 1: Categories
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .clickable(onClick = onNavigateToCategories)
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(FinanceTheme.sizes.buttonHeightMedium)
+                                .clip(CircleShape)
+                                .background(FinanceTheme.colors.surfaceContainerHigh),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Category,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = stringResource(R.string.nav_categories_title),
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.pref_categories_count, state.categories.size),
+                                style = FinanceTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m))
+
+                // ROW 2: Accounts
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .clickable(onClick = onNavigateToAccounts)
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(FinanceTheme.sizes.buttonHeightMedium)
+                                .clip(CircleShape)
+                                .background(FinanceTheme.colors.surfaceContainerHigh),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AccountBalance,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = stringResource(R.string.accounts_section_title),
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.pref_accounts_count, state.accounts.size),
+                                style = FinanceTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                    )
+                }
+            }
         }
 
         // Exactly Three Rows Card
