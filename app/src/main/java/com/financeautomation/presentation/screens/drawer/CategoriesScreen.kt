@@ -1,6 +1,7 @@
 package com.financeautomation.presentation.screens.drawer
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -48,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -190,10 +193,60 @@ fun CategoriesScreen(
                                         .clickable {
                                             viewModel.onUpdateCategoryColor(cat.id, token.name)
                                             selectedCategoryForColor = null
-                                        }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.surface,
+                                            modifier = Modifier.size(FinanceTheme.sizes.icon18)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // "No colour" option
+                    val isNoColorSelected = com.financeautomation.presentation.theme.isNoColor(cat)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.onUpdateCategoryColor(cat.id, CategoryColorTokens.NO_COLOR)
+                                selectedCategoryForColor = null
+                            }
+                            .padding(vertical = FinanceTheme.spacing.xs, horizontal = FinanceTheme.spacing.s),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(FinanceTheme.sizes.iconLarge)
+                                .clip(CircleShape)
+                                .border(
+                                    width = FinanceTheme.sizes.strokeMedium,
+                                    color = if (isNoColorSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isNoColorSelected) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(FinanceTheme.sizes.icon18)
                                 )
                             }
                         }
+                        Text(
+                            text = stringResource(R.string.category_color_none),
+                            style = FinanceTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             },
@@ -288,6 +341,7 @@ internal fun CategoryList(
     var localCategories by remember(categories) { mutableStateOf(categories) }
     var draggingCategoryId by remember { mutableStateOf<String?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var measuredRowHeightPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current.density
 
     Column(
@@ -329,6 +383,11 @@ internal fun CategoryList(
                     }
                 } else null,
                 modifier = Modifier
+                    .onSizeChanged { size ->
+                        if (size.height > 0) {
+                            measuredRowHeightPx = size.height.toFloat()
+                        }
+                    }
                     .semantics {
                         customActions = buildList {
                             if (index > 0) {
@@ -375,21 +434,22 @@ internal fun CategoryList(
                         onDrag = { change, dragAmount ->
                             change.consume()
                             dragOffsetY += dragAmount.y
-                            val itemHeightPx = 68f * density
+                            val rowHeight = if (measuredRowHeightPx > 0f) measuredRowHeightPx else 56f * density
+                            val swapThreshold = rowHeight * 0.5f
                             val currentIndex = localCategories.indexOfFirst { it.id == draggingCategoryId }
                             if (currentIndex != -1) {
-                                if (dragOffsetY > itemHeightPx && currentIndex < localCategories.size - 1) {
+                                if (dragOffsetY > swapThreshold && currentIndex < localCategories.size - 1) {
                                     val mutable = localCategories.toMutableList()
                                     val item = mutable.removeAt(currentIndex)
                                     mutable.add(currentIndex + 1, item)
                                     localCategories = mutable
-                                    dragOffsetY -= itemHeightPx
-                                } else if (dragOffsetY < -itemHeightPx && currentIndex > 0) {
+                                    dragOffsetY -= rowHeight
+                                } else if (dragOffsetY < -swapThreshold && currentIndex > 0) {
                                     val mutable = localCategories.toMutableList()
                                     val item = mutable.removeAt(currentIndex)
                                     mutable.add(currentIndex - 1, item)
                                     localCategories = mutable
-                                    dragOffsetY += itemHeightPx
+                                    dragOffsetY += rowHeight
                                 }
                             }
                         }
@@ -459,12 +519,14 @@ private fun CategoryItemCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(FinanceTheme.spacing.compact)
-                        .clip(CircleShape)
-                        .background(dotColor)
-                )
+                if (dotColor != Color.Transparent) {
+                    Box(
+                        modifier = Modifier
+                            .size(FinanceTheme.spacing.compact)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
+                }
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(

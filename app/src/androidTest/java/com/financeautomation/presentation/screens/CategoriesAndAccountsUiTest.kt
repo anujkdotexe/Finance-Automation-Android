@@ -97,11 +97,20 @@ class CategoriesAndAccountsUiTest {
         }
 
         // Long press on Row 1 handle ("Reorder Food & Drink") and drag down past Row 2
+        // Drag more than 1.5 row heights in small moveBy steps with advanceEventTime between them
+        val density = composeTestRule.density.density
+        val totalDistance = 160f * density
+        val steps = 8
+        val stepDistance = totalDistance / steps
+
         composeTestRule.onNodeWithContentDescription("Reorder Food & Drink")
             .performTouchInput {
                 down(center)
                 advanceEventTime(600)
-                moveTo(center.copy(y = center.y + 200f))
+                repeat(steps) {
+                    moveBy(androidx.compose.ui.geometry.Offset(0f, stepDistance))
+                    advanceEventTime(50)
+                }
                 up()
             }
 
