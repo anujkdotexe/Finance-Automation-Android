@@ -302,10 +302,10 @@ class NotificationProcessor(
         handledEntity: HandledNotificationEntity,
         detectedAccountHint: String? = null
     ): NotificationProcessingOutcome {
-        val targetState = if (wording == WordingClass.PROCESSING) {
-            PendingCaptureEntity.STATE_AWAITING_SUCCESS
-        } else {
-            PendingCaptureEntity.STATE_WAITING
+        val targetState = when {
+            flags.split(",").map { it.trim() }.contains(PendingCaptureEntity.FLAG_REFUND_REVERSAL) -> PendingCaptureEntity.STATE_NEEDS_REVIEW
+            wording == WordingClass.PROCESSING -> PendingCaptureEntity.STATE_AWAITING_SUCCESS
+            else -> PendingCaptureEntity.STATE_WAITING
         }
 
         // Check if an existing capture with the same sbn.key exists (e.g. processing -> success update)
@@ -426,6 +426,9 @@ class NotificationProcessor(
             com.financeautomation.domain.usecase.DropReason.NOT_WHITELISTED -> PipelineCode.DROPPED_NOT_WHITELISTED_COUNT
             com.financeautomation.domain.usecase.DropReason.BLACKLISTED,
             com.financeautomation.domain.usecase.DropReason.SELF_NOTIFICATION -> PipelineCode.DROPPED_BLACKLIST
+            com.financeautomation.domain.usecase.DropReason.PAYMENT_REQUEST -> PipelineCode.DROPPED_PAYMENT_REQUEST
+            com.financeautomation.domain.usecase.DropReason.MANDATE_NOTICE -> PipelineCode.DROPPED_MANDATE_NOTICE
+            com.financeautomation.domain.usecase.DropReason.BALANCE_HOLD -> PipelineCode.DROPPED_BALANCE_HOLD
         }
 
         /**

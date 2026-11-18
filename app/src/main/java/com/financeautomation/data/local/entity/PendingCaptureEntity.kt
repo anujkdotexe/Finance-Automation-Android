@@ -67,6 +67,7 @@ data class PendingCaptureEntity(
         const val FLAG_NEEDS_AMOUNT: String = "NEEDS_AMOUNT"
         const val FLAG_POSSIBLE_DUPLICATE: String = "POSSIBLE_DUPLICATE"
         const val FLAG_NEW_ACCOUNT: String = "NEW_ACCOUNT"
+        const val FLAG_REFUND_REVERSAL: String = "REFUND_REVERSAL"
 
         /** Flag value is `SUBSCRIPTION:<subscriptionId>`: the capture pays an open subscription cycle. */
         const val FLAG_SUBSCRIPTION_PREFIX: String = "SUBSCRIPTION:"

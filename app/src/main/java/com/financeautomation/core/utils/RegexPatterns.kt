@@ -41,8 +41,9 @@ object RegexPatterns {
 
     // The amount tied to a debit or credit verb: "debited Rs 450", "spent INR 349", "Rs 200 paid", "debited by 30"
     private val AMOUNT_NEXT_TO_VERB_REGEX: Regex = Regex(
-        """(?i)\b(?:debit(?:ed)?(?:\s+by|\s+for)?|spent|paid|withdrawn|sent|deducted|purchase|payment\s+of|credited|received|refunded)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)""" +
-            """|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|credited|received|refunded)\b"""
+        """(?i)\b(?:debit(?:ed)?(?:\s+by|\s+for)?|spent|paid|withdrawn|sent|deducted|purchase|payment\s+of|credited|received|refunded|dr\.?|cr\.?)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""" +
+            """|\b(?:debit(?:ed)?\s+by|debited\s+for)\s*([\d,]+(?:\.\d{1,2})?)""" +
+            """|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|credited|received|refunded|dr\.?|cr\.?)\b"""
     )
 
     // Words that mark an amount as a balance or limit, not the payment
@@ -51,12 +52,12 @@ object RegexPatterns {
 
     // Debit direction flag keywords
     val DEBIT_FLAG_REGEX: Regex = Regex(
-        """(?i)\b(debited|paid|spent|sent|withdrawn|deducted|purchased|debited\s+by|transfer\s+to)\b"""
+        """(?i)\b(debited|paid|spent|sent|withdrawn|deducted|purchased|debited\s+by|transfer\s+to|dr\.?)\b"""
     )
 
     // Credit direction flag keywords
     val CREDIT_FLAG_REGEX: Regex = Regex(
-        """(?i)\b(credited|received|deposited|refunded|credited\s+with|cashback|added)\b"""
+        """(?i)\b(credited|received|deposited|refunded|credited\s+with|cashback|added|cr\.?)\b"""
     )
 
     // Funding account regex matching bank name and last 3-4 digits
@@ -71,8 +72,8 @@ object RegexPatterns {
 
     // A completed payment: a direction verb directly tied to an amount ("Paid Rs 349", "Rs 500 debited")
     val CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
-            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|credited|received)\b"""
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded|dr\.?|cr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|credited|received|dr\.?|cr\.?)\b"""
     )
 
     // "Payment successful" style wording that confirms an outgoing payment without a separate debit verb
@@ -82,14 +83,14 @@ object RegexPatterns {
 
     // A completed outgoing payment: a debit verb tied to an amount
     val DEBIT_CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
-            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|purchased?)\b"""
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?|dr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|purchased?|dr\.?)\b"""
     )
 
     // A completed incoming payment: a credit verb tied to an amount
     val CREDIT_CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:credited|received|deposited|refunded)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
-            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:credited|received|deposited|refunded)\b"""
+        """(?i)\b(?:credited|received|deposited|refunded|cr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:credited|received|deposited|refunded|cr\.?)\b"""
     )
 
     // Advertising wording. It marks a message as a promotion even next to an amount, unless a purchase was paid.
@@ -128,7 +129,11 @@ object RegexPatterns {
     fun extractAmount(text: String): Double? {
         // 1. The amount next to a debit or credit verb is the payment; a balance or limit mentioned first must not win
         val near = AMOUNT_NEXT_TO_VERB_REGEX.find(text)
-        val nearRaw = near?.let { it.groupValues[1].ifEmpty { it.groupValues[2] } }
+        val nearRaw = near?.let {
+            it.groupValues.getOrNull(1)?.ifEmpty { "" }?.takeIf { s -> s.isNotEmpty() }
+                ?: it.groupValues.getOrNull(2)?.ifEmpty { "" }?.takeIf { s -> s.isNotEmpty() }
+                ?: it.groupValues.getOrNull(3)?.ifEmpty { "" }?.takeIf { s -> s.isNotEmpty() }
+        }
         nearRaw?.replace(",", "")?.toDoubleOrNull()?.let { return it }
         // 2. Otherwise the first amount that is not labelled as a balance or limit
         val all = AMOUNT_REGEX.findAll(text).toList()
