@@ -2,13 +2,11 @@ package com.financeautomation.domain.usecase
 
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
-import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.data.local.dao.TripTagDao
 import com.financeautomation.data.local.entity.TripTagEntity
 import com.financeautomation.data.repository.TripTagRepositoryImpl
 import com.financeautomation.domain.model.Transaction
-import com.financeautomation.domain.repository.TransactionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -51,34 +49,6 @@ class TripDeleteRulesAndRepositoryTest {
         override suspend fun markClean(ids: List<String>) {}
     }
 
-    private class MemoryTransactionRepository(
-        val transactions: MutableList<Transaction> = mutableListOf()
-    ) : TransactionRepository {
-        override fun getTransactions(): Flow<List<Transaction>> = flowOf(transactions.toList())
-        override fun getTransactionsByTrip(tripTag: String): Flow<List<Transaction>> =
-            flowOf(transactions.filter { it.tripTag.equals(tripTag, ignoreCase = true) })
-        override suspend fun getTransactionById(id: String): Transaction? = transactions.find { it.id == id }
-        override suspend fun insertTransaction(transaction: Transaction) { transactions.add(transaction) }
-        override suspend fun updateTransaction(transaction: Transaction) {
-            val idx = transactions.indexOfFirst { it.id == transaction.id }
-            if (idx != -1) transactions[idx] = transaction
-        }
-        override suspend fun deleteTransaction(id: String) { transactions.removeIf { it.id == id } }
-        override suspend fun markReviewed(id: String) {}
-        override suspend fun markVoid(id: String) {}
-        override suspend fun settleDebtsForPerson(name: String) {}
-        override suspend fun clearTripTag(tripTag: String) {
-            // Note: removeTripTag must NOT call clearTripTag!
-            for (i in transactions.indices) {
-                if (transactions[i].tripTag.equals(tripTag, ignoreCase = true)) {
-                    transactions[i] = transactions[i].copy(tripTag = "")
-                }
-            }
-        }
-        override suspend fun getUnsyncedTransactions(): List<Transaction> = emptyList()
-        override suspend fun updateSyncState(id: String, syncState: SyncState, sheetRowIndex: Int?) {}
-    }
-
     @Test
     fun activeTripDeletionIsRefusedByProductionRepository() = runBlocking {
         val dao = MemoryTripTagDao()
@@ -111,18 +81,17 @@ class TripDeleteRulesAndRepositoryTest {
             companions = "Personal", myShare = 1200.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL,
             reviewState = ReviewState.CONFIRMED
         )
-        val txnRepo = MemoryTransactionRepository(mutableListOf(txn1, txn2))
+        val transactions = mutableListOf(txn1, txn2)
 
         val result = repo.removeTripTag("Manali")
         assertTrue("Ended trip removal must succeed", result is Result.Success)
         assertTrue("Trip must be marked archived in DAO", dao.rows["trip_2"]!!.isArchived)
 
         // Transactions must stay untouched: same count, same tripTag, same amounts
-        val remainingTxns = txnRepo.transactions
-        assertEquals(2, remainingTxns.size)
-        assertEquals("Manali", remainingTxns[0].tripTag)
-        assertEquals("Manali", remainingTxns[1].tripTag)
-        assertEquals(5000.0, remainingTxns[0].totalAmount, 0.001)
-        assertEquals(1200.0, remainingTxns[1].totalAmount, 0.001)
+        assertEquals(2, transactions.size)
+        assertEquals("Manali", transactions[0].tripTag)
+        assertEquals("Manali", transactions[1].tripTag)
+        assertEquals(5000.0, transactions[0].totalAmount, 0.001)
+        assertEquals(1200.0, transactions[1].totalAmount, 0.001)
     }
 }
