@@ -96,7 +96,7 @@ fun FriendPaidFlowSheet(
     var amountText by rememberSaveable { mutableStateOf("") }
     var creditorName by rememberSaveable { mutableStateOf("") }
     var whatForText by rememberSaveable { mutableStateOf("") }
-    var selectedCategory by rememberSaveable { mutableStateOf(CategoryConstants.CATEGORY_FOOD_AND_DRINK) }
+    var selectedCategory by rememberSaveable { mutableStateOf(CategoryConstants.CATEGORY_OTHER) }
 
     val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DISPLAY_DATE_FORMATTER) }
     var dateText by rememberSaveable { mutableStateOf(todayFormatted) }

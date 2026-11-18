@@ -153,7 +153,7 @@ class AppContainerTest {
             throw UnsupportedOperationException("unexpected call: syncPendingTransactions")
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> =
             throw UnsupportedOperationException("unexpected call: logCredit")
-        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> =
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long, category: String): Result<String> =
             throw UnsupportedOperationException("unexpected call: logPayable")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> =
             throw UnsupportedOperationException("unexpected call: logRepayment")

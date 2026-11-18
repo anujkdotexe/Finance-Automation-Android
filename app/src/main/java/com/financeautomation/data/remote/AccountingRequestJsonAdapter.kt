@@ -78,6 +78,8 @@ object AccountingRequestJsonAdapter {
             put("amount", JsonPrimitive(req.amount))
             put("whatFor", JsonPrimitive(req.whatFor))
             put("timestamp", JsonPrimitive(req.timestamp))
+            put("category", JsonPrimitive(req.category))
+            req.transactionId?.let { put("transactionId", JsonPrimitive(it)) }
         }.toString()
     }
 
@@ -88,7 +90,9 @@ object AccountingRequestJsonAdapter {
             creditor = obj["creditor"]?.jsonPrimitive?.content.orEmpty(),
             amount = obj["amount"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
             whatFor = obj["whatFor"]?.jsonPrimitive?.content.orEmpty(),
-            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
+            category = obj["category"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER,
+            transactionId = obj["transactionId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         )
     }
 

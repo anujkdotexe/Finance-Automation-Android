@@ -33,7 +33,9 @@ data class LogPayableRequest(
     val creditor: String,
     val amount: Double,
     val whatFor: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val category: String = com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER,
+    val transactionId: String? = null
 )
 
 /**

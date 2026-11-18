@@ -217,17 +217,40 @@ open class AccountingSyncExecutor(
 
             val newPayUuid = "pay_" + UUID.randomUUID().toString().replace("-", "").take(12)
             val isFullyRepaid = nettingRes.netAmount <= 0.0
+            val effectiveCategory = req.category.trim().ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER }
+            val effectiveWhatFor = com.financeautomation.core.utils.PayableFormatUtils.buildEffectiveWhatFor(req.whatFor, effectiveCategory)
             val payCells = listOf(
                 dateSerial,
                 timeSerial,
                 req.creditor,
-                req.whatFor,
+                effectiveWhatFor,
                 AccountingUtils.round2(nettingRes.netAmount),
                 if (isFullyRepaid) dateSerial else "",
                 if (isFullyRepaid) "Repaid" else "Pending"
             )
 
+            val newDebitUuid = req.transactionId ?: ("txn_" + UUID.randomUUID().toString().replace("-", "").take(12))
+            val debitCells = listOf(
+                dateSerial,
+                timeSerial,
+                "Other",
+                if (req.whatFor.isNotBlank()) req.whatFor else "Paid by ${req.creditor}",
+                "",
+                effectiveCategory,
+                AccountingUtils.round2(req.amount),
+                "Personal",
+                AccountingUtils.round2(req.amount),
+                0.0,
+                "Personal"
+            )
+
             val appends = listOf(
+                com.financeautomation.domain.model.NewRow(
+                    table = TableType.DEBIT,
+                    tab = tabName,
+                    uuid = newDebitUuid,
+                    cells = debitCells
+                ),
                 com.financeautomation.domain.model.NewRow(
                     table = TableType.PAYABLE,
                     tab = tabName,

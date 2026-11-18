@@ -424,18 +424,65 @@ class TransactionRepositoryImpl(
         creditor: String,
         amount: Double,
         whatFor: String,
-        timestamp: Long
+        timestamp: Long,
+        category: String
     ): Result<String> = withContext(ioDispatcher) {
         try {
             if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
             if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "pay_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+            val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+            val effectiveCategory = category.trim().ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER }
+            val dateSerial = DateSerialUtils.toDateSerial(timestamp)
+            val timeSerial = DateSerialUtils.toTimeSerial(timestamp)
+            val desc = whatFor.trim().ifBlank { "Paid by $creditor" }
+
+            val txnEntity = TransactionEntity(
+                id = txnId,
+                timestamp = timestamp,
+                dateSerial = dateSerial,
+                timeSerial = timeSerial,
+                account = "Other",
+                merchant = desc,
+                tripTag = "",
+                category = effectiveCategory,
+                totalAmount = amount,
+                companions = "Personal",
+                myShare = amount,
+                owedToMe = 0.0,
+                status = TransactionStatus.PERSONAL.value,
+                sourcePackage = "",
+                reviewState = ReviewState.CONFIRMED.name,
+                syncState = SyncState.PENDING.name,
+                sheetRowIndex = null
+            )
+            resolveTransactionDao().insert(txnEntity)
+
+            val pDao = resolvePayableDao()
+            val effectiveWhatFor = com.financeautomation.core.utils.PayableFormatUtils.buildEffectiveWhatFor(whatFor, effectiveCategory)
+            pDao?.upsert(
+                PayableEntity(
+                    uuid = reqId,
+                    dateIncurredSerial = dateSerial,
+                    timeSerial = timeSerial,
+                    paidBy = creditor,
+                    whatFor = effectiveWhatFor,
+                    amountIOwe = amount,
+                    dateRepaidSerial = null,
+                    repaymentStatus = "Pending",
+                    tabName = "",
+                    sheetRowIndex = null
+                )
+            )
+
             val req = LogPayableRequest(
                 requestId = reqId,
                 creditor = creditor,
                 amount = amount,
                 whatFor = whatFor,
-                timestamp = timestamp
+                timestamp = timestamp,
+                category = effectiveCategory,
+                transactionId = txnId
             )
             val queueItem = SyncQueueEntity(
                 transactionId = reqId,
@@ -642,6 +689,16 @@ class TransactionRepositoryImpl(
                     val queued = qDao.getAllQueueFlow().first().filter { it.transactionId == id }
                     val isLoggedEntry = id.startsWith("pay_") || id.startsWith("rep_")
                     if (isLoggedEntry && queued.isNotEmpty()) {
+                        if (id.startsWith("pay_")) {
+                            val qItem = queued.first()
+                            try {
+                                val payReq = AccountingRequestJsonAdapter.payableRequestFromJson(qItem.payloadJson)
+                                payReq.transactionId?.let { tid ->
+                                    tDao.voidTransaction(tid, "[Void] Friend paid")
+                                }
+                                resolvePayableDao()?.deleteByUuid(id)
+                            } catch (_: Exception) {}
+                        }
                         qDao.deleteByTransactionId(id)
                         return@withLock Result.Success(Unit)
                     }
@@ -1133,8 +1190,12 @@ class TransactionRepositoryImpl(
                             rememberIfCreditSettledDebts(item.id, item.transactionId)
                         }
                         if (item.operationType == SyncQueueEntity.OP_LOG_PAYABLE) {
-                            val ts = AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson).timestamp
+                            val payReq = AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson)
+                            val ts = payReq.timestamp
                             deliveredMonths.add(java.time.YearMonth.from(Instant.ofEpochMilli(ts).atZone(sheetTimeZone)))
+                            payReq.transactionId?.let { tid ->
+                                transactionDao.updateSyncState(tid, SyncState.SYNCED.name)
+                            }
                         }
                         syncQueueDao.deleteById(item.id)
                         syncedCount++
