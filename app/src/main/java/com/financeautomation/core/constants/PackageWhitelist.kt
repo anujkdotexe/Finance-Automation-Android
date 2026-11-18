@@ -68,7 +68,7 @@ object PackageWhitelist {
 
     val WHITELISTED_FINANCIAL_PACKAGES: Set<String> = REGISTRY.map { it.packageId }.toSet()
 
-    // Strictly blocked messaging and mail apps where non-payment text must never be touched
+    // Strictly blocked messaging, mail and browser apps where non-payment text must never be touched
     const val PACKAGE_TELEGRAM: String = "org.telegram.messenger"
     const val PACKAGE_SIGNAL: String = "org.thoughtcrime.securesms"
     const val PACKAGE_FB_MESSENGER: String = "com.facebook.orca"
@@ -76,6 +76,11 @@ object PackageWhitelist {
     const val PACKAGE_DISCORD: String = "com.discord"
     const val PACKAGE_OUTLOOK: String = "com.microsoft.office.outlook"
     const val PACKAGE_GMAIL: String = "com.google.android.gm"
+    const val PACKAGE_CHROME: String = "com.android.chrome"
+    const val PACKAGE_FIREFOX: String = "org.mozilla.firefox"
+    const val PACKAGE_OPERA: String = "com.opera.browser"
+    const val PACKAGE_BRAVE: String = "com.brave.browser"
+    const val PACKAGE_EDGE: String = "com.microsoft.emmx"
 
     val BLACKLISTED_PRIVACY_PACKAGES: Set<String> = setOf(
         PACKAGE_TELEGRAM,
@@ -84,7 +89,12 @@ object PackageWhitelist {
         PACKAGE_INSTAGRAM,
         PACKAGE_DISCORD,
         PACKAGE_OUTLOOK,
-        PACKAGE_GMAIL
+        PACKAGE_GMAIL,
+        PACKAGE_CHROME,
+        PACKAGE_FIREFOX,
+        PACKAGE_OPERA,
+        PACKAGE_BRAVE,
+        PACKAGE_EDGE
     )
 
     val SMS_PACKAGES: Set<String> = setOf(

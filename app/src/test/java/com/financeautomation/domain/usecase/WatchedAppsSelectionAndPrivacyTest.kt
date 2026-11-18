@@ -80,15 +80,19 @@ class WatchedAppsSelectionAndPrivacyTest {
     fun privacyNoteIsShownAndMatchesSpecification() {
         assertEquals("We never read personal chats, emails or OTP messages.", PackageWhitelist.PRIVACY_STATEMENT)
 
-        val stringsXml = File("src/main/res/values/strings.xml").readText()
-        assertTrue("strings.xml must contain privacy note", stringsXml.contains("payment_apps_privacy_note"))
+        val stringsXml = File("src/main/res/values/strings.xml").let {
+            if (it.exists()) it.readText() else File("app/src/main/res/values/strings.xml").readText()
+        }
+        assertTrue("strings.xml must contain privacy note", stringsXml.contains("capture_privacy_note"))
         assertTrue("strings.xml privacy note must mention personal chats or emails",
             stringsXml.contains("We never read personal chats, emails or OTP messages")
         )
 
-        val screenSource = File("src/main/java/com/financeautomation/presentation/screens/drawer/CapturePermissionsScreen.kt").readText()
+        val screenSource = File("src/main/java/com/financeautomation/presentation/screens/drawer/CapturePermissionsScreen.kt").let {
+            if (it.exists()) it.readText() else File("app/src/main/java/com/financeautomation/presentation/screens/drawer/CapturePermissionsScreen.kt").readText()
+        }
         assertTrue("CapturePermissionsScreen must render privacy note",
-            screenSource.contains("payment_apps_privacy_note") || screenSource.contains("PRIVACY_STATEMENT")
+            screenSource.contains("capture_privacy_note") || screenSource.contains("PRIVACY_STATEMENT")
         )
     }
 }
