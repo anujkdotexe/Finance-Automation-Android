@@ -60,15 +60,24 @@ class SubscriptionActionUseCase(
         if (cycle.state == SubscriptionCycleState.PAID || cycle.state == SubscriptionCycleState.SKIPPED || cycle.transactionId != null) {
             return@withLock SubscriptionYesOutcome.AlreadyResolved
         }
-        val currentMonthStart = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
-            .withDayOfMonth(1).toEpochDay()
-        if (cycle.dueEpochDay < currentMonthStart) {
-            if (cycle.state != SubscriptionCycleState.NEEDS_REVIEW) {
-                repository.setCycleState(cycle.id, SubscriptionCycleState.NEEDS_REVIEW)
+        val currentDate = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+        val currentMonthStart = currentDate.withDayOfMonth(1).toEpochDay()
+        val timestamp = if (cycle.dueEpochDay < currentMonthStart) {
+            val daysPastDue = currentDate.toEpochDay() - cycle.dueEpochDay
+            if (daysPastDue in 1..REMINDER_GRACE_DAYS) {
+                // Within grace period across month boundary: log with due date's month at 23:59 on last day of due month
+                val dueDate = LocalDate.ofEpochDay(cycle.dueEpochDay)
+                val lastDayOfDueMonth = dueDate.withDayOfMonth(dueDate.lengthOfMonth())
+                lastDayOfDueMonth.atTime(23, 59).atZone(zone).toInstant().toEpochMilli()
+            } else {
+                if (cycle.state != SubscriptionCycleState.NEEDS_REVIEW) {
+                    repository.setCycleState(cycle.id, SubscriptionCycleState.NEEDS_REVIEW)
+                }
+                return@withLock SubscriptionYesOutcome.PastMonth
             }
-            return@withLock SubscriptionYesOutcome.PastMonth
+        } else {
+            expenseTimestamp(cycle.dueEpochDay, nowMillis)
         }
-        val timestamp = expenseTimestamp(cycle.dueEpochDay, nowMillis)
         val amount = sub.amount
         if (amount == null) {
             return@withLock try {
@@ -114,5 +123,6 @@ class SubscriptionActionUseCase(
 
     companion object {
         const val REMIND_COUNT_AFTER_NOT_YET: Int = 2
+        const val REMINDER_GRACE_DAYS: Long = 3L
     }
 }

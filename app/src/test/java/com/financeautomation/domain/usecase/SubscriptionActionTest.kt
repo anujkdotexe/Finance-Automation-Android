@@ -84,6 +84,37 @@ class SubscriptionActionTest {
     }
 
     @Test
+    fun yesWithinGraceDaysAfterMonthBoundaryLogsAtEndOfDueMonth() = runBlocking {
+        val f = Fixture(649.0)
+        val march31 = LocalDate.of(2026, 3, 31).toEpochDay()
+        val cycle = f.repo.addCycle("sub_netflix", march31)
+        val april2Now = LocalDate.of(2026, 4, 2).atTime(10, 0).atZone(ist).toInstant().toEpochMilli()
+
+        val outcome = f.actions.yes(cycle.id, april2Now)
+
+        assertTrue("Yes within grace period must be logged", outcome is SubscriptionYesOutcome.Logged)
+        assertEquals(1, f.recorder.inserted.size)
+        val txn = f.recorder.inserted.single()
+        val expectedTimestamp = LocalDate.of(2026, 3, 31).atTime(23, 59).atZone(ist).toInstant().toEpochMilli()
+        assertEquals(expectedTimestamp, txn.timestamp)
+        assertEquals(SubscriptionCycleState.PAID, f.repo.cycle(cycle.id).state)
+    }
+
+    @Test
+    fun yesAfterGraceDaysAcrossMonthBoundaryStaysPastMonth() = runBlocking {
+        val f = Fixture(649.0)
+        val march31 = LocalDate.of(2026, 3, 31).toEpochDay()
+        val cycle = f.repo.addCycle("sub_netflix", march31)
+        val april4Now = LocalDate.of(2026, 4, 4).atTime(10, 0).atZone(ist).toInstant().toEpochMilli()
+
+        val outcome = f.actions.yes(cycle.id, april4Now)
+
+        assertEquals(SubscriptionYesOutcome.PastMonth, outcome)
+        assertTrue(f.recorder.inserted.isEmpty())
+        assertEquals(SubscriptionCycleState.NEEDS_REVIEW, f.repo.cycle(cycle.id).state)
+    }
+
+    @Test
     fun yesOnCycleFromPreviousMonthInsertsNothingAndMovesItToNeedsReview() = runBlocking {
         val f = Fixture(649.0)
         val cycle = f.repo.addCycle("sub_netflix", LocalDate.of(2026, 3, 31).toEpochDay())
