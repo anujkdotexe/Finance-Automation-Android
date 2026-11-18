@@ -170,6 +170,28 @@ class SettingsSyncCoordinator(
         provisionWorkbook(createBackup = true, archiveOlder = archiveOlder)
     }
 
+    fun requestRepairWorkbook() {
+        if (uiState.value.isProvisioning) return
+        scope.launch(ioDispatcher) {
+            val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
+            val count = getExistingBackupsCount(currentYear)
+            if (count > 0) {
+                uiState.update { it.copy(pendingRepairConfirmation = count) }
+            } else {
+                onRepairWorkbook(archiveOlder = false)
+            }
+        }
+    }
+
+    fun confirmRepair(archiveOlder: Boolean) {
+        uiState.update { it.copy(pendingRepairConfirmation = null) }
+        onRepairWorkbook(archiveOlder = archiveOlder)
+    }
+
+    fun cancelRepair() {
+        uiState.update { it.copy(pendingRepairConfirmation = null) }
+    }
+
     suspend fun getExistingBackupsCount(year: Int): Int {
         val client = googleDriveClient ?: return 0
         return when (val res = client.findBackups(year)) {
@@ -187,40 +209,69 @@ class SettingsSyncCoordinator(
                 val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                 val workbookName = "Finance$currentYear"
                 val opName = if (createBackup) "repair workbook" else "provision workbook"
-                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true, createBackup = createBackup, archiveOlderBackups = archiveOlder)) {
-                    is Result.Success -> {
-                        val spreadsheetId = res.data
-                        preferencesRepository.setSpreadsheetId(spreadsheetId)
-                        regenerateDashboardUseCase?.invoke()
-                        syncConfigUseCase?.mirrorToCloud()
-                        val archiveOutcome = resolver.lastArchiveOutcome
-                        val userMsg = when {
-                            archiveOutcome != null && archiveOutcome.failedCount > 0 ->
-                                UiText.res(R.string.repair_backup_msg_partial_archive, archiveOutcome.failedCount)
-                            archiveOutcome != null && archiveOutcome.movedCount > 0 ->
-                                UiText.res(R.string.repair_backup_msg_archived, archiveOutcome.movedCount)
-                            else ->
-                                UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
+                if (createBackup) {
+                    when (val res = resolver.repairWorkbook(currentYear, archiveOlderBackups = archiveOlder)) {
+                        is Result.Success -> {
+                            val spreadsheetId = res.data.spreadsheetId
+                            preferencesRepository.setSpreadsheetId(spreadsheetId)
+                            regenerateDashboardUseCase?.invoke()
+                            syncConfigUseCase?.mirrorToCloud()
+                            val archiveOutcome = res.data.archiveOutcome
+                            val userMsg = when {
+                                archiveOutcome != null && (archiveOutcome.failedCount > 0 || archiveOutcome.error != null) -> {
+                                    val failCount = if (archiveOutcome.failedCount > 0) archiveOutcome.failedCount else 1
+                                    UiText.res(R.string.repair_backup_msg_partial_archive, failCount)
+                                }
+                                archiveOutcome != null && archiveOutcome.movedCount > 0 ->
+                                    UiText.res(R.string.repair_backup_msg_archived, archiveOutcome.movedCount)
+                                else ->
+                                    UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
+                            }
+                            uiState.update {
+                                it.copy(
+                                    spreadsheetId = spreadsheetId,
+                                    isProvisioning = false,
+                                    userMessage = userMsg
+                                )
+                            }
                         }
-                        uiState.update {
-                            it.copy(
-                                spreadsheetId = spreadsheetId,
-                                isProvisioning = false,
-                                userMessage = userMsg
-                            )
+                        is Result.Error -> {
+                            Diagnostics.record("SettingsSyncCoordinator", "repair_workbook: ${SyncErrorKind.safeCode(opName, res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
+                            uiState.update {
+                                it.copy(
+                                    isProvisioning = false,
+                                    errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage(opName, res.throwable))
+                                )
+                            }
                         }
+                        is Result.Loading -> {}
                     }
-                    is Result.Error -> {
-                        val tag = if (createBackup) "repair_workbook" else "provision_workbook"
-                        Diagnostics.record("SettingsSyncCoordinator", "$tag: ${SyncErrorKind.safeCode(opName, res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
-                        uiState.update {
-                            it.copy(
-                                isProvisioning = false,
-                                errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage(opName, res.throwable))
-                            )
+                } else {
+                    when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true)) {
+                        is Result.Success -> {
+                            val spreadsheetId = res.data
+                            preferencesRepository.setSpreadsheetId(spreadsheetId)
+                            regenerateDashboardUseCase?.invoke()
+                            syncConfigUseCase?.mirrorToCloud()
+                            uiState.update {
+                                it.copy(
+                                    spreadsheetId = spreadsheetId,
+                                    isProvisioning = false,
+                                    userMessage = UiText.res(R.string.settings_msg_provisioned_workbook, workbookName)
+                                )
+                            }
                         }
+                        is Result.Error -> {
+                            Diagnostics.record("SettingsSyncCoordinator", "provision_workbook: ${SyncErrorKind.safeCode(opName, res.throwable)} ${PrivacyScrubber.scrub(res.throwable.message.orEmpty())}")
+                            uiState.update {
+                                it.copy(
+                                    isProvisioning = false,
+                                    errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage(opName, res.throwable))
+                                )
+                            }
+                        }
+                        is Result.Loading -> {}
                     }
-                    is Result.Loading -> {}
                 }
             }
             return

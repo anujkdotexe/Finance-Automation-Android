@@ -93,8 +93,6 @@ fun SyncBackupScreen(
     val showNameAndEmail = !accountDisplayName.isNullOrBlank() && !accountEmail.isNullOrBlank()
 
     var showCreateFreshDialog by rememberSaveable { mutableStateOf(false) }
-    var showRepairArchiveDialog by rememberSaveable { mutableStateOf(false) }
-    var repairBackupCount by rememberSaveable { mutableStateOf(0) }
     var showSignOutDialog by remember { mutableStateOf(false) }
 
     val gso = remember {
@@ -238,10 +236,11 @@ fun SyncBackupScreen(
         )
     }
 
-    if (showRepairArchiveDialog) {
+    val pendingRepairCount = state.pendingRepairConfirmation
+    if (pendingRepairCount != null) {
         val currentYear = remember { java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year }
         AlertDialog(
-            onDismissRequest = { showRepairArchiveDialog = false },
+            onDismissRequest = { viewModel.cancelRepair() },
             title = {
                 Text(
                     text = stringResource(R.string.repair_backup_dialog_title),
@@ -250,10 +249,10 @@ fun SyncBackupScreen(
                 )
             },
             text = {
-                val bodyText = if (repairBackupCount == 1) {
+                val bodyText = if (pendingRepairCount == 1) {
                     stringResource(R.string.repair_backup_dialog_body_one, currentYear, 2)
                 } else {
-                    stringResource(R.string.repair_backup_dialog_body_many, repairBackupCount, currentYear, repairBackupCount + 1)
+                    stringResource(R.string.repair_backup_dialog_body_many, pendingRepairCount, currentYear, pendingRepairCount + 1)
                 }
                 Text(
                     text = bodyText,
@@ -267,8 +266,7 @@ fun SyncBackupScreen(
                 ) {
                     Button(
                         onClick = {
-                            showRepairArchiveDialog = false
-                            viewModel.onRepairWorkbook(archiveOlder = true)
+                            viewModel.confirmRepair(archiveOlder = true)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -278,8 +276,7 @@ fun SyncBackupScreen(
                     }
                     OutlinedButton(
                         onClick = {
-                            showRepairArchiveDialog = false
-                            viewModel.onRepairWorkbook(archiveOlder = false)
+                            viewModel.confirmRepair(archiveOlder = false)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -288,7 +285,7 @@ fun SyncBackupScreen(
                         Text(stringResource(R.string.repair_backup_action_keep))
                     }
                     TextButton(
-                        onClick = { showRepairArchiveDialog = false },
+                        onClick = { viewModel.cancelRepair() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
@@ -662,15 +659,7 @@ fun SyncBackupScreen(
 
                 OutlinedButton(
                     onClick = {
-                        coroutineScope.launch {
-                            val count = viewModel.checkBackupsBeforeRepair()
-                            if (count > 0) {
-                                repairBackupCount = count
-                                showRepairArchiveDialog = true
-                            } else {
-                                viewModel.onRepairWorkbook(archiveOlder = false)
-                            }
-                        }
+                        viewModel.requestRepairWorkbook()
                     },
                     enabled = !state.isProvisioning,
                     shape = FinanceTheme.shapes.medium,

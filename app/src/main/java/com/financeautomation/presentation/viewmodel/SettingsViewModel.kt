@@ -44,6 +44,8 @@ data class SettingsUiState(
     val googleAccountEmail: String? = null,
     /** Set while the user is asked to confirm switching to another Google account. */
     val pendingAccountSwitch: com.financeautomation.data.account.AccountSwitchPrompt? = null,
+    /** Non-null when a repair action found existing backups and awaits user confirmation (Archive / Keep / Cancel). Holds backup count. */
+    val pendingRepairConfirmation: Int? = null,
     val googleAccountDisplayName: String? = null,
     val accounts: List<Account> = emptyList(),
     val accountTransactionCounts: Map<String, Int> = emptyMap(),
@@ -246,6 +248,9 @@ class SettingsViewModel(
 
     fun autoProvisionMasterSheet() = syncCoordinator.autoProvisionMasterSheet()
     fun onRepairWorkbook(archiveOlder: Boolean = false) = syncCoordinator.onRepairWorkbook(archiveOlder = archiveOlder)
+    fun requestRepairWorkbook() = syncCoordinator.requestRepairWorkbook()
+    fun confirmRepair(archiveOlder: Boolean) = syncCoordinator.confirmRepair(archiveOlder)
+    fun cancelRepair() = syncCoordinator.cancelRepair()
     suspend fun checkBackupsBeforeRepair(): Int {
         val currentYear = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year
         return syncCoordinator.getExistingBackupsCount(currentYear)

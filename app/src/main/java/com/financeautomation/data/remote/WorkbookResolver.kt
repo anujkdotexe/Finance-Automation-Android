@@ -45,8 +45,6 @@ open class WorkbookResolver(
     val onWorkbookReplaced: suspend (year: Int, oldId: String, newId: String) -> Unit = { _, _, _ -> }
 ) {
     private val mutex = Mutex()
-    var lastArchiveOutcome: ArchiveBackupsOutcome? = null
-        private set
 
     /**
      * Checks if a workbook exists for [year] without creating a new workbook or folder.
@@ -76,11 +74,44 @@ open class WorkbookResolver(
         }
     }
 
+    open suspend fun repairWorkbook(
+        year: Int,
+        archiveOlderBackups: Boolean = false
+    ): Result<WorkbookRepairResult> = withContext(ioDispatcher) {
+        var archiveOutcome: ArchiveBackupsOutcome? = null
+        val res = resolveForYearInternal(
+            year = year,
+            forceValidateTabs = true,
+            createBackup = true,
+            archiveOlderBackups = archiveOlderBackups,
+            onArchiveOutcome = { archiveOutcome = it }
+        )
+        when (res) {
+            is Result.Success -> Result.Success(WorkbookRepairResult(res.data, archiveOutcome))
+            is Result.Error -> Result.Error(res.exception)
+            is Result.Loading -> Result.Loading
+        }
+    }
+
     open suspend fun resolveForYear(
         year: Int,
         forceValidateTabs: Boolean = false,
         createBackup: Boolean = false,
         archiveOlderBackups: Boolean = false
+    ): Result<String> = resolveForYearInternal(
+        year = year,
+        forceValidateTabs = forceValidateTabs,
+        createBackup = createBackup,
+        archiveOlderBackups = archiveOlderBackups,
+        onArchiveOutcome = null
+    )
+
+    private suspend fun resolveForYearInternal(
+        year: Int,
+        forceValidateTabs: Boolean = false,
+        createBackup: Boolean = false,
+        archiveOlderBackups: Boolean = false,
+        onArchiveOutcome: ((ArchiveBackupsOutcome) -> Unit)? = null
     ): Result<String> = withContext(ioDispatcher) {
         val today = LocalDate.now(clock).toString()
         val lastVerified = preferencesRepository.getPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year))
@@ -130,7 +161,6 @@ open class WorkbookResolver(
 
             if (candidateId != null) {
                 if (createBackup) {
-                    lastArchiveOutcome = null
                     // Check if workbook contains existing data rows before repair
                     val metadataRes = googleSheetsClient.getSheetTabsDetailed(candidateId)
                     if (metadataRes is Result.Success) {
@@ -144,7 +174,7 @@ open class WorkbookResolver(
                             } else {
                                 if (archiveOlderBackups && existingBackupsRes is Result.Error) {
                                     Diagnostics.record("WorkbookResolver", "findBackups_failed: ${existingBackupsRes.exception.message}")
-                                    lastArchiveOutcome = ArchiveBackupsOutcome(error = existingBackupsRes.exception)
+                                    onArchiveOutcome?.invoke(ArchiveBackupsOutcome(failedCount = 1, error = existingBackupsRes.exception))
                                 }
                                 emptyList()
                             }
@@ -163,13 +193,13 @@ open class WorkbookResolver(
                                 val rootFolderRes = googleDriveClient.findOrCreateFolder("Personal Finance")
                                 if (rootFolderRes is Result.Error) {
                                     Diagnostics.record("WorkbookResolver", "findOrCreateFolder_failed: ${rootFolderRes.exception.message}")
-                                    lastArchiveOutcome = ArchiveBackupsOutcome(failedCount = olderBackups.size, error = rootFolderRes.exception)
+                                    onArchiveOutcome?.invoke(ArchiveBackupsOutcome(failedCount = olderBackups.size, error = rootFolderRes.exception))
                                 } else {
                                     val rootFolderId = (rootFolderRes as Result.Success).data
                                     val archiveFolderRes = googleDriveClient.findOrCreateArchiveFolder(rootFolderId)
                                     if (archiveFolderRes is Result.Error) {
                                         Diagnostics.record("WorkbookResolver", "findOrCreateArchiveFolder_failed: ${archiveFolderRes.exception.message}")
-                                        lastArchiveOutcome = ArchiveBackupsOutcome(failedCount = olderBackups.size, error = archiveFolderRes.exception)
+                                        onArchiveOutcome?.invoke(ArchiveBackupsOutcome(failedCount = olderBackups.size, error = archiveFolderRes.exception))
                                     } else {
                                         val archiveFolderId = (archiveFolderRes as Result.Success).data
                                         var moved = 0
@@ -191,10 +221,12 @@ open class WorkbookResolver(
                                             }
                                         }
                                         Diagnostics.record("WorkbookResolver", "archive_backups: moved=$moved, failed=$failed, alreadyArchived=$alreadyArchived")
-                                        lastArchiveOutcome = ArchiveBackupsOutcome(
-                                            movedCount = moved,
-                                            failedCount = failed,
-                                            alreadyInArchiveCount = alreadyArchived
+                                        onArchiveOutcome?.invoke(
+                                            ArchiveBackupsOutcome(
+                                                movedCount = moved,
+                                                failedCount = failed,
+                                                alreadyInArchiveCount = alreadyArchived
+                                            )
                                         )
                                     }
                                 }
@@ -510,6 +542,11 @@ open class WorkbookResolver(
         fun layoutRange(tabTitle: String): String = "'${tabTitle.replace("'", "''")}'!A3:AE3"
     }
 }
+
+data class WorkbookRepairResult(
+    val spreadsheetId: String,
+    val archiveOutcome: ArchiveBackupsOutcome? = null
+)
 
 data class ArchiveBackupsOutcome(
     val movedCount: Int = 0,
