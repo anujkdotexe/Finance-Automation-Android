@@ -18,3 +18,10 @@ The builder downloads the four HTML files into this folder (names categories-v2-
 - The DARK screens contain extra invented content that is NOT part of the app and must be ignored: the "Burn Engine Config" summary card and "Active Ceiling Impact" counter, "SMS Engine 4.2", "Live Sync", "Auto-sync active", "Last TX" amounts, "Rules" and "Edit" buttons, a Cash balance, an "Ignored / Inactive accounts" block, the "On-Device Processing" card, renamed categories (Food & Dining, Commute & Fuel, Savings & Wealth, Transfers & Loans), per-row icons in tiles. For dark, use the LIGHT layout with the dark theme tokens from the existing dark screens (Categories - Dark, Accounts - Dark).
 - Account rows may show "N transactions this month" (light v2); optional, only if the data is already available cheaply; no balances anywhere.
 - Locked items: Savings, Transfer (categories); Cash and Other (accounts). The light Accounts v2 shows "Cash in Hand"; the real names stay Cash and Other.
+
+## v3 (2026-11-18, light only)
+| Screenshot | Stitch title | Screen id | HTML resource |
+|---|---|---|---|
+| categories-v3-light.png | Categories v3 | 02c66a483e8c4f6380e83c145912fb2e | projects/14304074461979593421/files/c88ce929aa9147aa9587ff330e1dc957 |
+
+Categories v3 is the reference for the Categories screen: sandwich handle (three stacked lines), three-dot menu, lifted row, locked built-in rows with the caption wrapped on two lines, empty state. It supersedes v2 for Categories. Accounts v3 and the other v3 screens are generated one by one (see STITCH_V3_PROMPTS.md); until an Accounts v3 exists, build Accounts like Categories v3 with the Accounts v2 content.
