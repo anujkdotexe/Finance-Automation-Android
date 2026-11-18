@@ -16,8 +16,7 @@ object NotificationPrivacy {
     data class Policy(val visibility: Int, val usePublicVersion: Boolean)
 
     fun policy(appLockOn: Boolean): Policy =
-        if (appLockOn) Policy(NotificationCompat.VISIBILITY_PRIVATE, true)
-        else Policy(NotificationCompat.VISIBILITY_PUBLIC, false)
+        Policy(NotificationCompat.VISIBILITY_PRIVATE, true)
 
     /** Reads the app lock setting; when it cannot be read the notification stays private. */
     suspend fun resolveAppLockOn(read: suspend () -> Boolean): Boolean = try {

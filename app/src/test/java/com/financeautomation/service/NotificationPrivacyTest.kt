@@ -18,10 +18,10 @@ class NotificationPrivacyTest {
     }
 
     @Test
-    fun appLockOffKeepsTheFullText() {
+    fun policyWithLockOffIsPrivateWithPublicVersion() {
         val p = NotificationPrivacy.policy(appLockOn = false)
-        assertEquals(NotificationCompat.VISIBILITY_PUBLIC, p.visibility)
-        assertFalse(p.usePublicVersion)
+        assertEquals(NotificationCompat.VISIBILITY_PRIVATE, p.visibility)
+        assertTrue(p.usePublicVersion)
     }
 
     @Test
