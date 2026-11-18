@@ -26,9 +26,9 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
-/** Posts one reminder notification for a due subscription cycle. */
+/** Posts one reminder notification for a due subscription cycle. Returns true if posted, false if not shown. */
 fun interface SubscriptionReminderNotifier {
-    fun post(subscription: Subscription, cycle: SubscriptionCycle)
+    fun post(subscription: Subscription, cycle: SubscriptionCycle): Boolean
 }
 
 /**
@@ -83,11 +83,15 @@ class SubscriptionReminderWorker(
             var posted = 0
             for (item in repository.getDueCyclesUpTo(todayEpochDay)) {
                 if (!item.subscription.remind || item.cycle.state != SubscriptionCycleState.DUE) continue
-                notifier.post(item.subscription, item.cycle)
-                posted++
-                val count = item.cycle.remindCount + 1
-                val nextState = if (count >= MAX_REMINDERS) SubscriptionCycleState.NEEDS_REVIEW else SubscriptionCycleState.DUE
-                repository.setCycleState(item.cycle.id, nextState, count)
+                val postedNotification = notifier.post(item.subscription, item.cycle)
+                if (postedNotification) {
+                    posted++
+                    val count = item.cycle.remindCount + 1
+                    val nextState = if (count >= MAX_REMINDERS) SubscriptionCycleState.NEEDS_REVIEW else SubscriptionCycleState.DUE
+                    repository.setCycleState(item.cycle.id, nextState, count)
+                } else {
+                    Diagnostics.record("SubscriptionReminderWorker", "SUBSCRIPTION_REMINDER_NOT_SHOWN")
+                }
             }
             return posted
         }

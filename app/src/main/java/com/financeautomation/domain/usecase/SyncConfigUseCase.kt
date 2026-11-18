@@ -172,7 +172,7 @@ class SyncConfigUseCase(
                         }
                     }
                     ConfigConstants.TYPE_PREF -> {
-                        if (!ConfigConstants.isLocalOnlyPref(row.key)) {
+                        if (ConfigConstants.isSyncedPref(row.key)) {
                             localGateway.applyRemotePreference(
                                 key = row.key,
                                 value = row.value1.ifEmpty { null },

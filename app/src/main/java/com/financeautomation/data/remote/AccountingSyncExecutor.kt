@@ -317,25 +317,29 @@ open class AccountingSyncExecutor(
         var sourceSnapshot: LedgerWorkbookSnapshot = snapshot
         var sourceSpreadsheetId: String = spreadsheetId
 
-        if (sourceTab == null) {
-            val targetKey = parseMonthKey(targetTab)
-            // Month 1 is January (e.g. Jan27 -> preceding is Dec26 in Finance2026)
-            if (targetKey != null && (targetKey % 12 == 1)) {
-                val targetYear = targetKey / 12
-                val prevYear = targetYear - 1
-                val prevSpreadsheetId = previousWorkbookIdProvider?.invoke(prevYear)
-                if (!prevSpreadsheetId.isNullOrBlank()) {
-                    val prevSnapRes = googleSheetsClient.readLedgerSnapshot(prevSpreadsheetId)
-                    if (prevSnapRes is Result.Success) {
-                        val prevSnap = prevSnapRes.data
-                        val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
-                        val foundDecTab = prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
+        val targetKey = parseMonthKey(targetTab)
+        val sourceKey = sourceTab?.let { parseMonthKey(it) }
+
+        // If source tab is in the previous year (e.g. Dec26 -> Jan27), source snapshot must come from previous year's workbook
+        if (targetKey != null && (targetKey % 12 == 1) && (sourceTab == null || (sourceKey != null && sourceKey / 12 < targetKey / 12))) {
+            val targetYear = targetKey / 12
+            val prevYear = targetYear - 1
+            val prevSpreadsheetId = previousWorkbookIdProvider?.invoke(prevYear)
+            if (!prevSpreadsheetId.isNullOrBlank()) {
+                val prevSnapRes = googleSheetsClient.readLedgerSnapshot(prevSpreadsheetId)
+                if (prevSnapRes is Result.Success) {
+                    val prevSnap = prevSnapRes.data
+                    val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
+                    val foundDecTab = if (sourceTab != null) {
+                        prevSnap.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
+                    } else {
+                        prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
                             ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
-                        if (foundDecTab != null) {
-                            sourceTab = foundDecTab.tabName
-                            sourceSnapshot = prevSnap
-                            sourceSpreadsheetId = prevSpreadsheetId
-                        }
+                    }
+                    if (foundDecTab != null) {
+                        sourceTab = foundDecTab.tabName
+                        sourceSnapshot = prevSnap
+                        sourceSpreadsheetId = prevSpreadsheetId
                     }
                 }
             }

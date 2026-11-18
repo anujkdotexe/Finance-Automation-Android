@@ -70,7 +70,7 @@ class SubscriptionMatcher(
 
     companion object {
         const val WINDOW_DAYS: Long = 3
-        const val DUPLICATE_WINDOW_DAYS: Long = 1
+        const val DUPLICATE_WINDOW_DAYS: Long = WINDOW_DAYS
         const val AMOUNT_TOLERANCE: Double = 0.01
     }
 }

@@ -485,6 +485,15 @@ class TransactionRepositoryImpl(
         sourceTab: String?
     ): Result<Unit> = withContext(ioDispatcher) {
         try {
+            val qDao = resolveSyncQueueDao()
+            val alreadyWaiting = qDao.getAllQueueFlow().first()
+                .filter { it.operationType == SyncQueueEntity.OP_CARRY_FORWARD }
+                .map { AccountingRequestJsonAdapter.carryForwardRequestFromJson(it.payloadJson) }
+                .any { it.targetTab == targetTab && it.sourceTab == sourceTab }
+            if (alreadyWaiting) {
+                return@withContext Result.Success(Unit)
+            }
+
             val reqId = "cf_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val accs = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
             val cats = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
@@ -984,6 +993,10 @@ class TransactionRepositoryImpl(
                         }
                         SyncQueueEntity.OP_RESTORE_PAYABLE -> {
                             AccountingRequestJsonAdapter.restorePayableRequestFromJson(item.payloadJson).year
+                        }
+                        SyncQueueEntity.OP_CARRY_FORWARD -> {
+                            val req = AccountingRequestJsonAdapter.carryForwardRequestFromJson(item.payloadJson)
+                            req.targetTab.takeLast(2).toIntOrNull()?.let { 2000 + it } ?: currentYear
                         }
                         else -> currentYear
                     }

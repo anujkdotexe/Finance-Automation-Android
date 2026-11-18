@@ -28,14 +28,14 @@ class SubscriptionNotifier(
     private val appLockOn: Boolean = false
 ) : SubscriptionReminderNotifier {
 
-    override fun post(subscription: Subscription, cycle: SubscriptionCycle) {
+    override fun post(subscription: Subscription, cycle: SubscriptionCycle): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            return
+            return false
         }
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return false
         ensureChannel(manager)
 
         val notificationId = notificationId(cycle.id)
@@ -72,6 +72,7 @@ class SubscriptionNotifier(
             publicTitle = context.getString(R.string.notif_public_subscription_title)
         )
         manager.notify(notificationId, builder.build())
+        return true
     }
 
     private fun receiverIntent(action: String, cycleId: String, notificationId: Int, slot: Int): PendingIntent {

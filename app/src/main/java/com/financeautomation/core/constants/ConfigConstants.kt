@@ -56,9 +56,29 @@ object ConfigConstants {
         "key_theme_mode",
         "app_lock_enabled",
         "hide_recents_preview",
+        "crashlytics_opt_in",
+        "crash_reports_enabled",
+        "usage_counts_enabled",
         "key_workbook_requeue_pending_year",
         "key_workbook_replaced_notice_pending"
     )
+
+    /**
+     * Strict allow-list of preference keys that are synchronized across devices via the Config tab.
+     * All security, consent, credential, and local device preferences are strictly excluded.
+     */
+    val SYNCED_PREF_KEYS: Set<String> = setOf(
+        "key_default_account",
+        "key_active_trip",
+        "key_settle_delay_seconds",
+        "key_subscription_reminder_time",
+        "key_default_category",
+        "key_speed_dial_categories"
+    )
+
+    fun isSyncedPref(key: String): Boolean {
+        return key in SYNCED_PREF_KEYS && !isLocalOnlyPref(key)
+    }
 
     fun isLocalOnlyPref(key: String): Boolean {
         return key in LOCAL_ONLY_PREF_KEYS ||
