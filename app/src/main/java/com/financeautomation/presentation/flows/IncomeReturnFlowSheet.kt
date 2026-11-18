@@ -265,9 +265,11 @@ fun IncomeReturnFlowSheet(
             OutlinedTextField(
                 value = settlerName,
                 onValueChange = {
-                    settlerName = it
+                    val clean = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                    settlerName = clean
                     if (selectedInflowType == friendSettlementType) {
-                        onPersonChanged(it)
+                        onPersonChanged(clean)
                     }
                 },
                 placeholder = {
@@ -317,7 +319,10 @@ fun IncomeReturnFlowSheet(
 
             OutlinedTextField(
                 value = reasonText,
-                onValueChange = { reasonText = it },
+                onValueChange = {
+                    reasonText = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+                },
                 placeholder = {
                     Text(
                         text = stringResource(R.string.hint_optional),

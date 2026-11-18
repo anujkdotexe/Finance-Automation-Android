@@ -99,7 +99,10 @@ fun AddFriendSheet(
                     )
                     OutlinedTextField(
                         value = friendName,
-                        onValueChange = { friendName = it },
+                        onValueChange = {
+                            friendName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.friend_add_name_placeholder)) },
                         leadingIcon = {
                             Icon(

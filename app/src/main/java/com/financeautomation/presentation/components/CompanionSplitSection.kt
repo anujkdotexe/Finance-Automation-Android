@@ -231,7 +231,10 @@ fun CompanionSplitSection(
             ) {
                 OutlinedTextField(
                     value = newFriendName,
-                    onValueChange = { newFriendName = it },
+                    onValueChange = {
+                        newFriendName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                            .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                    },
                     placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
                     singleLine = true,
                     shape = FinanceShapes.card,

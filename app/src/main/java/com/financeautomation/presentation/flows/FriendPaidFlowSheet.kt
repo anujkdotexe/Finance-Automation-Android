@@ -210,7 +210,10 @@ fun FriendPaidFlowSheet(
                 ) {
                     OutlinedTextField(
                         value = newFriendName,
-                        onValueChange = { newFriendName = it },
+                        onValueChange = {
+                            newFriendName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
                         singleLine = true,
                         shape = FinanceShapes.card,
@@ -252,7 +255,10 @@ fun FriendPaidFlowSheet(
 
             OutlinedTextField(
                 value = creditorName,
-                onValueChange = { creditorName = it },
+                onValueChange = {
+                    creditorName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                },
                 placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
                 singleLine = true,
                 shape = FinanceShapes.card,
@@ -278,7 +284,10 @@ fun FriendPaidFlowSheet(
 
             OutlinedTextField(
                 value = whatForText,
-                onValueChange = { whatForText = it },
+                onValueChange = {
+                    whatForText = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+                },
                 placeholder = { Text(stringResource(R.string.hint_add_description), style = FinanceTheme.typography.bodyMedium) },
                 singleLine = true,
                 shape = FinanceShapes.card,

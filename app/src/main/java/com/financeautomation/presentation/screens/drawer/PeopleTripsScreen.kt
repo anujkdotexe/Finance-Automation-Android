@@ -732,7 +732,10 @@ private fun FriendDetailSheet(
                 )
                 OutlinedTextField(
                     value = renameInput,
-                    onValueChange = { renameInput = it },
+                    onValueChange = {
+                        renameInput = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                            .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                    },
                     singleLine = true,
                     shape = FinanceShapes.card,
                     modifier = Modifier.fillMaxWidth()

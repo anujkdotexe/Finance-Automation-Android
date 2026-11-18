@@ -251,7 +251,10 @@ fun RepaidFriendFlowSheet(
 
                 OutlinedTextField(
                     value = personName,
-                    onValueChange = { personName = it },
+                    onValueChange = {
+                        personName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                            .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                    },
                     placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
                     singleLine = true,
                     shape = FinanceShapes.card,
@@ -309,7 +312,10 @@ fun RepaidFriendFlowSheet(
 
             OutlinedTextField(
                 value = noteText,
-                onValueChange = { noteText = it },
+                onValueChange = {
+                    noteText = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+                },
                 placeholder = { Text(stringResource(R.string.hint_optional), style = FinanceTheme.typography.bodyMedium) },
                 leadingIcon = {
                     Icon(

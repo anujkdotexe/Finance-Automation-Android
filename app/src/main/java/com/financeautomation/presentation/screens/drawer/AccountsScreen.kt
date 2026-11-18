@@ -153,7 +153,10 @@ fun AccountsScreen(
                         )
                         OutlinedTextField(
                             value = editName,
-                            onValueChange = { editName = it },
+                            onValueChange = {
+                                editName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                    .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                            },
                             singleLine = true,
                             shape = FinanceShapes.card,
                             modifier = Modifier.fillMaxWidth()
@@ -167,7 +170,10 @@ fun AccountsScreen(
                         )
                         OutlinedTextField(
                             value = editDigits,
-                            onValueChange = { if (it.length <= 4) editDigits = it },
+                            onValueChange = {
+                                val clean = com.financeautomation.core.utils.InputPolicy.cleanDigits4(it)
+                                if (clean.length <= 4) editDigits = clean
+                            },
                             singleLine = true,
                             shape = FinanceShapes.card,
                             modifier = Modifier.fillMaxWidth()
@@ -242,7 +248,10 @@ fun AccountsScreen(
                         )
                         OutlinedTextField(
                             value = newAccountName,
-                            onValueChange = { newAccountName = it },
+                            onValueChange = {
+                                newAccountName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                    .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                            },
                             placeholder = { Text(stringResource(R.string.accounts_name_placeholder), style = FinanceTheme.typography.bodyMedium) },
                             singleLine = true,
                             shape = FinanceShapes.card,
@@ -257,7 +266,10 @@ fun AccountsScreen(
                         )
                         OutlinedTextField(
                             value = newAccountDigits,
-                            onValueChange = { if (it.length <= 4) newAccountDigits = it },
+                            onValueChange = {
+                                val clean = com.financeautomation.core.utils.InputPolicy.cleanDigits4(it)
+                                if (clean.length <= 4) newAccountDigits = clean
+                            },
                             placeholder = { Text(stringResource(R.string.accounts_last4_placeholder), style = FinanceTheme.typography.bodyMedium) },
                             singleLine = true,
                             shape = FinanceShapes.card,

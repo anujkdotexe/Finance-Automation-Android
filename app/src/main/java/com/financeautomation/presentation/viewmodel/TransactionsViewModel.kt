@@ -282,7 +282,8 @@ class TransactionsViewModel(
     }
 
     fun setSearchQuery(query: String) {
-        searchQueryFlow.value = query
+        val clean = com.financeautomation.core.utils.InputPolicy.cleanSearch(query)
+        searchQueryFlow.value = clean
     }
 
     fun setSearchScope(scope: SearchScope) {

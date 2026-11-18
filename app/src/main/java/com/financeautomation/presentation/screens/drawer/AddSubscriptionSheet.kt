@@ -184,7 +184,10 @@ fun AddSubscriptionSheet(
                     )
                     OutlinedTextField(
                         value = name,
-                        onValueChange = { name = it },
+                        onValueChange = {
+                            name = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.sub_add_name_placeholder)) },
                         trailingIcon = {
                             Icon(
