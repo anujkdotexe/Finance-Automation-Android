@@ -358,7 +358,9 @@ class ParseNotificationUseCase(
         }
 
         // 10. Merchant / Payee extraction
-        val merchant = (if (title.isNotBlank()) RegexPatterns.extractMerchant(title) else null)
+        val biller = RegexPatterns.extractBiller(title, text)
+        val merchant = biller
+            ?: (if (title.isNotBlank()) RegexPatterns.extractMerchant(title) else null)
             ?: RegexPatterns.extractMerchant(text)
             ?: RegexPatterns.extractMerchant(fullContent)
             ?: "Unknown Payee"

@@ -20,7 +20,7 @@ class SenderAndAmountHeuristicsTest {
 
     @Test
     fun realBankHeadersAndShortCodesAreAccepted() {
-        for (id in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "HDFCBK", "5676766", "56161")) {
+        for (id in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "HDFCBK", "5676766", "56161", "JioPay-S", "JIOPAY-S")) {
             assertTrue("$id should be a bank sender", RegexPatterns.isBankSenderId(id))
         }
     }

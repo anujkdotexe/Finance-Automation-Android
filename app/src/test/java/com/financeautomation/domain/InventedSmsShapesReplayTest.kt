@@ -407,4 +407,60 @@ class InventedSmsShapesReplayTest {
         assertEquals("Category must be CategoryConstants.CATEGORY_REFUND", CategoryConstants.CATEGORY_REFUND, success.transaction.category)
         assertTrue("Flags must contain FLAG_REFUND_REVERSAL", success.flags.contains(PendingCaptureEntity.FLAG_REFUND_REVERSAL))
     }
+
+    @Test
+    fun testExecutedBillAndRechargePaymentsCapturedAsDebitsInNeedsReviewAndRemindersDropped() {
+        // 1. Executed recharge in English
+        val engText = "Recharge Successful !\nPlan Name : 899.00\nJio Number : 9876543210\nTransaction ID : BR123456"
+        assertTrue("English recharge passes gate", NotificationPreFilter.shouldReadFullText(smsPackage, "JioPay-S", engText))
+        val engResult = useCase(smsPackage, "JioPay-S", engText)
+        assertTrue("English recharge parses as Success", engResult is NotificationParseResult.Success)
+        val engSuccess = engResult as NotificationParseResult.Success
+        assertTrue("Must be debit", engSuccess.isDebit)
+        assertEquals("Amount must be 899.0", 899.0, engSuccess.transaction.totalAmount, 0.001)
+        assertEquals("Payee must be biller Jio", "Jio", engSuccess.transaction.merchant)
+
+        // 2. Executed recharge in Hindi
+        val hiText = "रिचार्ज सफल रहा!\nप्लान का नाम: 899.00 \nJio नंबर : 9876543210\nट्रांज़ैक्शन आईडी : BR123456"
+        assertTrue("Hindi recharge passes gate", NotificationPreFilter.shouldReadFullText(smsPackage, "JioPay-S", hiText))
+        val hiResult = useCase(smsPackage, "JioPay-S", hiText)
+        assertTrue("Hindi recharge parses as Success", hiResult is NotificationParseResult.Success)
+        val hiSuccess = hiResult as NotificationParseResult.Success
+        assertTrue("Must be debit", hiSuccess.isDebit)
+        assertEquals("Amount must be 899.0", 899.0, hiSuccess.transaction.totalAmount, 0.001)
+        assertEquals("Payee must be biller Jio", "Jio", hiSuccess.transaction.merchant)
+
+        // 3. Executed recharge in Marathi
+        val mrText = "रिचार्ज यशस्वी! \nप्लॅन चे नाव : 899.00 \nJio नंबर : 9876543210\nट्रान्झॅक्शन आयडी : BR123456"
+        assertTrue("Marathi recharge passes gate", NotificationPreFilter.shouldReadFullText(smsPackage, "JioPay-S", mrText))
+        val mrResult = useCase(smsPackage, "JioPay-S", mrText)
+        assertTrue("Marathi recharge parses as Success", mrResult is NotificationParseResult.Success)
+        val mrSuccess = mrResult as NotificationParseResult.Success
+        assertTrue("Must be debit", mrSuccess.isDebit)
+        assertEquals("Amount must be 899.0", 899.0, mrSuccess.transaction.totalAmount, 0.001)
+        assertEquals("Payee must be biller Jio", "Jio", mrSuccess.transaction.merchant)
+
+        // 4. Executed bill payment with explicit biller
+        val billText = "Bill payment of Rs. 1,450.00 received towards Bescom electricity bill. Txn ID: 98765"
+        assertTrue("Executed bill payment passes gate", NotificationPreFilter.shouldReadFullText(smsPackage, "BESCOM-S", billText))
+        val billResult = useCase(smsPackage, "BESCOM-S", billText)
+        assertTrue("Bill payment parses as Success", billResult is NotificationParseResult.Success)
+        val billSuccess = billResult as NotificationParseResult.Success
+        assertTrue("Must be debit", billSuccess.isDebit)
+        assertEquals("Amount must be 1450.0", 1450.0, billSuccess.transaction.totalAmount, 0.001)
+        assertEquals("Payee must be Bescom", "Bescom", billSuccess.transaction.merchant)
+
+        // 5. Expiring plan reminder without transaction (negative)
+        val expiryReminderText = "वर्तमान रिचार्ज प्लान 20-Mar-26 18:17 Hrs को समाप्त हो रहा है"
+        val expiryResult = useCase(smsPackage, "JIOPAY-S", expiryReminderText)
+        assertTrue("Plan expiry reminder must be dropped downstream as UNKNOWN_DIRECTION or PROMOTIONAL",
+            expiryResult is NotificationParseResult.Dropped &&
+                (expiryResult.reason == DropReason.UNKNOWN_DIRECTION || expiryResult.reason == DropReason.PROMOTIONAL))
+
+        // 6. Bill due notice without payment confirmation (negative)
+        val billDueText = "Dear customer, your electricity bill of Rs. 1450 is due on 25-Mar-2026. Pay now to avoid disconnection."
+        val billDueResult = useCase(smsPackage, "BESCOM-S", billDueText)
+        assertTrue("Bill due notice without payment confirmation dropped",
+            billDueResult is NotificationParseResult.Dropped)
+    }
 }
