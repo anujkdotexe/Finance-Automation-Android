@@ -1,7 +1,6 @@
 package com.financeautomation.domain.usecase
 
 import com.financeautomation.core.constants.PackageWhitelist
-import com.financeautomation.core.model.NotificationParseResult
 import com.financeautomation.core.model.ReviewState
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -22,8 +21,7 @@ class WatchedAppsSelectionAndPrivacyTest {
 
     @After
     fun tearDown() {
-        PackageWhitelist.resetWatchedApps()
-        PackageWhitelist.resetDisabledPackages()
+        PackageWhitelist.removeWatchedApp("com.sbi.lotusintouch")
     }
 
     @Test
@@ -65,13 +63,10 @@ class WatchedAppsSelectionAndPrivacyTest {
         PackageWhitelist.addWatchedApp(customAppPkg)
         assertTrue(PackageWhitelist.isGenericWatchedApp(customAppPkg))
 
-        val result = parseUseCase.execute(
+        val result = parseUseCase(
             sourcePackage = customAppPkg,
             title = "SBI Alert",
             text = "Debited INR 1,250.00 from A/C XX1234 to Merchant Store on 18-Nov-26",
-            subText = null,
-            channelId = null,
-            notificationCategory = null,
             timestamp = 1700000000000L
         )
 
