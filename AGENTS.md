@@ -131,10 +131,17 @@ The application must faithfully reproduce the proven iOS split calculations:
    * Use daemon processes, watcher scripts (e.g. inbox watcher), or background tasks with notifications.
    * Yield control and let the environment notify you reactively when the task finishes.
 
+15. **Real Message Data:**
+   * Real SMS and notification text (the owner's or a friend's) stays on the local machine, git-ignored. Never copy message text, reference numbers, amounts, payees or account digits into source, tests, commits, reports, logs or chat; refer to messages by fixture id.
+   * Committed test text is invented, or a mechanically scrubbed copy of real wording that the owner has read and approved in writing.
+   * Mixed-case SMS sender headers are accepted only from a named registry of known billers; everything else must be uppercase DLT style, so saved contact names are rejected on the sender alone.
+   * Executed bill and recharge payments are captured as debits in Needs Review; reminders, offers, requests and mandate notices are dropped.
+
 ---
 
 ## 5. Change Log For This Manual
 
+- **2026-11-18:** Added Rule 15 (Real Message Data) after the SMS parsing round: real message text stays local, committed test text is invented or approved scrubbed text, mixed-case sender headers only from a named registry, bill and recharge payments are captured. The status of the fix round is kept in docs/testing/ROUND_STATUS.md.
 - **2026-11-17:** Added Rule 14 (No Terminal Polling). Agents must never poll the terminal repeatedly in loops; use daemons, watchers, or reactive background notifications instead.
 - **2026-11-16:** Updated after the first full review and fix cycle. What changed and why:
   - Target platform set to API 28 to 36 and the ledger described as 28 visible plus three hidden columns, to match the build files and the sheet layout in the code.

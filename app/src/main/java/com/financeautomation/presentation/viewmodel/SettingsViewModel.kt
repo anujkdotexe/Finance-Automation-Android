@@ -67,6 +67,7 @@ data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val appLockEnabled: Boolean = false,
     val hideRecentsPreview: Boolean = false,
+    val crashlyticsOptIn: Boolean = false,
     val subscriptionReminderTime: String = PreferencesRepository.DEFAULT_SUBSCRIPTION_REMINDER_TIME
 )
 
@@ -402,6 +403,24 @@ class SettingsViewModel(
 
     fun setErrorMessage(message: String) {
         _uiState.update { it.copy(errorMessage = UiText.dynamic(message)) }
+    }
+
+    fun setCrashlyticsOptIn(context: android.content.Context, enabled: Boolean) {
+        com.financeautomation.core.utils.CrashlyticsManager.setOptIn(context, enabled)
+        _uiState.update { it.copy(crashlyticsOptIn = enabled) }
+    }
+
+    fun sendTestCrashReport(context: android.content.Context) {
+        if (!com.financeautomation.core.utils.CrashlyticsManager.isOptedIn(context)) {
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.privacy_test_report_off)) }
+            return
+        }
+        com.financeautomation.core.utils.CrashlyticsManager.recordNonFatal(
+            context,
+            RuntimeException("Test verification non-fatal report"),
+            "PreferencesScreen"
+        )
+        _uiState.update { it.copy(userMessage = UiText.res(R.string.privacy_test_report_sent)) }
     }
 
     companion object {

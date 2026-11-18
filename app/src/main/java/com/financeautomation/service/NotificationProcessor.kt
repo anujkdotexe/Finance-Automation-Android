@@ -6,6 +6,7 @@ import com.financeautomation.BuildConfig
 import com.financeautomation.FinanceApplication
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.PackageWhitelist
+import com.financeautomation.core.utils.CrashlyticsManager
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
@@ -164,6 +165,7 @@ class NotificationProcessor(
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: getAllAccounts fallback")
+            CrashlyticsManager.recordNonFatal(e, "NotificationProcessor.getAllAccounts")
             emptyList()
         }
         val defaultAccount: String = try {

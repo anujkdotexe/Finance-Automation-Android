@@ -117,6 +117,10 @@ class ConfigSyncCoordinator(
             pushMutex.withLock {
                 val res = syncConfigUseCase.push()
                 if (res is Result.Error) {
+                    com.financeautomation.core.utils.CrashlyticsManager.recordNonFatal(
+                        throwable = res.exception,
+                        locationTag = "ConfigSyncCoordinator.pushNow"
+                    )
                     throw res.exception
                 }
             }
@@ -131,6 +135,10 @@ class ConfigSyncCoordinator(
             if (force || syncConfigUseCase.shouldPull()) {
                 val res = syncConfigUseCase.pull()
                 if (res is Result.Error) {
+                    com.financeautomation.core.utils.CrashlyticsManager.recordNonFatal(
+                        throwable = res.exception,
+                        locationTag = "ConfigSyncCoordinator.pullOnForeground"
+                    )
                     throw res.exception
                 }
             }

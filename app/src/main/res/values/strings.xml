@@ -925,4 +925,12 @@
     <string name="input_err_reserved">This name is used by the app. Choose another.</string>
     <string name="spreadsheet_id_err">This is not a valid spreadsheet id or link.</string>
     <string name="report_note_warning">Your note is shared exactly as you type it. Do not include amounts or names.</string>
+
+    <!-- Crash reporting & privacy (P1-6) -->
+    <string name="privacy_crash_title">Send crash reports</string>
+    <string name="privacy_crash_body">Off by default. When on, a crash sends the app version, build type, your phone brand, model and Android version, the place in the code where it failed, and counts of setup checks. It never sends amounts, payees, account names, category, friend or trip names, spreadsheet links, emails or message text.</string>
+    <string name="privacy_turn_off_note">You can turn this switch off at any time. Collection stops right away.</string>
+    <string name="privacy_test_report_action">Send a test report (beta only)</string>
+    <string name="privacy_test_report_sent">A test report was sent. It can take a few minutes to appear.</string>
+    <string name="privacy_test_report_off">Turn on crash reports first.</string>
 </resources>

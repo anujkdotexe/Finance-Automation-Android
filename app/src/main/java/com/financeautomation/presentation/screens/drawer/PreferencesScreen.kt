@@ -277,9 +277,15 @@ fun PreferencesScreen(
             }
         }
 
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var crashReportsEnabled by remember(state.crashlyticsOptIn) {
+            mutableStateOf(com.financeautomation.core.utils.CrashlyticsManager.isOptedIn(context))
+        }
+
         PrivacyGroup(
             appLockEnabled = state.appLockEnabled,
             hidePreview = state.hideRecentsPreview,
+            crashReportsEnabled = crashReportsEnabled,
             lockUnavailable = lockUnavailable,
             onAppLockChange = { wantOn ->
                 lockUnavailable = false
@@ -294,7 +300,14 @@ fun PreferencesScreen(
                     }
                 }
             },
-            onHidePreviewChange = { viewModel.setHideRecentsPreview(it) }
+            onHidePreviewChange = { viewModel.setHideRecentsPreview(it) },
+            onCrashReportsChange = { enabled ->
+                crashReportsEnabled = enabled
+                viewModel.setCrashlyticsOptIn(context, enabled)
+            },
+            onSendTestReport = {
+                viewModel.sendTestCrashReport(context)
+            }
         )
     }
 
@@ -383,9 +396,12 @@ fun PreferencesScreen(
 private fun PrivacyGroup(
     appLockEnabled: Boolean,
     hidePreview: Boolean,
+    crashReportsEnabled: Boolean,
     lockUnavailable: Boolean,
     onAppLockChange: (Boolean) -> Unit,
-    onHidePreviewChange: (Boolean) -> Unit
+    onHidePreviewChange: (Boolean) -> Unit,
+    onCrashReportsChange: (Boolean) -> Unit,
+    onSendTestReport: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
         Text(
@@ -425,6 +441,37 @@ private fun PrivacyGroup(
                     checked = hidePreview,
                     onCheckedChange = onHidePreviewChange
                 )
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+                SwitchRow(
+                    title = stringResource(R.string.privacy_crash_title),
+                    description = stringResource(R.string.privacy_crash_body),
+                    checked = crashReportsEnabled,
+                    onCheckedChange = onCrashReportsChange
+                )
+                if (com.financeautomation.BuildConfig.DEBUG || com.financeautomation.BuildConfig.BUILD_TYPE == "beta") {
+                    HorizontalDivider(
+                        color = FinanceTheme.colors.surfaceContainerLow,
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onSendTestReport)
+                            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.privacy_test_report_action),
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         }
     }

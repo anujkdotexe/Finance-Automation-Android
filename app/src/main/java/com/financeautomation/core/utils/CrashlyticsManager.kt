@@ -16,6 +16,9 @@ object CrashlyticsManager {
     private const val PREFS_NAME = "crashlytics_config"
     private const val KEY_OPT_IN = "crashlytics_opt_in"
 
+    @Volatile
+    private var appContext: Context? = null
+
     /**
      * Strict allow-list of custom keys per Beta & Release Plan 4.5 & Phase Guide 9.5.
      * No other key is ever sent to Firebase.
@@ -30,20 +33,23 @@ object CrashlyticsManager {
         "trail_funnel_summary"
     )
 
-    private fun isFirebaseAvailable(context: Context): Boolean {
+    private fun isFirebaseAvailable(context: Context?): Boolean {
+        val ctx = context ?: appContext ?: return false
         return try {
-            FirebaseApp.getApps(context).isNotEmpty()
+            FirebaseApp.getApps(ctx).isNotEmpty()
         } catch (e: Exception) {
             false
         }
     }
 
-    fun isOptedIn(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    fun isOptedIn(context: Context? = null): Boolean {
+        val ctx = context ?: appContext ?: return false
+        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean(KEY_OPT_IN, false)
     }
 
     fun setOptIn(context: Context, enabled: Boolean) {
+        appContext = context.applicationContext
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_OPT_IN, enabled).apply()
 
@@ -60,6 +66,7 @@ object CrashlyticsManager {
     }
 
     fun initAtAppStart(context: Context) {
+        appContext = context.applicationContext
         val optedIn = isOptedIn(context)
         if (isFirebaseAvailable(context)) {
             try {
@@ -84,9 +91,10 @@ object CrashlyticsManager {
     /**
      * Sets a custom key strictly matching the allow-list.
      */
-    fun setCustomKey(context: Context, key: String, value: String) {
+    fun setCustomKey(context: Context? = null, key: String, value: String) {
         if (!ALLOWED_CUSTOM_KEYS.contains(key)) return
-        if (!isOptedIn(context) || !isFirebaseAvailable(context)) return
+        val ctx = context ?: appContext ?: return
+        if (!isOptedIn(ctx) || !isFirebaseAvailable(ctx)) return
 
         try {
             FirebaseCrashlytics.getInstance().setCustomKey(key, value)
@@ -98,8 +106,9 @@ object CrashlyticsManager {
     /**
      * Non-fatal exception logging: records only exception class and location, NEVER message text.
      */
-    fun recordNonFatal(context: Context, throwable: Throwable, locationTag: String) {
-        if (!isOptedIn(context) || !isFirebaseAvailable(context)) return
+    fun recordNonFatal(throwable: Throwable, locationTag: String, context: Context? = null) {
+        val ctx = context ?: appContext
+        if (ctx == null || !isOptedIn(ctx) || !isFirebaseAvailable(ctx)) return
 
         try {
             val sanitizedException = RuntimeException("${throwable.javaClass.simpleName} at $locationTag")
@@ -108,6 +117,10 @@ object CrashlyticsManager {
         } catch (e: Exception) {
             Diagnostics.record("CrashlyticsManager", "recordNonFatal: ${e.javaClass.simpleName}")
         }
+    }
+
+    fun recordNonFatal(context: Context, throwable: Throwable, locationTag: String) {
+        recordNonFatal(throwable, locationTag, context)
     }
 
     /**
@@ -119,4 +132,3 @@ object CrashlyticsManager {
         }
     }
 }
-
