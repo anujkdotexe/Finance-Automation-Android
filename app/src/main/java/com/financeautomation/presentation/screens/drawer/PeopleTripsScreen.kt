@@ -234,12 +234,15 @@ fun PeopleTripsScreen(
                 ) {
                     state.tripTags.forEach { trip ->
                         val isActive = trip.isActive || trip.name.equals(state.activeTripTag, ignoreCase = true)
+                        val summary = summaryFor(trip.name)
                         TripCard(
                             tripName = trip.name,
                             isActive = isActive,
                             statusText = if (isActive) stringResource(R.string.trip_active) else "Inactive",
-                            peopleCount = summaryFor(trip.name).peopleCount,
-                            totalSpend = formatRupees(summaryFor(trip.name).totalPaid),
+                            peopleCount = summary.peopleCount,
+                            totalSpend = formatRupees(summary.totalPaid),
+                            costYou = formatRupees(summary.netExpenditure),
+                            dateRange = formatTripDateRange(summary.transactions, isActive),
                             onOpen = { openTripName = trip.name },
                             onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
                             onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) },
@@ -248,12 +251,15 @@ fun PeopleTripsScreen(
                     }
                 }
             } else if (state.activeTripTag.isNotBlank()) {
+                val summary = summaryFor(state.activeTripTag)
                 TripCard(
                     tripName = state.activeTripTag,
                     isActive = true,
                     statusText = stringResource(R.string.trip_active),
-                    peopleCount = summaryFor(state.activeTripTag).peopleCount,
-                    totalSpend = formatRupees(summaryFor(state.activeTripTag).totalPaid),
+                    peopleCount = summary.peopleCount,
+                    totalSpend = formatRupees(summary.totalPaid),
+                    costYou = formatRupees(summary.netExpenditure),
+                    dateRange = formatTripDateRange(summary.transactions, true),
                     onOpen = { openTripName = state.activeTripTag },
                     onEndTrip = { viewModel.onActiveTripTagChanged("") },
                     onReactivateTrip = {}
@@ -501,12 +507,40 @@ private fun FriendItemRow(
 }
 
 @Composable
+private fun formatTripDateRange(transactions: List<com.financeautomation.domain.model.Transaction>, isActive: Boolean): String {
+    if (transactions.isEmpty()) {
+        return if (isActive) "Active travel ledger" else "Past travel ledger"
+    }
+    val first = transactions.minOf { it.timestamp }
+    val last = transactions.maxOf { it.timestamp }
+    val sdf = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH)
+    val sdfShort = java.text.SimpleDateFormat("d MMM", java.util.Locale.ENGLISH)
+    return if (isActive) {
+        "Started ${sdf.format(java.util.Date(first))}"
+    } else {
+        val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = first }
+        val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = last }
+        if (cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+            cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
+        ) {
+            sdf.format(java.util.Date(first))
+        } else if (cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR)) {
+            "${sdfShort.format(java.util.Date(first))} - ${sdf.format(java.util.Date(last))}"
+        } else {
+            "${sdf.format(java.util.Date(first))} - ${sdf.format(java.util.Date(last))}"
+        }
+    }
+}
+
+@Composable
 private fun TripCard(
     tripName: String,
     isActive: Boolean = true,
     statusText: String,
     peopleCount: Int,
     totalSpend: String,
+    costYou: String = "",
+    dateRange: String = "",
     onOpen: () -> Unit = {},
     onEndTrip: () -> Unit = {},
     onReactivateTrip: () -> Unit = {},
@@ -557,7 +591,7 @@ private fun TripCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (isActive) "Active travel ledger" else "Past travel ledger",
+                            text = if (dateRange.isNotBlank()) dateRange else if (isActive) "Active travel ledger" else "Past travel ledger",
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -625,18 +659,38 @@ private fun TripCard(
                     }
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = stringResource(R.string.trip_total_spend_label).uppercase(),
-                        style = FinanceTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = totalSpend,
-                        style = FinanceTheme.typography.kpiMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = stringResource(R.string.trip_total_spend_label).uppercase(),
+                            style = FinanceTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = totalSpend,
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    if (costYou.isNotBlank()) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "COST YOU",
+                                style = FinanceTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = costYou,
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
             }
         }
