@@ -492,13 +492,13 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun testOnRepairWorkbookWithFindBackupsErrorShowsPartialArchiveMessage() = runBlocking<Unit> {
+    fun testOnRepairWorkbookWithFindBackupsErrorShowsArchiveFailedMessage() = runBlocking<Unit> {
         val okHttpClient = OkHttpClient.Builder().build()
         val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
         val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
         val prefs = FakePreferencesRepository()
         val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs).apply {
-            repairArchiveOutcomeToReturn = ArchiveBackupsOutcome(failedCount = 1, error = Exception("Drive find error"))
+            repairArchiveOutcomeToReturn = ArchiveBackupsOutcome(failedCount = 0, error = Exception("Drive find error"))
         }
         val stateFlow = MutableStateFlow(SettingsUiState())
 
@@ -521,7 +521,40 @@ class SettingsViewModelTest {
         coordinator.onRepairWorkbook(archiveOlder = true)
 
         assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
-        assertEquals("Expected partial archive message on findBackups failure", R.string.repair_backup_msg_partial_archive, stateFlow.value.userMessage?.resId)
+        assertEquals("Expected archive failed message without made-up counts", R.string.repair_backup_msg_archive_failed, stateFlow.value.userMessage?.resId)
+    }
+
+    @Test
+    fun testOnRepairWorkbookWithKnownFailedCountShowsCountedPartialArchiveMessage() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs).apply {
+            repairArchiveOutcomeToReturn = ArchiveBackupsOutcome(failedCount = 2, error = Exception("Drive move error"))
+        }
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook(archiveOlder = true)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected counted partial archive message", R.string.repair_backup_msg_partial_archive, stateFlow.value.userMessage?.resId)
     }
 
     @Test

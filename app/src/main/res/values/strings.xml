@@ -72,6 +72,7 @@
     <string name="repair_backup_action_keep">Keep them where they are</string>
     <string name="repair_backup_msg_archived">Moved %1$d older backups to Archive.</string>
     <string name="repair_backup_msg_partial_archive">The new backup was made, but %1$d older backups could not be moved.</string>
+    <string name="repair_backup_msg_archive_failed">The new backup was created, but the older ones could not be moved. They are still in your Personal Finance folder.</string>
     <string name="action_create">Create</string>
     <string name="raw_http_errors_title">Raw Google API Errors</string>
     <string name="raw_http_errors_notice">Contains Google error text. Shared only if you choose.</string>

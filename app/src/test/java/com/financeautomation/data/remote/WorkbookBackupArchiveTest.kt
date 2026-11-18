@@ -596,7 +596,7 @@ class WorkbookBackupArchiveTest {
         assertTrue(res is Result.Success)
         val outcome = (res as Result.Success).data.archiveOutcome
         org.junit.Assert.assertNotNull(outcome)
-        assertEquals("Failed count must be 1 on findBackups error", 1, outcome!!.failedCount)
+        assertEquals("Failed count must be 0 on findBackups error because count is unknown", 0, outcome!!.failedCount)
         org.junit.Assert.assertNotNull("Error must be captured", outcome.error)
     }
 

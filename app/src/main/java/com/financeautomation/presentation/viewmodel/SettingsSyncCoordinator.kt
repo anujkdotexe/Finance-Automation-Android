@@ -218,10 +218,10 @@ class SettingsSyncCoordinator(
                             syncConfigUseCase?.mirrorToCloud()
                             val archiveOutcome = res.data.archiveOutcome
                             val userMsg = when {
-                                archiveOutcome != null && (archiveOutcome.failedCount > 0 || archiveOutcome.error != null) -> {
-                                    val failCount = if (archiveOutcome.failedCount > 0) archiveOutcome.failedCount else 1
-                                    UiText.res(R.string.repair_backup_msg_partial_archive, failCount)
-                                }
+                                archiveOutcome != null && archiveOutcome.failedCount > 0 ->
+                                    UiText.res(R.string.repair_backup_msg_partial_archive, archiveOutcome.failedCount)
+                                archiveOutcome != null && archiveOutcome.error != null ->
+                                    UiText.res(R.string.repair_backup_msg_archive_failed)
                                 archiveOutcome != null && archiveOutcome.movedCount > 0 ->
                                     UiText.res(R.string.repair_backup_msg_archived, archiveOutcome.movedCount)
                                 else ->

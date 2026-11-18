@@ -174,7 +174,7 @@ open class WorkbookResolver(
                             } else {
                                 if (archiveOlderBackups && existingBackupsRes is Result.Error) {
                                     Diagnostics.record("WorkbookResolver", "findBackups_failed: ${existingBackupsRes.exception.message}")
-                                    onArchiveOutcome?.invoke(ArchiveBackupsOutcome(failedCount = 1, error = existingBackupsRes.exception))
+                                    onArchiveOutcome?.invoke(ArchiveBackupsOutcome(failedCount = 0, error = existingBackupsRes.exception))
                                 }
                                 emptyList()
                             }
