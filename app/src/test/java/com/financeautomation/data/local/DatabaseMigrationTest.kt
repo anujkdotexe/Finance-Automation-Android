@@ -288,8 +288,30 @@ class DatabaseMigrationTest {
     }
 
     @Test
-    fun testDatabaseDeclaresVersion14() {
+    fun testMigration14to15_addsNoteColumnToTransactionsPendingCapturesAndSubscriptions() {
+        assertEquals(14, DatabaseMigrations.MIGRATION_14_15.startVersion)
+        assertEquals(15, DatabaseMigrations.MIGRATION_14_15.endVersion)
+        assertTrue(DatabaseMigrations.ALL_MIGRATIONS.contains(DatabaseMigrations.MIGRATION_14_15))
+
+        val executed = mutableListOf<String>()
+        val db = java.lang.reflect.Proxy.newProxyInstance(
+            javaClass.classLoader, arrayOf(androidx.sqlite.db.SupportSQLiteDatabase::class.java)
+        ) { _, method, args ->
+            if (method.name == "execSQL") executed.add(args!![0] as String)
+            null
+        } as androidx.sqlite.db.SupportSQLiteDatabase
+
+        DatabaseMigrations.MIGRATION_14_15.migrate(db)
+
+        assertEquals(3, executed.size)
+        assertTrue(executed.any { it.contains("ALTER TABLE `transactions` ADD COLUMN `note`") })
+        assertTrue(executed.any { it.contains("ALTER TABLE `pending_captures` ADD COLUMN `note`") })
+        assertTrue(executed.any { it.contains("ALTER TABLE `subscriptions` ADD COLUMN `note`") })
+    }
+
+    @Test
+    fun testDatabaseDeclaresVersion15() {
         val source = java.io.File("src/main/java/com/financeautomation/data/local/FinanceDatabase.kt").readText()
-        assertTrue(source.contains("version = 14"))
+        assertTrue(source.contains("version = 15"))
     }
 }

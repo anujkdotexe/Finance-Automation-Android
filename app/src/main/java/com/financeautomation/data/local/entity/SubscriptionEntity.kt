@@ -50,7 +50,10 @@ data class SubscriptionEntity(
     val updatedAt: Long = 0L,
 
     @ColumnInfo(name = "dirty", defaultValue = "0")
-    val dirty: Int = 0
+    val dirty: Int = 0,
+
+    @ColumnInfo(name = "note", defaultValue = "''")
+    val note: String = ""
 ) {
     fun toDomain(): Subscription = Subscription(
         id = id,
@@ -64,7 +67,8 @@ data class SubscriptionEntity(
         keywords = keywords,
         active = active,
         createdAt = createdAt,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        note = note
     )
 
     companion object {
@@ -85,7 +89,8 @@ data class SubscriptionEntity(
             active = s.active,
             createdAt = s.createdAt,
             updatedAt = updatedAt,
-            dirty = dirty
+            dirty = dirty,
+            note = s.note
         )
     }
 }

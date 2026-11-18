@@ -210,6 +210,14 @@ object DatabaseMigrations {
         }
     }
 
+    val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `transactions` ADD COLUMN `note` TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE `pending_captures` ADD COLUMN `note` TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE `subscriptions` ADD COLUMN `note` TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_2_3,
         MIGRATION_3_4,
@@ -222,7 +230,8 @@ object DatabaseMigrations {
         MIGRATION_10_11,
         MIGRATION_11_12,
         MIGRATION_12_13,
-        MIGRATION_13_14
+        MIGRATION_13_14,
+        MIGRATION_14_15
     )
 }
 

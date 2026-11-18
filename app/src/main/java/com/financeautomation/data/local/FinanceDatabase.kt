@@ -85,7 +85,7 @@ import java.io.File
         InflowEntity::class,
         BudgetEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
