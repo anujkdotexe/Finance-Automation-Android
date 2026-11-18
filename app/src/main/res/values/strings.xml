@@ -603,6 +603,7 @@
     <string name="categories_menu_rename">Rename</string>
     <string name="categories_menu_color">Change colour</string>
     <string name="categories_color_dialog_title">Choose category colour</string>
+    <string name="category_color_none">No colour</string>
     <string name="categories_empty_message">No categories yet. Tap \'+ Add category\' in the top bar to create your first category.</string>
     <string name="cd_reorder_category">Reorder %1$s</string>
     <string name="cd_reorder_account">Reorder %1$s</string>

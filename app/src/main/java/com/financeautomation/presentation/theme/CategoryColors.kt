@@ -81,6 +81,15 @@ object CategoryColorTokens {
         dark = Color(0xFF94A3B8)
     )
 
+    const val NO_COLOR: String = "None"
+
+    /** Neutral theme grey used for categories with "No colour" in charts. */
+    val None: CategoryColorToken = CategoryColorToken(
+        name = NO_COLOR,
+        light = Color(0xFF64748B),
+        dark = Color(0xFF94A3B8)
+    )
+
     /** Complete list of all tokens for mapping, indexing, and stable fallback. */
     val ALL: List<CategoryColorToken> = listOf(
         Amber,
@@ -93,7 +102,8 @@ object CategoryColorTokens {
         Lime,
         Orange,
         Emerald,
-        Slate
+        Slate,
+        None
     )
 
     /** Selection palette used in the Add Category sheet. */
@@ -139,11 +149,32 @@ fun categoryDotColor(categoryName: String, isDark: Boolean): Color {
     return if (isDark) token.dark else token.light
 }
 
-/** Resolves dot color for a domain category, honoring custom chosen color in iconName if present. */
+fun isNoColor(category: com.financeautomation.domain.model.Category): Boolean =
+    category.iconName.equals(CategoryColorTokens.NO_COLOR, ignoreCase = true) ||
+    category.iconName.equals("no_color", ignoreCase = true) ||
+    category.iconName.equals("no colour", ignoreCase = true)
+
+/** Resolves dot color for a domain category. Returns Color.Transparent when "No colour" is chosen so no dot is drawn. */
 fun categoryDotColor(category: com.financeautomation.domain.model.Category, isDark: Boolean): Color {
+    if (isNoColor(category)) return Color.Transparent
     val fromToken = CategoryColorTokens.ALL.find { it.name.equals(category.iconName, ignoreCase = true) }
     val token = fromToken ?: categoryColorToken(category.name)
     return if (isDark) token.dark else token.light
+}
+
+/** Resolves chart color for a domain category. Returns neutral theme grey when "No colour" is chosen. */
+fun categoryChartColor(category: com.financeautomation.domain.model.Category, isDark: Boolean): Color {
+    if (isNoColor(category)) {
+        return if (isDark) CategoryColorTokens.None.dark else CategoryColorTokens.None.light
+    }
+    val fromToken = CategoryColorTokens.ALL.find { it.name.equals(category.iconName, ignoreCase = true) }
+    val token = fromToken ?: categoryColorToken(category.name)
+    return if (isDark) token.dark else token.light
+}
+
+@Composable
+fun categoryChartColor(category: com.financeautomation.domain.model.Category): Color {
+    return categoryChartColor(category, isAppInDarkTheme())
 }
 
 /** Composable resolving dot color for a category name observing active dark theme. */
