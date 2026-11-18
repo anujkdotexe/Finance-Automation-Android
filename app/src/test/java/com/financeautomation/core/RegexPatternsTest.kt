@@ -103,7 +103,7 @@ class RegexPatternsTest {
         assertTrue(PackageWhitelist.isWhitelisted(PackageWhitelist.PACKAGE_PHONEPE))
         assertFalse(PackageWhitelist.isWhitelisted("com.random.app"))
 
-        assertTrue(PackageWhitelist.isBlacklisted("com.whatsapp"))
+        assertTrue(PackageWhitelist.isBlacklisted("org.thoughtcrime.securesms"))
         assertTrue(PackageWhitelist.isBlacklisted("org.telegram.messenger"))
         assertFalse(PackageWhitelist.isBlacklisted(PackageWhitelist.PACKAGE_GPAY))
     }

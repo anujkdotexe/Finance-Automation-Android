@@ -180,7 +180,8 @@ class ParseNotificationUseCase(
         timestamp: Long = System.currentTimeMillis(),
         configuredAccounts: List<String> = emptyList(),
         defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
-        accountDigits: Map<String, String?> = emptyMap()
+        accountDigits: Map<String, String?> = emptyMap(),
+        channelId: String? = null
     ): NotificationParseResult {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
@@ -192,6 +193,15 @@ class ParseNotificationUseCase(
 
         // 2. Blacklist check (privacy-sensitive messaging apps)
         if (PackageWhitelist.isBlacklisted(sourcePackage)) {
+            return NotificationParseResult.Dropped(
+                reason = DropReason.BLACKLISTED,
+                sourcePackage = sourcePackage
+            )
+        }
+
+        // 2b. Chat apps that carry payments (WhatsApp, WhatsApp Business):
+        // Only payment notifications on a payments channel are allowed. Any chat or general notification is dropped immediately.
+        if (PackageWhitelist.isChatApp(sourcePackage) && !PackageWhitelist.isPaymentChannel(channelId)) {
             return NotificationParseResult.Dropped(
                 reason = DropReason.BLACKLISTED,
                 sourcePackage = sourcePackage
@@ -304,13 +314,13 @@ class ParseNotificationUseCase(
 
         // 6c. Payment apps must show success (or in-progress) wording and a known direction
         if (!isSms) {
-            if (wording == WordingClass.UNKNOWN) {
+            if (wording == WordingClass.UNKNOWN && !PackageWhitelist.isGenericWatchedApp(sourcePackage)) {
                 return NotificationParseResult.Dropped(reason = DropReason.NO_SUCCESS_WORDING, sourcePackage = sourcePackage)
             }
             val knownDirection = RegexPatterns.isDebit(fullContent) ||
                 RegexPatterns.isPaymentSuccessful(fullContent) ||
                 RegexPatterns.isCredit(fullContent)
-            if (wording == WordingClass.SUCCESS && !knownDirection) {
+            if (wording == WordingClass.SUCCESS && !knownDirection && !PackageWhitelist.isGenericWatchedApp(sourcePackage)) {
                 return NotificationParseResult.Dropped(reason = DropReason.UNKNOWN_DIRECTION, sourcePackage = sourcePackage)
             }
         }

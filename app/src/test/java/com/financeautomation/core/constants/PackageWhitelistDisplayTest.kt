@@ -10,17 +10,38 @@ class PackageWhitelistDisplayTest {
     /** Display name to the packages it stands for. */
     private val displayToPackages: Map<String, Set<String>> = mapOf(
         "Google Pay" to setOf(PackageWhitelist.PACKAGE_GPAY),
-        "BHIM" to setOf(PackageWhitelist.PACKAGE_BHIM),
-        "Supermoney" to setOf(PackageWhitelist.PACKAGE_SUPERMONEY),
         "PhonePe" to setOf(PackageWhitelist.PACKAGE_PHONEPE),
         "Paytm" to setOf(PackageWhitelist.PACKAGE_PAYTM),
+        "BHIM" to setOf(PackageWhitelist.PACKAGE_BHIM),
+        "Supermoney" to setOf(PackageWhitelist.PACKAGE_SUPERMONEY),
+        "Amazon Pay" to setOf(PackageWhitelist.PACKAGE_AMAZON_PAY),
+        "CRED" to setOf(PackageWhitelist.PACKAGE_CRED),
+        "MobiKwik" to setOf(PackageWhitelist.PACKAGE_MOBIKWIK),
+        "Freecharge" to setOf(PackageWhitelist.PACKAGE_FREECHARGE),
+        "Navi" to setOf(PackageWhitelist.PACKAGE_NAVI),
+        "Samsung Wallet" to setOf(PackageWhitelist.PACKAGE_SAMSUNG_WALLET),
+        "WhatsApp (Payments)" to setOf(PackageWhitelist.PACKAGE_WHATSAPP, PackageWhitelist.PACKAGE_WHATSAPP_BUSINESS),
         "Bank SMS" to PackageWhitelist.SMS_PACKAGES
     )
 
     @Test
-    fun listIsExactlyTheSixAppsInOrder() {
+    fun listIsExactlyTheRegistryAppsInOrder() {
         assertEquals(
-            listOf("Google Pay", "BHIM", "Supermoney", "PhonePe", "Paytm", "Bank SMS"),
+            listOf(
+                "Google Pay",
+                "PhonePe",
+                "Paytm",
+                "BHIM",
+                "Supermoney",
+                "Amazon Pay",
+                "CRED",
+                "MobiKwik",
+                "Freecharge",
+                "Navi",
+                "Samsung Wallet",
+                "WhatsApp (Payments)",
+                "Bank SMS"
+            ),
             PackageWhitelist.watchedAppsForDisplay()
         )
     }
@@ -42,7 +63,7 @@ class PackageWhitelistDisplayTest {
 
     @Test
     fun noBlacklistedAppIsListed() {
-        val forbiddenNames = listOf("whatsapp", "telegram", "signal", "messenger", "instagram", "discord", "outlook", "gmail")
+        val forbiddenNames = listOf("telegram", "signal", "messenger", "instagram", "discord", "outlook", "gmail")
         for (name in PackageWhitelist.watchedAppsForDisplay()) {
             assertFalse("$name must not be a blacklisted app", forbiddenNames.any { name.lowercase().contains(it) })
             val packages = displayToPackages.getValue(name)
@@ -52,7 +73,54 @@ class PackageWhitelistDisplayTest {
 
     @Test
     fun privacyStatementIsExact() {
-        assertEquals("We never read WhatsApp, Telegram or OTP messages.", PackageWhitelist.PRIVACY_STATEMENT)
+        assertEquals("We never read personal chats, emails or OTP messages.", PackageWhitelist.PRIVACY_STATEMENT)
+    }
+
+    @Test
+    fun registryHasNoDuplicatePackageIds() {
+        val ids = PackageWhitelist.REGISTRY.map { it.packageId }
+        assertEquals(ids.size, ids.toSet().size)
+    }
+
+    @Test
+    fun chatAppDetectionAndChannelGating() {
+        assertTrue(PackageWhitelist.isChatApp(PackageWhitelist.PACKAGE_WHATSAPP))
+        assertTrue(PackageWhitelist.isChatApp(PackageWhitelist.PACKAGE_WHATSAPP_BUSINESS))
+        assertFalse(PackageWhitelist.isChatApp(PackageWhitelist.PACKAGE_GPAY))
+
+        assertTrue(PackageWhitelist.isPaymentChannel("payments"))
+        assertTrue(PackageWhitelist.isPaymentChannel("whatsapp_payments_channel"))
+        assertFalse(PackageWhitelist.isPaymentChannel("individual_chat"))
+        assertFalse(PackageWhitelist.isPaymentChannel("group_chat"))
+        assertFalse(PackageWhitelist.isPaymentChannel(null))
+        assertFalse(PackageWhitelist.isPaymentChannel(""))
+    }
+
+    @Test
+    fun perAppToggleWorks() {
+        assertTrue(PackageWhitelist.isWhitelisted(PackageWhitelist.PACKAGE_PHONEPE))
+        PackageWhitelist.setPackageEnabled(PackageWhitelist.PACKAGE_PHONEPE, false)
+        assertFalse(PackageWhitelist.isWhitelisted(PackageWhitelist.PACKAGE_PHONEPE))
+        assertFalse(PackageWhitelist.isPackageEnabled(PackageWhitelist.PACKAGE_PHONEPE))
+
+        PackageWhitelist.setPackageEnabled(PackageWhitelist.PACKAGE_PHONEPE, true)
+        assertTrue(PackageWhitelist.isWhitelisted(PackageWhitelist.PACKAGE_PHONEPE))
+        assertTrue(PackageWhitelist.isPackageEnabled(PackageWhitelist.PACKAGE_PHONEPE))
+    }
+
+    @Test
+    fun userWatchedAppGenericHandling() {
+        val testApp = "com.custom.mybank"
+        assertFalse(PackageWhitelist.isWhitelisted(testApp))
+        assertFalse(PackageWhitelist.isGenericWatchedApp(testApp))
+
+        PackageWhitelist.addWatchedApp(testApp)
+        assertTrue(PackageWhitelist.isWhitelisted(testApp))
+        assertTrue(PackageWhitelist.isGenericWatchedApp(testApp))
+
+        PackageWhitelist.removeWatchedApp(testApp)
+        assertFalse(PackageWhitelist.isWhitelisted(testApp))
+        assertFalse(PackageWhitelist.isGenericWatchedApp(testApp))
     }
 
     @Test
@@ -62,6 +130,9 @@ class PackageWhitelistDisplayTest {
         assertEquals("Supermoney", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_SUPERMONEY))
         assertEquals("PhonePe", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_PHONEPE))
         assertEquals("Paytm", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_PAYTM))
+        assertEquals("Amazon Pay", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_AMAZON_PAY))
+        assertEquals("CRED", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_CRED))
+        assertEquals("WhatsApp", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_WHATSAPP))
         assertEquals("Bank SMS", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_GOOGLE_MESSAGES))
         assertEquals("Bank SMS", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_DEFAULT_SMS))
         assertEquals("Bank SMS", PackageWhitelist.appDisplayName(PackageWhitelist.PACKAGE_SAMSUNG_MESSAGES))

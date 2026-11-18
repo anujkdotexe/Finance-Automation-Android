@@ -339,8 +339,8 @@
 
     <!-- Capture and Permissions Screen -->
     <string name="capture_apps_title">Apps we read</string>
-    <string name="capture_apps_desc">Google Pay, BHIM, Supermoney, PhonePe, Paytm, Bank SMS</string>
-    <string name="capture_privacy_note">We never read WhatsApp, Telegram or OTP messages.</string>
+    <string name="capture_apps_desc">Google Pay, PhonePe, Paytm, BHIM, Supermoney, Amazon Pay, CRED, Bank SMS</string>
+    <string name="capture_privacy_note">We never read personal chats, emails or OTP messages.</string>
 
     <!-- Sync and Backup Screen -->
     <string name="sync_cloud_storage">Cloud storage</string>
@@ -438,7 +438,7 @@
     <string name="about_version_label">Version %1$s (Build %2$d)</string>
     <string name="about_engine_active">On-device engine active</string>
     <string name="about_privacy_title">Strict privacy sandbox</string>
-    <string name="about_privacy_desc">We never read WhatsApp, Telegram, or OTP messages.</string>
+    <string name="about_privacy_desc">We never read personal chats, emails, or OTP messages.</string>
     <string name="about_metric_sms_filter">SMS filter</string>
     <string name="about_metric_sms_val">Zero log</string>
     <string name="about_metric_sms_sub">Ephemeral memory</string>
