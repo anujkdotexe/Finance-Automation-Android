@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.Build
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
@@ -38,7 +41,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.financeautomation.core.constants.PackageWhitelist
+import com.financeautomation.core.constants.PrivacyClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -549,12 +559,232 @@ fun CapturePermissionsScreen(
                     modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
                 )
 
-                // 6. Apps we read
+                var showWatchAppPicker by remember { mutableStateOf(false) }
+                var watchedAppsVersion by remember { mutableStateOf(0) }
+
+                // 6. Payment apps we watch
                 CaptureItemRow(
                     icon = Icons.Rounded.Apps,
-                    title = stringResource(R.string.capture_apps_title),
-                    subtitle = stringResource(R.string.capture_apps_desc)
+                    title = stringResource(R.string.payment_apps_title),
+                    subtitle = stringResource(R.string.payment_apps_desc),
+                    contentBelowSubtitle = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = FinanceTheme.spacing.s),
+                            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                        ) {
+                            val dummy = watchedAppsVersion // triggers recomposition on toggle/add/remove
+                            PackageWhitelist.REGISTRY.forEach { app ->
+                                var enabled by remember(app.packageId, dummy) {
+                                    mutableStateOf(PackageWhitelist.isPackageEnabled(app.packageId))
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = FinanceTheme.spacing.xxs),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f).padding(end = FinanceTheme.spacing.s)) {
+                                        Text(
+                                            text = app.displayName,
+                                            style = FinanceTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        if (app.privacyClass == PrivacyClass.CHAT_APP_PAYMENTS_ONLY) {
+                                            Text(
+                                                text = stringResource(R.string.payment_apps_chat_note),
+                                                style = FinanceTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Switch(
+                                        checked = enabled,
+                                        onCheckedChange = { isChecked ->
+                                            enabled = isChecked
+                                            PackageWhitelist.setPackageEnabled(app.packageId, isChecked)
+                                            watchedAppsVersion++
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                            uncheckedTrackColor = FinanceTheme.colors.surfaceContainerHighest
+                                        ),
+                                        modifier = Modifier.semantics {
+                                            contentDescription = context.getString(R.string.payment_apps_switch_cd, app.displayName)
+                                        }
+                                    )
+                                }
+                            }
+
+                            // Custom watched apps
+                            val customApps = remember(dummy) { PackageWhitelist.getWatchedApps() }
+                            if (customApps.isNotEmpty()) {
+                                HorizontalDivider(
+                                    color = FinanceTheme.colors.surfaceContainerLow,
+                                    modifier = Modifier.padding(vertical = FinanceTheme.spacing.xs)
+                                )
+                                customApps.forEach { customPkg ->
+                                    var customEnabled by remember(customPkg, dummy) {
+                                        mutableStateOf(PackageWhitelist.isPackageEnabled(customPkg))
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = FinanceTheme.spacing.xxs),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f).padding(end = FinanceTheme.spacing.s)) {
+                                            Text(
+                                                text = customPkg,
+                                                style = FinanceTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.payment_apps_custom_generic_note),
+                                                style = FinanceTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Switch(
+                                                checked = customEnabled,
+                                                onCheckedChange = { isChecked ->
+                                                    customEnabled = isChecked
+                                                    PackageWhitelist.setPackageEnabled(customPkg, isChecked)
+                                                    watchedAppsVersion++
+                                                },
+                                                colors = SwitchDefaults.colors(
+                                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                                    uncheckedTrackColor = FinanceTheme.colors.surfaceContainerHighest
+                                                )
+                                            )
+                                            TextButton(
+                                                onClick = {
+                                                    PackageWhitelist.removeWatchedApp(customPkg)
+                                                    watchedAppsVersion++
+                                                }
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.payment_apps_remove_action),
+                                                    style = FinanceTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Watch another app button
+                            OutlinedButton(
+                                text = stringResource(R.string.payment_apps_watch_another),
+                                onClick = { showWatchAppPicker = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = FinanceTheme.spacing.s)
+                                    .defaultMinSize(minHeight = 48.dp)
+                            )
+                        }
+                    }
                 )
+
+                if (showWatchAppPicker) {
+                    val pm = context.packageManager
+                    val installedApps = remember {
+                        try {
+                            val mainIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
+                            val launchables = pm.queryIntentActivities(mainIntent, 0).map { it.activityInfo.packageName }.toSet()
+                            pm.getInstalledApplications(0)
+                                .filter { launchables.contains(it.packageName) }
+                                .map { it.packageName to pm.getApplicationLabel(it).toString() }
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    }
+                    val availableApps = remember(installedApps, watchedAppsVersion) {
+                        PackageWhitelist.getAvailableAppsToWatch(installedApps)
+                    }
+
+                    AlertDialog(
+                        onDismissRequest = { showWatchAppPicker = false },
+                        title = {
+                            Text(
+                                text = stringResource(R.string.payment_apps_watch_another),
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        text = {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.payment_apps_watch_another_desc),
+                                    style = FinanceTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (availableApps.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.payment_apps_none_found),
+                                        style = FinanceTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(vertical = FinanceTheme.spacing.m)
+                                    )
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(280.dp)
+                                    ) {
+                                        items(availableApps) { (pkg, label) ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        PackageWhitelist.addWatchedApp(pkg)
+                                                        watchedAppsVersion++
+                                                        showWatchAppPicker = false
+                                                    }
+                                                    .padding(vertical = FinanceTheme.spacing.s, horizontal = FinanceTheme.spacing.xs),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = label,
+                                                        style = FinanceTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = pkg,
+                                                        style = FinanceTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { showWatchAppPicker = false }) {
+                                Text(stringResource(R.string.action_cancel))
+                            }
+                        }
+                    )
+                }
             }
         }
 

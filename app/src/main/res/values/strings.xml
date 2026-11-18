@@ -987,4 +987,15 @@
     <string name="accounts_type_cash">Cash</string>
     <string name="accounts_default_pill">Default</string>
     <string name="accounts_add_form_title">Add account</string>
+
+    <!-- Payment apps we watch -->
+    <string name="payment_apps_title">Payment apps we watch</string>
+    <string name="payment_apps_desc">The app reads payment notifications from these apps on your phone. Everything stays on your phone and goes only to your own Google Sheet.</string>
+    <string name="payment_apps_chat_note">WhatsApp: only payment notifications are read. Chat messages are never read.</string>
+    <string name="payment_apps_watch_another">Watch another app</string>
+    <string name="payment_apps_watch_another_desc">Pick an installed app. Its payments are always sent to Needs Review so you can confirm them.</string>
+    <string name="payment_apps_none_found">No other payment apps found on this phone.</string>
+    <string name="payment_apps_switch_cd">Watch %1$s</string>
+    <string name="payment_apps_custom_generic_note">Generic parser: always sent to Needs Review</string>
+    <string name="payment_apps_remove_action">Remove</string>
 </resources>

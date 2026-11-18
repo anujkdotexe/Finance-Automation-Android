@@ -37,6 +37,17 @@ object PackageWhitelist {
     const val PACKAGE_FREECHARGE: String = "com.freecharge.android"
     const val PACKAGE_NAVI: String = "com.naviapp"
     const val PACKAGE_SAMSUNG_WALLET: String = "com.samsung.android.spay"
+    const val PACKAGE_SBI_YONO: String = "com.sbi.lotusintouch"
+    const val PACKAGE_CANARA_AI1: String = "com.canarabank.mobility"
+    const val PACKAGE_ICICI_IMOBILE: String = "com.csam.icici.bank.imobile"
+    const val PACKAGE_HDFC_BANK: String = "com.snapwork.hdfc"
+    const val PACKAGE_AXIS_MOBILE: String = "com.axis.mobile"
+    const val PACKAGE_KOTAK_BANK: String = "com.msf.kbank.mobile"
+    const val PACKAGE_PAYZAPP: String = "com.enstage.wibmo.hdfc"
+    const val PACKAGE_AIRTEL_THANKS: String = "com.myairtelapp"
+    const val PACKAGE_SLICE: String = "in.indipe.app"
+    const val PACKAGE_JUPITER: String = "money.jupiter"
+    const val PACKAGE_FI_MONEY: String = "com.epifi.gro"
 
     const val PACKAGE_WHATSAPP: String = "com.whatsapp"
     const val PACKAGE_WHATSAPP_BUSINESS: String = "com.whatsapp.w4b"
@@ -60,6 +71,17 @@ object PackageWhitelist {
         PaymentAppInfo(PACKAGE_FREECHARGE, "Freecharge", true, PrivacyClass.PAYMENT_APP),
         PaymentAppInfo(PACKAGE_NAVI, "Navi", true, PrivacyClass.PAYMENT_APP),
         PaymentAppInfo(PACKAGE_SAMSUNG_WALLET, "Samsung Wallet", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_SBI_YONO, "SBI YONO", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_CANARA_AI1, "Canara ai1", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_ICICI_IMOBILE, "iMobile Pay", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_HDFC_BANK, "HDFC Bank", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_AXIS_MOBILE, "Axis Mobile", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_KOTAK_BANK, "Kotak Mobile", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_PAYZAPP, "PayZapp", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_AIRTEL_THANKS, "Airtel Thanks", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_SLICE, "slice", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_JUPITER, "Jupiter", true, PrivacyClass.PAYMENT_APP),
+        PaymentAppInfo(PACKAGE_FI_MONEY, "Fi Money", true, PrivacyClass.PAYMENT_APP),
         PaymentAppInfo(PACKAGE_WHATSAPP, "WhatsApp (Payments)", true, PrivacyClass.CHAT_APP_PAYMENTS_ONLY),
         PaymentAppInfo(PACKAGE_WHATSAPP_BUSINESS, "WhatsApp Business (Payments)", true, PrivacyClass.CHAT_APP_PAYMENTS_ONLY),
         PaymentAppInfo(PACKAGE_DEFAULT_SMS, "Default SMS", true, PrivacyClass.BANK_SMS),
@@ -123,6 +145,19 @@ object PackageWhitelist {
 
     fun getWatchedApps(): Set<String> = userWatchedPackages.toSet()
 
+    /**
+     * Filters a list of installed package (packageId to displayName) pairs for the "Watch another app" picker.
+     * Excludes packages already in the verified registry, already watched, or strictly blacklisted (chat, mail, social).
+     */
+    fun getAvailableAppsToWatch(installedPackages: List<Pair<String, String>>): List<Pair<String, String>> {
+        return installedPackages.filter { (pkg, _) ->
+            val trimmed = pkg.trim()
+            !WHITELISTED_FINANCIAL_PACKAGES.contains(trimmed) &&
+            !userWatchedPackages.contains(trimmed) &&
+            !isBlacklisted(trimmed)
+        }
+    }
+
     fun isGenericWatchedApp(packageName: String): Boolean {
         val trimmed = packageName.trim()
         return userWatchedPackages.contains(trimmed) && !WHITELISTED_FINANCIAL_PACKAGES.contains(trimmed)
@@ -160,22 +195,12 @@ object PackageWhitelist {
     /** Privacy line shown next to the list of watched apps. */
     const val PRIVACY_STATEMENT: String = "We never read personal chats, emails or OTP messages."
 
-    /** Names of the apps this app reads, for the read-only "Apps we read" list. */
-    fun watchedAppsForDisplay(): List<String> = listOf(
-        "Google Pay",
-        "PhonePe",
-        "Paytm",
-        "BHIM",
-        "Supermoney",
-        "Amazon Pay",
-        "CRED",
-        "MobiKwik",
-        "Freecharge",
-        "Navi",
-        "Samsung Wallet",
-        "WhatsApp (Payments)",
-        "Bank SMS"
-    )
+    /** Names of the apps this app reads, for the "Payment apps we watch" list. */
+    fun watchedAppsForDisplay(): List<String> {
+        val registryNames = REGISTRY.filter { isPackageEnabled(it.packageId) }.map { it.displayName }
+        val userWatchedNames = userWatchedPackages.toList()
+        return (registryNames + userWatchedNames).distinct()
+    }
 
     /** Maps a captured package name to a clean user-facing app name. */
     fun appDisplayName(packageName: String): String = when (packageName.trim()) {

@@ -46,7 +46,18 @@ class PaymentAppsRegistryAndPrivacyTest {
             "com.whatsapp.w4b",                      // WhatsApp Business
             "com.android.mms",                       // Default SMS
             "com.google.android.apps.messaging",     // Google Messages
-            "com.samsung.android.messaging"          // Samsung Messages
+            "com.samsung.android.messaging",         // Samsung Messages
+            "com.sbi.lotusintouch",                  // SBI YONO
+            "com.canarabank.mobility",               // Canara ai1
+            "com.csam.icici.bank.imobile",           // iMobile Pay
+            "com.snapwork.hdfc",                     // HDFC Bank
+            "com.axis.mobile",                       // Axis Mobile
+            "com.msf.kbank.mobile",                  // Kotak Mobile
+            "com.enstage.wibmo.hdfc",                // PayZapp
+            "com.myairtelapp",                       // Airtel Thanks
+            "in.indipe.app",                         // slice
+            "money.jupiter",                         // Jupiter
+            "com.epifi.gro"                          // Fi Money
         )
         assertTrue(packageIds.containsAll(expectedPackages))
 
@@ -170,6 +181,23 @@ class PaymentAppsRegistryAndPrivacyTest {
         // Adding blacklisted app is ignored
         PackageWhitelist.addWatchedApp(telegram)
         assertFalse("Blacklisted apps cannot be added as user-watched apps", PackageWhitelist.isWhitelisted(telegram))
+    }
+
+    @Test
+    fun getAvailableAppsToWatchFiltersBlacklistedAndRegistryApps() {
+        val installedApps = listOf(
+            "com.google.android.apps.nbu.paisa.user" to "Google Pay", // in registry
+            "org.telegram.messenger" to "Telegram",                   // blacklisted
+            "org.thoughtcrime.securesms" to "Signal",                 // blacklisted
+            "com.whatsapp" to "WhatsApp",                             // in registry
+            "com.instagram.android" to "Instagram",                   // blacklisted
+            "com.mycustom.payment" to "Custom Finance",               // eligible
+            "com.another.fintech" to "Fintech App"                    // eligible
+        )
+
+        val available = PackageWhitelist.getAvailableAppsToWatch(installedApps)
+        assertEquals(2, available.size)
+        assertEquals(listOf("com.mycustom.payment" to "Custom Finance", "com.another.fintech" to "Fintech App"), available)
     }
 
     @Test
