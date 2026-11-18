@@ -173,4 +173,24 @@ class TripSummaryUseCaseTest {
         assertEquals("Travel", s.categoryBreakdown[0].category)
         assertEquals(5000.0, s.categoryBreakdown[0].amount, 0.001)
     }
+
+    @Test
+    fun carriedForwardCopiesAreCountedOnceAndNotDuplicatedInTripSummary() {
+        val original = Transaction(
+            id = "orig_1", timestamp = 1000L, dateSerial = 46330, timeSerial = 0.5, account = "UPI",
+            merchant = "Resort Stay", tripTag = "Goa", category = "Travel", totalAmount = 6000.0,
+            companions = "Asha", myShare = 3000.0, owedToMe = 3000.0, status = TransactionStatus.CARRIED_FWD
+        )
+        val copy = Transaction(
+            id = "copy_1", timestamp = 2000L, dateSerial = 46360, timeSerial = 0.5, account = "UPI",
+            merchant = "[Carried from Nov] Resort Stay", tripTag = "Goa", category = "Travel", totalAmount = 3000.0,
+            companions = "Asha", myShare = 0.0, owedToMe = 3000.0, status = TransactionStatus.PENDING
+        )
+        val s = useCase.forTrip("Goa", listOf(original, copy))
+        assertEquals(1, s.transactionCount)
+        assertEquals(listOf("orig_1"), s.transactions.map { it.id })
+        assertEquals(6000.0, s.totalPaid, 0.001)
+        assertEquals(3000.0, s.givenPending, 0.001)
+        assertEquals(3000.0, s.netExpenditure, 0.001)
+    }
 }
