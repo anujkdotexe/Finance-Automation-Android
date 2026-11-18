@@ -9,6 +9,12 @@ import okio.buffer
 import java.io.IOException
 
 /**
+ * Thrown when an HTTP response exceeds the configured byte limit.
+ * Marked as a non-retryable permanent error in sync error handling to prevent infinite retry loops.
+ */
+class ResponseTooLargeException(message: String) : IOException(message)
+
+/**
  * OkHttp interceptor that enforces an upper bound on HTTP response body sizes.
  * Prevents memory exhaustion / OutOfMemoryError when receiving oversized or hostile responses.
  */
@@ -27,7 +33,7 @@ class ResponseSizeLimitInterceptor(
         val contentLength = body.contentLength()
         if (contentLength > maxBytes) {
             body.close()
-            throw IOException("HTTP response content-length ($contentLength bytes) exceeds size limit of $maxBytes bytes")
+            throw ResponseTooLargeException("HTTP response content-length ($contentLength bytes) exceeds size limit of $maxBytes bytes")
         }
 
         val boundedSource = object : ForwardingSource(body.source()) {
@@ -38,7 +44,7 @@ class ResponseSizeLimitInterceptor(
                 if (bytesRead != -1L) {
                     totalBytesRead += bytesRead
                     if (totalBytesRead > maxBytes) {
-                        throw IOException("HTTP response stream exceeded size limit of $maxBytes bytes")
+                        throw ResponseTooLargeException("HTTP response stream exceeded size limit of $maxBytes bytes")
                     }
                 }
                 return bytesRead

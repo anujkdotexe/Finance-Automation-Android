@@ -49,7 +49,7 @@ class ResponseSizeLimitInterceptorTest {
     }
 
     @Test
-    fun oversizedResponseWithContentLengthHeaderThrowsIOException() {
+    fun oversizedResponseWithContentLengthHeaderThrowsResponseTooLargeException() {
         val largeBytes = ByteArray(150 * 1024) { 'A'.code.toByte() } // 150 KB
         val mockResponse = Response.Builder()
             .request(Request.Builder().url("https://example.com/test").build())
@@ -60,7 +60,7 @@ class ResponseSizeLimitInterceptorTest {
             .build()
 
         val chain = FakeChain(mockResponse)
-        assertThrows(IOException::class.java) {
+        assertThrows(ResponseTooLargeException::class.java) {
             interceptor.intercept(chain)
         }
     }

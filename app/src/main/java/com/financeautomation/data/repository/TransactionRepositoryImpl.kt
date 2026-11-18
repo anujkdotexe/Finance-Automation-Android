@@ -819,7 +819,8 @@ class TransactionRepositoryImpl(
         is java.io.IOException -> {
             throwable !is com.financeautomation.data.remote.SheetNotFoundException &&
             throwable !is com.financeautomation.data.remote.MalformedResponseException &&
-            throwable !is com.financeautomation.data.remote.AuthExpiredException
+            throwable !is com.financeautomation.data.remote.AuthExpiredException &&
+            throwable !is com.financeautomation.data.remote.ResponseTooLargeException
         }
         else -> false
     }

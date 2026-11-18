@@ -308,6 +308,10 @@ class NotificationProcessor(
         detectedAccountHint: String? = null,
         text: String = ""
     ): NotificationProcessingOutcome {
+        val cleanPayee = com.financeautomation.core.utils.InputPolicy.cleanName(payee)
+            .take(com.financeautomation.core.utils.InputPolicy.MAX_MERCHANT_NAME_LENGTH)
+            .ifBlank { "Unknown Payee" }
+
         val targetState = when {
             flags.split(",").map { it.trim() }.contains(PendingCaptureEntity.FLAG_REFUND_REVERSAL) -> PendingCaptureEntity.STATE_NEEDS_REVIEW
             wording == WordingClass.PROCESSING -> PendingCaptureEntity.STATE_AWAITING_SUCCESS
@@ -320,7 +324,7 @@ class NotificationProcessor(
             if (existingByKey != null && existingByKey.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
                 val updated = existingByKey.copy(
                     amount = amount ?: existingByKey.amount,
-                    payee = if (payee != "Unknown Payee") payee else existingByKey.payee,
+                    payee = if (cleanPayee != "Unknown Payee") cleanPayee else existingByKey.payee,
                     inferredAccount = inferredAccount.ifBlank { existingByKey.inferredAccount },
                     state = if (targetState == PendingCaptureEntity.STATE_WAITING) PendingCaptureEntity.STATE_WAITING else existingByKey.state,
                     contentHash = contentHash,
@@ -363,7 +367,7 @@ class NotificationProcessor(
                     }
 
                     // Payees must be compatible, so two real payments of the same amount to different payees stay separate
-                    if (!com.financeautomation.core.utils.MerchantSimilarity.compatible(candidate.payee, payee)) {
+                    if (!com.financeautomation.core.utils.MerchantSimilarity.compatible(candidate.payee, cleanPayee)) {
                         return@filter false
                     }
 
@@ -391,7 +395,7 @@ class NotificationProcessor(
                         }
 
                         // Without matching ref, allow late merge ONLY for a generic bank SMS (Unknown Payee) within 30 minutes
-                        if (payee != "Unknown Payee") return@filter false
+                        if (cleanPayee != "Unknown Payee") return@filter false
                         return@filter delta <= WINDOW_CONFIRMED_GENERIC_MERGE_MS
                     }
 
@@ -411,7 +415,7 @@ class NotificationProcessor(
                         it.state == PendingCaptureEntity.STATE_NEEDS_REVIEW
                 }
                 if (openMergeTarget != null) {
-                    val richerPayee = selectRicherPayee(openMergeTarget.payee, payee)
+                    val richerPayee = selectRicherPayee(openMergeTarget.payee, cleanPayee)
                     val candidateRef = extractRefFromFlags(openMergeTarget.flags)
                     val mergedFlags = if (candidateRef == null && incomingRefId != null) {
                         if (openMergeTarget.flags.isNotBlank()) "${openMergeTarget.flags},REF_$incomingRefId" else "REF_$incomingRefId"
@@ -477,7 +481,7 @@ class NotificationProcessor(
             id = captureId,
             sourcePackage = sourcePackage,
             amount = amount,
-            payee = payee,
+            payee = cleanPayee,
             inferredAccount = inferredAccount,
             timestamp = postTime,
             kind = kind,
