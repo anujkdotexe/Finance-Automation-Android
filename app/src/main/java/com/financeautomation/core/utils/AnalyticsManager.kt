@@ -77,6 +77,11 @@ object AnalyticsManager {
     internal var testOptInOverride: Boolean? = null
     internal var testEventListener: ((eventName: String, params: Map<String, Any>?) -> Unit)? = null
 
+    internal fun resetForTesting() {
+        testOptInOverride = null
+        testEventListener = null
+    }
+
     private fun isFirebaseAvailable(context: Context?): Boolean {
         val ctx = context ?: appContext ?: return false
         return try {
