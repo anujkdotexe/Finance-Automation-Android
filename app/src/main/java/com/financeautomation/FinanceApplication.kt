@@ -36,6 +36,7 @@ class FinanceApplication : Application() {
         Diagnostics.initialize(this)
         LocalCrashRecorder.install(this, BuildConfig.VERSION_NAME)
         CrashlyticsManager.initAtAppStart(this)
+        com.financeautomation.core.utils.AnalyticsManager.initAtAppStart(this)
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
         // Periodic sync must not depend on a reboot or an app update; KEEP makes this a no-op when already scheduled

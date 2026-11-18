@@ -157,9 +157,10 @@ dependencies {
     // KotlinX Serialization JSON
     implementation(libs.kotlinx.serialization.json)
 
-    // Firebase Crashlytics (inert without google-services.json)
+    // Firebase Crashlytics & Analytics (inert without google-services.json or when opted out)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.analytics)
 
     // Unit Testing
     testImplementation(libs.junit)

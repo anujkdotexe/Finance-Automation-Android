@@ -76,6 +76,9 @@ fun SettingsScreen(
     var crashReportsEnabled by remember(state.crashlyticsOptIn) {
         mutableStateOf(com.financeautomation.core.utils.CrashlyticsManager.isOptedIn(context))
     }
+    var analyticsEnabled by remember(state.analyticsOptIn) {
+        mutableStateOf(com.financeautomation.core.utils.AnalyticsManager.isOptedIn(context))
+    }
 
     Column(
         modifier = modifier
@@ -276,9 +279,11 @@ fun SettingsScreen(
                     }
 
                     Switch(
-                        checked = false,
-                        onCheckedChange = null,
-                        enabled = false,
+                        checked = analyticsEnabled,
+                        onCheckedChange = { enabled ->
+                            analyticsEnabled = enabled
+                            viewModel.setAnalyticsOptIn(context, enabled)
+                        },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                             checkedTrackColor = MaterialTheme.colorScheme.primary,
