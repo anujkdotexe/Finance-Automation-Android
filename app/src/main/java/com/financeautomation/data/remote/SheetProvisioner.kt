@@ -58,15 +58,15 @@ object SheetProvisioner {
         return "EXPENSE LEDGER — $month"
     }
 
-    private const val ROW3_LAST_BORDERED_COL = 24 // column Y
+    private const val ROW3_LAST_BORDERED_COL = 25 // column Z
 
     /** Row 2 border sides per column index, from the live workbook. */
     val ROW2_BORDER_SIDES: Map<Int, Set<String>> = mapOf(
         0 to setOf("top", "bottom", "left"),
-        11 to setOf("top", "bottom", "left"),
-        12 to setOf("bottom"),
-        20 to setOf("top", "bottom"),
-        21 to setOf("top", "bottom")
+        12 to setOf("top", "bottom", "left"),
+        13 to setOf("bottom"),
+        21 to setOf("top", "bottom"),
+        22 to setOf("top", "bottom")
     )
 
     /** Thin borders on the named sides of a single cell. */
@@ -84,8 +84,8 @@ object SheetProvisioner {
         return mapOf("updateBorders" to request)
     }
 
-    /** Debit table columns C, D, E, F, H, K (0-based) that are plain text in the iOS reference. */
-    val DEBIT_TEXT_COLUMNS: List<Int> = listOf(2, 3, 4, 5, 7, 10)
+    /** Debit table columns C, D, E, F, H, K, L (0-based) that are plain text in the iOS reference. */
+    val DEBIT_TEXT_COLUMNS: List<Int> = listOf(2, 3, 4, 5, 7, 10, 11)
 
     private fun thinBorder(): Map<String, Any?> =
         mapOf("style" to "SOLID", "width" to 1, "color" to mapOf("red" to 0f, "green" to 0f, "blue" to 0f))
@@ -163,9 +163,9 @@ object SheetProvisioner {
         ColumnRowRange(25, 1000, 5)
     )
 
-    /** Month tab AB4:AB1000, C4:C1000, F4:F1000 and K4:K1000. */
+    /** Month tab AC4:AC1000, C4:C1000, F4:F1000 and K4:K1000. */
     val MONTH_TAB_DROPDOWN_RANGES = listOf(
-        ColumnRowRange(3, 1000, 27),
+        ColumnRowRange(3, 1000, 28),
         ColumnRowRange(3, 1000, 2),
         ColumnRowRange(3, 1000, 5),
         ColumnRowRange(3, 1000, 10)
@@ -509,7 +509,7 @@ object SheetProvisioner {
             Pair(
                 9,
                 Triple(
-                    """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AB4:AB"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Z4:Z")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AB4:AB"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Z4:Z")), 0)""",
+                    """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")), 0)""",
                     burnRedColor,
                     true
                 )
@@ -917,7 +917,7 @@ object SheetProvisioner {
         requests.add(outerBordersRequest(dashboardSheetId, startRow = 26, endRow = 27, startCol = 7, endCol = 8))
 
         // Row 27: Dynamic Two-Stage QUERY Formulas
-        val theyOweMeQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:K"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
+        val theyOweMeQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -932,7 +932,7 @@ object SheetProvisioner {
             )
         )
 
-        val iOwePeopleQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!V4:AB"), "SELECT X, Z, V WHERE (AB = 'Pending' OR AB = 'Partial') AND Z > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+        val iOwePeopleQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -1050,13 +1050,13 @@ object SheetProvisioner {
         }
 
         // 3. Merges (idempotent: unmerge preceding merge to allow re-running):
-        // Row 1 Title Banner: A1:AB1 (cols 0 to 28, row 0 to 1)
+        // Row 1 Title Banner: A1:AC1 (cols 0 to 29, row 0 to 1)
         val row1BannerRange = mapOf(
             "sheetId" to sheetId,
             "startRowIndex" to 0,
             "endRowIndex" to 1,
             "startColumnIndex" to 0,
-            "endColumnIndex" to 28
+            "endColumnIndex" to 29
         )
         requests.add(mapOf("unmergeCells" to mapOf("range" to row1BannerRange)))
         requests.add(
@@ -1069,7 +1069,7 @@ object SheetProvisioner {
         )
 
         // Row 2 Section Group Merges:
-        // Table 1 Debits: A2:K2 (cols 0 to 11, row 1 to 2)
+        // Table 1 Debits: A2:L2 (cols 0 to 12, row 1 to 2)
         val table1Range = mapOf(
             "sheetId" to sheetId,
             "startRowIndex" to 1,
@@ -1087,7 +1087,7 @@ object SheetProvisioner {
             )
         )
 
-        // Table 2 Inflows: M2:T2 (cols 12 to 20, row 1 to 2)
+        // Table 2 Inflows: N2:U2 (cols 13 to 21, row 1 to 2)
         val table2Range = mapOf(
             "sheetId" to sheetId,
             "startRowIndex" to 1,
@@ -1105,7 +1105,7 @@ object SheetProvisioner {
             )
         )
 
-        // Table 3 Payables: V2:AB2 (cols 21 to 28, row 1 to 2)
+        // Table 3 Payables: W2:AC2 (cols 22 to 29, row 1 to 2)
         val table3Range = mapOf(
             "sheetId" to sheetId,
             "startRowIndex" to 1,
@@ -1133,7 +1133,7 @@ object SheetProvisioner {
                         "startRowIndex" to 0,
                         "endRowIndex" to 1,
                         "startColumnIndex" to 0,
-                        "endColumnIndex" to 28
+                        "endColumnIndex" to 29
                     ),
                     "cell" to mapOf(
                         "userEnteredValue" to mapOf("stringValue" to bannerTitle),
@@ -1155,11 +1155,11 @@ object SheetProvisioner {
 
         // 5. Populate Row 2 Section Headers
         val sectionDefs = listOf(
-            Triple(0, 11, Pair("EXPENSES (MONEY OUT)", debitsHeaderBg)),
-            Triple(11, 12, Pair("", spacerGrayBg)),
-            Triple(12, 20, Pair("INFLOWS (MONEY IN)", inflowsHeaderBg)),
-            Triple(20, 21, Pair("", spacerGrayBg)),
-            Triple(21, 28, Pair("I OWE PEOPLE", owePeopleHeaderBg))
+            Triple(0, 12, Pair("EXPENSES (MONEY OUT)", debitsHeaderBg)),
+            Triple(12, 13, Pair("", spacerGrayBg)),
+            Triple(13, 21, Pair("INFLOWS (MONEY IN)", inflowsHeaderBg)),
+            Triple(21, 22, Pair("", spacerGrayBg)),
+            Triple(22, 29, Pair("I OWE PEOPLE", owePeopleHeaderBg))
         )
 
         sectionDefs.forEach { (startCol, endCol, content) ->
@@ -1223,7 +1223,7 @@ object SheetProvisioner {
             )
         }
 
-        // Hide UUID columns AC, AD, AE (indices 28 to 31)
+        // Hide UUID columns AD, AE, AF (indices 29 to 32)
         requests.add(
             mapOf(
                 "updateDimensionProperties" to mapOf(
@@ -1244,9 +1244,9 @@ object SheetProvisioner {
         // Exact Column Widths matching iOS master template
         val colWidths = listOf(
             0 to 90, 1 to 129, 2 to 80, 3 to 160, 4 to 100, 5 to 110, 6 to 100, 7 to 120, 8 to 90,
-            9 to 90, 10 to 80, 11 to 10, 12 to 90, 13 to 75, 14 to 90, 15 to 100, 16 to 120,
-            17 to 125, 18 to 115, 19 to 115, 20 to 10, 21 to 95, 22 to 75, 23 to 95, 24 to 120,
-            25 to 110, 26 to 95, 27 to 115
+            9 to 90, 10 to 80, 11 to 150, 12 to 10, 13 to 90, 14 to 75, 15 to 90, 16 to 100, 17 to 120,
+            18 to 125, 19 to 115, 20 to 115, 21 to 10, 22 to 95, 23 to 75, 24 to 95, 25 to 120,
+            26 to 110, 27 to 95, 28 to 115
         )
         colWidths.forEach { (colIdx, px) ->
             requests.add(
@@ -1291,7 +1291,7 @@ object SheetProvisioner {
                 )
             )
             format["verticalAlignment"] = "MIDDLE"
-            // Thin borders on A3:Y3 only, as in the live workbook
+            // Thin borders on A3:Z3 only, as in the live workbook
             if (colIdx <= ROW3_LAST_BORDERED_COL) {
                 format["borders"] = thinBorders()
             }
@@ -1318,7 +1318,7 @@ object SheetProvisioner {
             )
         )
 
-        // Reaffirm the A3:Y3 grid through one range request so the shared edges (for example K3 and S3) are written
+        // Reaffirm the A3:Z3 grid through one range request so the shared edges (for example K3 and S3) are written
         requests.add(
             mapOf(
                 "updateBorders" to mapOf(
@@ -1339,8 +1339,8 @@ object SheetProvisioner {
         )
 
         // 7. Column Number Formatting on Data Rows (Rows 4 to targetRowCount)
-        // Currency Columns: Total Amount (6), My Share (8), Owed To Me (9), Inflow Amount (18), Payable Amount (25)
-        listOf(6, 8, 9, 18, 25).forEach { colIdx ->
+        // Currency Columns: Total Amount (6), My Share (8), Owed To Me (9), Inflow Amount (19), Payable Amount (26)
+        listOf(6, 8, 9, 19, 26).forEach { colIdx ->
             requests.add(
                 createNumberFormatRequest(
                     sheetId = sheetId,
@@ -1354,7 +1354,7 @@ object SheetProvisioner {
             )
         }
 
-        // Plain text format (@) on the debit table columns C, D, E, F, H and K, as in the iOS reference
+        // Plain text format (@) on the debit table columns C, D, E, F, H, K and L, as in the iOS reference
         DEBIT_TEXT_COLUMNS.forEach { colIdx ->
             requests.add(
                 mapOf(
@@ -1377,8 +1377,8 @@ object SheetProvisioner {
             )
         }
 
-        // Date Columns: Debit Date (0), Inflow Date (12), Payable Date (21), Repaid Date (26)
-        listOf(0, 12, 21, 26).forEach { colIdx ->
+        // Date Columns: Debit Date (0), Inflow Date (13), Payable Date (22), Repaid Date (27)
+        listOf(0, 13, 22, 27).forEach { colIdx ->
             requests.add(
                 createNumberFormatRequest(
                     sheetId = sheetId,
@@ -1392,8 +1392,8 @@ object SheetProvisioner {
             )
         }
 
-        // Time Columns: Debit Time (1), Inflow Time (13), Payable Time (22)
-        listOf(1, 13, 22).forEach { colIdx ->
+        // Time Columns: Debit Time (1), Inflow Time (14), Payable Time (23)
+        listOf(1, 14, 23).forEach { colIdx ->
             requests.add(
                 createNumberFormatRequest(
                     sheetId = sheetId,
@@ -1409,6 +1409,155 @@ object SheetProvisioner {
 
         // The iOS reference has no conditional formatting on the month tab, so none is added.
         // (existingRuleFormulas is kept in the signature for callers that read existing rules.)
+
+        return requests
+    }
+
+    /**
+     * Builds atomic batchUpdate requests to upgrade an existing 31-wide month tab
+     * to the 32-column master schema with Expense Note at Column L (index 11).
+     * Includes insertDimension at index 11, header L3 = "Note", column width 150px,
+     * banner merge across A1:AC1, plain text format on Col L, and hiding AD..AF UUIDs.
+     */
+    fun buildRepairMonthTabSchemaRequests(
+        sheetId: Int,
+        tabTitle: String,
+        rowCount: Int = 1000
+    ): List<Map<String, Any?>> {
+        val requests = mutableListOf<Map<String, Any?>>()
+
+        // 1. Insert 1 column at index 11 (Column L)
+        requests.add(
+            mapOf(
+                "insertDimension" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "dimension" to "COLUMNS",
+                        "startIndex" to SheetSchemaConstants.COL_INDEX_EXPENSE_NOTE,
+                        "endIndex" to SheetSchemaConstants.COL_INDEX_EXPENSE_NOTE + 1
+                    ),
+                    "inheritFromBefore" to true
+                )
+            )
+        )
+
+        // 2. Set Row 3 Header L3 = "Note"
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf(
+                        "sheetId" to sheetId,
+                        "rowIndex" to 2,
+                        "columnIndex" to SheetSchemaConstants.COL_INDEX_EXPENSE_NOTE
+                    ),
+                    "rows" to listOf(
+                        mapOf(
+                            "values" to listOf(
+                                mapOf(
+                                    "userEnteredValue" to mapOf("stringValue" to "Note"),
+                                    "userEnteredFormat" to mapOf(
+                                        "backgroundColor" to headerSlateBg,
+                                        "horizontalAlignment" to "CENTER",
+                                        "verticalAlignment" to "MIDDLE",
+                                        "wrapStrategy" to "WRAP",
+                                        "textFormat" to mapOf(
+                                            "foregroundColor" to whiteColor,
+                                            "bold" to true,
+                                            "fontSize" to 9
+                                        ),
+                                        "borders" to thinBorders()
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy,borders)"
+                )
+            )
+        )
+
+        // 3. Set Column L width to 150 px
+        requests.add(
+            createUpdateDimensionPropertiesRequest(
+                sheetId = sheetId,
+                dimension = "COLUMNS",
+                startIndex = SheetSchemaConstants.COL_INDEX_EXPENSE_NOTE,
+                endIndex = SheetSchemaConstants.COL_INDEX_EXPENSE_NOTE + 1,
+                pixelSize = 150
+            )
+        )
+
+        // 4. Update Row 1 Title Banner merge (Cols 0 to 29, A1:AC1) and banner title
+        val bannerTitle = monthTabBannerTitle(tabTitle)
+        val row1BannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 0,
+            "endRowIndex" to 1,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 29
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to row1BannerRange)))
+        requests.add(mapOf("mergeCells" to mapOf("range" to row1BannerRange, "mergeType" to "MERGE_ALL")))
+        requests.add(
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to row1BannerRange,
+                    "cell" to mapOf(
+                        "userEnteredValue" to mapOf("stringValue" to bannerTitle),
+                        "userEnteredFormat" to mapOf(
+                            "backgroundColor" to ledgerBannerBg,
+                            "horizontalAlignment" to "CENTER",
+                            "verticalAlignment" to "MIDDLE",
+                            "textFormat" to mapOf(
+                                "foregroundColor" to whiteColor,
+                                "bold" to true,
+                                "fontSize" to 14
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+                )
+            )
+        )
+
+        // 5. Hide UUID columns AD, AE, AF (indices 29 to 32)
+        requests.add(
+            mapOf(
+                "updateDimensionProperties" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "dimension" to "COLUMNS",
+                        "startIndex" to SheetSchemaConstants.COL_INDEX_DEBIT_UUID,
+                        "endIndex" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                    ),
+                    "properties" to mapOf(
+                        "hiddenByUser" to true
+                    ),
+                    "fields" to "hiddenByUser"
+                )
+            )
+        )
+
+        // 6. Plain text format (@) on Column L data cells (rows 4 to rowCount)
+        requests.add(
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "startRowIndex" to 3,
+                        "endRowIndex" to rowCount,
+                        "startColumnIndex" to SheetSchemaConstants.COL_INDEX_EXPENSE_NOTE,
+                        "endColumnIndex" to SheetSchemaConstants.COL_INDEX_EXPENSE_NOTE + 1
+                    ),
+                    "cell" to mapOf(
+                        "userEnteredFormat" to mapOf(
+                            "numberFormat" to mapOf("type" to "TEXT", "pattern" to "@")
+                        )
+                    ),
+                    "fields" to "userEnteredFormat.numberFormat"
+                )
+            )
+        )
 
         return requests
     }

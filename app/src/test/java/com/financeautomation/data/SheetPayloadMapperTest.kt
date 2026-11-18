@@ -27,13 +27,14 @@ class SheetPayloadMapperTest {
         companions = "Personal",
         myShare = 450.0,
         owedToMe = 0.0,
-        status = TransactionStatus.SETTLED
+        status = TransactionStatus.SETTLED,
+        note = "Dinner note"
     )
 
     @Test
-    fun testMapTransactionToFullRowProduces31Columns() {
+    fun testMapTransactionToFullRowProduces32Columns() {
         val row = SheetPayloadMapper.mapTransactionToFullRow(sampleDebit)
-        assertEquals(31, row.size)
+        assertEquals(32, row.size)
     }
 
     @Test
@@ -62,25 +63,27 @@ class SheetPayloadMapperTest {
         assertEquals(0.0, row[9])
         // Col K (10): Status
         assertEquals("Settled", row[10])
+        // Col L (11): Expense Note
+        assertEquals("Dinner note", row[11])
     }
 
     @Test
     fun testSpacersAndEmptyTablesForDebit() {
         val row = SheetPayloadMapper.mapTransactionToFullRow(sampleDebit)
 
-        // Col L (11): Spacer 1
-        assertEquals("", row[11])
+        // Col M (12): Spacer 1
+        assertEquals("", row[12])
 
-        // Table 2 (12..19): Empty
-        for (i in 12..19) {
+        // Table 2 (13..20): Empty
+        for (i in 13..20) {
             assertEquals("Table 2 col $i should be empty", "", row[i])
         }
 
-        // Col U (20): Spacer 2
-        assertEquals("", row[20])
+        // Col V (21): Spacer 2
+        assertEquals("", row[21])
 
-        // Table 3 (21..27): Empty
-        for (i in 21..27) {
+        // Table 3 (22..28): Empty
+        for (i in 22..28) {
             assertEquals("Table 3 col $i should be empty", "", row[i])
         }
     }
@@ -89,12 +92,12 @@ class SheetPayloadMapperTest {
     fun testHiddenUuidsForDebit() {
         val row = SheetPayloadMapper.mapTransactionToFullRow(sampleDebit)
 
-        // Col AC (28): Debit Txn UUID
-        assertEquals("txn_test_12345", row[28])
-        // Col AD (29): Inflow Txn UUID
-        assertEquals("", row[29])
-        // Col AE (30): Payable Txn UUID
+        // Col AD (29): Debit Txn UUID
+        assertEquals("txn_test_12345", row[29])
+        // Col AE (30): Inflow Txn UUID
         assertEquals("", row[30])
+        // Col AF (31): Payable Txn UUID
+        assertEquals("", row[31])
     }
 
     @Test
@@ -105,13 +108,14 @@ class SheetPayloadMapperTest {
     }
 
     @Test
-    fun testMapTransactionToTable1Returns11Values() {
+    fun testMapTransactionToTable1Returns12Values() {
         val table1 = SheetPayloadMapper.mapTransactionToTable1(sampleDebit)
-        assertEquals(11, table1.size)
+        assertEquals(12, table1.size)
         assertEquals(46331, table1[0])
         assertEquals("Swiggy Bangalore", table1[3])
         assertEquals(450.0, table1[6])
         assertEquals("Settled", table1[10])
+        assertEquals("Dinner note", table1[11])
     }
 
     @Test
@@ -128,30 +132,39 @@ class SheetPayloadMapperTest {
             linkedDebitUuid = ""
         )
         val row = SheetPayloadMapper.mapInflowToFullRow(inflow)
-        assertEquals(31, row.size)
+        assertEquals(32, row.size)
 
-        // Table 1 empty
-        for (i in 0..10) {
+        // Table 1 empty (0..11)
+        for (i in 0..11) {
             assertEquals("", row[i])
         }
-        // Spacer 1 empty
-        assertEquals("", row[11])
+        // Spacer 1 empty (Col M, 12)
+        assertEquals("", row[12])
 
-        // Table 2 populated
-        assertEquals(46331, row[12])
-        assertEquals(0.45, row[13])
-        assertEquals("SBI", row[14])
-        assertEquals("Salary", row[15])
-        assertEquals("Acme Corp", row[16])
-        assertEquals("Monthly salary", row[17])
-        assertEquals(100000.0, row[18])
-        assertEquals("", row[19])
+        // Table 2 populated (Cols N-U, 13..20)
+        assertEquals(46331, row[13])
+        assertEquals(0.45, row[14])
+        assertEquals("SBI", row[15])
+        assertEquals("Salary", row[16])
+        assertEquals("Acme Corp", row[17])
+        assertEquals("Monthly salary", row[18])
+        assertEquals(100000.0, row[19])
+        assertEquals("", row[20])
 
-        // Col AD (29) has inflow UUID
-        assertEquals("inf_test_999", row[29])
-        // Col AC and AE empty
-        assertEquals("", row[28])
-        assertEquals("", row[30])
+        // Spacer 2 empty (Col V, 21)
+        assertEquals("", row[21])
+
+        // Table 3 empty (Cols W-AC, 22..28)
+        for (i in 22..28) {
+            assertEquals("", row[i])
+        }
+
+        // Col AD (29) empty
+        assertEquals("", row[29])
+        // Col AE (30) has inflow UUID
+        assertEquals("inf_test_999", row[30])
+        // Col AF (31) empty
+        assertEquals("", row[31])
     }
 
     @Test
@@ -167,19 +180,36 @@ class SheetPayloadMapperTest {
             repaymentStatus = RepaymentStatus.PENDING
         )
         val row = SheetPayloadMapper.mapPayableToFullRow(payable)
-        assertEquals(31, row.size)
+        assertEquals(32, row.size)
 
-        // Table 3 (21..27)
-        assertEquals(46331, row[21])
-        assertEquals(0.6, row[22])
-        assertEquals("Rahul", row[23])
-        assertEquals("Dinner share", row[24])
-        assertEquals(500.0, row[25])
-        assertEquals("", row[26])
-        assertEquals("Pending", row[27])
+        // Table 1 empty (0..11)
+        for (i in 0..11) {
+            assertEquals("", row[i])
+        }
+        // Spacer 1 empty (Col M, 12)
+        assertEquals("", row[12])
 
-        // Col AE (30) has payable UUID
-        assertEquals("pay_test_888", row[30])
+        // Table 2 empty (Cols N-U, 13..20)
+        for (i in 13..20) {
+            assertEquals("", row[i])
+        }
+        // Spacer 2 empty (Col V, 21)
+        assertEquals("", row[21])
+
+        // Table 3 (Cols W-AC, 22..28)
+        assertEquals(46331, row[22])
+        assertEquals(0.6, row[23])
+        assertEquals("Rahul", row[24])
+        assertEquals("Dinner share", row[25])
+        assertEquals(500.0, row[26])
+        assertEquals("", row[27])
+        assertEquals("Pending", row[28])
+
+        // Hidden System UUIDs (Cols AD-AF, 29..31)
+        assertEquals("", row[29])
+        assertEquals("", row[30])
+        // Col AF (31) has payable UUID
+        assertEquals("pay_test_888", row[31])
     }
 
     @Test
@@ -192,13 +222,14 @@ class SheetPayloadMapperTest {
         )
         val voidRow = SheetPayloadMapper.mapToVoidPayload(splitTxn)
 
-        assertEquals(31, voidRow.size)
+        assertEquals(32, voidRow.size)
         assertEquals("[Void] Swiggy Bangalore", voidRow[3])
         assertEquals(0.0, voidRow[6]) // Total amount zeroed to prevent gross outflow inflation
         assertEquals(0.0, voidRow[8])   // My Share zeroed
         assertEquals(0.0, voidRow[9])   // Owed To Me zeroed
         assertEquals("Void", voidRow[10]) // Status marked Void
-        assertEquals("txn_test_12345", voidRow[28]) // AC UUID preserved
+        assertEquals("Dinner note", voidRow[11]) // Note preserved
+        assertEquals("txn_test_12345", voidRow[29]) // AD UUID preserved
     }
 
     @Test

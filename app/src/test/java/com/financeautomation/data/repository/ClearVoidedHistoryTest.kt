@@ -112,16 +112,16 @@ class ClearVoidedHistoryTest {
         h.server.customRead = { call ->
             if (call.url.contains("values:batchGet")) {
                 """{"valueRanges":[
-                    {"range":"'$tab'!A4:K","majorDimension":"ROWS","values":[
-                        [46000,0.5,"SBI","[Void] Tea","","Food & Drink",0,"Personal",0,0,"Void"],
-                        [46000,0.6,"SBI","Lunch","","Food & Drink",0,"Personal",0,0,"Void"],
-                        [46000,0.7,"SBI","Bus","","Transport",30,"Personal",30,0,"Personal"]
+                    {"range":"'$tab'!A4:L","majorDimension":"ROWS","values":[
+                        [46000,0.5,"SBI","[Void] Tea","","Food & Drink",0,"Personal",0,0,"Void",""],
+                        [46000,0.6,"SBI","Lunch","","Food & Drink",0,"Personal",0,0,"Void",""],
+                        [46000,0.7,"SBI","Bus","","Transport",30,"Personal",30,0,"Personal",""]
                     ]},
-                    {"range":"'$tab'!AC4:AC","majorDimension":"ROWS","values":[["v1"],["v2"],["b1"]]},
-                    {"range":"'$tab'!M4:T","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!V4:AB","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]}
+                    {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[["v1"],["v2"],["b1"]]},
+                    {"range":"'$tab'!N4:U","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!W4:AC","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!AF4:AF","majorDimension":"ROWS","values":[]}
                 ]}"""
             } else null
         }

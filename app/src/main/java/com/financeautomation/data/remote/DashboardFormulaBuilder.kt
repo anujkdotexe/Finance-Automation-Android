@@ -48,7 +48,7 @@ object DashboardFormulaBuilder {
         val spent = "SUMIFS(${tabRange(tabName, "I4:I")}$exclusions)"
         val refunds = REFUND_TYPES.joinToString("") { type ->
             val escapedType = com.financeautomation.core.utils.SinkEscaper.sheetFormulaLiteral(type)
-            " - SUMIFS(${tabRange(tabName, "S4:S")}, ${tabRange(tabName, "P4:P")}, \"$escapedType\")"
+            " - SUMIFS(${tabRange(tabName, "T4:T")}, ${tabRange(tabName, "Q4:Q")}, \"$escapedType\")"
         }
         return "=IFERROR(MAX(0, $spent$refunds), 0)"
     }
@@ -135,7 +135,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4,
                 colIndex = 9, // Col J
-                formula = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AB4:AB"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Z4:Z")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AB4:AB"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Z4:Z")), 0)"""
+                formula = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")), 0)"""
             )
         )
 
@@ -268,7 +268,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 0,  // Col A
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:K"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
+                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
             )
         )
 
@@ -277,7 +277,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 7,  // Col H
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!V4:AB"), "SELECT X, Z, V WHERE (AB = 'Pending' OR AB = 'Partial') AND Z > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
             )
         )
 

@@ -644,7 +644,7 @@ class SettingsViewModelTest {
             httpStatus = 400,
             status = "INVALID_ARGUMENT",
             reason = "INVALID_ARGUMENT",
-            message = "Range ('Nov26'!AC4:AC) exceeds grid limits. Max rows: 1000, max columns: 26"
+            message = "Range ('Nov26'!AD4:AD) exceeds grid limits. Max rows: 1000, max columns: 26"
         )
         val exception = GoogleSheetsApiException(
             message = "Sheets batchUpdate failed (code 400)",

@@ -315,33 +315,33 @@ class TransactionRepositorySyncTest {
                     // values:batchGet (readLedgerSnapshot)
                     method == "GET" && url.contains("values:batchGet") -> {
                         customBatchGetResponse ?: """{"valueRanges":[
-                            {"range":"'Nov26'!A4:K","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AC4:AC","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!A4:L","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                            {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
                         ]}"""
                     }
-                    // findRowByUuid: AC3:AC
-                    method == "GET" && (url.contains("AC3") || url.contains("AC")) && url.contains("/values/") -> {
-                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") }
+                    // findRowByUuid: AD3:AD or legacy AC3:AC
+                    method == "GET" && (url.contains("AD3") || url.contains("AD") || url.contains("AC3") || url.contains("AC")) && url.contains("/values/") -> {
+                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AD") || it.key.startsWith("AC") }
                         if (matchingEntries.isEmpty()) {
-                            """{"range":"'Sheet'!AC3:AC","majorDimension":"ROWS","values":[]}"""
+                            """{"range":"'Sheet'!AD3:AD","majorDimension":"ROWS","values":[]}"""
                         } else {
                             val maxRow = writtenUuids.keys.mapNotNull { Regex("""\d+""").find(it)?.value?.toIntOrNull() }.maxOrNull() ?: 10
                             val rows = (4..maxRow).map { rowIdx ->
-                                val uuid = writtenUuids["AC$rowIdx"] ?: ""
+                                val uuid = writtenUuids["AD$rowIdx"] ?: writtenUuids["AC$rowIdx"] ?: ""
                                 if (uuid.isNotEmpty()) "[\"$uuid\"]" else "[\"\"]"
                             }
-                            """{"range":"'Sheet'!AC4:AC","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
+                            """{"range":"'Sheet'!AD4:AD","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
                         }
                     }
-                    // getCellString for AC column
-                    method == "GET" && url.contains("!AC") -> {
-                        val row = Regex("""AC(\d+)""").find(url)?.groupValues?.get(1) ?: "4"
-                        val uuid = writtenUuids["AC$row"] ?: "txn_test_void"
-                        """{"range":"'Sheet'!AC$row","majorDimension":"ROWS","values":[["$uuid"]]}"""
+                    // getCellString for AD or AC column
+                    method == "GET" && (url.contains("!AD") || url.contains("!AC")) -> {
+                        val row = Regex("""(AD|AC)(\d+)""").find(url)?.groupValues?.get(2) ?: "4"
+                        val uuid = writtenUuids["AD$row"] ?: writtenUuids["AC$row"] ?: "txn_test_void"
+                        """{"range":"'Sheet'!AD$row","majorDimension":"ROWS","values":[["$uuid"]]}"""
                     }
                     // findOrphanDebitRow or table range read
                     method == "GET" && url.contains("/values/") -> {
@@ -816,15 +816,15 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 0.0, "Settled"],
-                        [46338, 0.5, "SBI", "Dinner", "", "Food & Drink", 200.0, "AliceBobk", 75.0, 62.5, "Pending"]
+                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 0.0, "Settled", ""],
+                        [46338, 0.5, "SBI", "Dinner", "", "Food & Drink", 200.0, "AliceBobk", 75.0, 62.5, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
                     "values": [
                         ["txn_lunch_uuid_456"],
@@ -832,17 +832,17 @@ class TransactionRepositorySyncTest {
                     ]
                 },
                 {
-                    "range": "'Nov26'!M4:T",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
-                    "range": "'Nov26'!AD4:AD",
+                    "range": "'Nov26'!AE4:AE",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!W4:AC",
                     "majorDimension": "ROWS",
                     "values": [
                         [46338, 0.5, "Charlie", "Excess settlement credit", 5061.5, "", "Pending"],
@@ -850,7 +850,7 @@ class TransactionRepositorySyncTest {
                     ]
                 },
                 {
-                    "range": "'Nov26'!AE4:AE",
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": [
                         ["pay_excess_uuid_789"],
@@ -930,15 +930,15 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.5, "SBI", "New Merchant", "", "Groceries", 250.0, "Personal", 250.0, 0.0, "Settled"],
-                        [46338, 0.6, "Cash", "Imported Missing", "", "Shopping", 400.0, "Alice", 200.0, 200.0, "Pending"]
+                        [46338, 0.5, "SBI", "New Merchant", "", "Groceries", 250.0, "Personal", 250.0, 0.0, "Settled", ""],
+                        [46338, 0.6, "Cash", "Imported Missing", "", "Shopping", 400.0, "Alice", 200.0, 200.0, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
                     "values": [
                         ["txn_to_correct_1"],
@@ -946,22 +946,22 @@ class TransactionRepositorySyncTest {
                     ]
                 },
                 {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!AD4:AD",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1031,40 +1031,40 @@ class TransactionRepositorySyncTest {
         )
         tDao.insert(localTxn)
 
-        // Remote sheet has row 4 carrying the exact same UUID in column AC
+        // Remote sheet has row 4 carrying the exact same UUID in column AD
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.5, "Cash", "Groceries", "Transit", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending"]
+                        [46338, 0.5, "Cash", "Groceries", "Transit", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
                     "values": [
                         ["txn_groceries_uuid_789"]
                     ]
                 },
                 {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!AD4:AD",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1149,34 +1149,34 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 37.5, "Pending"]
+                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 37.5, "Pending", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_lunch_123"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["txn_lunch_123"]]
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1237,37 +1237,37 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.4, "SBI", "Dinner", "", "Food & Drink", 100.0, "Charlie", 50.0, 50.0, "Pending"],
-                        [46338, 0.5, "SBI", "Lunch", "", "Food & Drink", 50.0, "Bob", 50.0, 0.0, "Settled"]
+                        [46338, 0.4, "SBI", "Dinner", "", "Food & Drink", 100.0, "Charlie", 50.0, 50.0, "Pending", ""],
+                        [46338, 0.5, "SBI", "Lunch", "", "Food & Drink", 50.0, "Bob", 50.0, 0.0, "Settled", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_dinner_123"], ["txn_lunch_456"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
+                    "values": [["txn_dinner_123"], ["txn_lunch_456"]]
+                },
+                {
+                    "range": "'Nov26'!N4:U",
+                    "majorDimension": "ROWS",
                     "values": []
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
                     "majorDimension": "ROWS",
                     "values": [
                         [46338, 0.6, "Bob", "Movie ticket", 200.0, "", "Pending"]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AE4:AE",
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": [["pay_movie_789"]]
                 }
@@ -1531,34 +1531,34 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Pending"]
+                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Pending", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_nov_charlie_1"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["txn_nov_charlie_1"]]
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1606,29 +1606,19 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Carried Fwd"]
+                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Carried Fwd", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_nov_charlie_1"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["txn_nov_charlie_1"]]
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
@@ -1638,34 +1628,44 @@ class TransactionRepositorySyncTest {
                     "values": []
                 },
                 {
-                    "range": "'Dec26'!A4:K",
-                    "majorDimension": "ROWS",
-                    "values": [
-                        [46358, 0.0, "Cash", "Carried Fwd: Dinner", "", "Food & Drink", 100.0, "Charlie", 0.0, 100.0, "Pending"]
-                    ]
-                },
-                {
-                    "range": "'Dec26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["${lineage[0].uuid}"]]
-                },
-                {
-                    "range": "'Dec26'!M4:T",
+                    "range": "'Nov26'!W4:AC",
                     "majorDimension": "ROWS",
                     "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!A4:L",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46358, 0.0, "Cash", "Carried Fwd: Dinner", "", "Food & Drink", 100.0, "Charlie", 0.0, 100.0, "Pending", ""]
+                    ]
                 },
                 {
                     "range": "'Dec26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["${lineage[0].uuid}"]]
                 },
                 {
-                    "range": "'Dec26'!V4:AB",
+                    "range": "'Dec26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Dec26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1870,25 +1870,25 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension":"ROWS",
                     "values": [
                         [""], [""],
-                        [46338, 0.5, "Cash", "Groceries Split", "", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending"]
+                        [46338, 0.5, "Cash", "Groceries Split", "", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension":"ROWS",
                     "values": [
                         [""], [""],
                         ["$txnId"]
                     ]
                 },
-                {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
-                {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
-                {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
             ]
         }"""
 

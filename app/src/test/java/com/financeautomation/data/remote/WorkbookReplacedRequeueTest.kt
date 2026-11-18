@@ -458,7 +458,7 @@ class WorkbookReplacedRequeueTest {
                 val url = r.url.toString()
                 recordedCalls += "${r.method} $url"
                 when {
-                    url.contains("!AD4:AD") -> response(r, 200, """{"values":[]}""")
+                    url.contains("!AD4:AD") || url.contains("!AE4:AE") -> response(r, 200, """{"values":[]}""")
                     r.method == "POST" && (url.contains(":append") || url.contains("values:batchUpdate")) -> {
                         val buffer = okio.Buffer()
                         r.body?.writeTo(buffer)
@@ -488,15 +488,18 @@ class WorkbookReplacedRequeueTest {
         val res = executor.executeRestoreInflow(queueItem, "sheet_123", "Nov26")
         assertTrue("Restore inflow must succeed", res is Result.Success)
 
-        // Must NOT read all debits (Table 1 range A4:K or snapshot)
-        assertFalse("Must not read debits for waterfall", recordedCalls.any { it.contains("!A4:K") })
+        // Must NOT read all debits (Table 1 range A4:K, A4:L or snapshot)
+        assertFalse("Must not read debits for waterfall", recordedCalls.any { it.contains("!A4:K") || it.contains("!A4:L") })
         // Must append to Table 2 with strict column assertions
         assertEquals("Must make exactly one append call", 1, appendedBodies.size)
         val body = appendedBodies.first()
         val parsedJson = Json.parseToJsonElement(body).jsonObject
         val dataArray = parsedJson["data"]?.jsonArray.orEmpty()
-        val table2Entry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!M") == true }?.jsonObject
-        assertNotNull("Must contain table 2 range starting at column M", table2Entry)
+        val table2Entry = dataArray.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!N") || r.contains("!M")
+        }?.jsonObject
+        assertNotNull("Must contain table 2 range starting at column N or M", table2Entry)
         val t2Values = table2Entry!!["values"]?.jsonArray?.get(0)?.jsonArray
         assertNotNull(t2Values)
         assertEquals(8, t2Values!!.size)
@@ -506,8 +509,11 @@ class WorkbookReplacedRequeueTest {
         assertEquals("Bonus", t2Values[5].jsonPrimitive.content)
         assertEquals(200.0, t2Values[6].jsonPrimitive.double, 0.001)
 
-        val uuidEntry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AD") == true }?.jsonObject
-        assertNotNull("Must write hidden UUID to column AD", uuidEntry)
+        val uuidEntry = dataArray.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!AE") || r.contains("!AD")
+        }?.jsonObject
+        assertNotNull("Must write hidden UUID to column AE or AD", uuidEntry)
         val uuidValue = uuidEntry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content
         assertEquals("cred_restore_1", uuidValue)
     }
@@ -623,7 +629,7 @@ class WorkbookReplacedRequeueTest {
                 val r = chain.request()
                 val url = r.url.toString()
                 when {
-                    url.contains("!AE4:AE") -> response(r, 200, """{"values":[]}""")
+                    url.contains("!AE4:AE") || url.contains("!AF4:AF") -> response(r, 200, """{"values":[]}""")
                     r.method == "POST" && (url.contains(":append") || url.contains("values:batchUpdate")) -> {
                         val buffer = okio.Buffer()
                         r.body?.writeTo(buffer)
@@ -661,8 +667,11 @@ class WorkbookReplacedRequeueTest {
         val b1 = appendedBodies[0]
         val json1 = Json.parseToJsonElement(b1).jsonObject
         val data1 = json1["data"]?.jsonArray.orEmpty()
-        val t3Entry1 = data1.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!V") == true }?.jsonObject
-        assertNotNull("Must contain table 3 range starting at column V", t3Entry1)
+        val t3Entry1 = data1.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!W") || r.contains("!V")
+        }?.jsonObject
+        assertNotNull("Must contain table 3 range starting at column W or V", t3Entry1)
         val v1Values = t3Entry1!!["values"]?.jsonArray?.get(0)?.jsonArray
         assertNotNull(v1Values)
         assertEquals(7, v1Values!!.size)
@@ -671,14 +680,20 @@ class WorkbookReplacedRequeueTest {
         assertEquals(300.0, v1Values[4].jsonPrimitive.double, 0.001)
         assertEquals("Pending", v1Values[6].jsonPrimitive.content)
 
-        val uuid1Entry = data1.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AE") == true }?.jsonObject
-        assertNotNull("Must write hidden payable UUID to column AE", uuid1Entry)
+        val uuid1Entry = data1.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!AF") || r.contains("!AE")
+        }?.jsonObject
+        assertNotNull("Must write hidden payable UUID to column AF or AE", uuid1Entry)
         assertEquals("pay_p1", uuid1Entry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content)
 
         val b2 = appendedBodies[1]
         val json2 = Json.parseToJsonElement(b2).jsonObject
         val data2 = json2["data"]?.jsonArray.orEmpty()
-        val t3Entry2 = data2.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!V") == true }?.jsonObject
+        val t3Entry2 = data2.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!W") || r.contains("!V")
+        }?.jsonObject
         assertNotNull(t3Entry2)
         val v2Values = t3Entry2!!["values"]?.jsonArray?.get(0)?.jsonArray
         assertNotNull(v2Values)
@@ -689,8 +704,11 @@ class WorkbookReplacedRequeueTest {
         assertEquals(46335, v2Values[5].jsonPrimitive.int)
         assertEquals("Repaid", v2Values[6].jsonPrimitive.content)
 
-        val uuid2Entry = data2.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AE") == true }?.jsonObject
-        assertNotNull("Must write hidden payable UUID to column AE", uuid2Entry)
+        val uuid2Entry = data2.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!AF") || r.contains("!AE")
+        }?.jsonObject
+        assertNotNull("Must write hidden payable UUID to column AF or AE", uuid2Entry)
         assertEquals("pay_p2", uuid2Entry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content)
     }
 
@@ -740,7 +758,7 @@ class WorkbookReplacedRequeueTest {
                 val r = chain.request()
                 val url = r.url.toString()
                 when {
-                    url.contains("!AC4:AC") || url.contains("!AD4:AD") || url.contains("!AE4:AE") ->
+                    url.contains("!AC4:AC") || url.contains("!AD4:AD") || url.contains("!AE4:AE") || url.contains("!AF4:AF") ->
                         response(r, 200, """{"values":[]}""")
                     r.method == "POST" && (url.contains(":append") || url.contains("values:batchUpdate")) -> {
                         appendsByRange += url
@@ -828,7 +846,7 @@ class WorkbookReplacedRequeueTest {
                 val r = chain.request()
                 val url = r.url.toString()
                 when {
-                    url.contains("!AE4:AE") -> response(r, 200, """{"values":[]}""")
+                    url.contains("!AE4:AE") || url.contains("!AF4:AF") -> response(r, 200, """{"values":[]}""")
                     r.method == "POST" && (url.contains(":append") || url.contains("values:batchUpdate")) -> {
                         val buffer = okio.Buffer()
                         r.body?.writeTo(buffer)
@@ -850,7 +868,10 @@ class WorkbookReplacedRequeueTest {
         assertEquals(1, appendedBodies.size)
         val json = Json.parseToJsonElement(appendedBodies[0]).jsonObject
         val dataArray = json["data"]?.jsonArray.orEmpty()
-        val t3Entry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!V") == true }?.jsonObject
+        val t3Entry = dataArray.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!W") || r.contains("!V")
+        }?.jsonObject
         assertNotNull(t3Entry)
         val values = t3Entry!!["values"]?.jsonArray?.get(0)?.jsonArray
         assertNotNull(values)
@@ -858,7 +879,10 @@ class WorkbookReplacedRequeueTest {
         assertEquals("Grace", values[2].jsonPrimitive.content)
         assertEquals(75.0, values[4].jsonPrimitive.double, 0.001)
 
-        val uuidEntry = dataArray.firstOrNull { it.jsonObject["range"]?.jsonPrimitive?.content?.contains("!AE") == true }?.jsonObject
+        val uuidEntry = dataArray.firstOrNull {
+            val r = it.jsonObject["range"]?.jsonPrimitive?.content.orEmpty()
+            r.contains("!AF") || r.contains("!AE")
+        }?.jsonObject
         assertNotNull(uuidEntry)
         assertEquals("pay_no_date", uuidEntry!!["values"]?.jsonArray?.get(0)?.jsonArray?.get(0)?.jsonPrimitive?.content)
     }
@@ -1118,14 +1142,14 @@ class WorkbookReplacedRequeueTest {
         server.customRead = { call ->
             if (call.url.contains("values:batchGet")) {
                 """{"valueRanges":[
-                    {"range":"'Nov26'!A4:K","majorDimension":"ROWS","values":[
-                        [46337, 0.5, "Cash", "Dinner", "", "Food", 1000.0, "Bob", 500.0, 500.0, "Pending"]
+                    {"range":"'Nov26'!A4:L","majorDimension":"ROWS","values":[
+                        [46337, 0.5, "Cash", "Dinner", "", "Food", 1000.0, "Bob", 500.0, 500.0, "Pending", ""]
                     ]},
-                    {"range":"'Nov26'!AC4:AC","majorDimension":"ROWS","values":[["tx_earlier"]]},
-                    {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
-                    {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                    {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
-                    {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                    {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[["tx_earlier"]]},
+                    {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
                 ]}"""
             } else null
         }

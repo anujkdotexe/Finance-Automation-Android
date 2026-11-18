@@ -18,12 +18,12 @@ class ReconcileSafetyTest {
     /** A snapshot with one debit row at sheet row 4. */
     private fun snapshot(tab: String, description: String, category: String, amount: Double, uuid: String): String =
         """{"valueRanges":[
-            {"range":"'$tab'!A4:K","majorDimension":"ROWS","values":[[46000,0.5,"SBI","$description","","$category",$amount,"Personal",$amount,0,"Personal"]]},
-            {"range":"'$tab'!AC4:AC","majorDimension":"ROWS","values":[["$uuid"]]},
-            {"range":"'$tab'!M4:T","majorDimension":"ROWS","values":[]},
-            {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[]},
-            {"range":"'$tab'!V4:AB","majorDimension":"ROWS","values":[]},
-            {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]}
+            {"range":"'$tab'!A4:L","majorDimension":"ROWS","values":[[46000,0.5,"SBI","$description","","$category",$amount,"Personal",$amount,0,"Personal",""]]},
+            {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[["$uuid"]]},
+            {"range":"'$tab'!N4:U","majorDimension":"ROWS","values":[]},
+            {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]},
+            {"range":"'$tab'!W4:AC","majorDimension":"ROWS","values":[]},
+            {"range":"'$tab'!AF4:AF","majorDimension":"ROWS","values":[]}
         ]}"""
 
     private fun SyncHarness.serveSnapshot(description: String, category: String, amount: Double, uuid: String) {

@@ -21,7 +21,7 @@ data class MonthTabSnapshot(
 )
 
 /**
- * A row from Table 1 (Cols A to K plus AC hidden UUID) carrying its 1-based sheet row coordinate.
+ * A row from Table 1 (Cols A to L plus AD hidden UUID) carrying its 1-based sheet row coordinate.
  */
 data class LedgerDebitRow(
     val rowNumber: Int,
@@ -36,11 +36,12 @@ data class LedgerDebitRow(
     val myShare: Double,
     val owedToMe: Double,
     val status: String,
-    val uuid: String?
+    val uuid: String?,
+    val note: String = ""
 )
 
 /**
- * A row from Table 3 (Cols V to AB plus AE hidden UUID) carrying its 1-based sheet row coordinate.
+ * A row from Table 3 (Cols W to AC plus AF hidden UUID) carrying its 1-based sheet row coordinate.
  */
 data class LedgerPayableRow(
     val rowNumber: Int,
@@ -55,7 +56,7 @@ data class LedgerPayableRow(
 )
 
 /**
- * A row from Table 2 (Cols M to T plus AD hidden UUID) carrying its 1-based sheet row coordinate.
+ * A row from Table 2 (Cols N to U plus AE hidden UUID) carrying its 1-based sheet row coordinate.
  */
 data class LedgerInflowRow(
     val rowNumber: Int,

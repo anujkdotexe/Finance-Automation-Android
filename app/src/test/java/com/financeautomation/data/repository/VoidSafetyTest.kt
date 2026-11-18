@@ -40,12 +40,12 @@ class VoidSafetyTest {
         server.customRead = { call ->
             if (call.url.contains("values:batchGet")) {
                 """{"valueRanges":[
-                    {"range":"'$thisTab'!A4:K","majorDimension":"ROWS","values":[[46000,0.5,"SBI","Tea","","Food & Drink",80,"Personal",80,0,"Personal"]]},
-                    {"range":"'$thisTab'!AC4:AC","majorDimension":"ROWS","values":[["$id"]]},
-                    {"range":"'$thisTab'!M4:T","majorDimension":"ROWS","values":[]},
-                    {"range":"'$thisTab'!AD4:AD","majorDimension":"ROWS","values":[]},
-                    {"range":"'$thisTab'!V4:AB","majorDimension":"ROWS","values":[]},
-                    {"range":"'$thisTab'!AE4:AE","majorDimension":"ROWS","values":[]}
+                    {"range":"'$thisTab'!A4:L","majorDimension":"ROWS","values":[[46000,0.5,"SBI","Tea","","Food & Drink",80,"Personal",80,0,"Personal",""]]},
+                    {"range":"'$thisTab'!AD4:AD","majorDimension":"ROWS","values":[["$id"]]},
+                    {"range":"'$thisTab'!N4:U","majorDimension":"ROWS","values":[]},
+                    {"range":"'$thisTab'!AE4:AE","majorDimension":"ROWS","values":[]},
+                    {"range":"'$thisTab'!W4:AC","majorDimension":"ROWS","values":[]},
+                    {"range":"'$thisTab'!AF4:AF","majorDimension":"ROWS","values":[]}
                 ]}"""
             } else null
         }

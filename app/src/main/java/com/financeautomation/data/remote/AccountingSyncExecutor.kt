@@ -1,5 +1,6 @@
 package com.financeautomation.data.remote
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.data.local.dao.InflowDao
@@ -672,7 +673,11 @@ open class AccountingSyncExecutor(
             return Result.Success(Unit)
         }
 
-        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AD", entity.id)
+        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID, entity.id)
+            .let { res ->
+                if (res is Result.Success && res.data != null) res
+                else googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1, entity.id)
+            }
         if (existingCheck is Result.Success && existingCheck.data != null) {
             return Result.Success(Unit)
         } else if (existingCheck is Result.Error) {
@@ -718,7 +723,11 @@ open class AccountingSyncExecutor(
             return Result.Success(Unit)
         }
 
-        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AE", entity.uuid)
+        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID, entity.uuid)
+            .let { res ->
+                if (res is Result.Success && res.data != null) res
+                else googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1, entity.uuid)
+            }
         if (existingCheck is Result.Success && existingCheck.data != null) {
             return Result.Success(Unit)
         } else if (existingCheck is Result.Error) {

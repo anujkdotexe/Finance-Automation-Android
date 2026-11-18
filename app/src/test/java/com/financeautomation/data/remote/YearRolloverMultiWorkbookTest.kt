@@ -130,32 +130,32 @@ class YearRolloverMultiWorkbookTest {
                 // Batch get for Dec26 in 2026 workbook with an unsettled pending debit
                 req.method == "GET" && url.contains("sheet_finance_2026") && url.contains("values:batchGet") -> {
                     """{"valueRanges":[
-                        {"range":"'Dec26'!A4:K","majorDimension":"ROWS","values":[["31/12/26","23:59:00","HDFC","Dinner","","Food & Drink",1000,"Alice",500,500,"Pending"]]},
-                        {"range":"'Dec26'!AC4:AC","majorDimension":"ROWS","values":[["debit_dec26_uuid"]]},
-                        {"range":"'Dec26'!M4:T","majorDimension":"ROWS","values":[]},
-                        {"range":"'Dec26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                        {"range":"'Dec26'!V4:AB","majorDimension":"ROWS","values":[]},
-                        {"range":"'Dec26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                        {"range":"'Dec26'!A4:L","majorDimension":"ROWS","values":[["31/12/26","23:59:00","HDFC","Dinner","","Food & Drink",1000,"Alice",500,500,"Pending",""]]},
+                        {"range":"'Dec26'!AD4:AD","majorDimension":"ROWS","values":[["debit_dec26_uuid"]]},
+                        {"range":"'Dec26'!N4:U","majorDimension":"ROWS","values":[]},
+                        {"range":"'Dec26'!AE4:AE","majorDimension":"ROWS","values":[]},
+                        {"range":"'Dec26'!W4:AC","majorDimension":"ROWS","values":[]},
+                        {"range":"'Dec26'!AF4:AF","majorDimension":"ROWS","values":[]}
                     ]}"""
                 }
                 // Batch get for Jan27 in 2027 workbook (empty)
                 req.method == "GET" && url.contains("sheet_finance_2027") && url.contains("values:batchGet") -> {
                     """{"valueRanges":[
-                        {"range":"'Jan27'!A4:K","majorDimension":"ROWS","values":[]},
-                        {"range":"'Jan27'!AC4:AC","majorDimension":"ROWS","values":[]},
-                        {"range":"'Jan27'!M4:T","majorDimension":"ROWS","values":[]},
+                        {"range":"'Jan27'!A4:L","majorDimension":"ROWS","values":[]},
                         {"range":"'Jan27'!AD4:AD","majorDimension":"ROWS","values":[]},
-                        {"range":"'Jan27'!V4:AB","majorDimension":"ROWS","values":[]},
-                        {"range":"'Jan27'!AE4:AE","majorDimension":"ROWS","values":[]}
+                        {"range":"'Jan27'!N4:U","majorDimension":"ROWS","values":[]},
+                        {"range":"'Jan27'!AE4:AE","majorDimension":"ROWS","values":[]},
+                        {"range":"'Jan27'!W4:AC","majorDimension":"ROWS","values":[]},
+                        {"range":"'Jan27'!AF4:AF","majorDimension":"ROWS","values":[]}
                     ]}"""
                 }
                 // Check if uuid exists (findRowByUuid) -> returns empty
-                req.method == "GET" && url.contains("/values/") && url.contains("AC") -> {
-                    """{"range":"'Jan27'!AC3:AC","majorDimension":"ROWS","values":[]}"""
+                req.method == "GET" && url.contains("/values/") && (url.contains("AD") || url.contains("AC")) -> {
+                    """{"range":"'Jan27'!AD3:AD","majorDimension":"ROWS","values":[]}"""
                 }
                 // Append debit to Jan27 in 2027 workbook
                 req.method == "POST" && url.contains(":append") -> {
-                    """{"spreadsheetId":"sheet_finance_2027","updates":{"updatedRange":"'Jan27'!A4:K4","updatedCells":11}}"""
+                    """{"spreadsheetId":"sheet_finance_2027","updates":{"updatedRange":"'Jan27'!A4:L4","updatedCells":12}}"""
                 }
                 // Batch update values (status edit in Dec26 of 2026 workbook)
                 req.method == "POST" && url.contains("values:batchUpdate") -> {

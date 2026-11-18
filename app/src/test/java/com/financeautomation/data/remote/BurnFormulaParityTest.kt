@@ -56,9 +56,9 @@ class BurnFormulaParityTest {
         mapOf("F" to "Transfer", "I" to 30.0)
     )
     private val sheetInflows = listOf(
-        mapOf("P" to "Refund / Return", "S" to 60.0),
-        mapOf("P" to "Refund / Return", "S" to 0.0),
-        mapOf("P" to "Income / Salary", "S" to 5000.0)
+        mapOf("Q" to "Refund / Return", "T" to 60.0),
+        mapOf("Q" to "Refund / Return", "T" to 0.0),
+        mapOf("Q" to "Income / Salary", "T" to 5000.0)
     )
 
     /** Evaluates =IFERROR(MAX(0, SUMIFS(...) - SUMIFS(...) ...), 0) against the fixture rows. */

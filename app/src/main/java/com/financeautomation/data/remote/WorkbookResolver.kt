@@ -462,10 +462,10 @@ open class WorkbookResolver(
         val firstHeader = rowValues.firstOrNull()?.toString()?.trim()
         val lastHeader = rowValues.lastOrNull()?.toString()?.trim()
         val expectedFirst = SheetSchemaConstants.SHEET_COLUMN_HEADERS["A"]
-        val expectedLast = SheetSchemaConstants.SHEET_COLUMN_HEADERS["AE"]
+        val expectedPayableUuid = SheetSchemaConstants.COL_NAME_PAYABLE_UUID
         return firstHeader == expectedFirst &&
-                lastHeader == expectedLast &&
-                rowValues.size >= SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                lastHeader == expectedPayableUuid &&
+                rowValues.size >= SheetSchemaConstants.TOTAL_COLUMN_COUNT_V1
     }
 
     private suspend fun ensureWorkbookTabs(spreadsheetId: String, forYear: Int = ZonedDateTime.now(clock).year): Result<Unit> {
@@ -539,7 +539,7 @@ open class WorkbookResolver(
 
     companion object {
         /** The header row range of a month tab. The name is quoted because names like Nov26 look like cell references. */
-        fun layoutRange(tabTitle: String): String = "'${tabTitle.replace("'", "''")}'!A3:AE3"
+        fun layoutRange(tabTitle: String): String = "'${tabTitle.replace("'", "''")}'!A3:AF3"
     }
 }
 

@@ -26,7 +26,7 @@ class DashboardFormulaParityTest {
         val core = ios.removePrefix("=IFERROR(").removeSuffix(", 0)")
         fun range(cols: String) = """INDIRECT("'" & $tabInner & "'!$cols")"""
         val refunds = listOf("Refund / Return", "Refund").joinToString("") {
-            " - SUMIFS(${range("S4:S")}, ${range("P4:P")}, \"$it\")"
+            " - SUMIFS(${range("T4:T")}, ${range("Q4:Q")}, \"$it\")"
         }
         return "=IFERROR(MAX(0, $core$refunds), 0)"
     }

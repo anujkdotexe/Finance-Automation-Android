@@ -50,20 +50,21 @@ class SheetDimensionsTest {
     @Test
     fun testMonthTabColumnWidthsMatchIosReference() {
         val d = dims(SheetProvisioner.buildProvisionRequests(sheetId = 9, tabTitle = "Nov26"), 9)
-        // A, D, I, J (J shares the I width in iOS), L spacer, S, T (T shares the S width), U spacer, V, AB
         assertEquals(90, d.pixelsFor("COLUMNS", 0))
         assertEquals(129, d.pixelsFor("COLUMNS", 1)) // B 16.25
         assertEquals(160, d.pixelsFor("COLUMNS", 3)) // D 20.13
-        assertEquals(75, d.pixelsFor("COLUMNS", 13)) // N 9.5
-        assertEquals(100, d.pixelsFor("COLUMNS", 15)) // P 12.63
         assertEquals(90, d.pixelsFor("COLUMNS", 8))
         assertEquals(90, d.pixelsFor("COLUMNS", 9))
-        assertEquals(10, d.pixelsFor("COLUMNS", 11))
-        assertEquals(115, d.pixelsFor("COLUMNS", 18))
-        assertEquals(115, d.pixelsFor("COLUMNS", 19))
-        assertEquals(10, d.pixelsFor("COLUMNS", 20))
-        assertEquals(95, d.pixelsFor("COLUMNS", 21))
-        assertEquals(115, d.pixelsFor("COLUMNS", 27))
+        assertEquals(80, d.pixelsFor("COLUMNS", 10))
+        assertEquals(150, d.pixelsFor("COLUMNS", 11)) // L Note
+        assertEquals(10, d.pixelsFor("COLUMNS", 12)) // M Spacer 1
+        assertEquals(75, d.pixelsFor("COLUMNS", 14)) // O Time
+        assertEquals(100, d.pixelsFor("COLUMNS", 16)) // Q Type
+        assertEquals(115, d.pixelsFor("COLUMNS", 19)) // T Amount
+        assertEquals(115, d.pixelsFor("COLUMNS", 20)) // U Replaced By
+        assertEquals(10, d.pixelsFor("COLUMNS", 21)) // V Spacer 2
+        assertEquals(95, d.pixelsFor("COLUMNS", 22)) // W Date
+        assertEquals(115, d.pixelsFor("COLUMNS", 28)) // AC Status
     }
 
     @Test

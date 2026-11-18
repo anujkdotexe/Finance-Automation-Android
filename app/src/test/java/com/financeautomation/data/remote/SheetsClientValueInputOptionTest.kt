@@ -18,7 +18,7 @@ class SheetsClientValueInputOptionTest {
                 fakeClient.appendTableScoped(
                     spreadsheetId = "sheet123",
                     tabName = "Nov26",
-                    tableRange = "A4:K",
+                    tableRange = "A4:L",
                     row = listOf("2026-11-18", "12:00", "Canara", "Lunch", "Personal", "Food", 250.0),
                     valueInputOption = "USER_ENTERED"
                 )

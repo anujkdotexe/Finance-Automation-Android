@@ -189,12 +189,12 @@ class FriendPaidLivingBurnTest {
         server.customRead = { call ->
             if (call.url.contains("values:batchGet")) {
                 """{"valueRanges":[
-                    {"range":"'Nov26'!A4:K","majorDimension":"ROWS","values":[]},
-                    {"range":"'Nov26'!AC4:AC","majorDimension":"ROWS","values":[]},
-                    {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!A4:L","majorDimension":"ROWS","values":[]},
                     {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                    {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
-                    {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                    {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
+                    {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
                 ]}"""
             } else null
         }
@@ -230,14 +230,14 @@ class FriendPaidLivingBurnTest {
         val syncRes = executor.executeLogPayable(queueItem, "test_sheet_id", "Nov26")
         assertTrue("executeLogPayable must succeed", syncRes is com.financeautomation.core.model.Result.Success<*>)
 
-        // Check batchUpdate calls posted to sheet: must contain both Table 1 (debit A4:K4) and Table 3 (payable V4:AB4)
+        // Check batchUpdate calls posted to sheet: must contain both Table 1 (debit A4:L4) and Table 3 (payable W4:AC4)
         val batchCalls = server.calls.filter { it.method == "POST" && it.url.contains("values:batchUpdate") }
-        val debitCall = batchCalls.firstOrNull { it.body.contains("'Nov26'!A4:K4") }
+        val debitCall = batchCalls.firstOrNull { it.body.contains("'Nov26'!A4:L4") }
         assertNotNull("Must post batchUpdate for Table 1 debit row", debitCall)
 
         val debitBody = Json.parseToJsonElement(debitCall!!.body).jsonObject
         val debitDataArray = debitBody["data"]!!.jsonArray
-        val debitRangeObj = debitDataArray.first { it.jsonObject["range"]?.jsonPrimitive?.content == "'Nov26'!A4:K4" }.jsonObject
+        val debitRangeObj = debitDataArray.first { it.jsonObject["range"]?.jsonPrimitive?.content == "'Nov26'!A4:L4" }.jsonObject
         val debitValues = debitRangeObj["values"]!!.jsonArray[0].jsonArray
         assertEquals("Other", debitValues[2].jsonPrimitive.content) // Account
         assertEquals("Dinner", debitValues[3].jsonPrimitive.content) // Merchant/Item
@@ -247,12 +247,12 @@ class FriendPaidLivingBurnTest {
         assertEquals(300.0, debitValues[8].jsonPrimitive.content.toDouble(), 0.001) // MyShare
         assertEquals(0.0, debitValues[9].jsonPrimitive.content.toDouble(), 0.001) // OwedToMe
 
-        val payableCall = batchCalls.firstOrNull { it.body.contains("'Nov26'!V4:AB4") }
+        val payableCall = batchCalls.firstOrNull { it.body.contains("'Nov26'!W4:AC4") }
         assertNotNull("Must post batchUpdate for Table 3 payable row", payableCall)
 
         val payableBody = Json.parseToJsonElement(payableCall!!.body).jsonObject
         val payableDataArray = payableBody["data"]!!.jsonArray
-        val payableRangeObj = payableDataArray.first { it.jsonObject["range"]?.jsonPrimitive?.content == "'Nov26'!V4:AB4" }.jsonObject
+        val payableRangeObj = payableDataArray.first { it.jsonObject["range"]?.jsonPrimitive?.content == "'Nov26'!W4:AC4" }.jsonObject
         val payableValues = payableRangeObj["values"]!!.jsonArray[0].jsonArray
         assertEquals("Charlie", payableValues[2].jsonPrimitive.content) // PaidBy
         assertEquals("Dinner (Food & Drink)", payableValues[3].jsonPrimitive.content) // WhatFor with category

@@ -11,8 +11,8 @@ class SheetRangeAndGridTest {
 
     @Test
     fun theLayoutRangeQuotesTheSheetName() {
-        assertEquals("'Nov26'!A3:AE3", WorkbookResolver.layoutRange("Nov26"))
-        assertEquals("'It''s'!A3:AE3", WorkbookResolver.layoutRange("It's"))
+        assertEquals("'Nov26'!A3:AF3", WorkbookResolver.layoutRange("Nov26"))
+        assertEquals("'It''s'!A3:AF3", WorkbookResolver.layoutRange("It's"))
     }
 
     @Test
@@ -26,7 +26,7 @@ class SheetRangeAndGridTest {
 
     @Test
     fun aGridLimitErrorIsRetryable() {
-        val grid = GoogleSheetsApiException(400, "Range ('Nov26'!A4:K700) exceeds grid limits. Max rows: 600")
+        val grid = GoogleSheetsApiException(400, "Range ('Nov26'!A4:L700) exceeds grid limits. Max rows: 600")
         assertTrue(grid.isRetryable())
         assertFalse(GoogleSheetsApiException(400, "Invalid value at 'data'").isRetryable())
     }
