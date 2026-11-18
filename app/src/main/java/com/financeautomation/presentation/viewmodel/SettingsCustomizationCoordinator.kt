@@ -156,33 +156,43 @@ class SettingsCustomizationCoordinator(
         }
     }
 
+    private fun mapInputError(error: com.financeautomation.core.utils.InputPolicy.InputError, limit: Int?): UiText {
+        return when (error) {
+            com.financeautomation.core.utils.InputPolicy.InputError.BLANK -> UiText.res(R.string.input_err_blank)
+            com.financeautomation.core.utils.InputPolicy.InputError.TOO_LONG -> UiText.res(R.string.input_err_too_long, limit ?: com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+            com.financeautomation.core.utils.InputPolicy.InputError.INVALID_CHARS -> UiText.res(R.string.input_err_invalid_chars)
+            com.financeautomation.core.utils.InputPolicy.InputError.RESERVED_NAME -> UiText.res(R.string.input_err_reserved)
+            com.financeautomation.core.utils.InputPolicy.InputError.DUPLICATE_NAME -> UiText.res(R.string.input_err_duplicate)
+            else -> UiText.res(R.string.input_err_invalid_chars)
+        }
+    }
+
     fun onAddAccount(name: String, lastFourDigits: String? = null) {
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_account_blank)) }
+        val existing = uiState.value.accounts.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
             return
         }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
+        val cleanDigits = lastFourDigits?.let { com.financeautomation.core.utils.InputPolicy.cleanDigits4(it) }?.ifEmpty { null }
 
         scope.launch(ioDispatcher) {
             val repo = accountRepository
             if (repo != null) {
-                val existing = repo.getAccountByName(trimmed)
-                if (existing != null) {
-                    uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_account_exists, trimmed)) }
-                    return@launch
-                }
                 val newAcc = Account(
                     id = "acc_${UUID.randomUUID().toString().take(8)}",
-                    name = trimmed,
-                    lastFourDigits = lastFourDigits?.trim()?.ifEmpty { null },
+                    name = cleanName,
+                    lastFourDigits = cleanDigits,
                     isDefault = false,
                     isArchived = false,
                     displayOrder = uiState.value.accounts.size
                 )
                 repo.insertAccount(newAcc)
-                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, trimmed)) }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, cleanName)) }
             } else {
-                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, trimmed)) }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, cleanName)) }
             }
         }
     }
@@ -195,23 +205,21 @@ class SettingsCustomizationCoordinator(
     }
 
     fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false, colorName: String = "default_tag") {
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_category_blank)) }
+        val existing = uiState.value.categories.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
             return
         }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
 
         scope.launch(ioDispatcher) {
             val repo = categoryRepository
             if (repo != null) {
-                val existing = repo.getCategoryByName(trimmed)
-                if (existing != null) {
-                    uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_category_exists, trimmed)) }
-                    return@launch
-                }
                 val newCat = Category(
                     id = "cat_${UUID.randomUUID().toString().take(8)}",
-                    name = trimmed,
+                    name = cleanName,
                     isDefault = false,
                     isExcludedFromLivingBurn = isExcludedFromLivingBurn,
                     isArchived = false,
@@ -219,9 +227,9 @@ class SettingsCustomizationCoordinator(
                     iconName = colorName
                 )
                 repo.insertCategory(newCat)
-                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, trimmed)) }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, cleanName)) }
             } else {
-                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, trimmed)) }
+                uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, cleanName)) }
             }
         }
     }
@@ -259,15 +267,18 @@ class SettingsCustomizationCoordinator(
     }
 
     fun onAddTripTag(name: String) {
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_trip_tag_blank)) }
+        val existing = uiState.value.tripTags.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
             return
         }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
 
         scope.launch(ioDispatcher) {
-            tripTagRepository?.insertTripTag(trimmed)
-            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_trip_tag, trimmed)) }
+            tripTagRepository?.insertTripTag(cleanName)
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_trip_tag, cleanName)) }
         }
     }
 
@@ -288,78 +299,86 @@ class SettingsCustomizationCoordinator(
     }
 
     fun onAddCompanion(name: String) {
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_friend_blank)) }
+        val existing = uiState.value.companions.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
             return
         }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
 
         scope.launch(ioDispatcher) {
-            val existing = peopleRepository.getCompanionByName(trimmed)
-            if (existing != null) {
-                uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_companion_exists)) }
-                return@launch
-            }
-
             val newId = "comp_${UUID.randomUUID().toString().take(8)}"
-            peopleRepository.insertCompanion(Companion(id = newId, name = trimmed))
-            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_companion, trimmed)) }
+            peopleRepository.insertCompanion(Companion(id = newId, name = cleanName))
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_companion, cleanName)) }
         }
     }
 
     fun onRenameCompanion(companionId: String, newName: String) {
-        val trimmed = newName.trim()
-        if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_companion_blank)) }
+        val existing = uiState.value.companions.filter { it.id != companionId }.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(newName, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
             return
         }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
 
         scope.launch(ioDispatcher) {
             val companion = peopleRepository.getCompanionById(companionId)
             val oldName = companion?.name
-            peopleRepository.updateCompanionName(companionId, trimmed)
-            if (oldName != null && !oldName.equals(trimmed, ignoreCase = true)) {
-                transactionRepository?.updateCompanionName(oldName, trimmed)
-                resolvePayableDao()?.updatePaidByName(oldName, trimmed)
+            peopleRepository.updateCompanionName(companionId, cleanName)
+            if (oldName != null && !oldName.equals(cleanName, ignoreCase = true)) {
+                transactionRepository?.updateCompanionName(oldName, cleanName)
+                resolvePayableDao()?.updatePaidByName(oldName, cleanName)
             }
-            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_companion, trimmed)) }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_companion, cleanName)) }
         }
     }
 
     fun onRenameAccount(accountId: String, newName: String, lastFourDigits: String? = null) {
-        val trimmed = newName.trim()
-        if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_account_blank)) }
+        val existing = uiState.value.accounts.filter { it.id != accountId }.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(newName, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
             return
         }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
+        val cleanDigits = lastFourDigits?.let { com.financeautomation.core.utils.InputPolicy.cleanDigits4(it) }?.ifEmpty { null }
+
         scope.launch(ioDispatcher) {
             val repo = accountRepository ?: return@launch
             val acc = repo.getAccountById(accountId) ?: return@launch
             val oldName = acc.name
-            repo.updateAccount(acc.copy(name = trimmed, lastFourDigits = lastFourDigits?.trim()?.ifEmpty { null }))
-            if (!oldName.equals(trimmed, ignoreCase = true)) {
-                transactionRepository?.updateAccountName(oldName, trimmed)
+            repo.updateAccount(acc.copy(name = cleanName, lastFourDigits = cleanDigits))
+            if (!oldName.equals(cleanName, ignoreCase = true)) {
+                transactionRepository?.updateAccountName(oldName, cleanName)
             }
-            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_account, trimmed)) }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_account, cleanName)) }
         }
     }
 
     fun onRenameCategory(categoryId: String, newName: String) {
-        val trimmed = newName.trim()
-        if (trimmed.isBlank()) {
-            uiState.update { it.copy(errorMessage = UiText.res(R.string.settings_err_category_blank)) }
+        val existing = uiState.value.categories.filter { it.id != categoryId }.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(newName, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
             return
         }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
         scope.launch(ioDispatcher) {
             val repo = categoryRepository ?: return@launch
             val cat = repo.getCategoryById(categoryId) ?: return@launch
             val oldName = cat.name
-            repo.updateCategory(cat.copy(name = trimmed))
-            if (!oldName.equals(trimmed, ignoreCase = true)) {
-                transactionRepository?.updateCategoryName(oldName, trimmed)
-                budgetRepository?.renameCategory(oldName, trimmed)
+            repo.updateCategory(cat.copy(name = cleanName))
+            if (!oldName.equals(cleanName, ignoreCase = true)) {
+                transactionRepository?.updateCategoryName(oldName, cleanName)
+                budgetRepository?.renameCategory(oldName, cleanName)
             }
-            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_category, trimmed)) }
+            uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_renamed_category, cleanName)) }
         }
     }
 

@@ -172,6 +172,7 @@ class DefaultAppContainer(
         OkHttpClient.Builder()
             .addInterceptor(TokenRecoveryInterceptor(tokenProvider))
             .addInterceptor(com.financeautomation.data.remote.RateLimitInterceptor(sheetsReadGate))
+            .addInterceptor(com.financeautomation.data.remote.ResponseSizeLimitInterceptor())
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)

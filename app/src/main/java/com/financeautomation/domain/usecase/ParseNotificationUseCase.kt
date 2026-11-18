@@ -367,11 +367,14 @@ class ParseNotificationUseCase(
 
         // 10. Merchant / Payee extraction
         val biller = RegexPatterns.extractBiller(title, text)
-        val merchant = biller
+        val rawMerchant = biller
             ?: (if (title.isNotBlank()) RegexPatterns.extractMerchant(title) else null)
             ?: RegexPatterns.extractMerchant(text)
             ?: RegexPatterns.extractMerchant(fullContent)
             ?: "Unknown Payee"
+        val merchant = com.financeautomation.core.utils.InputPolicy.cleanName(rawMerchant)
+            .take(com.financeautomation.core.utils.InputPolicy.MAX_MERCHANT_NAME_LENGTH)
+            .ifBlank { "Unknown Payee" }
 
         // 10. Date and time serial conversion
         val dateSerial = DateSerialUtils.toDateSerial(timestamp)

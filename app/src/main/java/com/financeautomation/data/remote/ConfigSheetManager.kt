@@ -277,9 +277,10 @@ class ConfigSheetManager(
             val row = grid[rowIndex]
 
             // Account (Cols 0..4)
-            val accName = row.getOrNull(0)?.toString()?.trim().orEmpty()
+            val accRaw = row.getOrNull(0)?.toString().orEmpty()
+            val accName = com.financeautomation.core.utils.InputPolicy.cleanName(accRaw).take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
             if (accName.isNotBlank() && !accName.equals("AccountName", ignoreCase = true)) {
-                val lastFour = row.getOrNull(1)?.toString()?.trim()?.ifEmpty { null }
+                val lastFour = row.getOrNull(1)?.toString()?.let { com.financeautomation.core.utils.InputPolicy.cleanDigits4(it) }?.ifEmpty { null }
                 val isDefault = row.getOrNull(2)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
                 val isArchived = row.getOrNull(3)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
                 val order = row.getOrNull(4)?.toString()?.trim()?.toIntOrNull() ?: (rowIndex - 1)
@@ -296,7 +297,8 @@ class ConfigSheetManager(
             }
 
             // Category (Cols 5..9)
-            val catName = row.getOrNull(5)?.toString()?.trim().orEmpty()
+            val catRaw = row.getOrNull(5)?.toString().orEmpty()
+            val catName = com.financeautomation.core.utils.InputPolicy.cleanName(catRaw).take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
             if (catName.isNotBlank() && !catName.equals("CategoryName", ignoreCase = true)) {
                 val isBurnExcluded = row.getOrNull(6)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
                 val isDefault = row.getOrNull(7)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
@@ -315,7 +317,8 @@ class ConfigSheetManager(
             }
 
             // Companion (Cols 10..11)
-            val compName = row.getOrNull(10)?.toString()?.trim().orEmpty()
+            val compRaw = row.getOrNull(10)?.toString().orEmpty()
+            val compName = com.financeautomation.core.utils.InputPolicy.cleanName(compRaw).take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
             if (compName.isNotBlank() && !compName.equals("CompanionName", ignoreCase = true)) {
                 companions.add(
                     DomainCompanion(
@@ -326,7 +329,8 @@ class ConfigSheetManager(
             }
 
             // TripTag (Cols 12..13)
-            val tagName = row.getOrNull(12)?.toString()?.trim().orEmpty()
+            val tagRaw = row.getOrNull(12)?.toString().orEmpty()
+            val tagName = com.financeautomation.core.utils.InputPolicy.cleanName(tagRaw).take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
             if (tagName.isNotBlank() && !tagName.equals("TripTagName", ignoreCase = true)) {
                 val isActive = row.getOrNull(13)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
                 tripTags.add(
@@ -339,8 +343,8 @@ class ConfigSheetManager(
             }
 
             // Preferences (Cols 14..15)
-            val prefKey = row.getOrNull(14)?.toString()?.trim().orEmpty()
-            val prefValue = row.getOrNull(15)?.toString()?.trim().orEmpty()
+            val prefKey = row.getOrNull(14)?.toString()?.trim().orEmpty().take(100)
+            val prefValue = row.getOrNull(15)?.toString()?.trim().orEmpty().take(500)
             if (prefKey.isNotBlank() && !prefKey.equals("PrefKey", ignoreCase = true)) {
                 preferences[prefKey] = prefValue
             }

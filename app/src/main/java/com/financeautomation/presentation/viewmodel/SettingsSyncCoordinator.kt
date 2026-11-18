@@ -379,18 +379,23 @@ class SettingsSyncCoordinator(
      */
     fun onSpreadsheetIdChanged(newId: String) {
         scope.launch(ioDispatcher) {
-            val trimmed = newId.trim()
+            val validation = com.financeautomation.core.utils.InputPolicy.validateSpreadsheetId(newId)
+            if (!validation.isValid) {
+                uiState.update { it.copy(userMessage = null, errorMessage = UiText.res(R.string.spreadsheet_id_err)) }
+                return@launch
+            }
+            val validId = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
             val sheetsClient = googleSheetsClient
-            if (trimmed.isBlank() || sheetsClient == null) {
+            if (sheetsClient == null) {
                 uiState.update { it.copy(userMessage = null, errorMessage = SPREADSHEET_ID_REJECTED_TEXT) }
                 return@launch
             }
-            when (sheetsClient.getSheetTabsDetailed(trimmed)) {
+            when (sheetsClient.getSheetTabsDetailed(validId)) {
                 is Result.Success -> {
                     val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
-                    preferencesRepository.setSpreadsheetIdForYear(currentYear, trimmed)
+                    preferencesRepository.setSpreadsheetIdForYear(currentYear, validId)
                     uiState.update {
-                        it.copy(spreadsheetId = trimmed, errorMessage = null, userMessage = UiText.res(R.string.settings_msg_spreadsheet_id_saved))
+                        it.copy(spreadsheetId = validId, errorMessage = null, userMessage = UiText.res(R.string.settings_msg_spreadsheet_id_saved))
                     }
                 }
                 is Result.Error -> {

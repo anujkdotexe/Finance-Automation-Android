@@ -47,7 +47,7 @@ open class GoogleDriveClient(
      */
     open suspend fun findOrCreateFolder(folderName: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val escapedFolderName = folderName.replace("'", "\\'")
+            val escapedFolderName = com.financeautomation.core.utils.SinkEscaper.driveQueryLiteral(folderName)
             val query = "(appProperties has { key='app' and value='FinanceAutomation' } or name = '$escapedFolderName') and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
             val searchUrl = "$baseUrl/files".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
@@ -129,7 +129,7 @@ open class GoogleDriveClient(
             val propertyQuery = if (resolvedYear != null) {
                 "appProperties has { key='app' and value='FinanceAutomation' } and appProperties has { key='fiscalYear' and value='$resolvedYear' } and '$folderId' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
             } else {
-                val escapedSpreadsheetName = spreadsheetName.replace("'", "\\'")
+                val escapedSpreadsheetName = com.financeautomation.core.utils.SinkEscaper.driveQueryLiteral(spreadsheetName)
                 "name = '$escapedSpreadsheetName' and '$folderId' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
             }
 
@@ -160,7 +160,7 @@ open class GoogleDriveClient(
 
             // Fallback: search by exact name if property search returned empty
             if (resolvedYear != null) {
-                val escapedSpreadsheetName = spreadsheetName.replace("'", "\\'")
+                val escapedSpreadsheetName = com.financeautomation.core.utils.SinkEscaper.driveQueryLiteral(spreadsheetName)
                 val nameQuery = "name = '$escapedSpreadsheetName' and '$folderId' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
                 val nameSearchUrl = "$baseUrl/files".toHttpUrl().newBuilder()
                     .addQueryParameter("q", nameQuery)
@@ -364,7 +364,7 @@ open class GoogleDriveClient(
      */
     suspend fun searchSpreadsheet(spreadsheetName: String): Result<String?> = withContext(Dispatchers.IO) {
         try {
-            val escapedName = spreadsheetName.replace("'", "\\'")
+            val escapedName = com.financeautomation.core.utils.SinkEscaper.driveQueryLiteral(spreadsheetName)
             val query = "name = '$escapedName' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
             val searchUrl = "$baseUrl/files".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
@@ -410,7 +410,7 @@ open class GoogleDriveClient(
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             // Check if file already exists in folder
-            val escapedName = fileName.replace("'", "\\'")
+            val escapedName = com.financeautomation.core.utils.SinkEscaper.driveQueryLiteral(fileName)
             val query = "name = '$escapedName' and '$folderId' in parents and trashed = false"
             val searchUrl = "$baseUrl/files".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)

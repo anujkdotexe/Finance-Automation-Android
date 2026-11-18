@@ -916,4 +916,13 @@
     <string name="amount_key_divide">Divide</string>
     <string name="amount_key_open">Open bracket</string>
     <string name="amount_key_close">Close bracket</string>
+
+    <!-- Input validation messages (P1-5) -->
+    <string name="input_err_blank">Enter a name.</string>
+    <string name="input_err_too_long">Use %1$d characters or fewer.</string>
+    <string name="input_err_invalid_chars">Some characters are not allowed here.</string>
+    <string name="input_err_duplicate">You already have one with this name.</string>
+    <string name="input_err_reserved">This name is used by the app. Choose another.</string>
+    <string name="spreadsheet_id_err">This is not a valid spreadsheet id or link.</string>
+    <string name="report_note_warning">Your note is shared exactly as you type it. Do not include amounts or names.</string>
 </resources>

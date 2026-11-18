@@ -40,11 +40,15 @@ object DashboardFormulaBuilder {
      */
     private fun burnFormula(tabName: String, excludedCategoryNames: List<String>): String {
         val exclusions = livingBurnExclusions(excludedCategoryNames).joinToString("") { name ->
-            ", ${tabRange(tabName, "F4:F")}, \"<>$name\""
+            val escapedCriterion = com.financeautomation.core.utils.SinkEscaper.sheetFormulaLiteral(
+                com.financeautomation.core.utils.SinkEscaper.sheetCriterion(name)
+            )
+            ", ${tabRange(tabName, "F4:F")}, \"<>$escapedCriterion\""
         }
         val spent = "SUMIFS(${tabRange(tabName, "I4:I")}$exclusions)"
         val refunds = REFUND_TYPES.joinToString("") { type ->
-            " - SUMIFS(${tabRange(tabName, "S4:S")}, ${tabRange(tabName, "P4:P")}, \"$type\")"
+            val escapedType = com.financeautomation.core.utils.SinkEscaper.sheetFormulaLiteral(type)
+            " - SUMIFS(${tabRange(tabName, "S4:S")}, ${tabRange(tabName, "P4:P")}, \"$escapedType\")"
         }
         return "=IFERROR(MAX(0, $spent$refunds), 0)"
     }

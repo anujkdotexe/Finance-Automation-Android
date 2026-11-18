@@ -236,9 +236,11 @@ class QuickLogViewModel(
     }
 
     fun onPayeeChanged(text: String) {
-        _uiState.update { it.copy(payee = text) }
-        applyLastUsedAccountAndCategory(text)
-        refreshPredictedCategories(text)
+        val clean = com.financeautomation.core.utils.InputPolicy.cleanName(text)
+            .take(com.financeautomation.core.utils.InputPolicy.MAX_MERCHANT_NAME_LENGTH)
+        _uiState.update { it.copy(payee = clean) }
+        applyLastUsedAccountAndCategory(clean)
+        refreshPredictedCategories(clean)
     }
 
     fun onDateSelected(timestampMillis: Long) {
@@ -268,9 +270,13 @@ class QuickLogViewModel(
         if (name.isBlank()) return
         viewModelScope.launch(ioDispatcher) {
             try {
+                val existing = _uiState.value.availableCompanions.map { it.name }
+                val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+                if (!validation.isValid) return@launch
+                val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
                 val newCompanion = Companion(
                     id = java.util.UUID.randomUUID().toString(),
-                    name = name.trim()
+                    name = cleanName
                 )
                 peopleRepository.insertCompanion(newCompanion)
                 _uiState.update { current ->

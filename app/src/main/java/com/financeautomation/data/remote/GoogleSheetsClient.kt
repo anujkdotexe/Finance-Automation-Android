@@ -309,6 +309,7 @@ open class GoogleSheetsClient(
         uuidCol: String? = null,
         uuid: String? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
+        require(valueInputOption == "RAW") { "valueInputOption must strictly be RAW, received: $valueInputOption" }
         try {
             val parts = tableRange.split(":")
             val rawStart = parts.getOrNull(0).orEmpty()
@@ -471,6 +472,7 @@ open class GoogleSheetsClient(
         value: Any?,
         valueInputOption: String = "RAW"
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        require(valueInputOption == "RAW") { "valueInputOption must strictly be RAW, received: $valueInputOption" }
         try {
             val range = "'$tabName'!$cellCoordinate"
             val encodedRange = URLEncoder.encode(range, "UTF-8")
@@ -746,12 +748,12 @@ open class GoogleSheetsClient(
                 }
 
                 val valuesArray = jsonResponse["values"]?.jsonArray
-                val resultList = valuesArray?.map { rowElem ->
+                val resultList = valuesArray?.take(MAX_SHEET_ROWS_PER_CALL)?.map { rowElem ->
                     rowElem.jsonArray.map { cellElem ->
                         when (cellElem) {
-                            is JsonPrimitive -> cellElem.content
+                            is JsonPrimitive -> cellElem.content.take(MAX_CELL_STRING_LENGTH)
                             is JsonNull -> null
-                            else -> cellElem.toString()
+                            else -> cellElem.toString().take(MAX_CELL_STRING_LENGTH)
                         }
                     }
                 } ?: emptyList()
@@ -792,12 +794,12 @@ open class GoogleSheetsClient(
                 }
 
                 val valuesArray = jsonResponse["values"]?.jsonArray
-                val resultList = valuesArray?.map { rowElem ->
+                val resultList = valuesArray?.take(MAX_SHEET_ROWS_PER_CALL)?.map { rowElem ->
                     rowElem.jsonArray.map { cellElem ->
                         when (cellElem) {
-                            is JsonPrimitive -> cellElem.content
+                            is JsonPrimitive -> cellElem.content.take(MAX_CELL_STRING_LENGTH)
                             is JsonNull -> null
-                            else -> cellElem.toString()
+                            else -> cellElem.toString().take(MAX_CELL_STRING_LENGTH)
                         }
                     }
                 } ?: emptyList()
@@ -851,12 +853,12 @@ open class GoogleSheetsClient(
                     val vrObj = vrElem.jsonObject
                     val rangeName = vrObj["range"]?.jsonPrimitive?.content.orEmpty()
                     val valuesArray = vrObj["values"]?.jsonArray
-                    val rowList = valuesArray?.map { rowElem ->
+                    val rowList = valuesArray?.take(MAX_SHEET_ROWS_PER_CALL)?.map { rowElem ->
                         rowElem.jsonArray.map { cellElem ->
                             when (cellElem) {
-                                is JsonPrimitive -> cellElem.content
+                                is JsonPrimitive -> cellElem.content.take(MAX_CELL_STRING_LENGTH)
                                 is JsonNull -> null
-                                else -> cellElem.toString()
+                                else -> cellElem.toString().take(MAX_CELL_STRING_LENGTH)
                             }
                         }
                     } ?: emptyList()
@@ -881,6 +883,7 @@ open class GoogleSheetsClient(
         updates: Map<String, List<List<Any?>>>,
         valueInputOption: String = "RAW"
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        require(valueInputOption == "RAW") { "valueInputOption must strictly be RAW, received: $valueInputOption" }
         try {
             if (updates.isEmpty()) return@withContext Result.Success(Unit)
 
@@ -1767,6 +1770,9 @@ open class GoogleSheetsClient(
     }
 
     companion object {
+        const val MAX_SHEET_ROWS_PER_CALL = 5000
+        const val MAX_CELL_STRING_LENGTH = 5000
+
         fun Any?.toJsonElement(): JsonElement = when (this) {
             null -> JsonNull
             is Number -> JsonPrimitive(this)
