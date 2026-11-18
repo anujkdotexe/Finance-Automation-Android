@@ -353,8 +353,7 @@ fun PeopleTripsScreen(
     openTripName?.let { name ->
         val tripTag = state.tripTags.firstOrNull { it.name.equals(name, ignoreCase = true) }
         val isActive = tripTag?.isActive == true || name.equals(state.activeTripTag, ignoreCase = true)
-        TripDetailSheet(
-            summary = summaryFor(name),
+        TripDetailSheet(summary = summaryFor(name),
             isActive = isActive,
             onEndTrip = {
                 tripTag?.let { viewModel.onToggleTripTagActive(it.id) }

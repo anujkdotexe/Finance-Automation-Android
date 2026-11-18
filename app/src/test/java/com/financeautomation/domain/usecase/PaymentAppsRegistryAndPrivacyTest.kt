@@ -46,19 +46,9 @@ class PaymentAppsRegistryAndPrivacyTest {
             "com.whatsapp.w4b",                      // WhatsApp Business
             "com.android.mms",                       // Default SMS
             "com.google.android.apps.messaging",     // Google Messages
-            "com.samsung.android.messaging",         // Samsung Messages
-            "com.sbi.lotusintouch",                  // SBI YONO
-            "com.canarabank.mobility",               // Canara ai1
-            "com.csam.icici.bank.imobile",           // iMobile Pay
-            "com.snapwork.hdfc",                     // HDFC Bank
-            "com.axis.mobile",                       // Axis Mobile
-            "com.msf.kbank.mobile",                  // Kotak Mobile
-            "com.enstage.wibmo.hdfc",                // PayZapp
-            "com.myairtelapp",                       // Airtel Thanks
-            "in.indipe.app",                         // slice
-            "money.jupiter",                         // Jupiter
-            "com.epifi.gro"                          // Fi Money
+            "com.samsung.android.messaging"          // Samsung Messages
         )
+        assertEquals(expectedPackages.size, packageIds.size)
         assertTrue(packageIds.containsAll(expectedPackages))
 
         // WhatsApp items must be CHAT_APP_PAYMENTS_ONLY

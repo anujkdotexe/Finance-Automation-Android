@@ -100,8 +100,14 @@ class TripSummaryUseCase {
             val friendRows = rows.filter { row ->
                 row.companions.split(",").any { it.trim().equals(friendName, ignoreCase = true) }
             }
-            val friendPending = friendRows.sumOf { stillOwed(it) }
-            val friendRepaid = friendRows.sumOf { maxOf(0.0, (it.totalAmount - it.myShare) - stillOwed(it)) }
+            val friendPending = friendRows.sumOf { row ->
+                val count = maxOf(1, row.companions.split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.equals("Personal", ignoreCase = true) }.size)
+                stillOwed(row) / count
+            }
+            val friendRepaid = friendRows.sumOf { row ->
+                val count = maxOf(1, row.companions.split(",").map { it.trim() }.filter { it.isNotEmpty() && !it.equals("Personal", ignoreCase = true) }.size)
+                maxOf(0.0, (row.totalAmount - row.myShare) - stillOwed(row)) / count
+            }
             TripFriendDebt(
                 name = friendName.replaceFirstChar { it.uppercase() },
                 owedToMe = friendPending,
