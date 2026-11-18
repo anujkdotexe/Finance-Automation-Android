@@ -242,7 +242,7 @@ fun PeopleTripsScreen(
                             peopleCount = summary.peopleCount,
                             totalSpend = formatRupees(summary.totalPaid),
                             costYou = formatRupees(summary.netExpenditure),
-                            dateRange = formatTripDateRange(summary.transactions, isActive),
+                            dateRange = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(summary.transactions, isActive),
                             onOpen = { openTripName = trip.name },
                             onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
                             onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) },
@@ -259,7 +259,7 @@ fun PeopleTripsScreen(
                     peopleCount = summary.peopleCount,
                     totalSpend = formatRupees(summary.totalPaid),
                     costYou = formatRupees(summary.netExpenditure),
-                    dateRange = formatTripDateRange(summary.transactions, true),
+                    dateRange = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(summary.transactions, true),
                     onOpen = { openTripName = state.activeTripTag },
                     onEndTrip = { viewModel.onActiveTripTagChanged("") },
                     onReactivateTrip = {}
@@ -502,32 +502,6 @@ private fun FriendItemRow(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun formatTripDateRange(transactions: List<com.financeautomation.domain.model.Transaction>, isActive: Boolean): String {
-    if (transactions.isEmpty()) {
-        return if (isActive) "Active travel ledger" else "Past travel ledger"
-    }
-    val first = transactions.minOf { it.timestamp }
-    val last = transactions.maxOf { it.timestamp }
-    val sdf = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH)
-    val sdfShort = java.text.SimpleDateFormat("d MMM", java.util.Locale.ENGLISH)
-    return if (isActive) {
-        "Started ${sdf.format(java.util.Date(first))}"
-    } else {
-        val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = first }
-        val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = last }
-        if (cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
-            cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
-        ) {
-            sdf.format(java.util.Date(first))
-        } else if (cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR)) {
-            "${sdfShort.format(java.util.Date(first))} - ${sdf.format(java.util.Date(last))}"
-        } else {
-            "${sdf.format(java.util.Date(first))} - ${sdf.format(java.util.Date(last))}"
         }
     }
 }
