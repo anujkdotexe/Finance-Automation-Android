@@ -404,6 +404,187 @@ class CaptureMediumItemsTest {
         assertEquals("User note / tripTag must NOT be overwritten", "Dinner with friends", updatedTxn.tripTag)
         assertEquals("Amount must NOT change", 400.0, updatedTxn.totalAmount, 0.001)
         assertEquals("Merchant must NOT change", "Swiggy", updatedTxn.merchant)
+        assertEquals("Confirmed transaction row in DB must remain completely identical to before merge", initialTxn, updatedTxn)
+    }
+
+    @Test
+    fun extractReferenceIdRejectsFalseWordsWithoutDigits() {
+        // Words like payment, successful, transaction must return null as reference id
+        val text1 = "UPI payment of Rs 500 successful"
+        assertEquals(null, RegexPatterns.extractReferenceId(text1))
+
+        val text2 = "txn successful on 12-May"
+        assertEquals(null, RegexPatterns.extractReferenceId(text2))
+
+        val text3 = "UPI transaction completed"
+        assertEquals(null, RegexPatterns.extractReferenceId(text3))
+
+        // Legitimate reference IDs with >= 4 digits must be extracted
+        val text4 = "Paid Rs 500. UPI Ref 123456789012"
+        assertEquals("123456789012", RegexPatterns.extractReferenceId(text4))
+
+        val text5 = "TXN ID - E2601020RLFNFN has been processed"
+        assertEquals("E2601020RLFNFN", RegexPatterns.extractReferenceId(text5))
+    }
+
+    @Test
+    fun sameMerchantSameAmountTwoHoursApartDifferentReferenceIdsGivesTwoRows() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 20.00 to Chai Point. Ref 111111222222 - Canara Bank",
+            sbnKey = "0|sms|901",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 20.00 to Chai Point. Ref 333333444444 - Canara Bank",
+            sbnKey = "0|sms|902",
+            postTime = t0 + 2 * 3600_000L // 2 hours later
+        )
+        assertTrue("Different reference IDs 2 hours apart must NOT merge", r2 is NotificationProcessingOutcome.Captured)
+        assertEquals("Two distinct rows must exist in DB", 2, captureDao.captures.size)
+    }
+
+    @Test
+    fun sameMerchantSameAmountTwoHoursApartNoReferenceIdsAndPayeeInSecondMessageGivesTwoRows() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = "Paid ₹20.00 to Chai Point",
+            sbnKey = "0|gpay|911",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+        val cap1 = (r1 as NotificationProcessingOutcome.Captured).capture
+        captureDao.update(cap1.copy(state = PendingCaptureEntity.STATE_DONE))
+
+        // Second payment 2 hours later with specific payee in message
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 20.00 to Chai Point on 15/03/2026 - Canara Bank",
+            sbnKey = "0|sms|912",
+            postTime = t0 + 2 * 3600_000L
+        )
+        assertTrue("Second payment with specific payee must NOT be swallowed into confirmed", r2 is NotificationProcessingOutcome.Captured)
+        assertEquals("Must produce two separate rows", 2, captureDao.captures.size)
+    }
+
+    @Test
+    fun genericBankSmsAfterAppNotificationMergesOnceAndSecondGenericSmsMakesRow() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = "Paid ₹350.00 to Swiggy",
+            sbnKey = "0|gpay|921",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+        val cap1 = (r1 as NotificationProcessingOutcome.Captured).capture
+        captureDao.update(cap1.copy(state = PendingCaptureEntity.STATE_DONE))
+
+        // First generic bank SMS merges into confirmed capture
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "An amount of INR 350.00 has been DEBITED to your account XXX1824 on 15/03/2026. Avail Bal: INR 5,000. Dial 1930 to report cyber fraud - Canara Bank",
+            sbnKey = "0|sms|922",
+            postTime = t0 + 3600_000L // 1 hour later
+        )
+        assertTrue("First generic bank SMS must merge into confirmed", r2 is NotificationProcessingOutcome.Merged)
+        assertEquals("Still only one capture in DB", 1, captureDao.captures.size)
+
+        // Second generic bank SMS arrives later for a different transaction
+        val r3 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "An amount of INR 350.00 has been DEBITED to your account XXX1824 on 15/03/2026. Avail Bal: INR 4,650. Dial 1930 to report cyber fraud - Canara Bank",
+            sbnKey = "0|sms|923",
+            postTime = t0 + 2 * 3600_000L // 2 hours later
+        )
+        assertTrue("Second generic bank SMS must NOT be swallowed a second time; makes a row", r3 is NotificationProcessingOutcome.Captured)
+        assertEquals("Two captures must exist in DB", 2, captureDao.captures.size)
+    }
+
+    @Test
+    fun mergingIntoNeedsReviewRowNeverOverwritesUserEditedPayeeOrCategoryOrNotes() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 250.00 to Swiggy on 15/03/2026 from A/c *1824 - Canara Bank",
+            sbnKey = "0|sms|931",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+        val initialCap = (r1 as NotificationProcessingOutcome.Captured).capture
+
+        // Simulate user editing payee in Needs Review screen
+        val userEditedCap = initialCap.copy(
+            payee = "Custom Swiggy Order #123",
+            state = PendingCaptureEntity.STATE_NEEDS_REVIEW
+        )
+        captureDao.update(userEditedCap)
+
+        // Second generic bank SMS arrives within 180s
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "An amount of INR 250.00 has been DEBITED to your account XXX1824 on 15/03/2026. Dial 1930 to report cyber fraud - Canara Bank",
+            sbnKey = "0|sms|932",
+            postTime = t0 + 60_000L
+        )
+        assertTrue(r2 is NotificationProcessingOutcome.Merged)
+
+        val merged = captureDao.getById(initialCap.id)!!
+        assertEquals("User-edited payee must NEVER be overwritten", "Custom Swiggy Order #123", merged.payee)
     }
 
     @Test

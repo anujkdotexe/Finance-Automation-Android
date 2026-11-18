@@ -374,11 +374,22 @@ class NotificationProcessor(
                         return@filter true // Equal reference ID always merges up to 24h
                     }
 
-                    // Window checks when at least one message lacks reference ID
-                    val delta = kotlin.math.abs(candidate.timestamp - postTime)
+                    // For late merge into a confirmed/done capture:
                     if (candidate.state == PendingCaptureEntity.STATE_DONE) {
-                        delta <= WINDOW_CONFIRMED_LATE_MERGE_MS
-                    } else if (candidate.sourcePackage != sourcePackage) {
+                        // Allow late merge ONLY for a generic bank SMS (Unknown Payee)
+                        // A specific payee in the incoming message indicates a separate real payment
+                        if (payee != "Unknown Payee") return@filter false
+
+                        // Allow late merge ONLY ONCE per confirmed transaction
+                        if (candidate.flags.contains("BANK_SMS_ATTACHED")) return@filter false
+
+                        val delta = kotlin.math.abs(candidate.timestamp - postTime)
+                        return@filter delta <= WINDOW_CONFIRMED_LATE_MERGE_MS
+                    }
+
+                    // Window checks for open captures (WAITING, AWAITING_SUCCESS, NEEDS_REVIEW)
+                    val delta = kotlin.math.abs(candidate.timestamp - postTime)
+                    if (candidate.sourcePackage != sourcePackage) {
                         delta <= WINDOW_CROSS_PACKAGE_MERGE_MS
                     } else {
                         delta <= WINDOW_SAME_PACKAGE_MERGE_MS
@@ -415,30 +426,25 @@ class NotificationProcessor(
                     return NotificationProcessingOutcome.Merged(merged.id, enriched = true)
                 }
 
-                // If match is already confirmed / DONE, attach missing facts only (never create second row, never reopen review)
+                // If match is already confirmed / DONE, attach missing facts to capture only (never touch confirmed transaction in DB)
                 val confirmedTarget = similarCaptures.firstOrNull { it.state == PendingCaptureEntity.STATE_DONE }
                 if (confirmedTarget != null) {
                     val candidateRef = extractRefFromFlags(confirmedTarget.flags)
-                    val mergedFlags = if (candidateRef == null && incomingRefId != null) {
-                        if (confirmedTarget.flags.isNotBlank()) "${confirmedTarget.flags},REF_$incomingRefId" else "REF_$incomingRefId"
-                    } else {
-                        confirmedTarget.flags
-                    }
+                    val flagsWithBankAttached = buildList {
+                        add(confirmedTarget.flags)
+                        if (!confirmedTarget.flags.contains("BANK_SMS_ATTACHED")) add("BANK_SMS_ATTACHED")
+                        if (candidateRef == null && incomingRefId != null) add("REF_$incomingRefId")
+                    }.filter { it.isNotBlank() }.joinToString(",")
+
                     val enrichedConfirmed = confirmedTarget.copy(
                         inferredAccount = if ((confirmedTarget.inferredAccount.isNullOrBlank() || confirmedTarget.inferredAccount == CategoryConstants.ACCOUNT_OTHER) && inferredAccount.isNotBlank()) inferredAccount else confirmedTarget.inferredAccount,
                         detectedAccountHint = confirmedTarget.detectedAccountHint ?: detectedAccountHint,
-                        flags = mergedFlags,
+                        flags = flagsWithBankAttached,
                         updatedAt = System.currentTimeMillis()
                     )
                     val attachOp: suspend () -> Unit = {
                         handledNotificationDao?.insert(handledEntity)
                         pendingCaptureDao.update(enrichedConfirmed)
-                        if (transactionDao != null) {
-                            val existingTxn = transactionDao.getById(confirmedTarget.id)
-                            if (existingTxn != null && (existingTxn.account.isBlank() || existingTxn.account == CategoryConstants.ACCOUNT_OTHER) && inferredAccount.isNotBlank()) {
-                                transactionDao.update(existingTxn.copy(account = inferredAccount))
-                            }
-                        }
                     }
                     if (runInTransaction != null) runInTransaction.invoke(attachOp) else attachOp()
                     PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED_INTO_CONFIRMED)
@@ -454,28 +460,6 @@ class NotificationProcessor(
                     } else {
                         PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE
                     }
-                }
-            } else if (transactionDao != null) {
-                // Check if matching confirmed transaction exists in transactionDao within 24h
-                val epsilon = 0.01
-                val minAmount = amount - epsilon
-                val maxAmount = amount + epsilon
-                val recentTxns = transactionDao.getRecentSimilar(searchMinTime, searchMaxTime, minAmount, maxAmount)
-                    .filter { txn ->
-                        com.financeautomation.core.utils.MerchantSimilarity.compatible(txn.merchant, payee) &&
-                            areAccountsCompatible(txn.account, null, inferredAccount, detectedAccountHint)
-                    }
-                val matchedTxn = recentTxns.firstOrNull()
-                if (matchedTxn != null) {
-                    val attachOp: suspend () -> Unit = {
-                        handledNotificationDao?.insert(handledEntity)
-                        if ((matchedTxn.account.isBlank() || matchedTxn.account == CategoryConstants.ACCOUNT_OTHER) && inferredAccount.isNotBlank()) {
-                            transactionDao.update(matchedTxn.copy(account = inferredAccount))
-                        }
-                    }
-                    if (runInTransaction != null) runInTransaction.invoke(attachOp) else attachOp()
-                    PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED_INTO_CONFIRMED)
-                    return NotificationProcessingOutcome.Merged(matchedTxn.id, enriched = true)
                 }
             }
         }

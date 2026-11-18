@@ -248,9 +248,17 @@ object RegexPatterns {
 
     /**
      * Extracts transaction / UPI reference id or UTR number from message text.
+     * Requires at least 6 characters with at least 4 digits so words like "payment", "successful",
+     * or "transaction" following a prefix are never mistaken for a reference number.
      */
     fun extractReferenceId(text: String): String? {
-        return REFERENCE_ID_REGEX.find(text)?.groupValues?.get(1)?.trim()
+        for (match in REFERENCE_ID_REGEX.findAll(text)) {
+            val candidate = match.groupValues.getOrNull(1)?.trim() ?: continue
+            if (candidate.length >= 6 && candidate.count { it.isDigit() } >= 4) {
+                return candidate
+            }
+        }
+        return null
     }
 
     /**
