@@ -88,6 +88,34 @@ class CaptureMediumItemsTest {
         assertEquals("Only one capture should exist in DB", 1, captureDao.captures.size)
     }
 
+    @Test
+    fun reversalCreditThroughNotificationProcessorLandsInNeedsReviewWithFlagAndCreditKind() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val outcome = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "An amount of INR 250.00 has been REVERSED to your account XXX234 on 13/03/26. Total Avail.bal INR 4,350.00 - Canara Bank",
+            sbnKey = "0|sms|201",
+            postTime = 1713600000000L
+        )
+
+        assertTrue("Reversal credit must be captured", outcome is NotificationProcessingOutcome.Captured)
+        val capture = (outcome as NotificationProcessingOutcome.Captured).capture
+        assertEquals("Must land in STATE_NEEDS_REVIEW", PendingCaptureEntity.STATE_NEEDS_REVIEW, capture.state)
+        assertEquals("Kind must be KIND_CREDIT (inflow)", PendingCaptureEntity.KIND_CREDIT, capture.kind)
+        assertTrue("Flags must contain FLAG_REFUND_REVERSAL", capture.flags.contains(PendingCaptureEntity.FLAG_REFUND_REVERSAL))
+        assertEquals("Amount must match", 250.0, capture.amount!!, 0.001)
+    }
+
     private class FakeTestHandledDao : HandledNotificationDao {
         val handled = ConcurrentHashMap<String, HandledNotificationEntity>()
         override suspend fun insert(handled: HandledNotificationEntity) {
