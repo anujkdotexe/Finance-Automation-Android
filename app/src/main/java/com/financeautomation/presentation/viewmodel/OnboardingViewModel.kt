@@ -173,6 +173,10 @@ class OnboardingViewModel(
 
     fun skipAccountSetup() {
         viewModelScope.launch(ioDispatcher) {
+            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "accounts", "status" to "skipped")
+            )
             preferencesRepository.setOnboardingAccountsSeen(true)
             _uiState.update { it.copy(showAccountSetupStep = false, isAccountsSeen = true, accountSetupError = null) }
         }
@@ -180,6 +184,10 @@ class OnboardingViewModel(
 
     fun completeAccountSetup() {
         viewModelScope.launch(ioDispatcher) {
+            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "accounts", "status" to "done")
+            )
             preferencesRepository.setOnboardingAccountsSeen(true)
             _uiState.update { it.copy(showAccountSetupStep = false, isAccountsSeen = true, accountSetupError = null) }
         }
@@ -364,6 +372,10 @@ class OnboardingViewModel(
             saveAccountDetails(picked.first, picked.second, picked.third)
         }
         val email = preferencesRepository.getGoogleAccountEmailSync()?.takeIf { it.isNotBlank() } ?: picked?.first.orEmpty()
+        com.financeautomation.core.utils.AnalyticsManager.logEvent(
+            eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+            params = mapOf("step_id" to "sign_in", "status" to "done")
+        )
         _uiState.update {
             it.copy(
                 step1State = StepState.COMPLETED,
@@ -380,6 +392,10 @@ class OnboardingViewModel(
             when (val res = workbookResolver.resolveForYear(currentYear, forceValidateTabs = forceValidateTabs, createBackup = false)) {
                 is Result.Success -> {
                     val id = res.data
+                    com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                        eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                        params = mapOf("step_id" to "workbook", "status" to "done")
+                    )
                     _uiState.update {
                         it.copy(
                             step2State = StepState.COMPLETED,
@@ -403,6 +419,10 @@ class OnboardingViewModel(
 
     fun updatePermissionsState(hasNotificationListener: Boolean) {
         if (hasNotificationListener) {
+            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "permissions", "status" to "done")
+            )
             _uiState.update {
                 it.copy(
                     step3State = StepState.COMPLETED,

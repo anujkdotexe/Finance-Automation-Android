@@ -60,6 +60,7 @@ object AnalyticsManager {
      */
     val ALLOWED_PARAM_VALUES: Map<String, Set<String>> = mapOf(
         "status" to setOf("done", "skipped"),
+        "step_id" to setOf("sign_in", "workbook", "accounts", "permissions"),
         "feature_name" to setOf(
             "trips",
             "subscriptions",
@@ -73,6 +74,9 @@ object AnalyticsManager {
         )
     )
 
+    internal var testOptInOverride: Boolean? = null
+    internal var testEventListener: ((eventName: String, params: Map<String, Any>?) -> Unit)? = null
+
     private fun isFirebaseAvailable(context: Context?): Boolean {
         val ctx = context ?: appContext ?: return false
         return try {
@@ -83,6 +87,7 @@ object AnalyticsManager {
     }
 
     fun isOptedIn(context: Context? = null): Boolean {
+        testOptInOverride?.let { return it }
         val ctx = context ?: appContext ?: return false
         val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean(KEY_OPT_IN, false)
@@ -188,24 +193,34 @@ object AnalyticsManager {
         val allowedKeys = ALLOWED_EVENTS[eventName] ?: return false
 
         val ctx = context ?: appContext
-        if (ctx == null || !isOptedIn(ctx) || !isFirebaseAvailable(ctx)) return false
+        if (!isOptedIn(ctx)) return false
 
-        val bundle = Bundle()
         if (params != null) {
             for ((key, value) in params) {
                 if (!allowedKeys.contains(key)) return false
 
                 when (value) {
-                    is Number -> {
-                        bundle.putLong(key, value.toLong())
-                    }
+                    is Number -> {}
                     is String -> {
                         if (value.length > MAX_PARAM_LENGTH) return false
                         val allowedVals = ALLOWED_PARAM_VALUES[key]
                         if (allowedVals != null && !allowedVals.contains(value)) return false
-                        bundle.putString(key, value)
                     }
                     else -> return false
+                }
+            }
+        }
+
+        testEventListener?.invoke(eventName, params)
+
+        if (ctx == null || !isFirebaseAvailable(ctx)) return true
+
+        val bundle = Bundle()
+        if (params != null) {
+            for ((key, value) in params) {
+                when (value) {
+                    is Number -> bundle.putLong(key, value.toLong())
+                    is String -> bundle.putString(key, value)
                 }
             }
         }

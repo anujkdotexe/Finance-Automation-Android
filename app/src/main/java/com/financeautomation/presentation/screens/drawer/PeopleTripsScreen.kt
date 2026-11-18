@@ -274,7 +274,13 @@ fun PeopleTripsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(FinanceShapes.large)
-                    .clickable(onClick = onStartTrip)
+                    .clickable {
+                        com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                            eventName = com.financeautomation.core.utils.UsageEvents.EVENT_FEATURE_USED,
+                            params = mapOf("feature_name" to "trips")
+                        )
+                        onStartTrip()
+                    }
             ) {
                 Row(
                     modifier = Modifier

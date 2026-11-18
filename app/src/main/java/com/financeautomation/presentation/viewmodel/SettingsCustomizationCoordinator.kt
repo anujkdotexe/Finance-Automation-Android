@@ -191,6 +191,10 @@ class SettingsCustomizationCoordinator(
                     displayOrder = uiState.value.accounts.size
                 )
                 repo.insertAccount(newAcc)
+                com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                    eventName = com.financeautomation.core.utils.UsageEvents.EVENT_FEATURE_USED,
+                    params = mapOf("feature_name" to "custom_account_added")
+                )
                 uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, cleanName)) }
             } else {
                 uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_account, cleanName)) }
@@ -253,6 +257,10 @@ class SettingsCustomizationCoordinator(
                     iconName = colorName
                 )
                 repo.insertCategory(newCat)
+                com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                    eventName = com.financeautomation.core.utils.UsageEvents.EVENT_FEATURE_USED,
+                    params = mapOf("feature_name" to "custom_category_added")
+                )
                 uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, cleanName)) }
             } else {
                 uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_added_category, cleanName)) }

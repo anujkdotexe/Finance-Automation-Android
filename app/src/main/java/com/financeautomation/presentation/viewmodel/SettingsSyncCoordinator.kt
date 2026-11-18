@@ -213,6 +213,10 @@ class SettingsSyncCoordinator(
                     when (val res = resolver.repairWorkbook(currentYear, archiveOlderBackups = archiveOlder)) {
                         is Result.Success -> {
                             val spreadsheetId = res.data.spreadsheetId
+                            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_FEATURE_USED,
+                                params = mapOf("feature_name" to "repair_workbook")
+                            )
                             preferencesRepository.setSpreadsheetId(spreadsheetId)
                             regenerateDashboardUseCase?.invoke()
                             syncConfigUseCase?.mirrorToCloud()
@@ -460,6 +464,10 @@ class SettingsSyncCoordinator(
                 when (val result = repo.syncPendingTransactions(userInitiated = true)) {
                     is Result.Success -> {
                         val count = result.data
+                        com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                            eventName = com.financeautomation.core.utils.UsageEvents.EVENT_SYNC_RESULT,
+                            params = mapOf("error_kind" to "none", "count" to count)
+                        )
                         uiState.update {
                             it.copy(
                                 syncResult = "Synced $count transaction(s) to Google Sheets",
@@ -468,6 +476,11 @@ class SettingsSyncCoordinator(
                         }
                     }
                     is Result.Error -> {
+                        val kindCode = SyncErrorKind.fromThrowable(result.throwable).name.lowercase().take(20)
+                        com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                            eventName = com.financeautomation.core.utils.UsageEvents.EVENT_SYNC_RESULT,
+                            params = mapOf("error_kind" to kindCode, "count" to 1)
+                        )
                         Diagnostics.record("SettingsSyncCoordinator", "sync_error: ${SyncErrorKind.safeCode("settings sync", result.throwable)} ${PrivacyScrubber.scrub(result.throwable.message.orEmpty())}")
                         uiState.update {
                             it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("settings sync", result.throwable)))

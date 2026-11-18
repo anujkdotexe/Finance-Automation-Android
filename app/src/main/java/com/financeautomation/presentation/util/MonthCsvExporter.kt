@@ -29,6 +29,10 @@ object MonthCsvExporter {
 
             val csv = exportUseCase(year, month)
             val uri = writer.write(year, month, csv)
+            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_FEATURE_USED,
+                params = mapOf("feature_name" to "export_csv")
+            )
 
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/csv"

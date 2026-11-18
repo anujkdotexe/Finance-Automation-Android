@@ -119,4 +119,42 @@ class AnalyticsManagerTest {
             }
         }
     }
+
+    @Test
+    fun productionPathEventSentWhenOptedInAndDroppedWhenOptedOut() {
+        val capturedEvents = mutableListOf<Pair<String, Map<String, Any>?>>()
+        AnalyticsManager.testEventListener = { event, params ->
+            capturedEvents.add(event to params)
+        }
+
+        try {
+            // Case 1: Opt-in OFF -> must be dropped
+            AnalyticsManager.testOptInOverride = false
+            capturedEvents.clear()
+
+            val dropped = AnalyticsManager.logEvent(
+                eventName = UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "accounts", "status" to "done")
+            )
+            assertFalse("Event must be dropped when opt-in is false", dropped)
+            assertTrue("No event must reach listener when opted out", capturedEvents.isEmpty())
+
+            // Case 2: Opt-in ON -> must be accepted and forwarded
+            AnalyticsManager.testOptInOverride = true
+            capturedEvents.clear()
+
+            val accepted = AnalyticsManager.logEvent(
+                eventName = UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "accounts", "status" to "done")
+            )
+            assertTrue("Event must be accepted when opt-in is true", accepted)
+            assertEquals(1, capturedEvents.size)
+            assertEquals(UsageEvents.EVENT_ONBOARDING_STEP, capturedEvents[0].first)
+            assertEquals("accounts", capturedEvents[0].second?.get("step_id"))
+            assertEquals("done", capturedEvents[0].second?.get("status"))
+        } finally {
+            AnalyticsManager.testOptInOverride = null
+            AnalyticsManager.testEventListener = null
+        }
+    }
 }
