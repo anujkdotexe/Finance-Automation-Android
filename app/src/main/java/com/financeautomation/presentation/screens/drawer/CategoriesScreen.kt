@@ -125,11 +125,14 @@ fun CategoriesScreen(
                 categories = state.categories,
                 onReorderCategories = { viewModel.onReorderCategories(it) },
                 budgetByName = budgetByName.mapValues { it.value.monthlyAmount },
-                onOpenBudget = { budgetCategory = it },
+                onOpenBudget = { category ->
+                    val onOpenBudget = { budgetCategory = category.name }
+                    onOpenBudget()
+                },
                 onToggleBurn = { catId, enabled ->
                     viewModel.onToggleCategoryLivingBurnExclusion(catId, !enabled)
                 },
-                onClick = { selectedCategoryForEdit = it },
+                onClick = { category -> selectedCategoryForEdit = category },
                 onChangeColor = { selectedCategoryForColor = it },
                 onArchive = { viewModel.onArchiveCategory(it) }
             )
@@ -276,7 +279,7 @@ internal fun CategoryList(
     onReorderCategories: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
     budgetByName: Map<String, Double?> = emptyMap(),
-    onOpenBudget: (String) -> Unit = {},
+    onOpenBudget: (Category) -> Unit = {},
     onToggleBurn: (String, Boolean) -> Unit = { _, _ -> },
     onClick: (Category) -> Unit = {},
     onChangeColor: (Category) -> Unit = {},
@@ -302,7 +305,7 @@ internal fun CategoryList(
                 isLocked = isLocked,
                 isDragging = isDragging,
                 budgetAmount = budgetByName[category.name.trim().lowercase()],
-                onOpenBudget = { onOpenBudget(category.name) },
+                onOpenBudget = { onOpenBudget(category) },
                 onToggleBurn = { enabled -> onToggleBurn(category.id, enabled) },
                 onClick = { onClick(category) },
                 onChangeColor = { onChangeColor(category) },
