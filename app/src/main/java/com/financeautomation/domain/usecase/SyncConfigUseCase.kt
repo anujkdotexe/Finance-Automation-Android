@@ -91,9 +91,7 @@ class SyncConfigUseCase(
             val metaRow = rows.find { it.type == ConfigConstants.TYPE_META && it.key == ConfigConstants.KEY_SCHEMA_VERSION }
             val remoteVersion = metaRow?.value1?.toIntOrNull() ?: 1
             val supportedVersion = ConfigConstants.CONFIG_SCHEMA_VERSION.toInt()
-            if (remoteVersion > supportedVersion) {
-                isRemoteSchemaNewerThanSupported = true
-            }
+            isRemoteSchemaNewerThanSupported = remoteVersion > supportedVersion
 
             for (row in rows) {
                 val epochMilli = row.updatedAt.toEpochMilli()

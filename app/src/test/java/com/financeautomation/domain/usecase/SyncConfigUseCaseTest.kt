@@ -16,6 +16,7 @@ import com.financeautomation.testutil.MutableTestClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -265,5 +266,36 @@ class SyncConfigUseCaseTest {
         assertTrue("Restored category exists in gateway", "CustomCategory" in h.gateway.categories)
         val index = h.sheet.indexOfKey("category", "CustomCategory")
         assertTrue("CustomCategory was pushed to sheet instead of blank defaults", index >= 0)
+    }
+
+    @Test
+    fun schemaFlagResetsWhenSheetVersionIsFixed() = runBlocking {
+        val h = harness()
+        val metaIdx = h.sheet.indexOfKey("meta", "schemaVersion")
+        h.sheet.cells[metaIdx][2] = "99"
+
+        h.useCase.pull("sheet")
+        assertTrue("Flag must be true when remote version is newer", h.useCase.isRemoteSchemaNewerThanSupported)
+
+        h.gateway.edit("Fuel", excluded = true, updatedAt = clock.millis())
+        val pushRes = h.useCase.push("sheet")
+        assertTrue("Push must fail when schema is newer", pushRes is Result.Error)
+
+        h.sheet.cells[metaIdx][2] = "1"
+        h.useCase.pull("sheet")
+        assertFalse("Flag must reset to false when remote version is supported", h.useCase.isRemoteSchemaNewerThanSupported)
+
+        val pushRes2 = h.useCase.push("sheet")
+        assertTrue("Push must succeed after version fixed", pushRes2 is Result.Success)
+    }
+
+    @Test
+    fun nonNumericVersionIsTreatedAsOne() = runBlocking {
+        val h = harness()
+        val metaIdx = h.sheet.indexOfKey("meta", "schemaVersion")
+        h.sheet.cells[metaIdx][2] = "invalid_version"
+
+        h.useCase.pull("sheet")
+        assertFalse("Non-numeric version treated as 1 (supported)", h.useCase.isRemoteSchemaNewerThanSupported)
     }
 }
