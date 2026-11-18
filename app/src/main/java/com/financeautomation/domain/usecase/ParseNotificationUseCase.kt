@@ -181,7 +181,8 @@ class ParseNotificationUseCase(
         configuredAccounts: List<String> = emptyList(),
         defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
         accountDigits: Map<String, String?> = emptyMap(),
-        channelId: String? = null
+        channelId: String? = null,
+        category: String? = null
     ): NotificationParseResult {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
@@ -200,8 +201,8 @@ class ParseNotificationUseCase(
         }
 
         // 2b. Chat apps that carry payments (WhatsApp, WhatsApp Business):
-        // Only payment notifications on a payments channel are allowed. Any chat or general notification is dropped immediately.
-        if (PackageWhitelist.isChatApp(sourcePackage) && !PackageWhitelist.isPaymentChannel(channelId)) {
+        // Only payment notifications on a payments channel or category are allowed. Any chat or general notification is dropped immediately.
+        if (PackageWhitelist.isChatApp(sourcePackage) && !PackageWhitelist.isPaymentNotification(channelId, category)) {
             return NotificationParseResult.Dropped(
                 reason = DropReason.BLACKLISTED,
                 sourcePackage = sourcePackage

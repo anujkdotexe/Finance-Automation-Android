@@ -87,7 +87,8 @@ class NotificationProcessor(
         text: String,
         postTime: Long = System.currentTimeMillis(),
         sbnKey: String = "",
-        channelId: String? = null
+        channelId: String? = null,
+        category: String? = null
     ): NotificationProcessingOutcome = processMutex.withLock {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
@@ -101,8 +102,8 @@ class NotificationProcessor(
         }
 
         // 2b. Chat apps that carry payments (WhatsApp, WhatsApp Business):
-        // Only payment notifications on a payments channel are allowed. Any chat or general notification is dropped immediately.
-        if (PackageWhitelist.isChatApp(sourcePackage) && !PackageWhitelist.isPaymentChannel(channelId)) {
+        // Only payment notifications on a payments channel or category are allowed. Any chat or general notification is dropped immediately.
+        if (PackageWhitelist.isChatApp(sourcePackage) && !PackageWhitelist.isPaymentNotification(channelId, category)) {
             PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
             return NotificationProcessingOutcome.Ignored("Non-payment chat notification dropped: $sourcePackage")
         }
@@ -196,7 +197,8 @@ class NotificationProcessor(
             configuredAccounts = configuredAccounts,
             defaultAccount = defaultAccount,
             accountDigits = accountDigits,
-            channelId = channelId
+            channelId = channelId,
+            category = category
         )
 
         return when (parseResult) {

@@ -145,10 +145,17 @@ object PackageWhitelist {
         return trimmed == PACKAGE_WHATSAPP || trimmed == PACKAGE_WHATSAPP_BUSINESS
     }
 
-    fun isPaymentChannel(channelId: String?): Boolean {
-        if (channelId.isNullOrBlank()) return false
-        return channelId.contains("payment", ignoreCase = true)
+    fun isPaymentNotification(channelId: String?, category: String?): Boolean {
+        val channelMatch = !channelId.isNullOrBlank() && channelId.contains("payment", ignoreCase = true)
+        val categoryMatch = !category.isNullOrBlank() && (
+            category.equals("payment", ignoreCase = true) ||
+            category.equals("transaction", ignoreCase = true) ||
+            category.contains("payment", ignoreCase = true)
+        )
+        return channelMatch || categoryMatch
     }
+
+    fun isPaymentChannel(channelId: String?): Boolean = isPaymentNotification(channelId, null)
 
     /** Privacy line shown next to the list of watched apps. */
     const val PRIVACY_STATEMENT: String = "We never read personal chats, emails or OTP messages."

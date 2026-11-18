@@ -62,10 +62,11 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         }
 
         // Strict privacy check for chat apps that carry payments (WhatsApp, WhatsApp Business):
-        // Only inspect text if the notification is definitively on a payments channel.
+        // Only inspect text if the notification is definitively on a payments channel or category.
         if (PackageWhitelist.isChatApp(sourcePackage)) {
             val channelId = sbn.notification?.channelId
-            if (!PackageWhitelist.isPaymentChannel(channelId)) {
+            val category = sbn.notification?.category
+            if (!PackageWhitelist.isPaymentNotification(channelId, category)) {
                 PipelineTrail.recordDroppedNotWhitelisted()
                 return
             }
@@ -85,8 +86,9 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         val postTime = if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()
         val key = sbn.key ?: ""
         val channelId = sbn.notification?.channelId
+        val category = sbn.notification?.category
 
-        handleNotification(sourcePackage, title, text, postTime, key, channelId)
+        handleNotification(sourcePackage, title, text, postTime, key, channelId, category)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
@@ -145,7 +147,8 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         text: String,
         postTime: Long,
         sbnKey: String = "",
-        channelId: String? = null
+        channelId: String? = null,
+        category: String? = null
     ) {
         val app = applicationContext as? FinanceApplication
         val container = app?.appContainer
@@ -168,7 +171,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                     )
                 } ?: return@launch
 
-                val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey, channelId)
+                val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey, channelId, category)
                 when (outcome) {
                     is NotificationProcessingOutcome.Captured -> {
                         if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {

@@ -90,10 +90,15 @@ class PackageWhitelistDisplayTest {
 
         assertTrue(PackageWhitelist.isPaymentChannel("payments"))
         assertTrue(PackageWhitelist.isPaymentChannel("whatsapp_payments_channel"))
+        assertTrue(PackageWhitelist.isPaymentNotification(null, "payment"))
+        assertTrue(PackageWhitelist.isPaymentNotification(null, "transaction"))
+        assertTrue(PackageWhitelist.isPaymentNotification("chats", "payment"))
         assertFalse(PackageWhitelist.isPaymentChannel("individual_chat"))
         assertFalse(PackageWhitelist.isPaymentChannel("group_chat"))
         assertFalse(PackageWhitelist.isPaymentChannel(null))
         assertFalse(PackageWhitelist.isPaymentChannel(""))
+        assertFalse(PackageWhitelist.isPaymentNotification("individual_chat", "social"))
+        assertFalse(PackageWhitelist.isPaymentNotification(null, null))
     }
 
     @Test

@@ -110,6 +110,23 @@ class PaymentAppsRegistryAndPrivacyTest {
     }
 
     @Test
+    fun whatsAppPaymentCategoryParsedSuccessfully() {
+        // Legitimate payment alert identified via notification category
+        val result = parseUseCase(
+            sourcePackage = PackageWhitelist.PACKAGE_WHATSAPP,
+            title = "WhatsApp Payments",
+            text = "Paid ₹300 to Bakery",
+            timestamp = System.currentTimeMillis(),
+            channelId = null,
+            category = "payment"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(300.0, success.transaction.totalAmount, 0.001)
+        assertEquals("Bakery", success.transaction.merchant)
+    }
+
+    @Test
     fun userWatchedAppGenericParsingRoutesToNeedsReview() {
         val customApp = "com.custom.wallet"
         PackageWhitelist.addWatchedApp(customApp)
