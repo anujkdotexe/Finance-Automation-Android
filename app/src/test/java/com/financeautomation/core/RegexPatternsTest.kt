@@ -107,4 +107,30 @@ class RegexPatternsTest {
         assertTrue(PackageWhitelist.isBlacklisted("org.telegram.messenger"))
         assertFalse(PackageWhitelist.isBlacklisted(PackageWhitelist.PACKAGE_GPAY))
     }
+
+    @Test
+    fun testFinancialKeywordsRegexMatchesNewCandidatesAndEnforcesWordBoundaries() {
+        // Words added in P1-8 keyword gate
+        assertTrue("acct", RegexPatterns.hasFinancialKeywords("Acct XXX234 Dr. INR 1,499.00"))
+        assertTrue("dr.", RegexPatterns.hasFinancialKeywords("Dr. INR 500 on 15/09/26"))
+        assertTrue("dr", RegexPatterns.hasFinancialKeywords("INR 500 Dr to Demo Mart"))
+        assertTrue("cr.", RegexPatterns.hasFinancialKeywords("Cr. INR 500 on 15/09/26"))
+        assertTrue("cr", RegexPatterns.hasFinancialKeywords("INR 500 Cr from Demo Mart"))
+        assertTrue("debit", RegexPatterns.hasFinancialKeywords("debit of INR 500 processed"))
+        assertTrue("credit", RegexPatterns.hasFinancialKeywords("credit of INR 500 received"))
+        assertTrue("payment of", RegexPatterns.hasFinancialKeywords("payment of Rs 500 done"))
+        assertTrue("successfully paid", RegexPatterns.hasFinancialKeywords("successfully paid Rs 200 via Autopay"))
+        assertTrue("upi ref", RegexPatterns.hasFinancialKeywords("upi ref 12345678"))
+        assertTrue("upi:", RegexPatterns.hasFinancialKeywords("UPI: 600000000002"))
+
+        // Word boundary tests: Dr. Rao is allowed through the gate (matches dr.) but dropped later
+        assertTrue("Dr. Rao allowed through gate", RegexPatterns.hasFinancialKeywords("Dr. Rao presents exciting offers on electronics"))
+
+        // Word boundary tests: cream, decree, acre must NOT match
+        assertFalse("cream must not match", RegexPatterns.hasFinancialKeywords("buy cold cream at 20% discount"))
+        assertFalse("decree must not match", RegexPatterns.hasFinancialKeywords("royal decree announced"))
+        assertFalse("acre must not match", RegexPatterns.hasFinancialKeywords("buy 5 acre land today"))
+        assertFalse("discredited must not match", RegexPatterns.hasFinancialKeywords("discredited news source"))
+        assertFalse("indebited must not match", RegexPatterns.hasFinancialKeywords("indebited party details"))
+    }
 }
