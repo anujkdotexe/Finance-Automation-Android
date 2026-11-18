@@ -113,7 +113,10 @@ fun CompatibilityReportDialog(
                     )
                     OutlinedTextField(
                         value = userNote,
-                        onValueChange = { userNote = it },
+                        onValueChange = {
+                            userNote = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.report_user_note_placeholder), style = FinanceTheme.typography.bodyMedium) },
                         shape = FinanceTheme.shapes.card,
                         modifier = Modifier.fillMaxWidth()
