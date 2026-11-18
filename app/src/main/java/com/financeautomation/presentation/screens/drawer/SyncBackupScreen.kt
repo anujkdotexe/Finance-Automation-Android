@@ -93,6 +93,8 @@ fun SyncBackupScreen(
     val showNameAndEmail = !accountDisplayName.isNullOrBlank() && !accountEmail.isNullOrBlank()
 
     var showCreateFreshDialog by rememberSaveable { mutableStateOf(false) }
+    var showRepairArchiveDialog by rememberSaveable { mutableStateOf(false) }
+    var repairBackupCount by rememberSaveable { mutableStateOf(0) }
     var showSignOutDialog by remember { mutableStateOf(false) }
 
     val gso = remember {
@@ -224,6 +226,69 @@ fun SyncBackupScreen(
                     }
                     TextButton(
                         onClick = { showCreateFreshDialog = false },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            },
+            dismissButton = null
+        )
+    }
+
+    if (showRepairArchiveDialog) {
+        val currentYear = remember { java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year }
+        AlertDialog(
+            onDismissRequest = { showRepairArchiveDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.repair_backup_dialog_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                val bodyText = if (repairBackupCount == 1) {
+                    stringResource(R.string.repair_backup_dialog_body_one, currentYear, 2)
+                } else {
+                    stringResource(R.string.repair_backup_dialog_body_many, repairBackupCount, currentYear, repairBackupCount + 1)
+                }
+                Text(
+                    text = bodyText,
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    Button(
+                        onClick = {
+                            showRepairArchiveDialog = false
+                            viewModel.onRepairWorkbook(archiveOlder = true)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.repair_backup_action_archive))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showRepairArchiveDialog = false
+                            viewModel.onRepairWorkbook(archiveOlder = false)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.repair_backup_action_keep))
+                    }
+                    TextButton(
+                        onClick = { showRepairArchiveDialog = false },
                         modifier = Modifier
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
@@ -596,7 +661,17 @@ fun SyncBackupScreen(
                 }
 
                 OutlinedButton(
-                    onClick = viewModel::onRepairWorkbook,
+                    onClick = {
+                        coroutineScope.launch {
+                            val count = viewModel.checkBackupsBeforeRepair()
+                            if (count > 0) {
+                                repairBackupCount = count
+                                showRepairArchiveDialog = true
+                            } else {
+                                viewModel.onRepairWorkbook(archiveOlder = false)
+                            }
+                        }
+                    },
                     enabled = !state.isProvisioning,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()

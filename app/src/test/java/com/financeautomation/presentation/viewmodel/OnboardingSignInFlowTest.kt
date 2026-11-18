@@ -51,7 +51,12 @@ class OnboardingSignInFlowTest {
     private val resolver = object : WorkbookResolver(
         GoogleDriveClient(OkHttpClient(), tokens), GoogleSheetsClient(OkHttpClient(), tokens), h.prefs
     ) {
-        override suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean, createBackup: Boolean): Result<String> = Result.Success("sheet1")
+        override suspend fun resolveForYear(
+            year: Int,
+            forceValidateTabs: Boolean,
+            createBackup: Boolean,
+            archiveOlderBackups: Boolean
+        ): Result<String> = Result.Success("sheet1")
     }
 
     private fun vm(auth: AuthorizationSource): OnboardingViewModel {

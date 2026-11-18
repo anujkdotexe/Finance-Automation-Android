@@ -65,6 +65,11 @@
     <string name="fresh_workbook_msg_copy_history">A fresh workbook was created. Your saved history is being copied into it.</string>
     <string name="fresh_workbook_msg_copy_history_retry">A fresh workbook was created. Copying your saved history will retry automatically.</string>
     <string name="fresh_workbook_msg_empty">A fresh workbook was created and is empty. Queued entries will still be added.</string>
+    <string name="repair_backup_dialog_title">Workbook backups</string>
+    <string name="repair_backup_dialog_body_one">You already have 1 backup of Finance%1$d. Creating another makes 2.</string>
+    <string name="repair_backup_dialog_body_many">You already have %1$d backups of Finance%2$d. Creating another makes %3$d.</string>
+    <string name="repair_backup_action_archive">Move older backups to the Archive folder</string>
+    <string name="repair_backup_action_keep">Keep them where they are</string>
     <string name="action_create">Create</string>
     <string name="raw_http_errors_title">Raw Google API Errors</string>
     <string name="raw_http_errors_notice">Contains Google error text. Shared only if you choose.</string>

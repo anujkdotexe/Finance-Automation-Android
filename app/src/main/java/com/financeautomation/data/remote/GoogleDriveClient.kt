@@ -493,15 +493,24 @@ open class GoogleDriveClient(
 
     /**
      * Copies an existing file [fileId] in Google Drive giving it [backupName].
-     * The copy retains the same parent directory and permissions.
+     * Sets explicit appProperties (app=FinanceAutomationBackup, backupYear, and fiscalYear=null)
+     * so that the copy is never mistaken for the live workbook.
      */
     open suspend fun copyFile(
         fileId: String,
-        backupName: String
+        backupName: String,
+        year: Int? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val copyUrl = "$baseUrl/files/$fileId/copy?fields=id%2Cname"
-            val requestBodyJson = """{"name":"${backupName.replace("\"", "\\\"")}"}"""
+            val appPropsJson = buildString {
+                append("""{"app":"FinanceAutomationBackup"""")
+                if (year != null) {
+                    append(""","backupYear":"$year"""")
+                }
+                append(""","fiscalYear":null}""")
+            }
+            val requestBodyJson = """{"name":"${backupName.replace("\"", "\\\"")}","appProperties":$appPropsJson}"""
             val copyRequest = newRequestBuilder(copyUrl)
                 .post(requestBodyJson.toRequestBody(jsonMediaType))
                 .build()
@@ -529,4 +538,166 @@ open class GoogleDriveClient(
             Result.Error(e)
         }
     }
+
+    /**
+     * Finds app-made backup spreadsheets for [year] via marker properties (app=FinanceAutomationBackup).
+     * Never queries or filters by name only.
+     */
+    open suspend fun findBackups(year: Int): Result<List<DriveBackupFile>> = withContext(Dispatchers.IO) {
+        try {
+            val query = "appProperties has { key='app' and value='FinanceAutomationBackup' } and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
+            val searchUrl = "$baseUrl/files".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("fields", "files(id, name, parents, appProperties)")
+                .addQueryParameter("spaces", "drive")
+                .build()
+
+            val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
+            okHttpClient.newCall(searchRequest).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to find backups for year $year"), apiError)
+                    )
+                }
+
+                val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
+                val files = jsonResponse["files"]?.jsonArray.orEmpty()
+                val yearStr = year.toString()
+                val resultList = mutableListOf<DriveBackupFile>()
+                for (fileElem in files) {
+                    val fileObj = fileElem.jsonObject
+                    val fileId = fileObj["id"]?.jsonPrimitive?.content ?: continue
+                    val fileName = fileObj["name"]?.jsonPrimitive?.content.orEmpty()
+                    val parentsList = fileObj["parents"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content }.orEmpty()
+                    val appProps = fileObj["appProperties"]?.jsonObject
+                    val backupYear = appProps?.get("backupYear")?.jsonPrimitive?.content
+                    if (backupYear == yearStr || (backupYear == null && fileName.contains("Finance$yearStr"))) {
+                        resultList.add(DriveBackupFile(fileId, fileName, parentsList))
+                    }
+                }
+                Result.Success(resultList)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Searches for a folder named 'Archive' inside [parentFolderId].
+     * Creates it if missing inside [parentFolderId].
+     */
+    open suspend fun findOrCreateArchiveFolder(parentFolderId: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val query = "name = 'Archive' and '$parentFolderId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+            val searchUrl = "$baseUrl/files".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("fields", "files(id, name)")
+                .addQueryParameter("spaces", "drive")
+                .build()
+
+            val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
+            okHttpClient.newCall(searchRequest).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_LIST, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to query Archive folder in '$parentFolderId'"), apiError)
+                    )
+                }
+
+                val jsonResponse = json.parseToJsonElement(bodyString).jsonObject
+                val files = jsonResponse["files"]?.jsonArray
+                if (!files.isNullOrEmpty()) {
+                    val folderId = files[0].jsonObject["id"]?.jsonPrimitive?.content
+                    if (!folderId.isNullOrBlank()) {
+                        return@withContext Result.Success(folderId)
+                    }
+                }
+            }
+
+            // Folder does not exist, create it inside parentFolderId
+            val createUrl = "$baseUrl/files"
+            val requestBodyJson = """
+                {
+                    "name": "Archive",
+                    "mimeType": "application/vnd.google-apps.folder",
+                    "parents": ["$parentFolderId"],
+                    "appProperties": {
+                        "app": "FinanceAutomationArchive"
+                    }
+                }
+            """.trimIndent()
+
+            val createRequest = newRequestBuilder(createUrl)
+                .post(requestBodyJson.toRequestBody(jsonMediaType))
+                .build()
+
+            okHttpClient.newCall(createRequest).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_CREATE, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to create Archive folder in '$parentFolderId'"), apiError)
+                    )
+                }
+
+                val createdJson = json.parseToJsonElement(bodyString).jsonObject
+                val createdId = createdJson["id"]?.jsonPrimitive?.content
+                if (!createdId.isNullOrBlank()) {
+                    Result.Success(createdId)
+                } else {
+                    Result.Error(IOException("Drive API returned empty folder id for Archive folder"))
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Moves [fileId] into [newParentId] by adding [newParentId] and removing [removeParentId].
+     */
+    open suspend fun moveFile(
+        fileId: String,
+        newParentId: String,
+        removeParentId: String? = null
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val urlBuilder = "$baseUrl/files/$fileId".toHttpUrl().newBuilder()
+                .addQueryParameter("addParents", newParentId)
+            if (!removeParentId.isNullOrBlank()) {
+                urlBuilder.addQueryParameter("removeParents", removeParentId)
+            }
+            val request = newRequestBuilder(urlBuilder.build().toString())
+                .patch("{}".toRequestBody(jsonMediaType))
+                .build()
+
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val bodyString = response.body?.string().orEmpty()
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_UPDATE, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to move file '$fileId' to '$newParentId'"), apiError)
+                    )
+                }
+                Result.Success(Unit)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
 }
+
+data class DriveBackupFile(
+    val id: String,
+    val name: String,
+    val parents: List<String> = emptyList()
+)

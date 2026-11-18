@@ -166,11 +166,19 @@ class SettingsSyncCoordinator(
         provisionWorkbook(createBackup = false)
     }
 
-    fun onRepairWorkbook() {
-        provisionWorkbook(createBackup = true)
+    fun onRepairWorkbook(archiveOlder: Boolean = false) {
+        provisionWorkbook(createBackup = true, archiveOlder = archiveOlder)
     }
 
-    private fun provisionWorkbook(createBackup: Boolean) {
+    suspend fun getExistingBackupsCount(year: Int): Int {
+        val client = googleDriveClient ?: return 0
+        return when (val res = client.findBackups(year)) {
+            is Result.Success -> res.data.size
+            else -> 0
+        }
+    }
+
+    private fun provisionWorkbook(createBackup: Boolean, archiveOlder: Boolean = false) {
         if (uiState.value.isProvisioning) return
         val resolver = workbookResolver
         if (resolver != null) {
@@ -179,7 +187,7 @@ class SettingsSyncCoordinator(
                 val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
                 val workbookName = "Finance$currentYear"
                 val opName = if (createBackup) "repair workbook" else "provision workbook"
-                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true, createBackup = createBackup)) {
+                when (val res = resolver.resolveForYear(currentYear, forceValidateTabs = true, createBackup = createBackup, archiveOlderBackups = archiveOlder)) {
                     is Result.Success -> {
                         val spreadsheetId = res.data
                         preferencesRepository.setSpreadsheetId(spreadsheetId)

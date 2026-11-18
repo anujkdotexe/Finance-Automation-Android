@@ -48,7 +48,8 @@ open class WorkbookResolver(
 
     /**
      * Checks if a workbook exists for [year] without creating a new workbook or folder.
-     * Queries local preferences first, then checks Google Drive via findWorkbookForYear.
+     * Queries local preferences first, then checks Google Drive via isFileUsable (line 56)
+     * and findWorkbookForYear.
      */
     open suspend fun findExisting(year: Int): Result<String?> = withContext(ioDispatcher) {
         val storedId = preferencesRepository.getSpreadsheetIdForYearSync(year)
@@ -76,7 +77,8 @@ open class WorkbookResolver(
     open suspend fun resolveForYear(
         year: Int,
         forceValidateTabs: Boolean = false,
-        createBackup: Boolean = false
+        createBackup: Boolean = false,
+        archiveOlderBackups: Boolean = false
     ): Result<String> = withContext(ioDispatcher) {
         val today = LocalDate.now(clock).toString()
         val lastVerified = preferencesRepository.getPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year))
@@ -132,13 +134,36 @@ open class WorkbookResolver(
                         val tabTitles = metadataRes.data.keys.toList()
                         val hasDataRes = googleSheetsClient.hasDataRows(candidateId, tabTitles)
                         if (hasDataRes is Result.Success && hasDataRes.data) {
+                            // Query existing backups before copying
+                            val existingBackupsRes = googleDriveClient.findBackups(year)
+                            val olderBackupIds = if (existingBackupsRes is Result.Success) {
+                                existingBackupsRes.data.map { it.id }
+                            } else {
+                                emptyList()
+                            }
+
                             val currentDate = LocalDate.now(ZoneId.of("Asia/Kolkata"))
                             val backupName = "Finance$year (backup before repair $currentDate)"
-                            val copyRes = googleDriveClient.copyFile(candidateId, backupName)
+                            val copyRes = googleDriveClient.copyFile(candidateId, backupName, year = year)
                             if (copyRes is Result.Error) {
                                 return@withContext Result.Error(
                                     Exception("Pre-repair backup copy failed: ${copyRes.exception.message}", copyRes.exception)
                                 )
+                            }
+
+                            // Move older backups to Archive only after the new copy succeeds
+                            if (archiveOlderBackups && olderBackupIds.isNotEmpty()) {
+                                val rootFolderRes = googleDriveClient.findOrCreateFolder("Personal Finance")
+                                if (rootFolderRes is Result.Success) {
+                                    val rootFolderId = rootFolderRes.data
+                                    val archiveFolderRes = googleDriveClient.findOrCreateArchiveFolder(rootFolderId)
+                                    if (archiveFolderRes is Result.Success) {
+                                        val archiveFolderId = archiveFolderRes.data
+                                        for (olderId in olderBackupIds) {
+                                            googleDriveClient.moveFile(olderId, archiveFolderId, rootFolderId)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

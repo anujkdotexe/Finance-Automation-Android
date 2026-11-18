@@ -231,7 +231,12 @@ class SyncErrorHandlingTest {
                 arrayOf(PreferencesRepository::class.java)
             ) { _, _, _ -> null } as PreferencesRepository
         ) {
-            override suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean, createBackup: Boolean): Result<String> {
+            override suspend fun resolveForYear(
+                year: Int,
+                forceValidateTabs: Boolean,
+                createBackup: Boolean,
+                archiveOlderBackups: Boolean
+            ): Result<String> {
                 return Result.Error(nonRetryableErr)
             }
         }
@@ -266,7 +271,12 @@ class SyncErrorHandlingTest {
                 arrayOf(PreferencesRepository::class.java)
             ) { _, _, _ -> null } as PreferencesRepository
         ) {
-            override suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean, createBackup: Boolean): Result<String> {
+            override suspend fun resolveForYear(
+                year: Int,
+                forceValidateTabs: Boolean,
+                createBackup: Boolean,
+                archiveOlderBackups: Boolean
+            ): Result<String> {
                 return Result.Error(err404)
             }
         }

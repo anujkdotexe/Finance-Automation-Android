@@ -245,7 +245,11 @@ class SettingsViewModel(
     fun cancelAccountSwitch() = syncCoordinator.cancelAccountSwitch()
 
     fun autoProvisionMasterSheet() = syncCoordinator.autoProvisionMasterSheet()
-    fun onRepairWorkbook() = syncCoordinator.onRepairWorkbook()
+    fun onRepairWorkbook(archiveOlder: Boolean = false) = syncCoordinator.onRepairWorkbook(archiveOlder = archiveOlder)
+    suspend fun checkBackupsBeforeRepair(): Int {
+        val currentYear = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year
+        return syncCoordinator.getExistingBackupsCount(currentYear)
+    }
 
     // --- Google Sheets Connection & Sync ---
 
