@@ -103,16 +103,19 @@ class CategoriesAndAccountsUiTest {
         val steps = 8
         val stepDistance = totalDistance / steps
 
-        composeTestRule.onNodeWithContentDescription("Reorder Food & Drink")
-            .performTouchInput {
-                down(center)
-                advanceEventTime(600)
-                repeat(steps) {
-                    moveBy(androidx.compose.ui.geometry.Offset(0f, stepDistance))
-                    advanceEventTime(50)
-                }
-                up()
+        val handleNode = composeTestRule.onNodeWithContentDescription("Reorder Food & Drink")
+        val bounds = handleNode.getBoundsInRoot()
+        android.util.Log.d("DragTest", "Handle bounds in root: $bounds")
+
+        handleNode.performTouchInput {
+            down(center)
+            advanceEventTime(600)
+            repeat(steps) {
+                moveBy(androidx.compose.ui.geometry.Offset(0f, stepDistance))
+                advanceEventTime(50)
             }
+            up()
+        }
 
         assertEquals(listOf("c2", "c1"), savedOrder)
     }
