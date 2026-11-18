@@ -139,7 +139,7 @@ class ProductionTelemetryWiringTest {
     fun settingsSyncFailureDispatchesSyncResultWithNormalisedErrorKind() = runTest(dispatcher) {
         AnalyticsManager.testOptInOverride = true
         val h = SyncHarness()
-        val coordinator = createCoordinator(h.prefs, this, Result.Error(IOException("Connection failed")))
+        val coordinator = createCoordinator(h.prefs, this, Result.Error(java.net.UnknownHostException("Unable to resolve host")))
 
         coordinator.onSyncNow()
         advanceUntilIdle()
@@ -147,7 +147,7 @@ class ProductionTelemetryWiringTest {
         assertEquals("Exactly one sync_result event should be logged", 1, capturedEvents.size)
         val (eventName, params) = capturedEvents.first()
         assertEquals(UsageEvents.EVENT_SYNC_RESULT, eventName)
-        assertEquals("network", params?.get("error_kind"))
+        assertEquals("no_network", params?.get("error_kind"))
         assertEquals(1, params?.get("count"))
     }
 
