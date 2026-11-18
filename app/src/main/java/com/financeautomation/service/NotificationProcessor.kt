@@ -160,14 +160,16 @@ class NotificationProcessor(
         )
 
         // 6. Inferred account resolution from configured accounts
-        val configuredAccounts: List<String> = try {
-            accountDao?.getAllAccounts()?.map { it.name } ?: emptyList()
+        val allAccounts = try {
+            accountDao?.getAllAccounts() ?: emptyList()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: getAllAccounts fallback")
             CrashlyticsManager.recordNonFatal(e, "NotificationProcessor.getAllAccounts")
             emptyList()
         }
+        val configuredAccounts: List<String> = allAccounts.map { it.name }
+        val accountDigits: Map<String, String?> = allAccounts.associate { it.name to it.lastFourDigits }
         val defaultAccount: String = try {
             preferenceDao?.getPreference(PreferencesRepository.KEY_DEFAULT_ACCOUNT) ?: CategoryConstants.ACCOUNT_OTHER
         } catch (e: Exception) {
@@ -184,7 +186,8 @@ class NotificationProcessor(
             appName = null,
             timestamp = postTime,
             configuredAccounts = configuredAccounts,
-            defaultAccount = defaultAccount
+            defaultAccount = defaultAccount,
+            accountDigits = accountDigits
         )
 
         return when (parseResult) {

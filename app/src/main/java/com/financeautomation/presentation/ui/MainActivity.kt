@@ -118,7 +118,8 @@ class MainActivity : FragmentActivity() {
             preferencesRepository = app.appContainer.preferencesRepository,
             profileAvatarManager = app.appContainer.profileAvatarManager,
             accountSwitchGuard = app.appContainer.accountSwitchGuard,
-            ioDispatcher = app.appContainer.ioDispatcher
+            ioDispatcher = app.appContainer.ioDispatcher,
+            accountRepository = app.appContainer.accountRepository
         )
     }
 

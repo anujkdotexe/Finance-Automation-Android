@@ -255,6 +255,13 @@ interface PreferencesRepository {
         setPreference(KEY_NEEDS_REVIEW_HINT_DISMISSED, dismissed.toString(), isDirty = false)
     }
 
+    /** Whether the first-run onboarding accounts setup step has been seen or completed (default false). */
+    suspend fun isOnboardingAccountsSeen(): Boolean = getPreference(KEY_ONBOARDING_ACCOUNTS_SEEN) == "true"
+
+    suspend fun setOnboardingAccountsSeen(seen: Boolean) {
+        setPreference(KEY_ONBOARDING_ACCOUNTS_SEEN, seen.toString(), isDirty = false)
+    }
+
     /**
      * Observes whether a notice should be displayed alerting the user that their
      * workbook was replaced (e.g. because it was trashed or missing in Drive).
@@ -283,6 +290,7 @@ interface PreferencesRepository {
 
         const val KEY_DASHBOARD_HINT_DISMISSED: String = "dashboard_hint_dismissed"
         const val KEY_NEEDS_REVIEW_HINT_DISMISSED: String = "needs_review_hint_dismissed"
+        const val KEY_ONBOARDING_ACCOUNTS_SEEN: String = "onboarding_accounts_seen"
         const val KEY_SUBSCRIPTION_REMINDER_TIME: String = "subscription_reminder_time"
         const val DISMISSED_RECURRING_KEY: String = "dismissed_recurring"
         const val KEY_APP_LOCK_ENABLED: String = "app_lock_enabled"

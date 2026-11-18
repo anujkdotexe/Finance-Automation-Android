@@ -127,7 +127,8 @@ class ParseNotificationUseCase(
         fun inferAccountWithFlag(
             text: String,
             configuredAccounts: List<String>,
-            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
+            accountDigits: Map<String, String?> = emptyMap()
         ): InferredAccountResult {
             val digitMatch = Regex("""(?i)(?:xx|x|ending\s+|a/c\s*no\.?\s*|\.\.)(\d{3,4})\b""").find(text)
             val extractedDigits = digitMatch?.groupValues?.get(1)
@@ -141,7 +142,12 @@ class ParseNotificationUseCase(
                     return InferredAccountResult(trimmedAccount, false, null)
                 }
 
-                if (extractedDigits != null && trimmedAccount.contains(extractedDigits)) {
+                val digits = accountDigits[trimmedAccount]?.takeIf { it.isNotBlank() }
+                if (digits != null) {
+                    if (extractedDigits == digits || text.contains(digits)) {
+                        return InferredAccountResult(trimmedAccount, false, null)
+                    }
+                } else if (extractedDigits != null && trimmedAccount.contains(extractedDigits)) {
                     return InferredAccountResult(trimmedAccount, false, null)
                 }
             }
@@ -159,9 +165,10 @@ class ParseNotificationUseCase(
         fun inferAccount(
             text: String,
             configuredAccounts: List<String>,
-            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
+            defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
+            accountDigits: Map<String, String?> = emptyMap()
         ): String {
-            return inferAccountWithFlag(text, configuredAccounts, defaultAccount).account
+            return inferAccountWithFlag(text, configuredAccounts, defaultAccount, accountDigits).account
         }
     }
 
@@ -172,7 +179,8 @@ class ParseNotificationUseCase(
         appName: String? = null,
         timestamp: Long = System.currentTimeMillis(),
         configuredAccounts: List<String> = emptyList(),
-        defaultAccount: String = CategoryConstants.ACCOUNT_OTHER
+        defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
+        accountDigits: Map<String, String?> = emptyMap()
     ): NotificationParseResult {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
@@ -337,7 +345,7 @@ class ParseNotificationUseCase(
         val kind = if (isCredit) "CREDIT" else "DEBIT"
 
         // 8. Funding account inference
-        val inferred = inferAccountWithFlag(fullContent, configuredAccounts, defaultAccount)
+        val inferred = inferAccountWithFlag(fullContent, configuredAccounts, defaultAccount, accountDigits)
         val account = inferred.account
         val isNewAccount = inferred.isNewAccount
         val detectedAccount = inferred.detectedName ?: account

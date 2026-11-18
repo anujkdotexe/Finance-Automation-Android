@@ -56,7 +56,11 @@ class SyncHarness(
             method.name == "getDeveloperMode" -> flowOf(false)
             method.name == "getThemeMode" -> flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
             method.name == "getSettleDelaySeconds" -> flowOf(60)
-            method.name == "getDefaultAccount" -> flowOf("SBI")
+            method.name == "getDefaultAccount" -> flowOf(preferences[PreferencesRepository.KEY_DEFAULT_ACCOUNT] ?: "Other")
+            method.name == "getDefaultAccountSync" -> preferences[PreferencesRepository.KEY_DEFAULT_ACCOUNT] ?: "Other"
+            method.name == "setDefaultAccount" -> { preferences[PreferencesRepository.KEY_DEFAULT_ACCOUNT] = args!![0] as String; null }
+            method.name == "isOnboardingAccountsSeen" -> preferences[PreferencesRepository.KEY_ONBOARDING_ACCOUNTS_SEEN] == "true"
+            method.name == "setOnboardingAccountsSeen" -> { preferences[PreferencesRepository.KEY_ONBOARDING_ACCOUNTS_SEEN] = (args!![0] as Boolean).toString(); null }
             method.name == "getSubscriptionReminderTime" -> flowOf("21:00")
             method.name == "getSpreadsheetIdSync" || method.name == "getSpreadsheetIdForYearSync" -> "test_sheet_id"
             Flow::class.java.isAssignableFrom(method.returnType) -> flowOf<Any?>(null)

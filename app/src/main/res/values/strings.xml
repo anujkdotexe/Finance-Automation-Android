@@ -933,4 +933,23 @@
     <string name="privacy_test_report_action">Send a test report (beta only)</string>
     <string name="privacy_test_report_sent">A test report was sent. It can take a few minutes to appear.</string>
     <string name="privacy_test_report_off">Turn on crash reports first.</string>
+
+    <!-- Onboarding Accounts (P2-D) -->
+    <string name="onboarding_accounts_title">Which bank accounts and payment sources do you use?</string>
+    <string name="onboarding_accounts_subtitle">Add your bank accounts, cards, or wallets to categorize payments automatically. Cash and Other are built in.</string>
+    <string name="onboarding_accounts_add_button">Add account</string>
+    <string name="onboarding_accounts_name_label">Account or bank name</string>
+    <string name="onboarding_accounts_name_placeholder">e.g. SBI, HDFC, Canara</string>
+    <string name="onboarding_accounts_last4_label">Last 4 digits (optional)</string>
+    <string name="onboarding_accounts_last4_placeholder">e.g. 4821</string>
+    <string name="onboarding_accounts_type_bank">Bank</string>
+    <string name="onboarding_accounts_type_card">Card</string>
+    <string name="onboarding_accounts_type_wallet">Wallet</string>
+    <string name="onboarding_accounts_type_cash">Cash</string>
+    <string name="onboarding_accounts_your_accounts">Your accounts</string>
+    <string name="onboarding_accounts_builtin">Built-in</string>
+    <string name="onboarding_accounts_default_badge">Default</string>
+    <string name="onboarding_accounts_make_default">Make default</string>
+    <string name="onboarding_accounts_skip">Skip for now</string>
+    <string name="onboarding_accounts_cannot_remove_builtin">Cash and Other are built in and cannot be removed.</string>
 </resources>
