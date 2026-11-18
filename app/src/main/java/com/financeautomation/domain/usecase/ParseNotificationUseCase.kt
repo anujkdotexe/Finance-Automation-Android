@@ -375,7 +375,7 @@ class ParseNotificationUseCase(
             account = account,
             merchant = merchant,
             tripTag = "",
-            category = if (isReversalCredit) "Refund" else CategoryConstants.CATEGORY_OTHER,
+            category = if (isReversalCredit) CategoryConstants.CATEGORY_REFUND else CategoryConstants.CATEGORY_OTHER,
             totalAmount = amount,
             companions = "Personal",
             myShare = amount,

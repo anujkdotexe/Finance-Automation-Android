@@ -16,6 +16,7 @@ object CategoryConstants {
     const val CATEGORY_FAMILY: String = "Family"
     const val CATEGORY_SAVINGS: String = "Savings"
     const val CATEGORY_OTHER: String = "Other"
+    const val CATEGORY_REFUND: String = "Refund"
 
     val DEFAULT_CATEGORIES: List<String> = listOf(
         CATEGORY_FOOD_AND_DRINK,

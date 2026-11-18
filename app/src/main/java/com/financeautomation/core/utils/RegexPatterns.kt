@@ -31,7 +31,7 @@ object RegexPatterns {
 
     // Financial transaction keywords check for SMS filtering
     val FINANCIAL_KEYWORDS_REGEX: Regex = Regex(
-        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c(?:\s+no)?|account|acct|ac|spent|paid\s+thru|paid\s+to|received|dr\.?|cr\.?|debit|debits|credit|credits|payment\s+of|successfully\s+paid|upi\s*ref|upi:)(?=\W|$)"""
+        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c(?:\s+no)?|account|acct|ac|spent|paid\s+thru|paid\s+to|received|dr\.?|cr\.?|debit|debits|credit|credits|payment\s+of|successfully\s+paid|recharge\s+of|upi\s*ref|upi:)(?=\W|$)"""
     )
 
     // UPI Virtual Payment Address (VPA) regex
@@ -41,7 +41,7 @@ object RegexPatterns {
 
     // The amount tied to a debit or credit verb: "debited Rs 450", "spent INR 349", "Rs 200 paid", "debited by 30"
     private val AMOUNT_NEXT_TO_VERB_REGEX: Regex = Regex(
-        """(?i)\b(?:debit(?:ed)?(?:\s+by|\s+for)?|spent|paid|withdrawn|sent|deducted|purchase|payment\s+of|credited|received|refunded|dr\.?|cr\.?)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""" +
+        """(?i)\b(?:debit(?:ed)?(?:\s+by|\s+for)?|spent|paid|withdrawn|sent|deducted|purchase|payment\s+of|credited|received|refunded|recharge\s+of|dr\.?|cr\.?)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""" +
             """|\b(?:debit(?:ed)?\s+by|debited\s+for)\s*([\d,]+(?:\.\d{1,2})?)""" +
             """|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|credited|received|refunded|dr\.?|cr\.?)\b"""
     )
@@ -72,7 +72,7 @@ object RegexPatterns {
 
     // A completed payment: a direction verb directly tied to an amount ("Paid Rs 349", "Rs 500 debited")
     val CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded|dr\.?|cr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded|recharge\s+of|dr\.?|cr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
             """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|credited|received|dr\.?|cr\.?)\b"""
     )
 
@@ -83,7 +83,7 @@ object RegexPatterns {
 
     // A completed outgoing payment: a debit verb tied to an amount
     val DEBIT_CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?|dr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?|recharge\s+of|dr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
             """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|purchased?|dr\.?)\b"""
     )
 

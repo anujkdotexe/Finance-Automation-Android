@@ -1,7 +1,9 @@
 package com.financeautomation.domain
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.PackageWhitelist
 import com.financeautomation.core.utils.RegexPatterns
+import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
@@ -365,5 +367,44 @@ class InventedSmsShapesReplayTest {
             "Ac promo message must be dropped downstream by parser",
             parseResult is NotificationParseResult.Dropped
         )
+    }
+
+    @Test
+    fun testExecutedRechargeWithPromotionalTextIsCapturedAsDebit() {
+        // X1: F074 shape — executed recharge with amount must not be dropped as promotional
+        val rechargeText = "Congratulations! With your recharge of Rs.979.0, you can now enjoy FREE access to 20 OTTs such as Demo OTT on Demo App."
+        val sender = "ARTLTV-T"
+
+        val passesGate = NotificationPreFilter.shouldReadFullText(smsPackage, sender, rechargeText)
+        assertTrue("Executed recharge message must pass keyword gate", passesGate)
+
+        val parseResult = useCase(
+            sourcePackage = smsPackage,
+            title = sender,
+            text = rechargeText
+        )
+        assertTrue("Executed recharge must parse as Success, got $parseResult", parseResult is NotificationParseResult.Success)
+        val success = parseResult as NotificationParseResult.Success
+        assertTrue("Must be classified as debit", success.isDebit)
+        assertFalse("Must not be credit", success.isCredit)
+        assertEquals("Amount must match 979.0", 979.0, success.transaction.totalAmount, 0.001)
+    }
+
+    @Test
+    fun testReversalCreditUsesCategoryRefundAndInitializesNeedsReview() {
+        // X5: bank reversal credit uses CategoryConstants.CATEGORY_REFUND and FLAG_REFUND_REVERSAL
+        val reversalText = "An amount of INR 250.00 has been REVERSED to your account XXX234 on 13/03/26. Total Avail.bal INR 4,350.00 - Canara Bank"
+        val sender = "CANBNK-S"
+
+        val parseResult = useCase(
+            sourcePackage = smsPackage,
+            title = sender,
+            text = reversalText
+        )
+        assertTrue("Reversal credit must parse as Success", parseResult is NotificationParseResult.Success)
+        val success = parseResult as NotificationParseResult.Success
+        assertTrue("Must be credit", success.isCredit)
+        assertEquals("Category must be CategoryConstants.CATEGORY_REFUND", CategoryConstants.CATEGORY_REFUND, success.transaction.category)
+        assertTrue("Flags must contain FLAG_REFUND_REVERSAL", success.flags.contains(PendingCaptureEntity.FLAG_REFUND_REVERSAL))
     }
 }
