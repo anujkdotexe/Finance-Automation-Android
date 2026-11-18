@@ -408,6 +408,65 @@ class CaptureMediumItemsTest {
     }
 
     @Test
+    fun bankSms3HoursAfterConfirmedRowGivesSeparateRow() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val txDao = FakeTestTransactionDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao,
+            transactionDao = txDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = "Paid ₹400.00 to Swiggy",
+            sbnKey = "0|gpay|801",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+        val initialCap = (r1 as NotificationProcessingOutcome.Captured).capture
+
+        val confirmedCap = initialCap.copy(state = PendingCaptureEntity.STATE_DONE)
+        captureDao.update(confirmedCap)
+
+        val initialTxn = com.financeautomation.data.local.entity.TransactionEntity(
+            id = confirmedCap.id,
+            timestamp = t0,
+            dateSerial = 46100,
+            timeSerial = 0.5,
+            account = "Other",
+            merchant = "Swiggy",
+            tripTag = "Dinner with friends",
+            category = "Food & Drink",
+            totalAmount = 400.0,
+            companions = "Personal",
+            myShare = 400.0,
+            owedToMe = 0.0,
+            status = "Personal",
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            reviewState = "CONFIRMED",
+            syncState = "PENDING"
+        )
+        txDao.insert(initialTxn)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "An amount of INR 400.00 has been DEBITED to your account XXX1824 on 15/03/2026. Dial 1930 to report cyber fraud - Canara Bank",
+            sbnKey = "0|sms|802",
+            postTime = t0 + 3 * 3600_000L
+        )
+        assertTrue("Bank SMS 3h later must NOT merge into confirmed row", r2 is NotificationProcessingOutcome.Captured)
+        assertEquals("A new capture row must be created", 2, captureDao.captures.size)
+    }
+
+    @Test
     fun extractReferenceIdRejectsFalseWordsWithoutDigits() {
         // Words like payment, successful, transaction must return null as reference id
         val text1 = "UPI payment of Rs 500 successful"
