@@ -305,6 +305,10 @@
     <string name="prompt_place_optional">Place (optional)</string>
     <string name="prompt_settlement_note">Settlement note</string>
     <string name="hint_optional">Optional</string>
+    <string name="notes_field_add_button">+ Notes</string>
+    <string name="notes_field_label">Notes</string>
+    <string name="notes_field_placeholder">Add a note&#8230;</string>
+    <string name="notes_field_clear_cd">Clear note</string>
     <string name="prompt_friend_repaid">Friend repaid</string>
     <string name="prompt_friend_who_paid">Friend who paid</string>
     <string name="prompt_trip_name">Trip name</string>

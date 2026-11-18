@@ -125,7 +125,8 @@ class SubscriptionsViewModel(
         account: String = "Primary",
         remind: Boolean = true,
         anchorEpochDay: Long? = null,
-        category: String = Subscription.DEFAULT_CATEGORY
+        category: String = Subscription.DEFAULT_CATEGORY,
+        note: String = ""
     ) {
         viewModelScope.launch {
             val subscription = Subscription(
@@ -137,7 +138,8 @@ class SubscriptionsViewModel(
                 account = account,
                 category = category,
                 remind = remind,
-                active = true
+                active = true,
+                note = note.trim()
             )
             subscriptionRepository.upsertSubscription(subscription)
         }

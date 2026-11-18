@@ -65,6 +65,7 @@ import com.financeautomation.presentation.components.AmountEntry
 import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.NotesField
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import java.time.Instant
@@ -301,42 +302,14 @@ fun RepaidFriendFlowSheet(
         }
 
         // 4. Settlement Note (optional)
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = stringResource(R.string.prompt_settlement_note),
-                style = FinanceTheme.typography.labelUppercase,
-                color = FinanceTheme.colors.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-
-            OutlinedTextField(
-                value = noteText,
-                onValueChange = {
-                    noteText = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
-                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
-                },
-                placeholder = { Text(stringResource(R.string.hint_optional), style = FinanceTheme.typography.bodyMedium) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Rounded.EditNote,
-                        contentDescription = null,
-                        tint = FinanceTheme.colors.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-                    )
-                },
-                singleLine = true,
-                shape = FinanceShapes.card,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
-            )
-        }
+        NotesField(
+            value = noteText,
+            onValueChange = { noteText = it },
+            label = stringResource(R.string.prompt_settlement_note),
+            placeholder = stringResource(R.string.hint_optional),
+            onFocusChanged = onKeyboardFocusChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // 5. Date Field (defaults to today; opens picker that rejects future dates)
         Column(modifier = Modifier.fillMaxWidth()) {

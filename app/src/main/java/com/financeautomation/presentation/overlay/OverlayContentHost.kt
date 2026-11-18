@@ -146,6 +146,7 @@ fun OverlayContentHost(
                         state = state,
                         onAmountChanged = quickLogViewModel::onAmountChanged,
                         onPayeeChanged = quickLogViewModel::onPayeeChanged,
+                        onNoteChanged = quickLogViewModel::onNoteChanged,
                         onDateSelected = quickLogViewModel::onDateSelected,
                         onAccountSelected = quickLogViewModel::onAccountSelected,
                         onCategorySelected = quickLogViewModel::onCategorySelected,

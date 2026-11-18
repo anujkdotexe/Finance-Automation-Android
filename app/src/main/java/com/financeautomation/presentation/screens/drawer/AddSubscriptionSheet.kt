@@ -64,6 +64,7 @@ import com.financeautomation.domain.model.SubscriptionFrequency
 import com.financeautomation.presentation.components.AmountEntry
 import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.NotesField
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
@@ -72,7 +73,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 fun AddSubscriptionSheet(
     accounts: List<String>,
     onDismiss: () -> Unit,
-    onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean) -> Unit,
+    onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean, note: String) -> Unit,
     modifier: Modifier = Modifier,
     /** Opens the sheet filled in from a detected repeating payment. */
     prefill: com.financeautomation.domain.usecase.RecurringSuggestion? = null,
@@ -97,6 +98,7 @@ fun AddSubscriptionSheet(
         ?: CategoryConstants.ACCOUNT_OTHER
     var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
     var remindMe by rememberSaveable { mutableStateOf(existing?.remind ?: true) }
+    var noteText by rememberSaveable { mutableStateOf(existing?.note.orEmpty()) }
 
     var anchorDateEpochDay by rememberSaveable { mutableStateOf<Long?>(existing?.anchorEpochDay) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -562,6 +564,13 @@ fun AddSubscriptionSheet(
                     }
                 }
 
+                // 8. NOTES
+                NotesField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
                 // Action Button Pair (pinned above keyboard via imePadding)
@@ -572,7 +581,7 @@ fun AddSubscriptionSheet(
                     onFilledClick = {
                         if (name.isNotBlank()) {
                             val amt = if (isFixedAmount) amountEntry.amountOrZero.takeIf { amountEntry.canSave } else null
-                            onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe)
+                            onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe, noteText)
                         }
                     },
                     filledEnabled = name.isNotBlank() && (!isFixedAmount || amountEntry.canSave),

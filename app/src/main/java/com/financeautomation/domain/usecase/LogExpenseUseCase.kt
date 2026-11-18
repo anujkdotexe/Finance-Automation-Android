@@ -40,7 +40,8 @@ class LogExpenseUseCase(
         duplicateOfId: String? = null,
         afterInsert: (suspend (Transaction) -> Unit)? = null,
         /** Fixes the id, so saving the same capture twice writes one row. */
-        transactionId: String? = null
+        transactionId: String? = null,
+        note: String = ""
     ): Result<Transaction> {
         try {
             if (isFuture(timestamp)) return Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
@@ -74,6 +75,7 @@ class LogExpenseUseCase(
                 timeSerial = timeSerial,
                 account = account.ifBlank { CategoryConstants.ACCOUNT_OTHER },
                 merchant = merchant.trim(),
+                note = note.trim(),
                 tripTag = tripTag.trim(),
                 category = normalizedCategory,
                 totalAmount = splitResult.totalAmount,

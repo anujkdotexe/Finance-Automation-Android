@@ -129,6 +129,7 @@ class QuickLogViewModel(
                         amountText = amountStr,
                         amount = amountVal,
                         payee = capture.payee,
+                        note = capture.note,
                         selectedAccount = resolvedAccount,
                         isNeedsAmount = isNeedsAmount,
                         isPossibleDuplicate = isPossibleDup,
@@ -217,6 +218,7 @@ class QuickLogViewModel(
                 amountText = "",
                 amount = 0.0,
                 payee = "",
+                note = "",
                 isNeedsAmount = false,
                 isPossibleDuplicate = false,
                 isSaved = false,
@@ -241,6 +243,12 @@ class QuickLogViewModel(
         _uiState.update { it.copy(payee = clean) }
         applyLastUsedAccountAndCategory(clean)
         refreshPredictedCategories(clean)
+    }
+
+    fun onNoteChanged(text: String) {
+        val clean = com.financeautomation.core.utils.InputPolicy.cleanNote(text)
+            .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+        _uiState.update { it.copy(note = clean) }
     }
 
     fun onDateSelected(timestampMillis: Long) {

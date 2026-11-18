@@ -54,6 +54,7 @@ import com.financeautomation.presentation.components.AmountEntry
 import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.NotesField
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
@@ -308,39 +309,14 @@ fun IncomeReturnFlowSheet(
         }
 
         // 6. Notes / Reason Field (optional)
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = stringResource(R.string.prompt_reason_note),
-                style = FinanceTheme.typography.labelUppercase,
-                color = FinanceTheme.colors.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-
-            OutlinedTextField(
-                value = reasonText,
-                onValueChange = {
-                    reasonText = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
-                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
-                },
-                placeholder = {
-                    Text(
-                        text = stringResource(R.string.hint_optional),
-                        style = FinanceTheme.typography.bodyMedium
-                    )
-                },
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                singleLine = true,
-                shape = FinanceShapes.card,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
-            )
-        }
+        NotesField(
+            value = reasonText,
+            onValueChange = { reasonText = it },
+            label = stringResource(R.string.prompt_reason_note),
+            placeholder = stringResource(R.string.hint_optional),
+            onFocusChanged = onKeyboardFocusChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
         }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))

@@ -97,6 +97,7 @@ fun QuickLogSheet(
     state: QuickLogUiState,
     onAmountChanged: (String) -> Unit,
     onPayeeChanged: (String) -> Unit,
+    onNoteChanged: (String) -> Unit = {},
     onDateSelected: (Long) -> Unit = {},
     onAccountSelected: (String) -> Unit,
     onCategorySelected: (String) -> Unit,
@@ -256,6 +257,14 @@ fun QuickLogSheet(
                     .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
             )
         }
+
+        // 2b. Notes Field (collapsed + Notes button, expands to 120 char limited field)
+        NotesField(
+            value = state.note,
+            onValueChange = onNoteChanged,
+            onFocusChanged = onKeyboardFocusChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // Date Chips: Today, Yesterday, Pick date (no future dates)
         Column(modifier = Modifier.fillMaxWidth()) {
