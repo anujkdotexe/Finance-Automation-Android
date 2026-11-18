@@ -340,7 +340,7 @@ class CaptureMediumItemsTest {
     }
 
     @Test
-    fun bankSms3HoursAfterConfirmedRowGivesNoNewRowAndOneMergedIntoConfirmed() = runBlocking {
+    fun bankSms20MinutesAfterConfirmedRowMergesIntoConfirmed() = runBlocking {
         val handledDao = FakeTestHandledDao()
         val captureDao = FakeTestCaptureDao()
         val txDao = FakeTestTransactionDao()
@@ -389,15 +389,15 @@ class CaptureMediumItemsTest {
         )
         txDao.insert(initialTxn)
 
-        // Bank SMS arrives 3 hours later
+        // Bank SMS arrives 20 minutes later (within the 30-minute window)
         val r2 = processor.process(
             sourcePackage = "com.google.android.apps.messaging",
             title = "CANBNK-S",
             text = "An amount of INR 400.00 has been DEBITED to your account XXX1824 on 15/03/2026. Dial 1930 to report cyber fraud - Canara Bank",
             sbnKey = "0|sms|702",
-            postTime = t0 + 3 * 3600_000L
+            postTime = t0 + 20 * 60_000L
         )
-        assertTrue("Bank SMS 3h later must merge into confirmed", r2 is NotificationProcessingOutcome.Merged)
+        assertTrue("Bank SMS 20m later must merge into confirmed", r2 is NotificationProcessingOutcome.Merged)
         assertEquals("No second row must be created", 1, captureDao.captures.size)
 
         val updatedTxn = txDao.getById(confirmedCap.id)!!
@@ -520,15 +520,15 @@ class CaptureMediumItemsTest {
         val cap1 = (r1 as NotificationProcessingOutcome.Captured).capture
         captureDao.update(cap1.copy(state = PendingCaptureEntity.STATE_DONE))
 
-        // First generic bank SMS merges into confirmed capture
+        // First generic bank SMS within 30 minutes merges into confirmed capture
         val r2 = processor.process(
             sourcePackage = "com.google.android.apps.messaging",
             title = "CANBNK-S",
             text = "An amount of INR 350.00 has been DEBITED to your account XXX1824 on 15/03/2026. Avail Bal: INR 5,000. Dial 1930 to report cyber fraud - Canara Bank",
             sbnKey = "0|sms|922",
-            postTime = t0 + 3600_000L // 1 hour later
+            postTime = t0 + 20 * 60_000L // 20 minutes later
         )
-        assertTrue("First generic bank SMS must merge into confirmed", r2 is NotificationProcessingOutcome.Merged)
+        assertTrue("First generic bank SMS within 20 minutes must merge into confirmed", r2 is NotificationProcessingOutcome.Merged)
         assertEquals("Still only one capture in DB", 1, captureDao.captures.size)
 
         // Second generic bank SMS arrives later for a different transaction
@@ -537,10 +537,46 @@ class CaptureMediumItemsTest {
             title = "CANBNK-S",
             text = "An amount of INR 350.00 has been DEBITED to your account XXX1824 on 15/03/2026. Avail Bal: INR 4,650. Dial 1930 to report cyber fraud - Canara Bank",
             sbnKey = "0|sms|923",
-            postTime = t0 + 2 * 3600_000L // 2 hours later
+            postTime = t0 + 25 * 60_000L // 25 minutes later
         )
         assertTrue("Second generic bank SMS must NOT be swallowed a second time; makes a row", r3 is NotificationProcessingOutcome.Captured)
         assertEquals("Two captures must exist in DB", 2, captureDao.captures.size)
+    }
+
+    @Test
+    fun genericBankSmsThreeHoursAfterConfirmedTransactionMakesARow() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = "Paid ₹350.00 to Swiggy",
+            sbnKey = "0|gpay|941",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+        val cap1 = (r1 as NotificationProcessingOutcome.Captured).capture
+        captureDao.update(cap1.copy(state = PendingCaptureEntity.STATE_DONE))
+
+        // Generic bank SMS arriving 3 hours later (outside the 30-minute window) must NOT merge
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "An amount of INR 350.00 has been DEBITED to your account XXX1824 on 15/03/2026. Avail Bal: INR 5,000. Dial 1930 to report cyber fraud - Canara Bank",
+            sbnKey = "0|sms|942",
+            postTime = t0 + 3 * 3600_000L // 3 hours later
+        )
+        assertTrue("Generic bank SMS 3 hours later must NOT merge into confirmed; creates separate row", r2 is NotificationProcessingOutcome.Captured)
+        assertEquals("Must produce two captures in DB", 2, captureDao.captures.size)
     }
 
     @Test

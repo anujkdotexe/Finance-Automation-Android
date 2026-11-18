@@ -378,15 +378,21 @@ class NotificationProcessor(
 
                     // For late merge into a confirmed/done capture:
                     if (candidate.state == PendingCaptureEntity.STATE_DONE) {
-                        // Allow late merge ONLY for a generic bank SMS (Unknown Payee)
-                        // A specific payee in the incoming message indicates a separate real payment
-                        if (payee != "Unknown Payee") return@filter false
-
                         // Allow late merge ONLY ONCE per confirmed transaction
                         if (candidate.flags.contains("BANK_SMS_ATTACHED")) return@filter false
 
+                        val candidateRef = extractRefFromFlags(candidate.flags)
+                        val hasMatchingRef = candidateRef != null && incomingRefId != null && candidateRef == incomingRefId
+
                         val delta = kotlin.math.abs(candidate.timestamp - postTime)
-                        return@filter delta <= WINDOW_CONFIRMED_LATE_MERGE_MS
+                        if (hasMatchingRef) {
+                            // Equal reference id may still merge up to 24 h
+                            return@filter delta <= WINDOW_CONFIRMED_LATE_MERGE_MS
+                        }
+
+                        // Without matching ref, allow late merge ONLY for a generic bank SMS (Unknown Payee) within 30 minutes
+                        if (payee != "Unknown Payee") return@filter false
+                        return@filter delta <= WINDOW_CONFIRMED_GENERIC_MERGE_MS
                     }
 
                     // Window checks for open captures (WAITING, AWAITING_SUCCESS, NEEDS_REVIEW)
@@ -506,7 +512,8 @@ class NotificationProcessor(
     companion object {
         const val WINDOW_SAME_PACKAGE_MERGE_MS: Long = 180_000L
         const val WINDOW_CROSS_PACKAGE_MERGE_MS: Long = 600_000L
-        const val WINDOW_CONFIRMED_LATE_MERGE_MS: Long = 86_400_000L
+        const val WINDOW_CONFIRMED_LATE_MERGE_MS: Long = 86_400_000L // 24 hours for matching reference id
+        const val WINDOW_CONFIRMED_GENERIC_MERGE_MS: Long = 1_800_000L // 30 minutes for generic bank SMS
         const val WINDOW_CROSS_SOURCE_MERGE_MS: Long = WINDOW_SAME_PACKAGE_MERGE_MS
 
         fun selectRicherPayee(existingPayee: String, incomingPayee: String): String = when {
