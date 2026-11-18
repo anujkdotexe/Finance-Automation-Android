@@ -43,3 +43,14 @@ Reviewer notes on what was actually looked at (only Categories v3, Add expense v
 - Add expense v3: use ONLY the "+ Notes" collapsed link and the expanded Notes field (counter 0 / 120, Clear). IGNORE the labels "State A", "State B", "Modal Sheet View", "Automated Ledger", and the invented "Auto-Match Invoice / SMS receipt matched from vendor" row; they are Stitch annotations or invented content, not part of the app.
 - Subscriptions v3: the Closed section (name, "Closed 12 Aug", total paid in monospace, Reopen text button) is the reference; the sample names are placeholders. The row note line (e.g. "Shared with family") is the subscription note.
 - Dark: derive from these light layouts with the dark tokens; do not ask Stitch for dark.
+
+## Settings v3 (generated and exported 2026-11-18)
+| settings-v3-light.png | Settings v3 | 65d3f06f10a24f34844d1bd2b91af8f0 | projects/14304074461979593421/screens/65d3f06f10a24f34844d1bd2b91af8f0/fileEntries/html |
+All eight v3 screens now exist. Opened and reviewed by eye: Categories, Accounts, Settings, Add expense, Subscriptions, Add subscription, Trip card, Needs Review.
+
+## Reviewer notes per screen (what to use and what to ignore)
+- Settings v3: clean, use as is: one card with nine rows (icon, title, subtitle, chevron) and a card with the two privacy switches (both off). Real counts replace "9 items" and "4 items". Subtitles for the other rows may be shortened if long.
+- Accounts v3: use the sandwich handles, the lifted row, the three-dot menu, the Default pill, locked Cash and Other rows with the two-line caption, and the "Add account" form (name, last four digits optional, type chips Bank, Card, Wallet, Cash). IGNORE the invented subtitle "Active automation routing" and the "A" avatar button; the per-row line "N transactions this month" is optional.
+- Add subscription v3: the "+ Notes" collapsed button above Save is the reference; the expanded state was NOT generated (use the expanded Notes field from Add expense v3). IGNORE "New Recurring Entry", "Auto-tracking", the filter and overflow icons in the top bar, and the Netflix sample.
+- Trip card v3: use the five card states with the date range under the name (ended: "12 Nov to 18 Nov 2026", active: "Started 12 Nov"), "Total paid" and "Cost you", and the Trip notes block with "+ Notes". IGNORE all annotation text ("STATE 1", "SPEC_34", "Component spec", the "Specs and layout guidelines" box) and "4 attachments" (the app has no attachments).
+- Needs Review v3: the "Unparsed bank message" card (raw message in a grey quote box, amount field with placeholder "Enter amount", Dismiss and Fill in) is the reference; the category chips on it are optional. IGNORE the avatar button and the sample payees.
