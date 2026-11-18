@@ -127,6 +127,21 @@ class PaymentAppsRegistryAndPrivacyTest {
     }
 
     @Test
+    fun whatsAppNotificationWithNonPaymentCategoryAndChannelIsDropped() {
+        // Notification with non-payment channel and non-payment category
+        val result = parseUseCase(
+            sourcePackage = PackageWhitelist.PACKAGE_WHATSAPP,
+            title = "Friend",
+            text = "Sent you ₹500 for lunch",
+            timestamp = System.currentTimeMillis(),
+            channelId = "messages",
+            category = "msg"
+        )
+        assertTrue(result is NotificationParseResult.Dropped)
+        assertEquals(DropReason.BLACKLISTED, (result as NotificationParseResult.Dropped).reason)
+    }
+
+    @Test
     fun userWatchedAppGenericParsingRoutesToNeedsReview() {
         val customApp = "com.custom.wallet"
         PackageWhitelist.addWatchedApp(customApp)
