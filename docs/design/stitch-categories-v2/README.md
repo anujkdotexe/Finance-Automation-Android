@@ -25,3 +25,21 @@ The builder downloads the four HTML files into this folder (names categories-v2-
 | categories-v3-light.png | Categories v3 | 02c66a483e8c4f6380e83c145912fb2e | projects/14304074461979593421/files/c88ce929aa9147aa9587ff330e1dc957 |
 
 Categories v3 is the reference for the Categories screen: sandwich handle (three stacked lines), three-dot menu, lifted row, locked built-in rows with the caption wrapped on two lines, empty state. It supersedes v2 for Categories. Accounts v3 and the other v3 screens are generated one by one (see STITCH_V3_PROMPTS.md); until an Accounts v3 exists, build Accounts like Categories v3 with the Accounts v2 content.
+
+## v3 screens exported 2026-11-18 (light only)
+| Screenshot | Stitch title | Screen id | HTML resource (download with Stitch download_file) |
+|---|---|---|---|
+| categories-v3-light.png | Categories v3 | 02c66a483e8c4f6380e83c145912fb2e | projects/14304074461979593421/files/c88ce929aa9147aa9587ff330e1dc957 |
+| accounts-v3-light.png | Accounts v3 | cebadab9967d4aa7961d65a29019f67f | projects/14304074461979593421/screens/cebadab9967d4aa7961d65a29019f67f/fileEntries/html |
+| add-expense-v3-light.png | Add expense v3 | 4ac29c7b8a164e99bd94b210d9d22dfe | projects/14304074461979593421/screens/4ac29c7b8a164e99bd94b210d9d22dfe/fileEntries/html |
+| subscriptions-v3-light.png | Subscriptions v3 | a35d11ab00e34b6d8a7a35fb529aa902 | projects/14304074461979593421/screens/a35d11ab00e34b6d8a7a35fb529aa902/fileEntries/html |
+| add-subscription-v3-light.png | Add subscription v3 | 16f58c72012e428c87a21c4463cc0622 | projects/14304074461979593421/screens/16f58c72012e428c87a21c4463cc0622/fileEntries/html |
+| trip-card-v3-light.png | Trip card v3 | 3935e21766294d8f809e16477ee5eb7a | projects/14304074461979593421/screens/3935e21766294d8f809e16477ee5eb7a/fileEntries/html |
+| needs-review-v3-light.png | Needs Review v3 | 5ae3742d84384aa9951d4e934eb5fe06 | projects/14304074461979593421/screens/5ae3742d84384aa9951d4e934eb5fe06/fileEntries/html |
+
+NOT generated yet: Settings v3 (plain list of rows plus the two privacy switches). Prompt is in STITCH_V3_PROMPTS.md, item 2.
+
+Reviewer notes on what was actually looked at (only Categories v3, Add expense v3 and Subscriptions v3 were opened; Accounts v3, Add subscription v3, Trip card v3 and Needs Review v3 were exported but not yet reviewed by eye):
+- Add expense v3: use ONLY the "+ Notes" collapsed link and the expanded Notes field (counter 0 / 120, Clear). IGNORE the labels "State A", "State B", "Modal Sheet View", "Automated Ledger", and the invented "Auto-Match Invoice / SMS receipt matched from vendor" row; they are Stitch annotations or invented content, not part of the app.
+- Subscriptions v3: the Closed section (name, "Closed 12 Aug", total paid in monospace, Reopen text button) is the reference; the sample names are placeholders. The row note line (e.g. "Shared with family") is the subscription note.
+- Dark: derive from these light layouts with the dark tokens; do not ask Stitch for dark.
