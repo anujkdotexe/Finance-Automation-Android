@@ -1,22 +1,16 @@
 package com.financeautomation.presentation.screens
 
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -24,9 +18,10 @@ import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 import com.financeautomation.presentation.screens.drawer.AccountsScreen
 import com.financeautomation.presentation.screens.drawer.CategoriesScreen
+import com.financeautomation.presentation.screens.drawer.CategoryList
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -86,30 +81,30 @@ class CategoriesAndAccountsUiTest {
 
     @Test
     fun dragGestureOnCategoryRowPerformsTouchInputSwipe() {
-        var reordered = false
+        val categories = listOf(
+            Category(id = "c1", name = "Food & Drink", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 0),
+            Category(id = "c2", name = "Shopping", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 1)
+        )
+        var savedOrder: List<String>? = null
+
         composeTestRule.setContent {
             FinanceAutomationTheme(darkTheme = false) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .semantics { contentDescription = "Reorder category" }
-                        .pointerInput(Unit) {
-                            detectDragGesturesAfterLongPress(
-                                onDragEnd = { reordered = true }
-                            ) { _, _ -> }
-                        }
+                CategoryList(
+                    categories = categories,
+                    onReorderCategories = { savedOrder = it }
                 )
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Reorder category")
+        // Long press on Row 1 handle ("Reorder Food & Drink") and drag down past Row 2
+        composeTestRule.onNodeWithContentDescription("Reorder Food & Drink")
             .performTouchInput {
                 down(center)
                 advanceEventTime(600)
-                moveTo(center.copy(y = center.y + 100f))
+                moveTo(center.copy(y = center.y + 200f))
                 up()
             }
 
-        assertTrue("Long press and drag gesture must complete and trigger reorder callback", reordered)
+        assertEquals(listOf("c2", "c1"), savedOrder)
     }
 }
