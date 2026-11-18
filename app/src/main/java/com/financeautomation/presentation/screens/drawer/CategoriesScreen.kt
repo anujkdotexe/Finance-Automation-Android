@@ -451,6 +451,11 @@ private fun CategoryItemCard(
                     )
                     if (isLocked) {
                         Text(
+                            text = stringResource(R.string.categories_locked_subtitle),
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
                             text = stringResource(R.string.categories_always_excluded),
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

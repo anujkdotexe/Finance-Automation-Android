@@ -82,7 +82,8 @@ class SyncConfigUseCaseTest {
             val existing = categories[name]
             if (existing == null || updatedAt > existing.updatedAt) {
                 categories[name] = (existing ?: Category(id = "cat_$name", name = name)).copy(
-                    isExcludedFromLivingBurn = excludedFromBurn, updatedAt = updatedAt, deleted = deleted
+                    isExcludedFromLivingBurn = excludedFromBurn, updatedAt = updatedAt, deleted = deleted,
+                    displayOrder = displayOrder, iconName = iconName
                 )
                 dirty.remove("cat_$name")
             }
@@ -297,5 +298,28 @@ class SyncConfigUseCaseTest {
 
         h.useCase.pull("sheet")
         assertFalse("Non-numeric version treated as 1 (supported)", h.useCase.isRemoteSchemaNewerThanSupported)
+    }
+
+    @Test
+    fun configRoundTripKeepsOrderAndColourWithDelimiterName() = runBlocking {
+        val h = harness()
+        val complexName = "Food | Dining, Groceries"
+        h.sheet.addRow("category", complexName, "false", "false", "false", "3|Coral", "2026-11-18T10:00:00Z", "device1", "")
+
+        h.useCase.pull("sheet")
+        val cat = h.gateway.categories[complexName]
+        org.junit.Assert.assertNotNull(cat)
+        assertEquals("Display order must be preserved", 3, cat!!.displayOrder)
+        assertEquals("Colour must be preserved", "Coral", cat.iconName)
+
+        clock.set(t0.plusSeconds(300))
+        h.gateway.edit(complexName, excluded = false, updatedAt = clock.millis())
+        val pushRes = h.useCase.push("sheet")
+        assertTrue("Push succeeds", pushRes is Result.Success)
+
+        val idx = h.sheet.indexOfKey("category", complexName)
+        assertTrue("Category found in sheet", idx >= 0)
+        val row = h.sheet.cells[idx]
+        assertEquals("3|Coral", row[5])
     }
 }

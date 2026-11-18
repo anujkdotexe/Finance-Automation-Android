@@ -965,4 +965,26 @@
     <string name="onboarding_accounts_make_default">Make default</string>
     <string name="onboarding_accounts_skip">Skip for now</string>
     <string name="onboarding_accounts_cannot_remove_builtin">Cash and Other are built in and cannot be removed.</string>
+
+    <!-- Settings v3 screen -->
+    <string name="settings_screen_title">Settings</string>
+    <string name="settings_screen_subtitle">Preferences, accounts, categories and app options</string>
+    <string name="settings_nav_people_trips_subtitle">Balances and travel ledgers</string>
+    <string name="settings_nav_subscriptions_subtitle">Active recurring payments</string>
+    <string name="settings_nav_capture_subtitle">Notification access and listener</string>
+    <string name="settings_nav_sync_subtitle">Connected Google Sheet</string>
+    <string name="settings_nav_preferences_subtitle">Living burn and display settings</string>
+    <string name="settings_nav_diagnostics_subtitle">Logs and local cache</string>
+    <string name="settings_nav_about_subtitle">Version 1.0.0, privacy and licences</string>
+    <string name="settings_privacy_crash_title">Send crash reports</string>
+    <string name="settings_privacy_crash_desc">Off by default. Sends only technical details, never amounts, payees, names or message text.</string>
+    <string name="settings_privacy_analytics_title">Share anonymous usage counts</string>
+    <string name="settings_privacy_analytics_desc">Off by default. Counts of how often screens are used, never amounts, payees, names or message text.</string>
+    <string name="categories_locked_subtitle">Built in, cannot be renamed or archived</string>
+    <string name="accounts_type_bank">Bank</string>
+    <string name="accounts_type_card">Card</string>
+    <string name="accounts_type_wallet">Wallet</string>
+    <string name="accounts_type_cash">Cash</string>
+    <string name="accounts_default_pill">Default</string>
+    <string name="accounts_add_form_title">Add account</string>
 </resources>

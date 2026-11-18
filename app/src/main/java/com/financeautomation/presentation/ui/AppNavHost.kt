@@ -118,6 +118,7 @@ import com.financeautomation.presentation.screens.drawer.OpenSourceLicencesScree
 import com.financeautomation.presentation.screens.drawer.PrivacyPolicyScreen
 import com.financeautomation.presentation.screens.drawer.PeopleTripsScreen
 import com.financeautomation.presentation.screens.drawer.PreferencesScreen
+import com.financeautomation.presentation.screens.drawer.SettingsScreen
 import com.financeautomation.presentation.screens.drawer.SubscriptionsScreen
 import com.financeautomation.presentation.screens.drawer.SyncBackupScreen
 import com.financeautomation.presentation.screens.onboarding.NotificationAccessScreen
@@ -145,6 +146,7 @@ object AppRoutes {
     const val CAPTURE_PERMISSIONS = "capturePermissions"
     const val SYNC_BACKUP = "syncBackup"
     const val PREFERENCES = "preferences"
+    const val SETTINGS = "settings"
     const val DIAGNOSTICS = "diagnostics"
     const val ABOUT = "about"
     const val PRIVACY_POLICY = "privacyPolicy"
@@ -172,7 +174,7 @@ private val DRAWER_ITEMS = listOf(
     DrawerDestination(AppRoutes.INSIGHTS, "Insights", Icons.Rounded.BarChart),
     DrawerDestination(AppRoutes.CAPTURE_PERMISSIONS, "Capture and permissions", Icons.Rounded.Security),
     DrawerDestination(AppRoutes.SYNC_BACKUP, "Sync and backup", Icons.Rounded.Sync),
-    DrawerDestination(AppRoutes.PREFERENCES, "Preferences", Icons.Rounded.Tune),
+    DrawerDestination(AppRoutes.SETTINGS, "Settings", Icons.Rounded.Tune),
     DrawerDestination(AppRoutes.DIAGNOSTICS, "Diagnostics", Icons.Rounded.BugReport, requiresDeveloperMode = true),
     DrawerDestination(AppRoutes.ABOUT, "About", Icons.Rounded.Info)
 )
@@ -424,6 +426,7 @@ fun AppNavHost(
                                         AppRoutes.CAPTURE_PERMISSIONS -> stringResource(R.string.nav_capture_permissions_title)
                                         AppRoutes.SYNC_BACKUP -> stringResource(R.string.nav_sync_backup_title)
                                         AppRoutes.PREFERENCES -> stringResource(R.string.nav_preferences_title)
+                                        AppRoutes.SETTINGS -> stringResource(R.string.settings_screen_title)
                                         AppRoutes.DIAGNOSTICS -> stringResource(R.string.nav_diagnostics_title)
                                         AppRoutes.ABOUT -> stringResource(R.string.nav_about_title)
                                         else -> stringResource(R.string.app_name)
@@ -484,6 +487,13 @@ fun AppNavHost(
                                                 enabled = false
                                             )
                                             HorizontalDivider()
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.settings_screen_title)) },
+                                                onClick = {
+                                                    accountMenuExpanded = false
+                                                    navController.navigateTop(AppRoutes.SETTINGS)
+                                                }
+                                            )
                                             DropdownMenuItem(
                                                 text = { Text(stringResource(R.string.menu_sync_backup)) },
                                                 onClick = {
@@ -795,6 +805,22 @@ fun AppNavHost(
                         SyncBackupScreen(
                             viewModel = settingsViewModel,
                             state = settingsState
+                        )
+                    }
+
+                    composable(AppRoutes.SETTINGS) {
+                        SettingsScreen(
+                            viewModel = settingsViewModel,
+                            state = settingsState,
+                            onNavigateToCategories = { navController.navigateTop(AppRoutes.CATEGORIES) },
+                            onNavigateToAccounts = { navController.navigateTop(AppRoutes.ACCOUNTS) },
+                            onNavigateToPeopleTrips = { navController.navigateTop(AppRoutes.PEOPLE_TRIPS) },
+                            onNavigateToSubscriptions = { navController.navigateTop(AppRoutes.SUBSCRIPTIONS) },
+                            onNavigateToCapturePermissions = { navController.navigateTop(AppRoutes.CAPTURE_PERMISSIONS) },
+                            onNavigateToSyncBackup = { navController.navigateTop(AppRoutes.SYNC_BACKUP) },
+                            onNavigateToPreferences = { navController.navigateTop(AppRoutes.PREFERENCES) },
+                            onNavigateToDiagnostics = { navController.navigateTop(AppRoutes.DIAGNOSTICS) },
+                            onNavigateToAbout = { navController.navigateTop(AppRoutes.ABOUT) }
                         )
                     }
 

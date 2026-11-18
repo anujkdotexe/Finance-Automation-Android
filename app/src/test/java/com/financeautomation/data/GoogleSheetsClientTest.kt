@@ -222,6 +222,40 @@ class GoogleSheetsClientTest {
     }
 
     @Test
+    fun testRenamedCategoryAndAccountRowUpdatePayload() = runBlocking {
+        var capturedUrl: String? = null
+        var capturedBody: String? = null
+
+        val client = createMockClient { request ->
+            capturedUrl = request.url.toString()
+            val buffer = okio.Buffer()
+            request.body?.writeTo(buffer)
+            capturedBody = buffer.readUtf8()
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("""{"updatedCells": 11}""".toResponseBody(jsonMediaType))
+                .build()
+        }
+
+        // Row 15: Synced transaction with renamed account "HDFC Salary" and renamed category "Groceries & Supermarket"
+        val row = listOf(
+            46331, 0.5, "HDFC Salary", "Supermarket", "", "Groceries & Supermarket",
+            1250.0, "Personal", 1250.0, 0.0, "Settled"
+        )
+        val result = client.updateRow("test_sheet_id", "Nov26", 15, row)
+
+        assertTrue(result is Result.Success<*>)
+        val url = requireNotNull(capturedUrl)
+        assertTrue("URL must target range A15:K15", url.contains("A15%3AK15") || url.contains("A15:K15"))
+        val body = requireNotNull(capturedBody)
+        assertTrue("Body must include renamed account", body.contains("HDFC Salary"))
+        assertTrue("Body must include renamed category", body.contains("Groceries & Supermarket"))
+    }
+
+    @Test
     fun testAppendTableScopedRoutingDebits() = runBlocking {
         var capturedPutUrl: String? = null
         // 4 existing debits: rows 4, 5, 6, 7 occupied

@@ -838,6 +838,76 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun testArchivedCategorySpendStillShowsInMonthWithArchivedLabel() = runTest {
+        val now = System.currentTimeMillis()
+        val txns = listOf(
+            Transaction(
+                id = "t1",
+                timestamp = now,
+                dateSerial = 46331,
+                timeSerial = 0.5,
+                account = "SBI",
+                merchant = "Canteen",
+                category = "Food & Drink",
+                totalAmount = 300.0,
+                myShare = 300.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED,
+                reviewState = ReviewState.CONFIRMED
+            ),
+            Transaction(
+                id = "t2",
+                timestamp = now,
+                dateSerial = 46331,
+                timeSerial = 0.5,
+                account = "SBI",
+                merchant = "Headphones",
+                category = "Electronics",
+                totalAmount = 500.0,
+                myShare = 500.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED,
+                reviewState = ReviewState.CONFIRMED
+            )
+        )
+        val tRepo = object : FakeTransactionRepo() {
+            override fun getTransactions(): Flow<List<Transaction>> = flowOf(txns)
+        }
+        val customCatRepo = object : CategoryRepository {
+            override fun getCategories(includeArchived: Boolean): Flow<List<Category>> = flowOf(
+                listOf(
+                    Category("1", "Food & Drink", isExcludedFromLivingBurn = false, isArchived = false),
+                    Category("2", "Electronics", isExcludedFromLivingBurn = false, isArchived = true)
+                )
+            )
+            override suspend fun getAllCategories(includeArchived: Boolean): List<Category> = emptyList()
+            override suspend fun getActiveCategories(): List<Category> = emptyList()
+            override suspend fun getCategoryById(id: String): Category? = null
+            override suspend fun getCategoryByName(name: String): Category? = null
+            override suspend fun insertCategory(category: Category) {}
+            override suspend fun updateCategory(category: Category) {}
+            override suspend fun setExcludedFromLivingBurn(id: String, excluded: Boolean) {}
+            override suspend fun archiveCategory(id: String) {}
+            override suspend fun unarchiveCategory(id: String) {}
+            override suspend fun deleteCategory(id: String) {}
+            override suspend fun reorderCategories(categoryIds: List<String>) {}
+        }
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            categoryRepository = customCatRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(800.0, vm.uiState.value.currentBurn, 0.001)
+        val categories = vm.uiState.value.allCategories
+        val electronics = categories.firstOrNull { it.category == "Electronics (archived)" }
+        org.junit.Assert.assertNotNull(electronics)
+        assertEquals(500.0, electronics!!.amount, 0.001)
+    }
+
+    @Test
     fun testVoidingAnInflowReducesTheIncomeFigure() = runTest {
         val now = System.currentTimeMillis()
         val inflowRepo = FakeInflowRepo()

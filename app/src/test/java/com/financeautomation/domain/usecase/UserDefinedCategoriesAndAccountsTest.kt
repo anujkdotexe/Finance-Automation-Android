@@ -505,4 +505,74 @@ class UserDefinedCategoriesAndAccountsTest {
         assertEquals(1, accountDao.getById("a3")?.displayOrder)
         assertEquals(2, accountDao.getById("a1")?.displayOrder)
     }
+
+    @Test
+    fun renameCategoryToExistingNameIsRefused() = runBlocking {
+        val categoryDao = FakeCategoryDao()
+        val cat1 = CategoryEntity("cat_1", "Food & Drink", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 0)
+        val cat2 = CategoryEntity("cat_2", "Shopping", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 1)
+        categoryDao.insert(cat1)
+        categoryDao.insert(cat2)
+
+        val categoryRepo = CategoryRepositoryImpl(categoryDao = categoryDao, ioDispatcher = Dispatchers.Unconfined)
+        val uiState = MutableStateFlow(
+            SettingsUiState(
+                categories = listOf(cat1.toDomain(), cat2.toDomain())
+            )
+        )
+
+        val coordinator = SettingsCustomizationCoordinator(
+            preferencesRepository = mockPreferencesRepo(),
+            peopleRepository = mockPeopleRepo(),
+            transactionRepository = null,
+            payableDao = null,
+            accountRepository = null,
+            categoryRepository = categoryRepo,
+            tripTagRepository = mockTripTagRepo(),
+            budgetRepository = null,
+            uiState = uiState,
+            scope = this,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        // Attempt to rename Shopping to Food & Drink (duplicate)
+        coordinator.onRenameCategory("cat_2", "Food & Drink")
+        assertEquals("Shopping", categoryDao.getById("cat_2")?.name)
+        assertNotNull(uiState.value.errorMessage)
+    }
+
+    @Test
+    fun renameAccountToExistingNameIsRefused() = runBlocking {
+        val accountDao = FakeAccountDao()
+        val acc1 = AccountEntity("acc_1", "HDFC", "1234", isDefault = false, isArchived = false, displayOrder = 0)
+        val acc2 = AccountEntity("acc_2", "SBI", "5678", isDefault = false, isArchived = false, displayOrder = 1)
+        accountDao.insert(acc1)
+        accountDao.insert(acc2)
+
+        val accountRepo = AccountRepositoryImpl(accountDao = accountDao, ioDispatcher = Dispatchers.Unconfined)
+        val uiState = MutableStateFlow(
+            SettingsUiState(
+                accounts = listOf(acc1.toDomain(), acc2.toDomain())
+            )
+        )
+
+        val coordinator = SettingsCustomizationCoordinator(
+            preferencesRepository = mockPreferencesRepo(),
+            peopleRepository = mockPeopleRepo(),
+            transactionRepository = null,
+            payableDao = null,
+            accountRepository = accountRepo,
+            categoryRepository = null,
+            tripTagRepository = mockTripTagRepo(),
+            budgetRepository = null,
+            uiState = uiState,
+            scope = this,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        // Attempt to rename SBI to HDFC (duplicate)
+        coordinator.onRenameAccount("acc_2", "HDFC")
+        assertEquals("SBI", accountDao.getById("acc_2")?.name)
+        assertNotNull(uiState.value.errorMessage)
+    }
 }

@@ -554,8 +554,10 @@ class DashboardViewModel(
             .map { (cat, sum) ->
                 val pct = if (grossBurn > 0.0) (sum / grossBurn).toFloat().coerceIn(0f, 1f) else 0f
                 val progress = budgetProgressMap[cat.trim().lowercase()]
+                val isArchived = categories.firstOrNull { it.name.trim().equals(cat.trim(), ignoreCase = true) }?.isArchived == true
+                val displayCat = if (isArchived) "$cat (archived)" else cat
                 CategorySpend(
-                    category = cat,
+                    category = displayCat,
                     amount = sum,
                     percentage = pct,
                     budgetProgress = progress

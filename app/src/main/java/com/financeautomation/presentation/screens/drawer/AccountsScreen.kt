@@ -331,6 +331,36 @@ fun AccountsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
+                    var selectedType by rememberSaveable { mutableStateOf("Bank") }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = "Account type",
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            listOf("Bank", "Card", "Wallet", "Cash").forEach { type ->
+                                val selected = selectedType == type
+                                Surface(
+                                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else FinanceTheme.colors.surfaceContainerHigh,
+                                    shape = FinanceShapes.pill,
+                                    modifier = Modifier.clickable { selectedType = type }
+                                ) {
+                                    Text(
+                                        text = type,
+                                        style = FinanceTheme.typography.labelMedium,
+                                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.xs)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
                         Text(
                             text = stringResource(R.string.dialog_add_account_name),
@@ -510,15 +540,23 @@ private fun AccountListItem(
                     }
                 }
             }
-            Text(
-                text = if (transactionCount > 0) {
-                    stringResource(R.string.accounts_tx_count, transactionCount)
-                } else {
-                    "Active account"
-                },
-                style = FinanceTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (isLocked) {
+                Text(
+                    text = stringResource(R.string.categories_locked_subtitle),
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = if (transactionCount > 0) {
+                        stringResource(R.string.accounts_tx_count, transactionCount)
+                    } else {
+                        "Active account"
+                    },
+                    style = FinanceTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         // 4. Trailing overflow menu
