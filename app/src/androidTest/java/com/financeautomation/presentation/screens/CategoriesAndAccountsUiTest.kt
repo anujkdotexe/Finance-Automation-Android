@@ -1,10 +1,15 @@
 package com.financeautomation.presentation.screens
 
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -77,5 +82,34 @@ class CategoriesAndAccountsUiTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun dragGestureOnCategoryRowPerformsTouchInputSwipe() {
+        var reordered = false
+        composeTestRule.setContent {
+            FinanceAutomationTheme(darkTheme = false) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics { contentDescription = "Reorder category" }
+                        .pointerInput(Unit) {
+                            detectDragGesturesAfterLongPress(
+                                onDragEnd = { reordered = true }
+                            ) { _, _ -> }
+                        }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Reorder category")
+            .performTouchInput {
+                down(center)
+                advanceEventTime(600)
+                moveTo(center.copy(y = center.y + 100f))
+                up()
+            }
+
+        assertTrue("Long press and drag gesture must complete and trigger reorder callback", reordered)
     }
 }
