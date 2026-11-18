@@ -4,26 +4,35 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.financeautomation.R
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.formatRupees
@@ -39,16 +48,65 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Net expenditure of one trip: what you paid, what others still owe you, what came back, and what the trip really
- * cost you, followed by every transaction on the trip.
+ * Net expenditure and full insights of one trip: what you paid, what others still owe you, what came back,
+ * what the trip really cost you, insights (per day, biggest expense, breakdowns), and trip actions (End, Reactivate, Delete).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TripDetailSheet(summary: TripSummary, onDismiss: () -> Unit) {
+fun TripDetailSheet(
+    summary: TripSummary,
+    isActive: Boolean = false,
+    onEndTrip: () -> Unit = {},
+    onReactivateTrip: () -> Unit = {},
+    onDeleteTrip: (String) -> Unit = {},
+    onDismiss: () -> Unit
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+
     val dateFormat = remember {
         SimpleDateFormat("dd MMM", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("Asia/Kolkata") }
     }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.trip_delete_title, summary.name),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.trip_delete_body),
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showDeleteConfirm = false },
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeleteTrip(summary.name)
+                        onDismiss()
+                    },
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text(stringResource(R.string.trip_delete_action))
+                }
+            }
+        )
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             modifier = Modifier
@@ -58,18 +116,47 @@ fun TripDetailSheet(summary: TripSummary, onDismiss: () -> Unit) {
                 .padding(bottom = FinanceTheme.spacing.xl),
             verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
-            Text(
-                text = summary.name,
-                style = FinanceTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = summary.name,
+                        style = FinanceTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (summary.dateRange.isNotBlank()) {
+                        Text(
+                            text = summary.dateRange,
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Surface(
+                    color = if (isActive) MaterialTheme.colorScheme.primaryContainer else FinanceTheme.colors.surfaceContainerHigh,
+                    shape = FinanceShapes.pill
+                ) {
+                    Text(
+                        text = if (isActive) stringResource(R.string.trip_active) else "Ended",
+                        style = FinanceTheme.typography.labelSmall,
+                        color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
+                    )
+                }
+            }
+
             Text(
                 text = stringResource(R.string.trip_detail_people_and_count, summary.peopleCount, summary.transactionCount),
                 style = FinanceTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            // Net Expenditure Card
             Surface(
                 color = FinanceTheme.colors.surfaceContainerLow,
                 shape = FinanceShapes.card,
@@ -84,12 +171,155 @@ fun TripDetailSheet(summary: TripSummary, onDismiss: () -> Unit) {
                     NetRow(stringResource(R.string.trip_net_returned), formatRupees(summary.returned))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     NetRow(stringResource(R.string.trip_net_expenditure), formatRupees(summary.netExpenditure), emphasised = true)
+
+                    if (summary.daysCount > 0 && summary.averagePerDay > 0.0) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        NetRow(stringResource(R.string.trip_insight_per_day), formatRupees(summary.averagePerDay, includeDecimals = true))
+                    }
+                    if (summary.biggestSingleExpense != null) {
+                        NetRow(stringResource(R.string.trip_insight_biggest), "${summary.biggestSingleExpense.merchant} (${formatRupees(summary.biggestSingleExpense.totalAmount)})")
+                    }
+                }
+            }
+
+            // Category Breakdown Section
+            if (summary.categoryBreakdown.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.trip_by_category),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Surface(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    shape = FinanceShapes.card,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(FinanceTheme.spacing.m),
+                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        summary.categoryBreakdown.forEach { cat ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${cat.category} (${String.format(Locale.US, "%.0f%%", cat.percentage)})",
+                                    style = FinanceTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = formatRupees(cat.amount),
+                                    style = FinanceTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Friend Breakdown Section
+            if (summary.perFriendBreakdown.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.trip_by_person),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Surface(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    shape = FinanceShapes.card,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(FinanceTheme.spacing.m),
+                        verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
+                    ) {
+                        summary.perFriendBreakdown.forEach { friend ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = friend.name,
+                                    style = FinanceTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                val statusDesc = when {
+                                    friend.owedToMe > 0.001 -> "Owes ${formatRupees(friend.owedToMe)}"
+                                    friend.repaid > 0.001 -> "Repaid ${formatRupees(friend.repaid)}"
+                                    else -> "Settled"
+                                }
+                                Text(
+                                    text = statusDesc,
+                                    style = FinanceTheme.typography.bodySmall,
+                                    color = if (friend.owedToMe > 0.001) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isActive) {
+                    OutlinedButton(
+                        onClick = {
+                            onEndTrip()
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.trips_end_trip))
+                    }
+                    OutlinedButton(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.trip_delete_active_blocked))
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            onReactivateTrip()
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.trip_reactivate))
+                    }
+                    OutlinedButton(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(stringResource(R.string.trip_delete_action), color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
 
             Text(
                 text = stringResource(R.string.trip_detail_transactions),
                 style = FinanceTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             if (summary.transactions.isEmpty()) {

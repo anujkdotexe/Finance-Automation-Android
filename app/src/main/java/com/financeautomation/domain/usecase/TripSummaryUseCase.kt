@@ -1,16 +1,34 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.domain.model.Transaction
 
 /**
- * Net expenditure of one trip (or any group of transactions).
+ * Category spend breakdown for a trip.
+ */
+data class TripCategoryBreakdown(
+    val category: String,
+    val amount: Double,
+    val percentage: Double
+)
+
+/**
+ * Breakdown of money owed and repaid for a specific companion on a trip.
+ */
+data class TripFriendDebt(
+    val name: String,
+    val owedToMe: Double,
+    val repaid: Double
+)
+
+/**
+ * Net expenditure and insights of one trip (or any group of transactions).
  *
  * - [totalPaid]: everything paid out of pocket on the trip.
  * - [givenPending]: the part others still owe back (Pending and Carried Fwd rows).
  * - [returned]: the part others have already paid back (Settled rows).
- * - [netExpenditure]: what the trip really cost, which is My share. It equals
- *   [totalPaid] minus [givenPending] minus [returned] when the rows are consistent.
+ * - [netExpenditure]: what the trip really cost (Living Burn definition: My share minus refunds).
  */
 data class TripSummary(
     val name: String,
@@ -21,7 +39,13 @@ data class TripSummary(
     val returned: Double,
     val netExpenditure: Double,
     /** The trip rows, newest first, void rows left out. */
-    val transactions: List<Transaction>
+    val transactions: List<Transaction>,
+    val dateRange: String = "",
+    val daysCount: Int = 1,
+    val averagePerDay: Double = 0.0,
+    val perFriendBreakdown: List<TripFriendDebt> = emptyList(),
+    val categoryBreakdown: List<TripCategoryBreakdown> = emptyList(),
+    val biggestSingleExpense: Transaction? = null
 )
 
 /** Pure Kotlin, no Android dependencies. */
@@ -53,6 +77,50 @@ class TripSummaryUseCase {
             .filter { it.isNotEmpty() && !it.equals("Personal", ignoreCase = true) }
             .map { it.lowercase() }
             .toSet()
+
+        val days = if (rows.isEmpty()) {
+            0
+        } else {
+            val minTs = rows.minOf { it.timestamp }
+            val maxTs = rows.maxOf { it.timestamp }
+            val diff = maxOf(0L, maxTs - minTs)
+            (diff / (24 * 60 * 60 * 1000L)).toInt() + 1
+        }
+
+        // Shared LivingBurn definition: My share minus refunds
+        val refundSpend = rows
+            .filter { it.category.equals(CategoryConstants.CATEGORY_REFUND, ignoreCase = true) }
+            .sumOf { it.totalAmount }
+        val spendRows = rows.filter { !it.category.equals(CategoryConstants.CATEGORY_REFUND, ignoreCase = true) }
+        val netSpend = maxOf(0.0, spendRows.sumOf { it.myShare } - refundSpend)
+
+        val avgPerDay = if (days > 0) netSpend / days else 0.0
+
+        val friendBreakdowns = friends.map { friendName ->
+            val friendRows = rows.filter { row ->
+                row.companions.split(",").any { it.trim().equals(friendName, ignoreCase = true) }
+            }
+            val friendPending = friendRows.sumOf { stillOwed(it) }
+            val friendRepaid = friendRows.sumOf { maxOf(0.0, (it.totalAmount - it.myShare) - stillOwed(it)) }
+            TripFriendDebt(
+                name = friendName.replaceFirstChar { it.uppercase() },
+                owedToMe = friendPending,
+                repaid = friendRepaid
+            )
+        }
+
+        val catBreakdown = spendRows
+            .groupBy { it.category.trim().ifBlank { CategoryConstants.CATEGORY_OTHER } }
+            .map { (cat, catRows) ->
+                val catSpend = catRows.sumOf { it.myShare }
+                val pct = if (netSpend > 0.001) (catSpend / netSpend) * 100.0 else 0.0
+                TripCategoryBreakdown(category = cat, amount = catSpend, percentage = pct)
+            }
+            .sortedByDescending { it.amount }
+
+        val biggest = spendRows.maxByOrNull { it.totalAmount }
+        val dateRangeFormatted = TripDateRangeFormatter.format(rows, isActive = false)
+
         return TripSummary(
             name = name.trim(),
             transactionCount = rows.size,
@@ -60,8 +128,14 @@ class TripSummaryUseCase {
             totalPaid = rows.sumOf { it.totalAmount },
             givenPending = pending,
             returned = returned,
-            netExpenditure = rows.sumOf { it.myShare },
-            transactions = rows
+            netExpenditure = netSpend,
+            transactions = rows,
+            dateRange = dateRangeFormatted,
+            daysCount = days,
+            averagePerDay = avgPerDay,
+            perFriendBreakdown = friendBreakdowns,
+            categoryBreakdown = catBreakdown,
+            biggestSingleExpense = biggest
         )
     }
 

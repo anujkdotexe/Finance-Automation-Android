@@ -115,4 +115,62 @@ class TripSummaryUseCaseTest {
         assertTrue(activity.contains("tripSummary = tripSummary"))
         assertTrue(activity.contains("if (lockedNow || tag == null) null"))
     }
+
+    @Test
+    fun tripInsightsComputedCorrectly() {
+        val dayMs = 24 * 60 * 60 * 1000L
+        val baseTs = 1700000000000L
+        val rows = listOf(
+            Transaction(
+                id = "1", timestamp = baseTs, dateSerial = 46330, timeSerial = 0.5, account = "UPI", merchant = "Hotel",
+                tripTag = "Goa", category = "Travel", totalAmount = 6000.0, companions = "Asha, Ravi",
+                myShare = 2000.0, owedToMe = 4000.0, status = TransactionStatus.PENDING
+            ),
+            Transaction(
+                id = "2", timestamp = baseTs + 2 * dayMs, dateSerial = 46332, timeSerial = 0.5, account = "UPI", merchant = "Dinner",
+                tripTag = "Goa", category = "Food", totalAmount = 1500.0, companions = "Asha",
+                myShare = 750.0, owedToMe = 750.0, status = TransactionStatus.PENDING
+            )
+        )
+        val s = useCase.forTrip("Goa", rows)
+        assertEquals(3, s.daysCount)
+        assertEquals(2750.0, s.netExpenditure, 0.001)
+        assertEquals(2750.0 / 3, s.averagePerDay, 0.001)
+        assertEquals("Hotel", s.biggestSingleExpense?.merchant)
+        assertEquals(6000.0, s.biggestSingleExpense?.totalAmount ?: 0.0, 0.001)
+
+        assertEquals(2, s.categoryBreakdown.size)
+        val travelCat = s.categoryBreakdown.first { it.category == "Travel" }
+        assertEquals(2000.0, travelCat.amount, 0.001)
+        assertEquals((2000.0 / 2750.0) * 100.0, travelCat.percentage, 0.01)
+
+        val asha = s.perFriendBreakdown.first { it.name.equals("Asha", ignoreCase = true) }
+        assertEquals(2750.0, asha.owedToMe, 0.001)
+        assertEquals(0.0, asha.repaid, 0.001)
+        val ravi = s.perFriendBreakdown.first { it.name.equals("Ravi", ignoreCase = true) }
+        assertEquals(2000.0, ravi.owedToMe, 0.001)
+        assertEquals(0.0, ravi.repaid, 0.001)
+    }
+
+    @Test
+    fun refundReducesTripNetExpenditureLivingBurn() {
+        val rows = listOf(
+            Transaction(
+                id = "1", timestamp = 1000L, dateSerial = 46330, timeSerial = 0.5, account = "UPI", merchant = "Flight",
+                tripTag = "Goa", category = "Travel", totalAmount = 5000.0, companions = "Personal",
+                myShare = 5000.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL
+            ),
+            Transaction(
+                id = "2", timestamp = 2000L, dateSerial = 46331, timeSerial = 0.5, account = "UPI", merchant = "Airline Refund",
+                tripTag = "Goa", category = "Refund", totalAmount = 2000.0, companions = "Personal",
+                myShare = 2000.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL
+            )
+        )
+        val s = useCase.forTrip("Goa", rows)
+        assertEquals(3000.0, s.netExpenditure, 0.001)
+        assertEquals("Flight", s.biggestSingleExpense?.merchant)
+        assertEquals(1, s.categoryBreakdown.size)
+        assertEquals("Travel", s.categoryBreakdown[0].category)
+        assertEquals(5000.0, s.categoryBreakdown[0].amount, 0.001)
+    }
 }

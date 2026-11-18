@@ -245,8 +245,7 @@ fun PeopleTripsScreen(
                             dateRange = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(summary.transactions, isActive),
                             onOpen = { openTripName = trip.name },
                             onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
-                            onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) },
-                            onRemove = { tripToRemove = trip.name }
+                            onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) }
                         )
                     }
                 }
@@ -352,7 +351,23 @@ fun PeopleTripsScreen(
     }
 
     openTripName?.let { name ->
-        TripDetailSheet(summary = summaryFor(name), onDismiss = { openTripName = null })
+        val tripTag = state.tripTags.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        val isActive = tripTag?.isActive == true || name.equals(state.activeTripTag, ignoreCase = true)
+        TripDetailSheet(
+            summary = summaryFor(name),
+            isActive = isActive,
+            onEndTrip = {
+                tripTag?.let { viewModel.onToggleTripTagActive(it.id) }
+                    ?: viewModel.onActiveTripTagChanged("")
+            },
+            onReactivateTrip = {
+                tripTag?.let { viewModel.onToggleTripTagActive(it.id) }
+            },
+            onDeleteTrip = { tripName ->
+                viewModel.onRemoveTripTag(tripName)
+            },
+            onDismiss = { openTripName = null }
+        )
     }
 
     if (showAddFriendSheet) {
@@ -617,25 +632,12 @@ private fun TripCard(
                         Text(stringResource(R.string.trips_end_trip), style = FinanceTheme.typography.labelMedium)
                     }
                 } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-                        if (onRemove != null) {
-                            OutlinedButton(
-                                onClick = onRemove,
-                                shape = FinanceTheme.shapes.small,
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                                    .semantics { contentDescription = removeTripDescription }
-                            ) {
-                                Text(stringResource(R.string.people_remove_action), style = FinanceTheme.typography.labelMedium)
-                            }
-                        }
-                        Button(
-                            onClick = onReactivateTrip,
-                            shape = FinanceTheme.shapes.small,
-                            modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                        ) {
-                            Text(stringResource(R.string.trips_reactivate), style = FinanceTheme.typography.labelMedium)
-                        }
+                    Button(
+                        onClick = onReactivateTrip,
+                        shape = FinanceTheme.shapes.small,
+                        modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.trips_reactivate), style = FinanceTheme.typography.labelMedium)
                     }
                 }
 

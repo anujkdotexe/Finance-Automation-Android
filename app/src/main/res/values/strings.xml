@@ -998,4 +998,19 @@
     <string name="payment_apps_switch_cd">Watch %1$s</string>
     <string name="payment_apps_custom_generic_note">Generic parser: always sent to Needs Review</string>
     <string name="payment_apps_remove_action">Remove</string>
+
+    <!-- Trips Stitch v3 detail & insights -->
+    <string name="trip_delete_title">Delete %1$s?</string>
+    <string name="trip_delete_body">The trip is hidden from your lists. Your transactions stay in the ledger and in the sheet.</string>
+    <string name="trip_delete_action">Delete trip</string>
+    <string name="trip_delete_active_blocked">End the trip first.</string>
+    <string name="trip_reactivate">Reactivate trip</string>
+    <string name="trip_past_title">Past trips</string>
+    <string name="trip_insight_per_day">Per day</string>
+    <string name="trip_insight_biggest">Biggest expense</string>
+    <string name="trip_insight_count">Transactions</string>
+    <string name="trip_insight_people">People</string>
+    <string name="trip_by_category">By category</string>
+    <string name="trip_by_person">By person</string>
+    <string name="trip_range_days">%1$s to %2$s, %3$d days</string>
 </resources>
