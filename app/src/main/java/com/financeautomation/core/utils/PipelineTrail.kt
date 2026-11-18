@@ -59,6 +59,7 @@ enum class PipelineCode {
     DISMISSED,
     DONE,
     MERGED,
+    MERGED_INTO_CONFIRMED,
     FLAGGED_DUPLICATE,
     QUEUED,
     SUCCESS,

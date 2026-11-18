@@ -242,6 +242,17 @@ object RegexPatterns {
         return null
     }
 
+    private val REFERENCE_ID_REGEX: Regex = Regex(
+        """(?i)\b(?:ref(?:\s*no\.?)?|upi\s*(?:ref(?:\s*no\.?)?)?|utr(?:\s*no\.?)?|txn\s*(?:id|no\.?)?)[:\s\-]+([A-Za-z0-9]{6,25})\b"""
+    )
+
+    /**
+     * Extracts transaction / UPI reference id or UTR number from message text.
+     */
+    fun extractReferenceId(text: String): String? {
+        return REFERENCE_ID_REGEX.find(text)?.groupValues?.get(1)?.trim()
+    }
+
     /**
      * Checks if text contains financial transaction keywords.
      */

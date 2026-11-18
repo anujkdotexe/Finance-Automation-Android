@@ -10,6 +10,7 @@ import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
+import com.financeautomation.core.utils.RegexPatterns
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -217,7 +218,8 @@ class NotificationProcessor(
                     sbnKey = sbnKey,
                     contentHash = contentHash,
                     handledEntity = handledEntity,
-                    detectedAccountHint = parseResult.detectedAccountHint
+                    detectedAccountHint = parseResult.detectedAccountHint,
+                    text = text
                 )
                 outcome
             }
@@ -254,7 +256,8 @@ class NotificationProcessor(
                     sbnKey = sbnKey,
                     contentHash = contentHash,
                     handledEntity = handledEntity,
-                    detectedAccountHint = parseResult.detectedAccountHint
+                    detectedAccountHint = parseResult.detectedAccountHint,
+                    text = text
                 )
                 outcome
             }
@@ -300,7 +303,8 @@ class NotificationProcessor(
         sbnKey: String,
         contentHash: String,
         handledEntity: HandledNotificationEntity,
-        detectedAccountHint: String? = null
+        detectedAccountHint: String? = null,
+        text: String = ""
     ): NotificationProcessingOutcome {
         val targetState = when {
             flags.split(",").map { it.trim() }.contains(PendingCaptureEntity.FLAG_REFUND_REVERSAL) -> PendingCaptureEntity.STATE_NEEDS_REVIEW
@@ -330,40 +334,76 @@ class NotificationProcessor(
             }
         }
 
-        var activeFlags = flags
+        val incomingRefId = RegexPatterns.extractReferenceId(text)
+        var activeFlags = if (incomingRefId != null && !flags.contains("REF_")) {
+            if (flags.isNotBlank()) "$flags,REF_$incomingRefId" else "REF_$incomingRefId"
+        } else {
+            flags
+        }
 
-        // Deduplication within 180 seconds (cross-source and same-source)
+        // Deduplication (same-package, cross-package, and confirmed late-merge)
         if (pendingCaptureDao != null && amount != null && amount > 0.0) {
-            val minTime = postTime - WINDOW_CROSS_SOURCE_MERGE_MS
-            val maxTime = postTime + WINDOW_CROSS_SOURCE_MERGE_MS
-            val similarCaptures = pendingCaptureDao.findSimilarByAmountAndTime(amount, minTime, maxTime)
-                .filter {
+            val searchMinTime = postTime - WINDOW_CONFIRMED_LATE_MERGE_MS
+            val searchMaxTime = postTime + WINDOW_CONFIRMED_LATE_MERGE_MS
+            val similarCaptures = pendingCaptureDao.findSimilarByAmountAndTime(amount, searchMinTime, searchMaxTime)
+                .filter { candidate ->
                     // Must be the same transaction kind (debits merge with debits)
-                    it.kind == kind &&
-                        // Same-package merge is allowed for debits (P1-10 same SMS app bank/biller pairs)
-                        (it.sourcePackage != sourcePackage || kind == PendingCaptureEntity.KIND_DEBIT) &&
-                        // Account digits must be compatible if both are present
-                        areAccountsCompatible(it.inferredAccount, it.detectedAccountHint, inferredAccount, detectedAccountHint) &&
-                        // Payees must be compatible, so two real payments of the same amount to different payees stay separate
-                        com.financeautomation.core.utils.MerchantSimilarity.compatible(it.payee, payee)
+                    if (candidate.kind != kind) return@filter false
+
+                    // Same-package merge is allowed for debits
+                    if (candidate.sourcePackage == sourcePackage && kind != PendingCaptureEntity.KIND_DEBIT) {
+                        return@filter false
+                    }
+
+                    // Account digits must be compatible if both are present
+                    if (!areAccountsCompatible(candidate.inferredAccount, candidate.detectedAccountHint, inferredAccount, detectedAccountHint)) {
+                        return@filter false
+                    }
+
+                    // Payees must be compatible, so two real payments of the same amount to different payees stay separate
+                    if (!com.financeautomation.core.utils.MerchantSimilarity.compatible(candidate.payee, payee)) {
+                        return@filter false
+                    }
+
+                    // Reference ID beats the window when both messages carry one
+                    val candidateRef = extractRefFromFlags(candidate.flags)
+                    if (candidateRef != null && incomingRefId != null) {
+                        if (!candidateRef.equals(incomingRefId, ignoreCase = true)) {
+                            return@filter false // Different reference IDs stay separate
+                        }
+                        return@filter true // Equal reference ID always merges up to 24h
+                    }
+
+                    // Window checks when at least one message lacks reference ID
+                    val delta = kotlin.math.abs(candidate.timestamp - postTime)
+                    if (candidate.state == PendingCaptureEntity.STATE_DONE) {
+                        delta <= WINDOW_CONFIRMED_LATE_MERGE_MS
+                    } else if (candidate.sourcePackage != sourcePackage) {
+                        delta <= WINDOW_CROSS_PACKAGE_MERGE_MS
+                    } else {
+                        delta <= WINDOW_SAME_PACKAGE_MERGE_MS
+                    }
                 }
 
             if (similarCaptures.isNotEmpty()) {
-                val mergeTarget = similarCaptures.firstOrNull {
+                val openMergeTarget = similarCaptures.firstOrNull {
                     it.state == PendingCaptureEntity.STATE_WAITING ||
                         it.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS ||
                         it.state == PendingCaptureEntity.STATE_NEEDS_REVIEW
                 }
-                if (mergeTarget != null) {
-                    val richerPayee = when {
-                        mergeTarget.payee == "Unknown Payee" && payee != "Unknown Payee" -> payee
-                        payee != "Unknown Payee" && payee.length > mergeTarget.payee.length && payee.contains(mergeTarget.payee, ignoreCase = true) -> payee
-                        else -> mergeTarget.payee
+                if (openMergeTarget != null) {
+                    val richerPayee = selectRicherPayee(openMergeTarget.payee, payee)
+                    val candidateRef = extractRefFromFlags(openMergeTarget.flags)
+                    val mergedFlags = if (candidateRef == null && incomingRefId != null) {
+                        if (openMergeTarget.flags.isNotBlank()) "${openMergeTarget.flags},REF_$incomingRefId" else "REF_$incomingRefId"
+                    } else {
+                        openMergeTarget.flags
                     }
-                    val merged = mergeTarget.copy(
+                    val merged = openMergeTarget.copy(
                         payee = richerPayee,
-                        inferredAccount = if (mergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else mergeTarget.inferredAccount,
-                        detectedAccountHint = mergeTarget.detectedAccountHint ?: detectedAccountHint,
+                        inferredAccount = if (openMergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else openMergeTarget.inferredAccount,
+                        detectedAccountHint = openMergeTarget.detectedAccountHint ?: detectedAccountHint,
+                        flags = mergedFlags,
                         updatedAt = System.currentTimeMillis()
                     )
                     val mergeOp: suspend () -> Unit = {
@@ -375,17 +415,67 @@ class NotificationProcessor(
                     return NotificationProcessingOutcome.Merged(merged.id, enriched = true)
                 }
 
-                // If already SHOWN or DONE, mark new capture as POSSIBLE_DUPLICATE
-                val hasShownOrDone = similarCaptures.any {
-                    it.state == PendingCaptureEntity.STATE_SHOWN || it.state == PendingCaptureEntity.STATE_DONE
+                // If match is already confirmed / DONE, attach missing facts only (never create second row, never reopen review)
+                val confirmedTarget = similarCaptures.firstOrNull { it.state == PendingCaptureEntity.STATE_DONE }
+                if (confirmedTarget != null) {
+                    val candidateRef = extractRefFromFlags(confirmedTarget.flags)
+                    val mergedFlags = if (candidateRef == null && incomingRefId != null) {
+                        if (confirmedTarget.flags.isNotBlank()) "${confirmedTarget.flags},REF_$incomingRefId" else "REF_$incomingRefId"
+                    } else {
+                        confirmedTarget.flags
+                    }
+                    val enrichedConfirmed = confirmedTarget.copy(
+                        inferredAccount = if ((confirmedTarget.inferredAccount.isNullOrBlank() || confirmedTarget.inferredAccount == CategoryConstants.ACCOUNT_OTHER) && inferredAccount.isNotBlank()) inferredAccount else confirmedTarget.inferredAccount,
+                        detectedAccountHint = confirmedTarget.detectedAccountHint ?: detectedAccountHint,
+                        flags = mergedFlags,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    val attachOp: suspend () -> Unit = {
+                        handledNotificationDao?.insert(handledEntity)
+                        pendingCaptureDao.update(enrichedConfirmed)
+                        if (transactionDao != null) {
+                            val existingTxn = transactionDao.getById(confirmedTarget.id)
+                            if (existingTxn != null && (existingTxn.account.isBlank() || existingTxn.account == CategoryConstants.ACCOUNT_OTHER) && inferredAccount.isNotBlank()) {
+                                transactionDao.update(existingTxn.copy(account = inferredAccount))
+                            }
+                        }
+                    }
+                    if (runInTransaction != null) runInTransaction.invoke(attachOp) else attachOp()
+                    PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED_INTO_CONFIRMED)
+                    return NotificationProcessingOutcome.Merged(confirmedTarget.id, enriched = true)
                 }
-                if (hasShownOrDone) {
+
+                // If already SHOWN, mark new capture as POSSIBLE_DUPLICATE
+                val hasShown = similarCaptures.any { it.state == PendingCaptureEntity.STATE_SHOWN }
+                if (hasShown) {
                     PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.FLAGGED_DUPLICATE)
                     activeFlags = if (activeFlags.isNotBlank()) {
                         "$activeFlags,${PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE}"
                     } else {
                         PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE
                     }
+                }
+            } else if (transactionDao != null) {
+                // Check if matching confirmed transaction exists in transactionDao within 24h
+                val epsilon = 0.01
+                val minAmount = amount - epsilon
+                val maxAmount = amount + epsilon
+                val recentTxns = transactionDao.getRecentSimilar(searchMinTime, searchMaxTime, minAmount, maxAmount)
+                    .filter { txn ->
+                        com.financeautomation.core.utils.MerchantSimilarity.compatible(txn.merchant, payee) &&
+                            areAccountsCompatible(txn.account, null, inferredAccount, detectedAccountHint)
+                    }
+                val matchedTxn = recentTxns.firstOrNull()
+                if (matchedTxn != null) {
+                    val attachOp: suspend () -> Unit = {
+                        handledNotificationDao?.insert(handledEntity)
+                        if ((matchedTxn.account.isBlank() || matchedTxn.account == CategoryConstants.ACCOUNT_OTHER) && inferredAccount.isNotBlank()) {
+                            transactionDao.update(matchedTxn.copy(account = inferredAccount))
+                        }
+                    }
+                    if (runInTransaction != null) runInTransaction.invoke(attachOp) else attachOp()
+                    PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED_INTO_CONFIRMED)
+                    return NotificationProcessingOutcome.Merged(matchedTxn.id, enriched = true)
                 }
             }
         }
@@ -428,7 +518,22 @@ class NotificationProcessor(
     }
 
     companion object {
-        const val WINDOW_CROSS_SOURCE_MERGE_MS: Long = 180_000L
+        const val WINDOW_SAME_PACKAGE_MERGE_MS: Long = 180_000L
+        const val WINDOW_CROSS_PACKAGE_MERGE_MS: Long = 600_000L
+        const val WINDOW_CONFIRMED_LATE_MERGE_MS: Long = 86_400_000L
+        const val WINDOW_CROSS_SOURCE_MERGE_MS: Long = WINDOW_SAME_PACKAGE_MERGE_MS
+
+        fun selectRicherPayee(existingPayee: String, incomingPayee: String): String = when {
+            existingPayee == "Unknown Payee" && incomingPayee != "Unknown Payee" -> incomingPayee
+            incomingPayee != "Unknown Payee" && existingPayee != "Unknown Payee" &&
+                incomingPayee.length > existingPayee.length &&
+                incomingPayee.contains(existingPayee, ignoreCase = true) -> incomingPayee
+            else -> existingPayee
+        }
+
+        fun extractRefFromFlags(flags: String): String? {
+            return flags.split(',').find { it.startsWith("REF_") }?.removePrefix("REF_")
+        }
 
         fun areAccountsCompatible(
             targetAcc: String?,

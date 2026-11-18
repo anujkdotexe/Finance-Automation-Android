@@ -108,6 +108,7 @@ class ParseNotificationUseCase(
         private val REVERSAL_CREDIT_REGEX = Regex("""(?i)\b(?:reversed|refund(?:ed)?)\s+to\s+your\s+account\b|\bamount\s+of\s+[^\n]+has\s+been\s+reversed\b""")
         private val INVESTMENT_NON_MONEY_REGEX = Regex("""(?i)\b(?:cdsl|nsdl):?\s*(?:credit|debit)\b|\b(?:redemption\s+request|payout\s+shall\s+be\s+made)\b""")
         private val STORE_CREDIT_REGEX = Regex("""(?i)\b(?:can\s+be\s+redeemed\s+on\s+your\s+subsequent\s+orders|credits\s+have\s+been\s+added\s+to\s+your\s+\w+\s+account)\b""")
+        private val AGGREGATOR_RECEIPT_REGEX = Regex("""(?i)\b(?:thank\s+you\s+for\s+(?:making\s+a\s+)?successful\s+transaction|transaction\s+with\s+txn\s+id\b.*has\s+been\s+successfully\s+processed)\b""")
 
         fun classifyWording(text: String): WordingClass {
             if (FAILURE_REGEX.containsMatchIn(text)) return WordingClass.FAILURE
@@ -259,6 +260,13 @@ class ParseNotificationUseCase(
         }
 
         if (STORE_CREDIT_REGEX.containsMatchIn(fullContent)) {
+            return NotificationParseResult.Dropped(
+                reason = DropReason.NOT_WHITELISTED,
+                sourcePackage = sourcePackage
+            )
+        }
+
+        if (AGGREGATOR_RECEIPT_REGEX.containsMatchIn(fullContent) && !hasExecutedDebit) {
             return NotificationParseResult.Dropped(
                 reason = DropReason.NOT_WHITELISTED,
                 sourcePackage = sourcePackage
