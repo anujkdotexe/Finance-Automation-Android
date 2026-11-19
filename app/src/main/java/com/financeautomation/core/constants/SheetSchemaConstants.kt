@@ -72,6 +72,17 @@ object SheetSchemaConstants {
     const val TABLE_1_START_COL_INDEX: Int = 0
     const val TABLE_1_END_COL_INDEX: Int = 11
 
+    const val COL_LETTER_DEBIT_DATE: String = "A"
+    const val COL_LETTER_DEBIT_TIME: String = "B"
+    const val COL_LETTER_DEBIT_ACCOUNT: String = "C"
+    const val COL_LETTER_DEBIT_DESCRIPTION: String = "D"
+    const val COL_LETTER_DEBIT_TRIP_TAG: String = "E"
+    const val COL_LETTER_DEBIT_CATEGORY: String = "F"
+    const val COL_LETTER_DEBIT_TOTAL_AMOUNT: String = "G"
+    const val COL_LETTER_DEBIT_COMPANIONS: String = "H"
+    const val COL_LETTER_DEBIT_MY_SHARE: String = "I"
+    const val COL_LETTER_DEBIT_OWED_TO_ME: String = "J"
+    const val COL_LETTER_DEBIT_STATUS: String = "K"
     const val COL_INDEX_EXPENSE_NOTE: Int = 11
     const val COL_LETTER_EXPENSE_NOTE: String = "L"
 
@@ -84,6 +95,15 @@ object SheetSchemaConstants {
     const val TABLE_2_START_COL_INDEX: Int = 13
     const val TABLE_2_END_COL_INDEX: Int = 20
 
+    const val COL_LETTER_INFLOW_DATE: String = "N"
+    const val COL_LETTER_INFLOW_TIME: String = "O"
+    const val COL_LETTER_INFLOW_ACCOUNT: String = "P"
+    const val COL_LETTER_INFLOW_TYPE: String = "Q"
+    const val COL_LETTER_INFLOW_RECEIVED_FROM: String = "R"
+    const val COL_LETTER_INFLOW_REASON: String = "S"
+    const val COL_LETTER_INFLOW_AMOUNT: String = "T"
+    const val COL_LETTER_INFLOW_LINKED_DEBIT: String = "U"
+
     // Spacer 2 (Col V, index 21)
     const val SPACER_2_COL_INDEX: Int = 21
     const val SPACER_2_COL_LETTER: String = "V"
@@ -92,6 +112,14 @@ object SheetSchemaConstants {
     const val TABLE_3_PAYABLES_RANGE: String = "W3:AC"
     const val TABLE_3_START_COL_INDEX: Int = 22
     const val TABLE_3_END_COL_INDEX: Int = 28
+
+    const val COL_LETTER_PAYABLE_DATE_INCURRED: String = "W"
+    const val COL_LETTER_PAYABLE_TIME: String = "X"
+    const val COL_LETTER_PAYABLE_PAID_BY: String = "Y"
+    const val COL_LETTER_PAYABLE_WHAT_FOR: String = "Z"
+    const val COL_LETTER_PAYABLE_AMOUNT_I_OWE: String = "AA"
+    const val COL_LETTER_PAYABLE_DATE_REPAID: String = "AB"
+    const val COL_LETTER_PAYABLE_STATUS: String = "AC"
 
     // Hidden System UUID Columns (Cols AD-AF, indices 29-31)
     const val COL_INDEX_DEBIT_UUID: Int = 29
