@@ -172,12 +172,12 @@ open class AccountingSyncExecutor(
         tabName: String
     ): Result<Unit> {
         val req = AccountingRequestJsonAdapter.voidInflowRequestFromJson(item.payloadJson)
-        val rowRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AD", req.inflowId)
+        val rowRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID, req.inflowId)
         if (rowRes is Result.Error) return Result.Error(rowRes.exception)
         val row = (rowRes as Result.Success).data
             ?: return Result.Error(IllegalStateException("Income row not found in $tabName for ${req.inflowId}"))
 
-        val reasonRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "R$row")
+        val reasonRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_INFLOW_REASON}$row")
         if (reasonRes is Result.Error) return Result.Error(reasonRes.exception)
         val currentReason = (reasonRes as Result.Success).data.orEmpty()
 
@@ -467,9 +467,9 @@ open class AccountingSyncExecutor(
         // Appends first
         for (append in plan.appends) {
             val colUuid = when (append.table) {
-                TableType.DEBIT -> "AC"
-                TableType.INFLOW -> "AD"
-                TableType.PAYABLE -> "AE"
+                TableType.DEBIT -> SheetSchemaConstants.COL_LETTER_DEBIT_UUID
+                TableType.INFLOW -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID
+                TableType.PAYABLE -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
             }
             val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, colUuid, append.uuid)
             if (existingCheck is Result.Success && existingCheck.data != null) {
