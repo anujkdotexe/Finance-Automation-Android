@@ -1,9 +1,6 @@
 package com.financeautomation.presentation.overlay
 
-import android.content.Context
-import android.content.Intent
 import com.financeautomation.data.local.entity.PendingCaptureEntity
-import com.financeautomation.service.QuickActionReceiver
 import com.financeautomation.testutil.FakePendingCaptureDao
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -13,7 +10,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OverlayAndWatcherResilienceTest {
@@ -116,48 +112,5 @@ class OverlayAndWatcherResilienceTest {
         val updated = dao.getById("cap_swiped_heads_up")
         assertNotNull(updated)
         assertEquals(PendingCaptureEntity.STATE_DISMISSED, updated?.state)
-    }
-
-    @Test
-    fun windowRemovalOrderEnsuresViewRemovedEvenIfDestroyThrows() {
-        var viewRemoved = false
-        var destroyCalled = false
-        var exceptionSwallowed = false
-
-        var mockView: Any? = Any()
-        var mockOwners: Any? = Any()
-
-        // Emulate OverlayController.clearCurrentWindow logic
-        val view = mockView
-        val owners = mockOwners
-        try {
-            if (view != null) {
-                try {
-                    // Step 1: Remove view first
-                    viewRemoved = true
-                } catch (e: Exception) {
-                    // Diagnostics
-                }
-            }
-            if (owners != null) {
-                try {
-                    // Step 2: Destroy tree owners in separate try block
-                    destroyCalled = true
-                    throw RuntimeException("Simulated Compose tree owner destroy error")
-                } catch (e: Exception) {
-                    exceptionSwallowed = true
-                }
-            }
-        } finally {
-            // Step 3: Null references in finally
-            mockView = null
-            mockOwners = null
-        }
-
-        assertEquals("View must be removed first", true, viewRemoved)
-        assertEquals("Destroy must be attempted", true, destroyCalled)
-        assertEquals("Exception during destroy must be caught cleanly", true, exceptionSwallowed)
-        assertNull("View reference must be cleared in finally", mockView)
-        assertNull("Owners reference must be cleared in finally", mockOwners)
     }
 }

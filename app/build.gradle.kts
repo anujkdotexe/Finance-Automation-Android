@@ -21,7 +21,7 @@ android {
         applicationId = "com.financeautomation"
         minSdk = 28
         targetSdk = 36
-        versionCode = gitCommitCount
+        versionCode = maxOf(566, gitCommitCount)
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -108,6 +108,9 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.jvmArgs("-Djava.net.preferIPv4Stack=true")
+        }
     }
 }
 

@@ -207,7 +207,7 @@ fun SyncBackupScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.fresh_workbook_action_copy_history))
                     }
@@ -218,7 +218,7 @@ fun SyncBackupScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.fresh_workbook_action_start_empty))
                     }
@@ -226,7 +226,7 @@ fun SyncBackupScreen(
                         onClick = { showCreateFreshDialog = false },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.action_cancel))
                     }
@@ -270,7 +270,7 @@ fun SyncBackupScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.repair_backup_action_archive))
                     }
@@ -280,7 +280,7 @@ fun SyncBackupScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.repair_backup_action_keep))
                     }
@@ -288,7 +288,7 @@ fun SyncBackupScreen(
                         onClick = { viewModel.cancelRepair() },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.action_cancel))
                     }

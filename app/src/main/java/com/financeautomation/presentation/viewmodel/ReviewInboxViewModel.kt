@@ -45,6 +45,7 @@ data class ReviewInboxUiState(
     val captures: List<PendingCaptureEntity> = emptyList(),
     val newAccountCaptures: List<PendingCaptureEntity> = emptyList(),
     val failedQueueItems: List<SyncQueueEntity> = emptyList(),
+    val failedQueueDetails: Map<Long, String> = emptyMap(),
     val isHintDismissed: Boolean = false,
     val isLoading: Boolean = false,
     val selectedTransaction: Transaction? = null,
@@ -208,7 +209,45 @@ class ReviewInboxViewModel(
             qDao.getFailedQueueFlow()
                 .catch { e -> Diagnostics.record("ReviewInboxViewModel", "observeFailedQueue: ${e.javaClass.simpleName}") }
                 .collect { failedItems ->
-                    _uiState.update { it.copy(failedQueueItems = failedItems) }
+                    val detailsMap = mutableMapOf<Long, String>()
+                    for (item in failedItems) {
+                        try {
+                            when (item.operationType) {
+                                SyncQueueEntity.OP_INSERT,
+                                SyncQueueEntity.OP_UPDATE,
+                                SyncQueueEntity.OP_VOID -> {
+                                    val txn = transactionRepository.getTransactionById(item.transactionId)
+                                    if (txn != null) {
+                                        val formatted = String.format(java.util.Locale.US, "%.2f", txn.totalAmount)
+                                        val merchantName = txn.merchant.ifBlank { "Expense" }
+                                        val cat = if (txn.category.isNotBlank()) " • ${txn.category}" else ""
+                                        detailsMap[item.id] = "$merchantName • ₹$formatted$cat"
+                                    }
+                                }
+                                SyncQueueEntity.OP_LOG_CREDIT -> {
+                                    val req = com.financeautomation.data.remote.AccountingRequestJsonAdapter.creditRequestFromJson(item.payloadJson)
+                                    val formatted = String.format(java.util.Locale.US, "%.2f", req.amount)
+                                    val settler = if (req.settler.isNotBlank()) " • ${req.settler}" else ""
+                                    detailsMap[item.id] = "${req.inflowType} • ₹$formatted$settler"
+                                }
+                                SyncQueueEntity.OP_LOG_PAYABLE -> {
+                                    val req = com.financeautomation.data.remote.AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson)
+                                    val formatted = String.format(java.util.Locale.US, "%.2f", req.amount)
+                                    val creditor = if (req.creditor.isNotBlank()) " • ${req.creditor}" else ""
+                                    detailsMap[item.id] = "Payable • ₹$formatted$creditor"
+                                }
+                                SyncQueueEntity.OP_LOG_REPAYMENT -> {
+                                    val req = com.financeautomation.data.remote.AccountingRequestJsonAdapter.repaymentRequestFromJson(item.payloadJson)
+                                    val formatted = String.format(java.util.Locale.US, "%.2f", req.amount)
+                                    val person = if (req.creditor.isNotBlank()) " • ${req.creditor}" else ""
+                                    detailsMap[item.id] = "Repayment • ₹$formatted$person"
+                                }
+                            }
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                        }
+                    }
+                    _uiState.update { it.copy(failedQueueItems = failedItems, failedQueueDetails = detailsMap) }
                 }
         }
     }
@@ -246,13 +285,7 @@ class ReviewInboxViewModel(
     fun dismissCapture(id: String) {
         viewModelScope.launch(ioDispatcher) {
             val captureDao = resolvePendingCaptureDao() ?: return@launch
-            val current = captureDao.getById(id)
-            val newState = if (current?.state == PendingCaptureEntity.STATE_DISMISSED) {
-                PendingCaptureEntity.STATE_DONE
-            } else {
-                PendingCaptureEntity.STATE_DISMISSED
-            }
-            captureDao.updateState(id, newState)
+            captureDao.updateState(id, PendingCaptureEntity.STATE_DISMISSED)
             _uiState.update { it.copy(userMessage = UiText.res(R.string.review_msg_capture_dismissed)) }
         }
     }

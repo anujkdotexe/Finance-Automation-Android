@@ -1002,5 +1002,54 @@ class ReviewInboxViewModelTest {
         advanceUntilIdle()
         assertTrue(vm2.uiState.value.isHintDismissed)
     }
+
+    @Test
+    fun testFailedQueueDetailsResolvedForFailedItems() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val txn = Transaction(
+            id = "txn_failed_1",
+            timestamp = 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Starbucks Coffee",
+            category = "Food & Drink",
+            totalAmount = 250.0,
+            companions = "Personal",
+            myShare = 250.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW
+        )
+        tRepo.insertTransaction(txn)
+
+        val queueItem = SyncQueueEntity(
+            id = 42L,
+            transactionId = "txn_failed_1",
+            operationType = SyncQueueEntity.OP_UPDATE,
+            payloadJson = "txn_failed_1",
+            status = SyncQueueEntity.STATUS_FAILED,
+            lastErrorKind = "AUTH_EXPIRED",
+            lastErrorDetail = "401 Unauthorized"
+        )
+        qDao.insert(queueItem)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            accountRepository = FakeAccountRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(1, state.failedQueueItems.size)
+        val detail = state.failedQueueDetails[42L]
+        assertTrue("Detail should resolve merchant and amount", detail?.contains("Starbucks Coffee") == true)
+        assertTrue("Detail should resolve amount", detail?.contains("250.00") == true)
+        assertTrue("Detail should resolve category", detail?.contains("Food & Drink") == true)
+    }
 }
 

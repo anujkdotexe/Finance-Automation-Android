@@ -154,7 +154,7 @@ fun CaptureItemRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = FinanceTheme.sizes.minRowHeight)
             .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
@@ -230,7 +230,7 @@ fun OemRowContent(
             onClick = onOpenSettings,
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
+                .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
         )
 
         Row(
@@ -691,7 +691,7 @@ fun CapturePermissionsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = FinanceTheme.spacing.s)
-                                    .defaultMinSize(minHeight = 48.dp)
+                                    .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                             )
                         }
                     }

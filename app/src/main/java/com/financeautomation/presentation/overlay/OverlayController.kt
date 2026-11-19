@@ -101,6 +101,7 @@ class OverlayController(
     )
 
     private val showRequested = AtomicBoolean(false)
+    private val isSubmittingExpense = AtomicBoolean(false)
 
     val isShowing: Boolean
         get() = showRequested.get() || currentView != null
@@ -283,34 +284,41 @@ class OverlayController(
                                         openDebts = openDebtsState.value,
                                         onPersonChanged = ::loadOpenDebtsForPerson,
                                         onConfirmExpense = {
-                                            viewModel.onConfirmAndSave { message, txnId ->
-                                                PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
-                                                dismiss()
-                                                resultPill.show(
-                                                    message = message.asString(appContext),
-                                                    transactionId = txnId,
-                                                    onUndo = if (txnId != null) {
-                                                        { id ->
+                                            if (!isSubmittingExpense.compareAndSet(false, true)) return@OverlayContentHost
+                                            viewModel.onConfirmAndSave(
+                                                onSaved = { message, txnId ->
+                                                    isSubmittingExpense.set(false)
+                                                    PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
+                                                    dismiss()
+                                                    resultPill.show(
+                                                        message = message.asString(appContext),
+                                                        transactionId = txnId,
+                                                        onUndo = { id ->
                                                             mainScope.launch(ioDispatcher) {
                                                                 transactionRepository.undoRecentSave(id)
                                                             }
                                                         }
-                                                    } else null
-                                                )
-                                            }
+                                                    )
+                                                },
+                                                onError = { err ->
+                                                    isSubmittingExpense.set(false)
+                                                    resultPill.show(err.asString(appContext))
+                                                }
+                                            )
                                         },
                                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
                                             val capId = currentCaptureId
-                                            if (capId != null) {
-                                                mainScope.launch(ioDispatcher) {
-                                                    try {
-                                                        pendingCaptureDaoProvider().updateState(capId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
-                                                    } catch (e: Exception) {
-                                                        if (e is CancellationException) throw e
+                                            actionDispatcher.confirmIncome(amount, account, inflowType, settler, reason, explicitRefs) { success ->
+                                                if (success && capId != null) {
+                                                    mainScope.launch(ioDispatcher) {
+                                                        try {
+                                                            pendingCaptureDaoProvider().updateState(capId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+                                                        } catch (e: Exception) {
+                                                            if (e is CancellationException) throw e
+                                                        }
                                                     }
                                                 }
                                             }
-                                            actionDispatcher.confirmIncome(amount, account, inflowType, settler, reason, explicitRefs)
                                         },
                                         onConfirmFriendPaid = actionDispatcher::confirmPayable,
                                         onConfirmRepaid = actionDispatcher::confirmRepaid,
@@ -405,27 +413,26 @@ class OverlayController(
 
     private fun clearCurrentWindow() {
         blurHelper.teardownWindowBlur()
+        isSubmittingExpense.set(false)
         val view = currentView
         val owners = currentTreeOwners
-        try {
-            if (view != null) {
-                try {
-                    windowManager.removeView(view)
-                } catch (e: Exception) {
-                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: removeView failed")
-                }
+        currentView = null
+        currentTreeOwners = null
+        currentLayoutParams = null
+
+        if (view != null) {
+            try {
+                windowManager.removeView(view)
+            } catch (e: Exception) {
+                Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: removeView failed")
             }
-            if (owners != null) {
-                try {
-                    owners.destroy()
-                } catch (e: Exception) {
-                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: owners.destroy failed")
-                }
+        }
+        if (owners != null) {
+            try {
+                owners.destroy()
+            } catch (e: Exception) {
+                Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: owners.destroy failed")
             }
-        } finally {
-            currentView = null
-            currentTreeOwners = null
-            currentLayoutParams = null
         }
     }
 
@@ -433,10 +440,12 @@ class OverlayController(
      * Dismisses the currently displayed overlay window and recycles resources.
      */
     fun dismiss() {
-        clearCurrentWindow()
-        currentCaptureId = null
-        showRequested.set(false)
-        _isShowingFlow.value = false
+        mainScope.launch {
+            clearCurrentWindow()
+            currentCaptureId = null
+            showRequested.set(false)
+            _isShowingFlow.value = false
+        }
     }
 
     /**

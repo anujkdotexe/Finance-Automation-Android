@@ -305,7 +305,8 @@
     <string name="prompt_place_optional">Place (optional)</string>
     <string name="prompt_settlement_note">Settlement note</string>
     <string name="hint_optional">Optional</string>
-    <string name="notes_field_add_button">+ Notes</string>
+    <string name="notes_field_add_button">Notes</string>
+    <string name="notes_field_add_cd">Add note</string>
     <string name="notes_field_label">Notes</string>
     <string name="notes_field_placeholder">Add a note&#8230;</string>
     <string name="notes_field_clear_cd">Clear note</string>
@@ -458,7 +459,9 @@
     <string name="privacy_section_data_title">Your data stays yours</string>
     <string name="privacy_section_data_desc">Finance Automation operates strictly local-first. All financial notifications are parsed entirely on your device. Transaction records are written directly to your private Google Sheets spreadsheet and never pass through any third-party backend servers.</string>
     <string name="privacy_section_notifications_title">Notification interception</string>
-    <string name="privacy_section_notifications_desc">The notification listener strictly checks incoming alerts against a whitelist of verified financial applications: Google Pay, PhonePe, Paytm, BHIM, Supermoney, and official bank debit SMS. Personal messaging applications (WhatsApp, Telegram, Signal) and OTP messages are never inspected, parsed, or logged.</string>
+    <string name="privacy_section_notifications_desc">The notification listener filters incoming alerts using a built-in registry of 13 verified payment apps (including Google Pay, PhonePe, Paytm, BHIM, Supermoney, Amazon Pay, CRED, Navi) and 3 system SMS packages (debit alerts accepted only from verified bank-style sender IDs). For chat apps carrying payments (WhatsApp and WhatsApp Business), only notifications specifically categorized by the system as payment channels are read; all personal messages, groups, calls, media, OTPs, and other chat apps (Telegram, Signal) are strictly rejected without reading their text.</string>
+    <string name="privacy_section_diagnostics_title">Opt-in diagnostics</string>
+    <string name="privacy_section_diagnostics_desc">Technical diagnostics (Crashlytics crash reports and anonymous usage counts) are strictly opt-in and disabled by default. When enabled, reports never contain transaction amounts, payees, account digits, spreadsheet IDs, or message text.</string>
     <string name="privacy_section_permissions_title">Minimal permissions</string>
     <string name="privacy_section_permissions_desc">We only request Google Drive and Sheets scopes necessary to read and update your designated ledger file (drive.file). The app cannot access your other Drive documents.</string>
     <string name="privacy_open_online">View policy online</string>

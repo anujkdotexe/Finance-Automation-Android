@@ -38,10 +38,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.Clock
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.TimeZone
 
 /**
  * Breakdown of monthly spend by category for visualization.
@@ -131,7 +131,8 @@ class DashboardViewModel(
     private val preferencesRepository: PreferencesRepository? = null,
     private val budgetRepository: BudgetRepository? = null,
     private val budgetProgressUseCase: BudgetProgressUseCase = BudgetProgressUseCase(),
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: Clock = Clock.system(LivingBurn.KOLKATA)
 ) : ViewModel() {
 
     constructor(
@@ -421,51 +422,38 @@ class DashboardViewModel(
         // The living burn rule lives in LivingBurn so budgets and the widget use exactly the same one
         val excludedCategoryNames: Set<String> = LivingBurn.excludedNames(categories)
 
-        val kolkataTz = TimeZone.getTimeZone("Asia/Kolkata")
-        val nowCal = Calendar.getInstance(kolkataTz)
-        val cal = Calendar.getInstance(kolkataTz).apply {
-            add(Calendar.MONTH, monthOffset)
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val startOfMonth = cal.timeInMillis
-        val selectedYear = cal.get(Calendar.YEAR)
-        val selectedMonth = cal.get(Calendar.MONTH) + 1
+        val kolkataZone = LivingBurn.KOLKATA
+        val nowZdt = ZonedDateTime.now(clock).withZoneSameInstant(kolkataZone)
+        val selectedMonthDate = nowZdt.toLocalDate().withDayOfMonth(1).plusMonths(monthOffset.toLong())
+        val startOfMonth = selectedMonthDate.atStartOfDay(kolkataZone).toInstant().toEpochMilli()
+        val selectedYear = selectedMonthDate.year
+        val selectedMonth = selectedMonthDate.monthValue
 
-        val monthLabelFormat = SimpleDateFormat("MMMM yyyy", Locale.US).apply {
-            timeZone = kolkataTz
-        }
-        val selectedMonthLabel = monthLabelFormat.format(cal.time)
+        val monthLabelFormat = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US).withZone(kolkataZone)
+        val selectedMonthLabel = monthLabelFormat.format(selectedMonthDate)
 
-        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val daysInMonth = selectedMonthDate.lengthOfMonth()
         val daysElapsed = if (monthOffset == 0) {
-            nowCal.get(Calendar.DAY_OF_MONTH).coerceIn(1, daysInMonth)
+            nowZdt.dayOfMonth.coerceIn(1, daysInMonth)
         } else if (monthOffset < 0) {
             daysInMonth
         } else {
             1
         }
 
-        cal.add(Calendar.MONTH, 1)
-        val endOfMonth = cal.timeInMillis
+        val endOfMonth = selectedMonthDate.plusMonths(1).atStartOfDay(kolkataZone).toInstant().toEpochMilli()
         val selectedWindow = startOfMonth until endOfMonth
 
         // Prior month window for "Last month" comparison
-        val priorCal = Calendar.getInstance(kolkataTz).apply {
-            timeInMillis = startOfMonth
-            add(Calendar.MONTH, -1)
-        }
-        val startOfPriorMonth = priorCal.timeInMillis
+        val priorMonthDate = selectedMonthDate.minusMonths(1)
+        val startOfPriorMonth = priorMonthDate.atStartOfDay(kolkataZone).toInstant().toEpochMilli()
         val endOfPriorMonth = startOfMonth
         val priorWindow = startOfPriorMonth until endOfPriorMonth
 
-        val priorSameDayCal = (priorCal.clone() as Calendar).apply {
-            add(Calendar.DAY_OF_MONTH, daysElapsed)
-        }
-        val endOfPriorSameDay = minOf(priorSameDayCal.timeInMillis, endOfPriorMonth)
+        val endOfPriorSameDay = minOf(
+            priorMonthDate.atStartOfDay(kolkataZone).plusDays(daysElapsed.toLong()).toInstant().toEpochMilli(),
+            endOfPriorMonth
+        )
 
         val currentBurn = LivingBurn.total(transactions, selectedWindow, excludedCategoryNames, inflows)
         val lastMonthBurn = LivingBurn.total(transactions, priorWindow, excludedCategoryNames, inflows)
@@ -730,7 +718,8 @@ class DashboardViewModel(
             preferencesRepository: PreferencesRepository? = null,
             budgetRepository: BudgetRepository? = null,
             budgetProgressUseCase: BudgetProgressUseCase = BudgetProgressUseCase(),
-            ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+            ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+            clock: Clock = Clock.system(LivingBurn.KOLKATA)
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: androidx.lifecycle.viewmodel.CreationExtras): T {
                 val created = create(modelClass)
@@ -751,7 +740,8 @@ class DashboardViewModel(
                     preferencesRepository = preferencesRepository,
                     budgetRepository = budgetRepository,
                     budgetProgressUseCase = budgetProgressUseCase,
-                    ioDispatcher = ioDispatcher
+                    ioDispatcher = ioDispatcher,
+                    clock = clock
                 ) as T
             }
         }

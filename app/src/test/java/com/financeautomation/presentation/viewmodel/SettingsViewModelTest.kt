@@ -592,9 +592,11 @@ class SettingsViewModelTest {
         // Second tap while running: must be ignored
         coordinator.autoProvisionMasterSheet()
 
-        // Wait until completion
-        while (stateFlow.value.isProvisioning) {
-            delay(20)
+        // Wait until completion with a safety timeout
+        kotlinx.coroutines.withTimeout(5_000L) {
+            while (stateFlow.value.isProvisioning) {
+                delay(20)
+            }
         }
 
         // Verify resolver was called exactly once

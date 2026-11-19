@@ -149,9 +149,16 @@ object QuickLogTransactionHelper {
             (existing.owedToMe > 0.0 && existing.owedToMe < (existing.totalAmount - existing.myShare - 0.01))
 
         val cleanNote = com.financeautomation.core.utils.InputPolicy.cleanNote(state.note)
+        val newTimestamp = state.captureTimestamp ?: existing.timestamp
+        val newDateSerial = if (state.captureTimestamp != null) com.financeautomation.core.utils.DateSerialUtils.toDateSerial(newTimestamp) else existing.dateSerial
+        val newTimeSerial = if (state.captureTimestamp != null) com.financeautomation.core.utils.DateSerialUtils.toTimeSerial(newTimestamp) else existing.timeSerial
+
         val updated = if (isSettledOrCarried) {
             // For Settled/Carried Fwd rows or modified owed, allow only description, category, and account edits. Keep existing tripTag.
             existing.copy(
+                timestamp = newTimestamp,
+                dateSerial = newDateSerial,
+                timeSerial = newTimeSerial,
                 merchant = state.payee.ifBlank { existing.merchant },
                 note = cleanNote,
                 category = state.selectedCategory,
@@ -172,6 +179,9 @@ object QuickLogTransactionHelper {
                 TransactionStatus.PENDING
             }
             existing.copy(
+                timestamp = newTimestamp,
+                dateSerial = newDateSerial,
+                timeSerial = newTimeSerial,
                 merchant = state.payee.ifBlank { "Expense" },
                 note = cleanNote,
                 category = state.selectedCategory,

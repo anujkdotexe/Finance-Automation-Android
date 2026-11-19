@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.flows
 
+import androidx.annotation.StringRes
 import com.financeautomation.presentation.components.ClearFocusOnUserDrag
 import com.financeautomation.core.constants.CategoryConstants
 
@@ -62,6 +63,13 @@ typealias OpenDebtItem = com.financeautomation.domain.model.OpenDebtItem
 
 
 
+enum class InflowOption(val key: String, @StringRes val labelRes: Int) {
+    INCOME("Income", R.string.inflow_type_income),
+    REFUND("Refund", R.string.inflow_type_return),
+    FRIEND_SETTLEMENT("Friend Settlement", R.string.inflow_type_friend),
+    TRANSFER("Transfer", R.string.inflow_type_transfer)
+}
+
 /**
  * Rebuilt Add Income flow sheet following the frozen design specification:
  * - Amount hero in mono.
@@ -101,22 +109,15 @@ fun IncomeReturnFlowSheet(
         }
     }
 
-    val incomeType = stringResource(R.string.inflow_type_income)
-    val refundType = stringResource(R.string.inflow_type_return)
-    val friendSettlementType = stringResource(R.string.inflow_type_friend)
-    val transferType = stringResource(R.string.inflow_type_transfer)
-
-    val inflowTypes = remember(incomeType, refundType, friendSettlementType, transferType) {
-        listOf(incomeType, refundType, friendSettlementType, transferType)
-    }
-    var selectedInflowType by rememberSaveable { mutableStateOf(incomeType) }
+    val inflowOptions = remember { InflowOption.values().toList() }
+    var selectedOption by rememberSaveable { mutableStateOf(InflowOption.INCOME) }
 
     var settlerName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
     var reasonText by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(preselectedFriend) {
         if (!preselectedFriend.isNullOrBlank()) {
-            selectedInflowType = friendSettlementType
+            selectedOption = InflowOption.FRIEND_SETTLEMENT
             onPersonChanged(preselectedFriend)
         }
     }
@@ -183,14 +184,14 @@ fun IncomeReturnFlowSheet(
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
-                inflowTypes.forEach { type ->
-                    val isSelected = selectedInflowType == type
+                inflowOptions.forEach { option ->
+                    val isSelected = selectedOption == option
                     AppChip(
-                        text = type,
+                        text = stringResource(option.labelRes),
                         selected = isSelected,
                         onClick = {
                             focusManager.clearFocus()
-                            selectedInflowType = type
+                            selectedOption = option
                         }
                     )
                 }
@@ -229,7 +230,7 @@ fun IncomeReturnFlowSheet(
         // 4. Sender / Source Field
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = if (selectedInflowType == friendSettlementType) {
+                text = if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {
                     stringResource(R.string.prompt_who_settled)
                 } else {
                     stringResource(R.string.prompt_sender_source)
@@ -241,7 +242,7 @@ fun IncomeReturnFlowSheet(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
             // Friend Chips if Friend settlement is active in wrapping FlowRow
-            if (selectedInflowType == friendSettlementType && companions.isNotEmpty()) {
+            if (selectedOption == InflowOption.FRIEND_SETTLEMENT && companions.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
@@ -269,13 +270,13 @@ fun IncomeReturnFlowSheet(
                     val clean = com.financeautomation.core.utils.InputPolicy.cleanName(it)
                         .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                     settlerName = clean
-                    if (selectedInflowType == friendSettlementType) {
+                    if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {
                         onPersonChanged(clean)
                     }
                 },
                 placeholder = {
                     Text(
-                        text = if (selectedInflowType == friendSettlementType) {
+                        text = if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {
                             stringResource(R.string.hint_friends_name)
                         } else {
                             stringResource(R.string.prompt_who_sent_this)
@@ -296,7 +297,7 @@ fun IncomeReturnFlowSheet(
         }
 
         // 5. Bill Picker for Friend Settlement (if open debts exist for this person)
-        if (selectedInflowType == friendSettlementType && openDebts.isNotEmpty()) {
+        if (selectedOption == InflowOption.FRIEND_SETTLEMENT && openDebts.isNotEmpty()) {
             OpenDebtPickerSection(
                 openDebts = openDebts,
                 autoSettleAll = autoSettleAll,
@@ -324,7 +325,7 @@ fun IncomeReturnFlowSheet(
         // 7. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Save income" outside scrollable area
         val amountEntry = AmountEntry(amountText)
         val parsedAmount = amountEntry.amountOrZero
-        val isValid = amountEntry.canSave && (selectedInflowType != friendSettlementType || settlerName.isNotBlank())
+        val isValid = amountEntry.canSave && (selectedOption != InflowOption.FRIEND_SETTLEMENT || settlerName.isNotBlank())
 
         ButtonPair(
             outlinedText = stringResource(R.string.action_cancel),
@@ -333,12 +334,12 @@ fun IncomeReturnFlowSheet(
             onFilledClick = {
                 val refs = if (autoSettleAll) emptyList() else selectedDebtIds.toList()
                 val effectiveReason = reasonText.ifBlank {
-                    if (selectedInflowType == friendSettlementType) "Settlement from $settlerName" else selectedInflowType
+                    if (selectedOption == InflowOption.FRIEND_SETTLEMENT) "Settlement from $settlerName" else selectedOption.key
                 }
                 onConfirm(
                     parsedAmount,
                     selectedAccount,
-                    selectedInflowType,
+                    selectedOption.key,
                     settlerName.trim(),
                     effectiveReason,
                     refs

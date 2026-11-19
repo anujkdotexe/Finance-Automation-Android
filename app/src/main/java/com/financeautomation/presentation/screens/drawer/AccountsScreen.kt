@@ -2,7 +2,7 @@ package com.financeautomation.presentation.screens.drawer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -185,7 +185,7 @@ fun AccountsScreen(
                                         }
                                     },
                                 dragHandleModifier = Modifier.pointerInput(account.id) {
-                                    detectDragGesturesAfterLongPress(
+                                    detectDragGestures(
                                         onDragStart = {
                                             draggingAccountId = account.id
                                             dragOffsetY = 0f
@@ -486,11 +486,10 @@ private fun AccountListItem(
         Box(
             modifier = Modifier
                 .size(FinanceTheme.sizes.minTouchTarget)
-                .clip(CircleShape)
+                .then(dragHandleModifier)
                 .semantics {
                     contentDescription = reorderCd
-                }
-                .then(dragHandleModifier),
+                },
             contentAlignment = Alignment.Center
         ) {
             Icon(

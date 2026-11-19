@@ -695,7 +695,10 @@ fun AppNavHost(
                         )
                     ) { backStackEntry ->
                         val monthOffset = backStackEntry.arguments?.getInt("monthOffset") ?: 0
-                        val category = backStackEntry.arguments?.getString("category")
+                        val rawCategory = backStackEntry.arguments?.getString("category")
+                        val category = if (!rawCategory.isNullOrBlank()) {
+                            try { java.net.URLDecoder.decode(rawCategory, "UTF-8") } catch (_: Exception) { rawCategory }
+                        } else null
                         val type = backStackEntry.arguments?.getString("type")
 
                         LaunchedEffect(backStackEntry.id) {
@@ -781,12 +784,15 @@ fun AppNavHost(
                         com.financeautomation.presentation.screens.InsightsScreen(
                             viewModel = insightsViewModel,
                             onOpenCategory = { month, category ->
-                                // Open Transactions on that month, filtered to the category
-                                transactionsViewModel.clearSearch()
-                                transactionsViewModel.currentMonth()
-                                repeat(insightsViewModel.monthsBeforeCurrent(month)) { transactionsViewModel.previousMonth() }
-                                transactionsViewModel.setFilter(category = category)
-                                navController.navigate(AppRoutes.TRANSACTIONS) { launchSingleTop = true }
+                                val offset = insightsViewModel.monthsBeforeCurrent(month)
+                                val encodedCat = try {
+                                    java.net.URLEncoder.encode(category, "UTF-8")
+                                } catch (_: Exception) {
+                                    category
+                                }
+                                navController.navigate("${AppRoutes.TRANSACTIONS}?monthOffset=$offset&category=$encodedCat") {
+                                    launchSingleTop = true
+                                }
                             }
                         )
                     }

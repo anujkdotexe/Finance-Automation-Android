@@ -73,7 +73,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 fun AddSubscriptionSheet(
     accounts: List<String>,
     onDismiss: () -> Unit,
-    onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean, note: String) -> Unit,
+    onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean, note: String, anchorEpochDay: Long?) -> Unit,
     modifier: Modifier = Modifier,
     /** Opens the sheet filled in from a detected repeating payment. */
     prefill: com.financeautomation.domain.usecase.RecurringSuggestion? = null,
@@ -100,10 +100,12 @@ fun AddSubscriptionSheet(
     var remindMe by rememberSaveable { mutableStateOf(existing?.remind ?: true) }
     var noteText by rememberSaveable { mutableStateOf(existing?.note.orEmpty()) }
 
-    var anchorDateEpochDay by rememberSaveable { mutableStateOf<Long?>(existing?.anchorEpochDay) }
+    val todayEpochDay = remember { java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toEpochDay() }
+    var anchorDateEpochDay by rememberSaveable {
+        mutableStateOf<Long?>(existing?.anchorEpochDay ?: prefill?.anchorEpochDay ?: todayEpochDay)
+    }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    val todayEpochDay = remember { java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toEpochDay() }
     val nextDueEpochDay = remember(anchorDateEpochDay, selectedFrequency) {
         anchorDateEpochDay?.let { anchor ->
             val anchorDate = java.time.LocalDate.ofEpochDay(anchor)
@@ -581,7 +583,7 @@ fun AddSubscriptionSheet(
                     onFilledClick = {
                         if (name.isNotBlank()) {
                             val amt = if (isFixedAmount) amountEntry.amountOrZero.takeIf { amountEntry.canSave } else null
-                            onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe, noteText)
+                            onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe, noteText, anchorDateEpochDay)
                         }
                     },
                     filledEnabled = name.isNotBlank() && (!isFixedAmount || amountEntry.canSave),

@@ -258,7 +258,7 @@ fun QuickLogSheet(
             )
         }
 
-        // 2b. Notes Field (collapsed + Notes button, expands to 120 char limited field)
+        // 2b. Notes Field (collapsed Notes button, expands to 120 char limited field)
         NotesField(
             value = state.note,
             onValueChange = onNoteChanged,

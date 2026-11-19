@@ -109,7 +109,6 @@ class OnboardingSignInFlowTest {
 
     @Test
     fun consentIsAskedForTheSameAccountAndNothingIsStoredUntilItIsGiven() = runTest(dispatcher) {
-        val pending = android.app.PendingIntent::class.java
         val auth = FakeAuth(AuthResult.Failed(java.io.IOException("needs consent")))
         val model = vm(auth)
         model.onGoogleAccountDetails("me@example.com", null, null)
@@ -125,7 +124,7 @@ class OnboardingSignInFlowTest {
         advanceUntilIdle()
         assertEquals("me@example.com", h.googleEmail)
         assertEquals(listOf<String?>("me@example.com", "me@example.com"), auth.requestedFor)
-        assertTrue(pending != null)
+        assertEquals(StepState.COMPLETED, model.uiState.value.step1State)
     }
 
     @Test

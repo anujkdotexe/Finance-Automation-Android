@@ -251,6 +251,7 @@ fun ReviewInboxContent(
                         ) { queueItem ->
                             FailedQueueItemCard(
                                 item = queueItem,
+                                itemDetail = state.failedQueueDetails[queueItem.id],
                                 onRetry = { onRetryQueueItem(queueItem.id) },
                                 onDiscard = { onDiscardQueueItem(queueItem.id) }
                             )
@@ -309,6 +310,7 @@ fun ReviewInboxContent(
 @Composable
 fun FailedQueueItemCard(
     item: SyncQueueEntity,
+    itemDetail: String? = null,
     onRetry: () -> Unit,
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier
@@ -339,11 +341,29 @@ fun FailedQueueItemCard(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
             )
+            if (!itemDetail.isNullOrBlank()) {
+                Text(
+                    text = itemDetail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
             Text(
                 text = stringResource(R.string.review_failed_queue_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            val errorText = try {
+                item.lastErrorKind?.let { com.financeautomation.core.utils.SyncErrorKind.valueOf(it).plainMessage() }
+            } catch (_: Exception) { null } ?: item.lastErrorDetail ?: item.lastErrorKind
+            if (!errorText.isNullOrBlank()) {
+                Text(
+                    text = "Reason: $errorText",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             ButtonPair(
                 outlinedText = stringResource(R.string.action_discard),
                 onOutlinedClick = onDiscard,

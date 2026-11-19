@@ -92,6 +92,12 @@ fun PrivacyPolicyScreen(
                 description = stringResource(R.string.privacy_section_permissions_desc)
             )
 
+            PrivacySectionCard(
+                icon = Icons.Rounded.Security,
+                title = stringResource(R.string.privacy_section_diagnostics_title),
+                description = stringResource(R.string.privacy_section_diagnostics_desc)
+            )
+
             OutlinedButton(
                 onClick = { openExternalLink(context, "https://financeautomation.app/privacy") },
                 modifier = Modifier

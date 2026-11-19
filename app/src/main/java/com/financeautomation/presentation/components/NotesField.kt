@@ -45,7 +45,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 /**
  * Shared NotesField composable (P2-H Item 2).
  *
- * Collapsed state: "+ Notes" text button with a 48 dp minimum touch target.
+ * Collapsed state: "Notes" text button with an Add icon and a 48 dp minimum touch target.
  * Expanded state: Outlined text field with 120 character counter, clear action, and edit action.
  */
 @Composable
@@ -60,6 +60,8 @@ fun NotesField(
     var isExpanded by rememberSaveable(value) { mutableStateOf(value.isNotEmpty()) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val addNoteCd = stringResource(R.string.notes_field_add_cd)
+    val clearNoteCd = stringResource(R.string.notes_field_clear_cd)
 
     LaunchedEffect(isExpanded) {
         if (isExpanded && value.isEmpty()) {
@@ -75,7 +77,7 @@ fun NotesField(
                 onClick = { isExpanded = true },
                 modifier = Modifier
                     .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                    .semantics { contentDescription = "+ Notes" }
+                    .semantics { contentDescription = addNoteCd }
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,
@@ -115,11 +117,11 @@ fun NotesField(
                                 onValueChange("")
                                 isExpanded = false
                             },
-                            modifier = Modifier.semantics { contentDescription = "Clear note" }
+                            modifier = Modifier.semantics { contentDescription = clearNoteCd }
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.notes_field_clear_cd),
+                                contentDescription = clearNoteCd,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

@@ -19,9 +19,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.financeautomation.FinanceApplication
 import com.financeautomation.R
-import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.presentation.screens.OnboardingScreen
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
@@ -211,7 +211,6 @@ class MainActivity : FragmentActivity() {
             val googleEmail by emailFlow.collectAsState(initial = SetupGate.Pref.Loading)
             val spreadsheetId by yearIdFlow.collectAsState(initial = SetupGate.Pref.Loading)
             val legacySpreadsheetId by legacyIdFlow.collectAsState(initial = SetupGate.Pref.Loading)
-            val themeMode by app.appContainer.preferencesRepository.getThemeMode().collectAsState(initial = ThemeMode.SYSTEM)
             var forceOnboarding by remember { mutableStateOf(false) }
             var lockReady by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
@@ -228,7 +227,7 @@ class MainActivity : FragmentActivity() {
             val setupLoading = setupDecision == SetupGate.Decision.LOADING
             val needsOnboarding = forceOnboarding || setupLatched || setupDecision == SetupGate.Decision.INCOMPLETE
 
-            FinanceAutomationTheme(themeMode = themeMode) {
+            SavedThemeHost(savedMode = app.appContainer.preferencesRepository.getThemeMode()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

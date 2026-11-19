@@ -77,13 +77,14 @@ class NotesFieldLogicTest {
     }
 
     @Test
-    fun cleanNoteEnforcesMaxLength120() {
+    fun cleanNoteWithMaxLenEnforcesMaxLength120() {
         val longText = "A".repeat(150)
-        val filtered = longText.filter { c ->
-            c == '\n' || c == '\t' || (c.code >= 0x20 && c.code != 0x7F)
-        }.take(InputPolicy.MAX_NOTE_LENGTH)
-        assertEquals(120, filtered.length)
-        assertEquals(InputPolicy.MAX_NOTE_LENGTH, filtered.length)
+        val clean = InputPolicy.cleanNote(longText).take(InputPolicy.MAX_NOTE_LENGTH)
+        assertEquals(120, clean.length)
+        assertEquals(InputPolicy.MAX_NOTE_LENGTH, clean.length)
+        val validation = InputPolicy.validateNote(longText)
+        assertTrue("Text longer than max length must fail validation", validation is InputPolicy.ValidationResult.Error)
+        assertEquals(InputPolicy.InputError.TOO_LONG, (validation as InputPolicy.ValidationResult.Error).reason)
     }
 
     @Test

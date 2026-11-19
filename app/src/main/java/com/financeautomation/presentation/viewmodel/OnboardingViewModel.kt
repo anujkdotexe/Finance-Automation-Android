@@ -200,7 +200,7 @@ class OnboardingViewModel(
             val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
             val errorText = when (err.reason) {
                 com.financeautomation.core.utils.InputPolicy.InputError.BLANK -> UiText.res(R.string.input_err_blank)
-                com.financeautomation.core.utils.InputPolicy.InputError.TOO_LONG -> UiText.res(R.string.input_err_too_long, listOf(err.limit))
+                com.financeautomation.core.utils.InputPolicy.InputError.TOO_LONG -> UiText.res(R.string.input_err_too_long, err.limit ?: com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                 com.financeautomation.core.utils.InputPolicy.InputError.DUPLICATE_NAME -> UiText.res(R.string.input_err_duplicate)
                 else -> UiText.res(R.string.input_err_invalid_chars)
             }
@@ -250,6 +250,10 @@ class OnboardingViewModel(
         }
         viewModelScope.launch(ioDispatcher) {
             accountRepository?.deleteAccount(accountId)
+            if (_uiState.value.defaultAccountName.equals(target.name, ignoreCase = true)) {
+                preferencesRepository.setDefaultAccount(com.financeautomation.core.constants.CategoryConstants.ACCOUNT_OTHER)
+                _uiState.update { it.copy(defaultAccountName = com.financeautomation.core.constants.CategoryConstants.ACCOUNT_OTHER) }
+            }
             _uiState.update { it.copy(accountSetupError = null) }
         }
     }

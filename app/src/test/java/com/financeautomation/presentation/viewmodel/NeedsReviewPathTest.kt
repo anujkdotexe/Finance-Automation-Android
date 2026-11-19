@@ -355,7 +355,7 @@ class NeedsReviewPathTest {
     }
 
     @Test
-    fun dismissCaptureFromReviewInbox_marksStateDone() = runTest {
+    fun dismissCaptureFromReviewInbox_marksStateDismissed() = runTest {
         val captureDao = FakePendingCaptureDao()
         val now = System.currentTimeMillis()
 
@@ -368,7 +368,7 @@ class NeedsReviewPathTest {
                 inferredAccount = "GPay",
                 timestamp = now,
                 kind = PendingCaptureEntity.KIND_DEBIT,
-                state = PendingCaptureEntity.STATE_DISMISSED,
+                state = PendingCaptureEntity.STATE_NEEDS_REVIEW,
                 notificationKey = null,
                 contentHash = null,
                 updatedAt = now
@@ -389,8 +389,8 @@ class NeedsReviewPathTest {
         vm.dismissCapture("cap_to_dismiss")
         advanceUntilIdle()
 
-        // Capture state is now DONE, so it is removed from Needs Review
-        assertEquals(PendingCaptureEntity.STATE_DONE, captureDao.getById("cap_to_dismiss")?.state)
+        // Capture state is now DISMISSED (preserved for review/confirmation)
+        assertEquals(PendingCaptureEntity.STATE_DISMISSED, captureDao.getById("cap_to_dismiss")?.state)
     }
 
     @Test

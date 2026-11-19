@@ -87,7 +87,7 @@ fun TripDetailSheet(
             dismissButton = {
                 OutlinedButton(
                     onClick = { showDeleteConfirm = false },
-                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                    modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                 ) {
                     Text(stringResource(R.string.action_cancel))
                 }
@@ -99,7 +99,7 @@ fun TripDetailSheet(
                         onDeleteTrip(summary.name)
                         onDismiss()
                     },
-                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
+                    modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                 ) {
                     Text(stringResource(R.string.trip_delete_action))
                 }
@@ -280,7 +280,7 @@ fun TripDetailSheet(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.trips_end_trip))
                     }
@@ -289,7 +289,7 @@ fun TripDetailSheet(
                         enabled = false,
                         modifier = Modifier
                             .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.trip_delete_active_blocked))
                     }
@@ -301,7 +301,7 @@ fun TripDetailSheet(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.trip_reactivate))
                     }
@@ -309,7 +309,7 @@ fun TripDetailSheet(
                         onClick = { showDeleteConfirm = true },
                         modifier = Modifier
                             .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp)
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
                     ) {
                         Text(stringResource(R.string.trip_delete_action), color = MaterialTheme.colorScheme.error)
                     }

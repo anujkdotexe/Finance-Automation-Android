@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -58,7 +59,8 @@ class QuickLogViewModel(
     private val calculateSplitUseCase: CalculateSplitUseCase = CalculateSplitUseCase(),
     private val logExpenseUseCase: LogExpenseUseCase = LogExpenseUseCase(transactionRepository, calculateSplitUseCase),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null
+    private val subscriptionRepository: com.financeautomation.domain.repository.SubscriptionRepository? = null,
+    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(QuickLogUiState())
@@ -346,27 +348,34 @@ class QuickLogViewModel(
      * 3. Marks pending capture as DONE.
      * 4. Notifies completion callback for result pill display.
      */
-    fun onConfirmAndSave(onSaved: (message: UiText, transactionId: String?) -> Unit) {
+    fun onConfirmAndSave(
+        onSaved: (message: UiText, transactionId: String) -> Unit,
+        onError: ((UiText) -> Unit)?
+    ) {
         val state = _uiState.value
         if (state.amount <= 0.0) {
-            _uiState.update { it.copy(errorMessage = UiText.res(R.string.quicklog_err_amount_zero)) }
+            val err = UiText.res(R.string.quicklog_err_amount_zero)
+            _uiState.update { it.copy(errorMessage = err) }
+            onError?.invoke(err)
             return
         }
         if (state.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
-            _uiState.update { it.copy(errorMessage = UiText.dynamic("Credit transactions cannot be saved as debit expenses.")) }
+            val err = UiText.dynamic("Credit transactions cannot be saved as debit expenses.")
+            _uiState.update { it.copy(errorMessage = err) }
+            onError?.invoke(err)
             return
         }
         if (!state.isSaveEnabled) {
-            _uiState.update {
-                it.copy(errorMessage = UiText.dynamic("At least one companion must be specified when an amount is owed to me"))
-            }
+            val err = UiText.dynamic("At least one companion must be specified when an amount is owed to me")
+            _uiState.update { it.copy(errorMessage = err) }
+            onError?.invoke(err)
             return
         }
         val captureTs = state.captureTimestamp
         if (captureTs != null && com.financeautomation.core.utils.isFuture(captureTs)) {
-            _uiState.update {
-                it.copy(errorMessage = UiText.res(R.string.quicklog_err_future_date))
-            }
+            val err = UiText.res(R.string.quicklog_err_future_date)
+            _uiState.update { it.copy(errorMessage = err) }
+            onError?.invoke(err)
             return
         }
 
@@ -379,18 +388,24 @@ class QuickLogViewModel(
                         is Result.Success -> {
                             val msg = UiText.res(R.string.quicklog_msg_updated)
                             _uiState.update { it.copy(isSaving = false, isSaved = true, resultMessage = msg) }
-                            onSaved(msg, txnId)
+                            withContext(mainDispatcher) {
+                                onSaved(msg, txnId)
+                            }
                         }
                         is Result.Error -> {
                             Diagnostics.record("QuickLogViewModel", "update_error: ${SyncErrorKind.safeCode("quicklog update", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
-                            _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", res.throwable))) }
+                            val errMsg = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", res.throwable))
+                            _uiState.update { it.copy(isSaving = false, errorMessage = errMsg) }
+                            withContext(mainDispatcher) { onError?.invoke(errMsg) }
                         }
                         is Result.Loading -> Unit
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     Diagnostics.record("QuickLogViewModel", "update_exception: ${SyncErrorKind.safeCode("quicklog update", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
-                    _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", e))) }
+                    val errMsg = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", e))
+                    _uiState.update { it.copy(isSaving = false, errorMessage = errMsg) }
+                    withContext(mainDispatcher) { onError?.invoke(errMsg) }
                 }
             }
             return
@@ -412,24 +427,34 @@ class QuickLogViewModel(
                         val formattedAmount = String.format(java.util.Locale.US, "%.2f", state.amount)
                         val message = UiText.res(R.string.quicklog_msg_saved_will_sync, formattedAmount)
                         _uiState.update { it.copy(isSaving = false, isSaved = true, transactionId = loggedTxn.id, resultMessage = message) }
-                        onSaved(message, loggedTxn.id)
+                        withContext(mainDispatcher) {
+                            onSaved(message, loggedTxn.id)
+                        }
                     }
                     is Result.Error -> {
                         Diagnostics.record("QuickLogViewModel", "save_error: ${SyncErrorKind.safeCode("quicklog save", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
-                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog save", result.throwable))) }
+                        val errMsg = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog save", result.throwable))
+                        _uiState.update { it.copy(isSaving = false, errorMessage = errMsg) }
+                        withContext(mainDispatcher) { onError?.invoke(errMsg) }
                     }
                     is Result.Loading -> Unit
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Diagnostics.record("QuickLogViewModel", "save_exception: ${SyncErrorKind.safeCode("quicklog save", e)} ${PrivacyScrubber.scrub(e.message.orEmpty())}")
-                _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog save", e))) }
+                val errMsg = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog save", e))
+                _uiState.update { it.copy(isSaving = false, errorMessage = errMsg) }
+                withContext(mainDispatcher) { onError?.invoke(errMsg) }
             }
         }
     }
 
+    fun onConfirmAndSave(onSaved: (message: UiText, transactionId: String) -> Unit) {
+        onConfirmAndSave(onSaved, null)
+    }
+
     fun onConfirmAndSave(onSaved: (UiText) -> Unit) {
-        onConfirmAndSave { message, _ -> onSaved(message) }
+        onConfirmAndSave { message: UiText, _: String -> onSaved(message) }
     }
 
     /**
@@ -446,7 +471,13 @@ class QuickLogViewModel(
                     peopleRepository = peopleRepository
                 )
                 if (updatedState != null) {
-                    _uiState.value = updatedState
+                    _uiState.update { curr ->
+                        updatedState.copy(
+                            availableAccounts = curr.availableAccounts.ifEmpty { updatedState.availableAccounts },
+                            availableCategories = curr.availableCategories.ifEmpty { updatedState.availableCategories },
+                            availableCompanions = curr.availableCompanions.ifEmpty { updatedState.availableCompanions }
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -486,7 +517,14 @@ class QuickLogViewModel(
      * Resets state for a clean prompt cycle.
      */
     fun clearState() {
-        _uiState.value = QuickLogUiState()
+        _uiState.update { curr ->
+            QuickLogUiState(
+                availableAccounts = curr.availableAccounts,
+                availableCategories = curr.availableCategories,
+                availableCompanions = curr.availableCompanions,
+                selectedAccount = curr.selectedAccount
+            )
+        }
     }
 
     /**

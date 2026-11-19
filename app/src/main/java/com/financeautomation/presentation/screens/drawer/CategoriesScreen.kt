@@ -3,7 +3,7 @@ package com.financeautomation.presentation.screens.drawer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -423,7 +423,7 @@ internal fun CategoryList(
                             }
                         },
                     dragHandleModifier = Modifier.pointerInput(category.id) {
-                        detectDragGesturesAfterLongPress(
+                        detectDragGestures(
                             onDragStart = {
                                 draggingCategoryId = category.id
                                 dragOffsetY = 0f
@@ -506,11 +506,10 @@ private fun CategoryItemCard(
             Box(
                 modifier = Modifier
                     .size(FinanceTheme.sizes.minTouchTarget)
-                    .clip(CircleShape)
+                    .then(dragHandleModifier)
                     .semantics {
                         contentDescription = reorderCd
-                    }
-                    .then(dragHandleModifier),
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

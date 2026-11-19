@@ -210,7 +210,11 @@ class SettingsCustomizationCoordinator(
                 uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in account ${acc.name} cannot be archived.")) }
                 return@launch
             }
+            val wasDefault = acc.isDefault || preferencesRepository.getDefaultAccountSync().equals(acc.name, ignoreCase = true)
             repo.archiveAccount(accountId)
+            if (wasDefault) {
+                preferencesRepository.setDefaultAccount(CategoryConstants.ACCOUNT_OTHER)
+            }
             uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_account_archived)) }
         }
     }
@@ -223,7 +227,11 @@ class SettingsCustomizationCoordinator(
                 uiState.update { it.copy(errorMessage = UiText.dynamic("Built-in account ${acc.name} cannot be deleted.")) }
                 return@launch
             }
+            val wasDefault = acc.isDefault || preferencesRepository.getDefaultAccountSync().equals(acc.name, ignoreCase = true)
             repo.deleteAccount(accountId)
+            if (wasDefault) {
+                preferencesRepository.setDefaultAccount(CategoryConstants.ACCOUNT_OTHER)
+            }
             uiState.update { it.copy(userMessage = UiText.res(R.string.settings_msg_account_deleted)) }
         }
     }

@@ -490,7 +490,7 @@ private fun OnboardingAccountsSetupScreen(
             Surface(
                 shape = FinanceShapes.large,
                 color = FinanceTheme.colors.surfaceContainerLowest,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                border = BorderStroke(FinanceTheme.sizes.strokeThin, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -596,7 +596,7 @@ private fun OnboardingAccountsSetupScreen(
                     Surface(
                         shape = FinanceShapes.card,
                         color = FinanceTheme.colors.surfaceContainerLowest,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        border = BorderStroke(FinanceTheme.sizes.strokeThin, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(

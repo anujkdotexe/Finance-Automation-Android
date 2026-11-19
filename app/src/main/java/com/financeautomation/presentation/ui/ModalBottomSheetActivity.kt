@@ -199,15 +199,16 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         },
                         onConfirmExpense = {
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
-                            quickLogViewModel.onConfirmAndSave { msg, txnId ->
-                                if (txnId != null) {
+                            quickLogViewModel.onConfirmAndSave(
+                                onSaved = { msg, txnId ->
                                     Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
                                     dismissSafely()
-                                } else {
+                                },
+                                onError = { msg ->
                                     isSubmitting.set(false)
                                     Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
                                 }
-                            }
+                            )
                         },
                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
@@ -299,7 +300,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                 }
                             }
                         },
-                        onConfirmRepaid = { amount, person, timestamp ->
+                        onConfirmRepaid = { amount, person, timestamp, account, note ->
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
@@ -307,7 +308,9 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                         creditor = person,
                                         amount = amount,
                                         explicitRef = null,
-                                        timestamp = timestamp
+                                        timestamp = timestamp,
+                                        account = account,
+                                        note = note
                                     )
                                     withContext(Dispatchers.Main) {
                                         when (res) {

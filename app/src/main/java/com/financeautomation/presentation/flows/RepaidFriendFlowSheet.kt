@@ -104,7 +104,7 @@ fun RepaidFriendFlowSheet(
     preselectedFriend: String? = null,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (amount: Double, person: String, timestamp: Long) -> Unit,
+    onConfirm: (amount: Double, person: String, timestamp: Long, account: String?, note: String?) -> Unit,
     onKeyboardFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -415,7 +415,9 @@ fun RepaidFriendFlowSheet(
                         System.currentTimeMillis()
                     }
                 }
-                onConfirm(parsedAmount, personName.trim(), epochMillis)
+                val finalAccount = selectedAccount.takeIf { it.isNotBlank() }
+                val finalNote = noteText.trim().takeIf { it.isNotEmpty() }
+                onConfirm(parsedAmount, personName.trim(), epochMillis, finalAccount, finalNote)
             },
             filledEnabled = isValid
         )
