@@ -44,6 +44,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -345,6 +346,9 @@ internal fun CategoryList(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var measuredRowHeightPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current.density
+    val currentCategories by rememberUpdatedState(categories)
+    val currentLocalCategories by rememberUpdatedState(localCategories)
+    val currentOnReorder by rememberUpdatedState(onReorderCategories)
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -422,9 +426,9 @@ internal fun CategoryList(
                                 dragOffsetY = 0f
                             },
                             onDragEnd = {
-                                val finalIds = localCategories.map { it.id }
-                                if (finalIds != categories.map { it.id }) {
-                                    onReorderCategories(finalIds)
+                                val finalIds = currentLocalCategories.map { it.id }
+                                if (finalIds != currentCategories.map { it.id }) {
+                                    currentOnReorder(finalIds)
                                 }
                                 draggingCategoryId = null
                                 dragOffsetY = 0f
@@ -432,23 +436,23 @@ internal fun CategoryList(
                             onDragCancel = {
                                 draggingCategoryId = null
                                 dragOffsetY = 0f
-                                localCategories = categories
+                                localCategories = currentCategories
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 dragOffsetY += dragAmount.y
                                 val rowHeight = if (measuredRowHeightPx > 0f) measuredRowHeightPx else 56f * density
                                 val swapThreshold = rowHeight * 0.5f
-                                val currentIndex = localCategories.indexOfFirst { it.id == draggingCategoryId }
+                                val currentIndex = currentLocalCategories.indexOfFirst { it.id == draggingCategoryId }
                                 if (currentIndex != -1) {
-                                    if (dragOffsetY > swapThreshold && currentIndex < localCategories.size - 1) {
-                                        val mutable = localCategories.toMutableList()
+                                    if (dragOffsetY > swapThreshold && currentIndex < currentLocalCategories.size - 1) {
+                                        val mutable = currentLocalCategories.toMutableList()
                                         val item = mutable.removeAt(currentIndex)
                                         mutable.add(currentIndex + 1, item)
                                         localCategories = mutable
                                         dragOffsetY -= rowHeight
                                     } else if (dragOffsetY < -swapThreshold && currentIndex > 0) {
-                                        val mutable = localCategories.toMutableList()
+                                        val mutable = currentLocalCategories.toMutableList()
                                         val item = mutable.removeAt(currentIndex)
                                         mutable.add(currentIndex - 1, item)
                                         localCategories = mutable

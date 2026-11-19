@@ -38,12 +38,14 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -79,7 +81,10 @@ fun AccountsScreen(
     var localAccounts by remember(state.accounts) { mutableStateOf(state.accounts) }
     var draggingAccountId by remember { mutableStateOf<String?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var measuredRowHeightPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current.density
+    val currentAccounts by rememberUpdatedState(state.accounts)
+    val currentLocalAccounts by rememberUpdatedState(localAccounts)
 
     Column(
         modifier = modifier
@@ -147,6 +152,11 @@ fun AccountsScreen(
                                 onArchive = { viewModel.onArchiveAccount(account.id) },
                                 onDelete = { viewModel.onDeleteAccount(account.id) },
                                 modifier = Modifier
+                                    .onSizeChanged { size ->
+                                        if (size.height > 0) {
+                                            measuredRowHeightPx = size.height.toFloat()
+                                        }
+                                    }
                                     .semantics {
                                         customActions = buildList {
                                             if (index > 0) {
@@ -178,8 +188,8 @@ fun AccountsScreen(
                                             dragOffsetY = 0f
                                         },
                                         onDragEnd = {
-                                            val finalIds = localAccounts.map { it.id }
-                                            if (finalIds != state.accounts.map { it.id }) {
+                                            val finalIds = currentLocalAccounts.map { it.id }
+                                            if (finalIds != currentAccounts.map { it.id }) {
                                                 viewModel.onReorderAccounts(finalIds)
                                             }
                                             draggingAccountId = null
@@ -188,22 +198,23 @@ fun AccountsScreen(
                                         onDragCancel = {
                                             draggingAccountId = null
                                             dragOffsetY = 0f
-                                            localAccounts = state.accounts
+                                            localAccounts = currentAccounts
                                         },
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             dragOffsetY += dragAmount.y
-                                            val itemHeightPx = 68f * density
-                                            val currentIndex = localAccounts.indexOfFirst { it.id == draggingAccountId }
+                                            val itemHeightPx = if (measuredRowHeightPx > 0f) measuredRowHeightPx else 68f * density
+                                            val swapThreshold = itemHeightPx * 0.5f
+                                            val currentIndex = currentLocalAccounts.indexOfFirst { it.id == draggingAccountId }
                                             if (currentIndex != -1) {
-                                                if (dragOffsetY > itemHeightPx && currentIndex < localAccounts.size - 1) {
-                                                    val mutable = localAccounts.toMutableList()
+                                                if (dragOffsetY > swapThreshold && currentIndex < currentLocalAccounts.size - 1) {
+                                                    val mutable = currentLocalAccounts.toMutableList()
                                                     val item = mutable.removeAt(currentIndex)
                                                     mutable.add(currentIndex + 1, item)
                                                     localAccounts = mutable
                                                     dragOffsetY -= itemHeightPx
-                                                } else if (dragOffsetY < -itemHeightPx && currentIndex > 0) {
-                                                    val mutable = localAccounts.toMutableList()
+                                                } else if (dragOffsetY < -swapThreshold && currentIndex > 0) {
+                                                    val mutable = currentLocalAccounts.toMutableList()
                                                     val item = mutable.removeAt(currentIndex)
                                                     mutable.add(currentIndex - 1, item)
                                                     localAccounts = mutable
