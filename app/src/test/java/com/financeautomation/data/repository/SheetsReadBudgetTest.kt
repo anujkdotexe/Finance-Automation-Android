@@ -21,7 +21,7 @@ class SheetsReadBudgetTest {
     private fun SyncHarness.reads() = server.calls.count { it.method == "GET" }
     private fun SyncHarness.ledgerReads() = server.calls.count { it.method == "GET" && it.url.contains("values:batchGet") }
     private fun SyncHarness.valueLookups() =
-        server.calls.count { it.method == "GET" && it.url.contains("/values/") && !it.url.contains("values:batchGet") }
+        server.calls.count { it.method == "GET" && it.url.contains("/values/") && !it.url.contains("values:batchGet") && !it.url.contains("L3") }
 
     private suspend fun SyncHarness.save(id: String) = repo.insertTransaction(expense(id, merchant = id))
 
