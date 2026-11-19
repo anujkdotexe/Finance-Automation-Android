@@ -236,4 +236,34 @@ class OnboardingAccountsSetupTest {
         assertEquals("Other", unknown.account)
         assertTrue(unknown.isNewAccount)
     }
+
+    @Test
+    fun tooLongAccountNameSetsFormattedErrorWithoutThrowing() = runTest(dispatcher) {
+        val h = SyncHarness()
+        h.googleEmail = null
+        val dao = InMemoryAccountDao()
+        val repo = AccountRepositoryImpl(accountDao = dao, ioDispatcher = dispatcher)
+
+        val vm = OnboardingViewModel(
+            googleAuthTokenProvider = FakeAuth(AuthResult.Token("tok")),
+            workbookResolver = createResolver(h),
+            preferencesRepository = h.prefs,
+            ioDispatcher = dispatcher,
+            accountRepository = repo
+        )
+        advanceUntilIdle()
+
+        // Name exceeding 40 characters (MAX_NAME_LENGTH)
+        val tooLongName = "A".repeat(45)
+        vm.addAccount(tooLongName, null)
+        advanceUntilIdle()
+
+        val err = vm.uiState.value.accountSetupError
+        assertNotNull("Must set account setup error for name exceeding limit", err)
+        assertTrue("Error must be StringResource UiText", err is UiText.StringResource)
+        val res = err as UiText.StringResource
+        assertEquals(com.financeautomation.R.string.input_err_too_long, res.resId)
+        assertEquals(1, res.args.size)
+        assertEquals(40, res.args[0])
+    }
 }

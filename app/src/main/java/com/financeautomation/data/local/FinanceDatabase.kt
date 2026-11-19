@@ -114,7 +114,11 @@ abstract class FinanceDatabase : RoomDatabase() {
         private const val TAG = "FinanceDatabase"
 
         init {
-            System.loadLibrary("sqlcipher")
+            try {
+                System.loadLibrary("sqlcipher")
+            } catch (e: UnsatisfiedLinkError) {
+                // In JVM unit tests, sqlcipher native library is not present
+            }
         }
 
         @Volatile

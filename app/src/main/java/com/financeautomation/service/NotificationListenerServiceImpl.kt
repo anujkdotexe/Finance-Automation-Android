@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
  * Android NotificationListenerService intercepting financial notifications from whitelisted package IDs.
  * Implements self-healing listener rebinds, catch-up replay, and handoff to ForegroundWatcher.
  */
-class NotificationListenerServiceImpl : NotificationListenerService() {
+open class NotificationListenerServiceImpl : NotificationListenerService() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)

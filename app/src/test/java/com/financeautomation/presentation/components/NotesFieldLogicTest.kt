@@ -2,6 +2,7 @@ package com.financeautomation.presentation.components
 
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.InputPolicy
 import com.financeautomation.domain.model.Companion
@@ -168,5 +169,57 @@ class NotesFieldLogicTest {
         )
 
         assertEquals("Family 4K plan shared with parents", sub.note)
+    }
+
+    @Test
+    fun quickLogTransactionHelper_updateExisting_updatesDateTimestampAndSerials() = kotlinx.coroutines.runBlocking {
+        val originalTimestamp = 1713600000000L
+        val originalDateSerial = com.financeautomation.core.utils.DateSerialUtils.toDateSerial(originalTimestamp)
+        val originalTimeSerial = com.financeautomation.core.utils.DateSerialUtils.toTimeSerial(originalTimestamp)
+
+        val existingTxn = Transaction(
+            id = "txn_2",
+            timestamp = originalTimestamp,
+            dateSerial = originalDateSerial,
+            timeSerial = originalTimeSerial,
+            account = "Cash",
+            merchant = "Cafe",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 150.0,
+            companions = "Personal",
+            myShare = 150.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            note = ""
+        )
+
+        val txnRepo = FakeTransactionRepo().apply { this.existingTxn = existingTxn }
+        val newTimestamp = originalTimestamp + 86400000L * 2 // 2 days later
+        val newDateSerial = com.financeautomation.core.utils.DateSerialUtils.toDateSerial(newTimestamp)
+        val newTimeSerial = com.financeautomation.core.utils.DateSerialUtils.toTimeSerial(newTimestamp)
+
+        val loadedState = QuickLogTransactionHelper.loadExistingTransaction(
+            txnId = "txn_2",
+            currentState = QuickLogUiState(),
+            transactionRepository = txnRepo,
+            peopleRepository = FakePeopleRepo()
+        )
+
+        val updatedState = loadedState!!.copy(captureTimestamp = newTimestamp)
+        val updateRes = QuickLogTransactionHelper.updateExisting(
+            txnId = "txn_2",
+            state = updatedState,
+            transactionRepository = txnRepo
+        )
+
+        assertTrue(updateRes is Result.Success)
+        val savedTxn = txnRepo.updated.firstOrNull()
+        org.junit.Assert.assertNotNull(savedTxn)
+        assertEquals(newTimestamp, savedTxn!!.timestamp)
+        assertEquals(newDateSerial, savedTxn.dateSerial)
+        assertEquals(newTimeSerial, savedTxn.timeSerial, 0.0001)
     }
 }
