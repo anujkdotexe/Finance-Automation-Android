@@ -114,6 +114,7 @@ class GoogleSheetsClientTest {
                 val decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
                 val values = when {
                     decodedUrl.contains("A4:A") -> existingDebits.map { listOf(it.getOrNull(0) ?: "") }
+                    decodedUrl.contains("L3:L3") || decodedUrl.contains("L3%3AL3") -> listOf(listOf("Note"))
                     decodedUrl.contains("AD4:AD") || decodedUrl.contains("AC4:AC") -> existingDebits.map { listOf(it.getOrNull(11) ?: it.getOrNull(10) ?: "") }
                     decodedUrl.contains("N4:N") || decodedUrl.contains("M4:M") -> existingInflows.map { listOf(it.getOrNull(0) ?: "") }
                     decodedUrl.contains("AE4:AE") || decodedUrl.contains("AD4:AD") -> existingInflows.map { listOf(it.getOrNull(7) ?: "") }
@@ -742,11 +743,11 @@ class GoogleSheetsClientTest {
                 }
 
                 // Check L3
-                method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3")) -> {
+                method == "GET" && !url.contains("batchGet") && (url.contains("L3%3AL3") || url.contains("L3:L3")) -> {
                     val body = if (isRepaired) {
                         """{"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [["Note"]]}"""
                     } else {
-                        """{"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [[""]]}"""
+                        """{"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [["Spacer 1"]]}"""
                     }
                     Response.Builder()
                         .request(request)
@@ -758,7 +759,7 @@ class GoogleSheetsClientTest {
                 }
 
                 // Post repair verification read back: L3:AF3
-                method == "GET" && (url.contains("L3%3AAF3") || url.contains("L3:AF3")) -> {
+                method == "GET" && !url.contains("batchGet") && (url.contains("L3%3AAF3") || url.contains("L3:AF3")) -> {
                     val body = """{"range": "'Nov26'!L3:AF3", "majorDimension": "ROWS", "values": [["Note", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Debit Txn UUID", "Inflow Txn UUID", "Payable Txn UUID"]]}"""
                     Response.Builder()
                         .request(request)
@@ -789,6 +790,7 @@ class GoogleSheetsClientTest {
                 method == "GET" && url.contains("values:batchGet") -> {
                     val body = """{
                         "valueRanges": [
+                            {"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [["Note"]]},
                             {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": [[46331, 0.5, "SBI", "Dinner", "", "Food & Drink", 500.0, "Personal", 500.0, 0.0, "Settled", "Dinner with team"]]},
                             {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": [["txn_debit_123"]]},
                             {"range": "'Nov26'!N4:U", "majorDimension": "ROWS", "values": [[46331, 0.5, "SBI", "Salary", "Employer", "Monthly Salary", 100000.0, ""]]},
@@ -1035,9 +1037,10 @@ class GoogleSheetsClientTest {
                         .build()
                 }
                 method == "GET" && url.contains("values:batchGet") -> {
-                    // Legacy 31-wide: A4:K has 11 columns, AC4:AC has uuid, A4:L is empty
+                    // Legacy 31-wide: L3 is "Spacer 1", A4:K has 11 columns, AC4:AC has uuid
                     val body = """{
                         "valueRanges": [
+                            {"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [["Spacer 1"]]},
                             {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": []},
                             {"range": "'Nov26'!A4:K", "majorDimension": "ROWS", "values": [[46331, 0.5, "SBI", "Old Coffee", "", "Food & Drink", 150.0, "Personal", 150.0, 0.0, "Settled"]]},
                             {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": []},
@@ -1101,9 +1104,10 @@ class GoogleSheetsClientTest {
                         .build()
                 }
                 method == "GET" && url.contains("values:batchGet") -> {
-                    // Modern 32-wide: A4:L has 12 columns with Note, AD4:AD has uuid
+                    // Modern 32-wide: L3 is "Note", A4:L has 12 columns with Note, AD4:AD has uuid
                     val body = """{
                         "valueRanges": [
+                            {"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [["Note"]]},
                             {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": [[46331, 0.5, "SBI", "New Coffee", "", "Food & Drink", 180.0, "Personal", 180.0, 0.0, "Settled", "Cappuccino with oat milk"]]},
                             {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": [["txn_modern_32"]]},
                             {"range": "'Nov26'!N4:U", "majorDimension": "ROWS", "values": []},
@@ -1140,5 +1144,281 @@ class GoogleSheetsClientTest {
         assertEquals("New Coffee", novTab.debits.first().description)
         assertEquals("Cappuccino with oat milk", novTab.debits.first().note)
         assertEquals("txn_modern_32", novTab.debits.first().uuid)
+    }
+
+    @Test
+    fun testProductionChain_old31ColumnWorkbook_syncWritesExpenseAndRepairsTabExactlyOnce() = runBlocking {
+        var isRepaired = false
+        val executedBatchBodies = mutableListOf<String>()
+        val putCalls = mutableListOf<Pair<String, String>>()
+
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                // Spreadsheet metadata
+                method == "GET" && url.contains("/test_sheet_id?") -> {
+                    val body = """{
+                        "spreadsheetId": "test_sheet_id",
+                        "sheets": [
+                            {"properties": {"sheetId": 1234, "title": "Nov26", "gridProperties": {"rowCount": 1000, "columnCount": 31}}}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                // Check L3
+                method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3")) -> {
+                    val headerVal = if (isRepaired) "Note" else "Spacer 1"
+                    val body = """{"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [["$headerVal"]]}"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                // Verification read back L3:AF3
+                method == "GET" && (url.contains("L3%3AAF3") || url.contains("L3:AF3")) -> {
+                    val body = """{"range": "'Nov26'!L3:AF3", "majorDimension": "ROWS", "values": [["Note", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Debit Txn UUID", "Inflow Txn UUID", "Payable Txn UUID"]]}"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                // batchUpdate (repair)
+                method == "POST" && url.contains(":batchUpdate") -> {
+                    val buffer = okio.Buffer()
+                    request.body?.writeTo(buffer)
+                    val bodyStr = buffer.readUtf8()
+                    executedBatchBodies.add(bodyStr)
+                    isRepaired = true
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                // Append value puts
+                method == "PUT" && url.contains("/values/") -> {
+                    val decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
+                    val buffer = okio.Buffer()
+                    request.body?.writeTo(buffer)
+                    putCalls.add(decodedUrl to buffer.readUtf8())
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"updatedCells": 1}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                // Single value get for free row scan
+                method == "GET" && url.contains("/values/") -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"range": "'Nov26'!A4:A", "majorDimension": "ROWS", "values": []}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        // 1. Production call chain: appendDebit is called on un-repaired 31-column month tab
+        val debit1 = listOf(46331, 0.5, "SBI", "Dinner", "", "Food & Drink", 500.0, "Personal", 500.0, 0.0, "Settled", "Dinner note")
+        val res1 = client.appendDebit("test_sheet_id", "Nov26", debit1)
+        assertTrue("First append must succeed", res1 is Result.Success)
+        assertEquals("Must execute repair batchUpdate exactly once", 1, executedBatchBodies.size)
+        assertTrue(executedBatchBodies.first().contains("\"startIndex\":11"))
+        assertTrue("Row must land in 32-column range A4:L4", putCalls.any { it.first.contains("A4:L4") && it.second.contains("Dinner note") })
+
+        // 2. Second append on the same tab in the session: should not execute repair batchUpdate again!
+        val debit2 = listOf(46332, 0.6, "SBI", "Coffee", "", "Food & Drink", 150.0, "Personal", 150.0, 0.0, "Settled", "Second note")
+        val res2 = client.appendDebit("test_sheet_id", "Nov26", debit2)
+        assertTrue("Second append must succeed", res2 is Result.Success)
+        assertEquals("Must NOT execute repair batchUpdate a second time", 1, executedBatchBodies.size)
+    }
+
+    @Test
+    fun testRepairMonthTabSchema_onFailedOrEmptyRead_stopsAndReportsErrorWithoutInsertingDimension() = runBlocking {
+        var is500Error = true
+        var batchUpdateCalled = false
+
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3")) -> {
+                    if (is500Error) {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(500)
+                            .message("Internal Server Error")
+                            .body("""{"error": "transient"}""".toResponseBody(jsonMediaType))
+                            .build()
+                    } else {
+                        // Empty read
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{"values": []}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+                method == "POST" && url.contains(":batchUpdate") -> {
+                    batchUpdateCalled = true
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{"replies": []}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        // Test 1: HTTP 500 error on L3 read
+        val resError = client.repairMonthTabSchema("test_sheet_id", "Nov26")
+        assertTrue("Must report error on failed L3 read", resError is Result.Error)
+        assertTrue("Must NOT call batchUpdate or insertDimension on read error", !batchUpdateCalled)
+
+        // Test 2: Empty read on L3
+        is500Error = false
+        val resEmpty = client.repairMonthTabSchema("test_sheet_id", "Nov26")
+        assertTrue("Must report error on empty L3 read", resEmpty is Result.Error)
+        assertTrue("Must NOT call batchUpdate or insertDimension on empty read", !batchUpdateCalled)
+    }
+
+    @Test
+    fun testReadLedgerSnapshot_reads31ColumnTabNextTo32ColumnTab() = runBlocking {
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                method == "GET" && url.contains("/test_sheet_id?") -> {
+                    val body = """{
+                        "spreadsheetId": "test_sheet_id",
+                        "sheets": [
+                            {"properties": {"sheetId": 101, "title": "Oct26", "gridProperties": {"rowCount": 1000, "columnCount": 31}}},
+                            {"properties": {"sheetId": 102, "title": "Nov26", "gridProperties": {"rowCount": 1000, "columnCount": 32}}}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                method == "GET" && url.contains("values:batchGet") -> {
+                    val body = """{
+                        "valueRanges": [
+                            {"range": "'Oct26'!L3:L3", "majorDimension": "ROWS", "values": [["Spacer 1"]]},
+                            {"range": "'Oct26'!A4:K", "majorDimension": "ROWS", "values": [[46300, 0.5, "HDFC", "Oct Fuel", "", "Fuel", 2000.0, "Personal", 2000.0, 0.0, "Settled"]]},
+                            {"range": "'Oct26'!AC4:AC", "majorDimension": "ROWS", "values": [["txn_oct_legacy_31"]]},
+                            {"range": "'Oct26'!M4:T", "majorDimension": "ROWS", "values": [[46300, 0.5, "HDFC", "Salary", "Company", "Oct Salary", 80000.0, ""]]},
+                            {"range": "'Oct26'!AD4:AD", "majorDimension": "ROWS", "values": [["inf_oct_legacy_31"]]},
+                            {"range": "'Oct26'!V4:AB", "majorDimension": "ROWS", "values": [[46300, 0.5, "Alice", "Oct Stay", 500.0, "", "Pending"]]},
+                            {"range": "'Oct26'!AE4:AE", "majorDimension": "ROWS", "values": [["pay_oct_legacy_31"]]},
+                            {"range": "'Nov26'!L3:L3", "majorDimension": "ROWS", "values": [["Note"]]},
+                            {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": [[46331, 0.5, "HDFC", "Nov Dinner", "", "Food", 1000.0, "Personal", 1000.0, 0.0, "Settled", "Team Dinner"]]},
+                            {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": [["txn_nov_modern_32"]]},
+                            {"range": "'Nov26'!N4:U", "majorDimension": "ROWS", "values": [[46331, 0.5, "HDFC", "Salary", "Company", "Nov Salary", 85000.0, ""]]},
+                            {"range": "'Nov26'!AE4:AE", "majorDimension": "ROWS", "values": [["inf_nov_modern_32"]]},
+                            {"range": "'Nov26'!W4:AC", "majorDimension": "ROWS", "values": [[46331, 0.5, "Bob", "Nov Grocery", 300.0, "", "Pending"]]},
+                            {"range": "'Nov26'!AF4:AF", "majorDimension": "ROWS", "values": [["pay_nov_modern_32"]]}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        val snapshotRes = client.readLedgerSnapshot("test_sheet_id")
+        assertTrue(snapshotRes is Result.Success)
+        val snapshot = (snapshotRes as Result.Success).data
+        assertEquals(2, snapshot.monthTabs.size)
+
+        // 31-column legacy tab Oct26
+        val octTab = snapshot.monthTabs.first { it.tabName == "Oct26" }
+        assertEquals(1, octTab.debits.size)
+        assertEquals("Oct Fuel", octTab.debits.first().description)
+        assertEquals("", octTab.debits.first().note)
+        assertEquals("txn_oct_legacy_31", octTab.debits.first().uuid)
+        assertEquals(1, octTab.inflows.size)
+        assertEquals("inf_oct_legacy_31", octTab.inflows.first().uuid)
+        assertEquals(1, octTab.payables.size)
+        assertEquals("pay_oct_legacy_31", octTab.payables.first().uuid)
+
+        // 32-column modern tab Nov26
+        val novTab = snapshot.monthTabs.first { it.tabName == "Nov26" }
+        assertEquals(1, novTab.debits.size)
+        assertEquals("Nov Dinner", novTab.debits.first().description)
+        assertEquals("Team Dinner", novTab.debits.first().note)
+        assertEquals("txn_nov_modern_32", novTab.debits.first().uuid)
+        assertEquals(1, novTab.inflows.size)
+        assertEquals("inf_nov_modern_32", novTab.inflows.first().uuid)
+        assertEquals(1, novTab.payables.size)
+        assertEquals("pay_nov_modern_32", novTab.payables.first().uuid)
     }
 }

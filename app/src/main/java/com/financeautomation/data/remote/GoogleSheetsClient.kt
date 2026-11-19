@@ -189,6 +189,19 @@ open class GoogleSheetsClient(
         }
     }
 
+    private val verifiedMonthTabs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    open suspend fun ensureMonthTabReady(spreadsheetId: String, tabName: String): Result<Unit> {
+        val key = "$spreadsheetId:$tabName"
+        if (verifiedMonthTabs.contains(key)) return Result.Success(Unit)
+        val res = ensureMonthTabExists(spreadsheetId, tabName)
+        if (res is Result.Success) {
+            verifiedMonthTabs.add(key)
+            return Result.Success(Unit)
+        }
+        return Result.Error((res as Result.Error).exception)
+    }
+
     /**
      * Appends a Table 1 Debit transaction strictly to range A3:L.
      */
@@ -198,6 +211,8 @@ open class GoogleSheetsClient(
         row: List<Any?>,
         uuid: String? = null
     ): Result<Int> {
+        val ready = ensureMonthTabReady(spreadsheetId, tabName)
+        if (ready is Result.Error) return Result.Error(ready.exception)
         val slice = if (row.size > 12) row.take(12) else row
         return appendTableScoped(
             spreadsheetId = spreadsheetId,
@@ -219,6 +234,8 @@ open class GoogleSheetsClient(
         row: List<Any?>,
         uuid: String? = null
     ): Result<Int> {
+        val ready = ensureMonthTabReady(spreadsheetId, tabName)
+        if (ready is Result.Error) return Result.Error(ready.exception)
         val slice = when {
             row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT -> row.subList(SheetSchemaConstants.TABLE_2_START_COL_INDEX, SheetSchemaConstants.TABLE_2_END_COL_INDEX + 1)
             row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT_V1 -> row.subList(SheetSchemaConstants.TABLE_2_START_COL_INDEX_V1, SheetSchemaConstants.TABLE_2_END_COL_INDEX_V1 + 1)
@@ -245,6 +262,8 @@ open class GoogleSheetsClient(
         row: List<Any?>,
         uuid: String? = null
     ): Result<Int> {
+        val ready = ensureMonthTabReady(spreadsheetId, tabName)
+        if (ready is Result.Error) return Result.Error(ready.exception)
         val slice = when {
             row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT -> row.subList(SheetSchemaConstants.TABLE_3_START_COL_INDEX, SheetSchemaConstants.TABLE_3_END_COL_INDEX + 1)
             row.size == SheetSchemaConstants.TOTAL_COLUMN_COUNT_V1 -> row.subList(SheetSchemaConstants.TABLE_3_START_COL_INDEX_V1, SheetSchemaConstants.TABLE_3_END_COL_INDEX_V1 + 1)
@@ -656,6 +675,8 @@ open class GoogleSheetsClient(
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
         val tabsMap = (tabsResult as Result.Success).data
         if (tabsMap.containsKey(tabName)) {
+            val repairRes = repairMonthTabSchema(spreadsheetId, tabName)
+            if (repairRes is Result.Error) return@withContext Result.Error(repairRes.exception)
             return@withContext Result.Success(false)
         }
         val provResult = provisionMonthTab(spreadsheetId, tabName, accounts, categories)
@@ -663,6 +684,8 @@ open class GoogleSheetsClient(
             // Check if another concurrent call created it
             val recheck = getSheetTabsWithIds(spreadsheetId)
             if (recheck is Result.Success && recheck.data.containsKey(tabName)) {
+                val repairRes = repairMonthTabSchema(spreadsheetId, tabName)
+                if (repairRes is Result.Error) return@withContext Result.Error(repairRes.exception)
                 return@withContext Result.Success(false)
             }
             return@withContext Result.Error(provResult.exception)
@@ -681,13 +704,19 @@ open class GoogleSheetsClient(
         tabName: String
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            // 1. Check header cell L3 first: skip if already "Note"
+            // 1. Check header cell L3 first: stop on error or empty read, skip if already "Note"
             val l3Res = getRangeValuesRaw(spreadsheetId, "'$tabName'!L3:L3")
-            if (l3Res is Result.Success) {
-                val headerVal = l3Res.data.firstOrNull()?.firstOrNull()?.toString()?.trim()
-                if (headerVal.equals("Note", ignoreCase = true)) {
-                    return@withContext Result.Success(false)
-                }
+            if (l3Res is Result.Error) {
+                return@withContext Result.Error(l3Res.exception)
+            }
+            val headerVal = (l3Res as Result.Success).data.firstOrNull()?.firstOrNull()?.toString()?.trim()
+            if (headerVal.isNullOrEmpty()) {
+                return@withContext Result.Error(
+                    IllegalStateException("Cannot repair month tab schema: header cell L3 is empty or unreadable on tab '$tabName'")
+                )
+            }
+            if (headerVal.equals("Note", ignoreCase = true)) {
+                return@withContext Result.Success(false)
             }
 
             // 2. Resolve sheetId
@@ -1379,6 +1408,16 @@ open class GoogleSheetsClient(
                 val refreshResult = getSheetTabsWithIds(spreadsheetId)
                 if (refreshResult is Result.Success) {
                     tabsMap = refreshResult.data.toMutableMap()
+                }
+            }
+
+            // Repair all existing month tabs to 32-column schema
+            for (tab in tabsMap.keys) {
+                if (MONTH_TAB_REGEX.matches(tab)) {
+                    val repRes = repairMonthTabSchema(spreadsheetId, tab)
+                    if (repRes is Result.Error) {
+                        return@withContext Result.Error(repRes.exception)
+                    }
                 }
             }
 
@@ -2182,17 +2221,23 @@ open class GoogleSheetsClient(
             }
 
             // Construct batch ranges for all sorted month tabs:
-            // Table 1: 'Tab'!A4:L and 'Tab'!AD4:AD
-            // Table 2: 'Tab'!N4:U and 'Tab'!AE4:AE
-            // Table 3: 'Tab'!W4:AC and 'Tab'!AF4:AF
+            // Table 1: 'Tab'!A4:L and 'Tab'!AD4:AD (V1 fallback: A4:K and AC4:AC)
+            // Table 2: 'Tab'!N4:U and 'Tab'!AE4:AE (V1 fallback: M4:T and AD4:AD)
+            // Table 3: 'Tab'!W4:AC and 'Tab'!AF4:AF (V1 fallback: V4:AB and AE4:AE)
+            // Header: 'Tab'!L3:L3 to detect 31- vs 32-column layout by header Note
             val batchRanges = mutableListOf<String>()
             sortedTabs.forEach { tab ->
+                batchRanges.add("'$tab'!L3:L3")
                 batchRanges.add("'$tab'!A4:L")
                 batchRanges.add("'$tab'!AD4:AD")
                 batchRanges.add("'$tab'!N4:U")
                 batchRanges.add("'$tab'!AE4:AE")
                 batchRanges.add("'$tab'!W4:AC")
                 batchRanges.add("'$tab'!AF4:AF")
+                batchRanges.add("'$tab'!A4:K")
+                batchRanges.add("'$tab'!AC4:AC")
+                batchRanges.add("'$tab'!M4:T")
+                batchRanges.add("'$tab'!V4:AB")
             }
 
             val batchResult = batchGetValues(
@@ -2217,12 +2262,15 @@ open class GoogleSheetsClient(
 
             for (tab in sortedTabs) {
                 val sheetId = tabsMap[tab] ?: 0
-                val debitsData = getValuesForRange(tab, "A4:L").ifEmpty { getValuesForRange(tab, "A4:K") }
-                val debitsUuids = getValuesForRange(tab, "AD4:AD").ifEmpty { getValuesForRange(tab, "AC4:AC") }
-                val inflowsData = getValuesForRange(tab, "N4:U").ifEmpty { getValuesForRange(tab, "M4:T") }
-                val inflowsUuids = getValuesForRange(tab, "AE4:AE").ifEmpty { getValuesForRange(tab, "AD4:AD") }
-                val payablesData = getValuesForRange(tab, "W4:AC").ifEmpty { getValuesForRange(tab, "V4:AB") }
-                val payablesUuids = getValuesForRange(tab, "AF4:AF").ifEmpty { getValuesForRange(tab, "AE4:AE") }
+                val l3Header = getValuesForRange(tab, "L3:L3").firstOrNull()?.firstOrNull()?.toString()?.trim()
+                val isV2 = l3Header.equals("Note", ignoreCase = true)
+
+                val debitsData = if (isV2) getValuesForRange(tab, "A4:L") else getValuesForRange(tab, "A4:K")
+                val debitsUuids = if (isV2) getValuesForRange(tab, "AD4:AD") else getValuesForRange(tab, "AC4:AC")
+                val inflowsData = if (isV2) getValuesForRange(tab, "N4:U") else getValuesForRange(tab, "M4:T")
+                val inflowsUuids = if (isV2) getValuesForRange(tab, "AE4:AE") else getValuesForRange(tab, "AD4:AD")
+                val payablesData = if (isV2) getValuesForRange(tab, "W4:AC") else getValuesForRange(tab, "V4:AB")
+                val payablesUuids = if (isV2) getValuesForRange(tab, "AF4:AF") else getValuesForRange(tab, "AE4:AE")
 
                 val debitsList = mutableListOf<LedgerDebitRow>()
                 for (i in debitsData.indices) {
