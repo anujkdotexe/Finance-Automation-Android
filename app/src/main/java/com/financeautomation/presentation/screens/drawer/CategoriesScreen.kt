@@ -430,7 +430,7 @@ internal fun CategoryList(
                             },
                             onDragEnd = {
                                 val finalIds = currentLocalCategories.map { it.id }
-                                if (finalIds != currentCategories.map { it.id }) {
+                                if (ReorderLogic.hasOrderChanged(finalIds, currentCategories.map { it.id })) {
                                     currentOnReorder(finalIds)
                                 }
                                 draggingCategoryId = null
@@ -439,29 +439,25 @@ internal fun CategoryList(
                             onDragCancel = {
                                 draggingCategoryId = null
                                 dragOffsetY = 0f
-                                localCategories = currentCategories
+                                localCategories = ReorderLogic.resolveCancelReset(currentCategories)
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 dragOffsetY += dragAmount.y
-                                val rowHeight = if (measuredRowHeightPx > 0f) measuredRowHeightPx else defaultRowHeightPx
-                                val swapThreshold = rowHeight * 0.5f
-                                val currentIndex = currentLocalCategories.indexOfFirst { it.id == draggingCategoryId }
-                                if (currentIndex != -1) {
-                                    if (dragOffsetY > swapThreshold && currentIndex < currentLocalCategories.size - 1) {
-                                        val mutable = currentLocalCategories.toMutableList()
-                                        val item = mutable.removeAt(currentIndex)
-                                        mutable.add(currentIndex + 1, item)
-                                        localCategories = mutable
-                                        dragOffsetY -= rowHeight
-                                    } else if (dragOffsetY < -swapThreshold && currentIndex > 0) {
-                                        val mutable = currentLocalCategories.toMutableList()
-                                        val item = mutable.removeAt(currentIndex)
-                                        mutable.add(currentIndex - 1, item)
-                                        localCategories = mutable
-                                        dragOffsetY += rowHeight
-                                    }
+                                val rowHeight = ReorderLogic.calculateEffectiveRowHeight(measuredRowHeightPx, defaultRowHeightPx)
+                                val swapThreshold = ReorderLogic.calculateSwapThreshold(rowHeight)
+                                val stepResult = ReorderLogic.processDragStep(
+                                    currentList = currentLocalCategories,
+                                    draggingId = draggingCategoryId ?: "",
+                                    currentOffsetY = dragOffsetY,
+                                    rowHeightPx = rowHeight,
+                                    swapThresholdPx = swapThreshold,
+                                    idSelector = { it.id }
+                                )
+                                if (stepResult.didSwap) {
+                                    localCategories = stepResult.updatedList
                                 }
+                                dragOffsetY = stepResult.remainingOffsetY
                             }
                         )
                     }

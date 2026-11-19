@@ -241,7 +241,8 @@ class DashboardSubscriptionsAndTripsParityTest {
             Transaction(id = "3", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Goa Hotel", category = "Dining", totalAmount = 2500.0, myShare = 2500.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "Goa2026", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
             Transaction(id = "4", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Monthly SIP", category = "Savings", totalAmount = 10000.0, myShare = 10000.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
             Transaction(id = "5", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Bank Transfer", category = "Transfer", totalAmount = 5000.0, myShare = 5000.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
-            Transaction(id = "6", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "[Void] Cancelled Booking", category = "Other", totalAmount = 0.0, myShare = 0.0, owedToMe = 0.0, status = TransactionStatus.VOID, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED)
+            Transaction(id = "6", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "[Void] Cancelled Booking", category = "Other", totalAmount = 0.0, myShare = 0.0, owedToMe = 0.0, status = TransactionStatus.VOID, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
+            Transaction(id = "7", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "[Void] Hand Edited NonZero Void", category = "Dining", totalAmount = 750.0, myShare = 750.0, owedToMe = 0.0, status = TransactionStatus.VOID, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED)
         )
         val domainInflows = listOf(
             Inflow(id = "inf_1", timestamp = testTs, amount = 600.0, account = "HDFC", inflowType = "Refund / Return", source = "Store", note = "Merchant return")
@@ -254,7 +255,8 @@ class DashboardSubscriptionsAndTripsParityTest {
             FakeExpenseRow(desc = "Goa Hotel", tripTag = "Goa2026", category = "Dining", totalAmount = 2500.0, myShare = 2500.0),
             FakeExpenseRow(desc = "Monthly SIP", tripTag = "", category = "Savings", totalAmount = 10000.0, myShare = 10000.0),
             FakeExpenseRow(desc = "Bank Transfer", tripTag = "", category = "Transfer", totalAmount = 5000.0, myShare = 5000.0),
-            FakeExpenseRow(desc = "[Void] Cancelled Booking", tripTag = "", category = "Other", totalAmount = 0.0, myShare = 0.0)
+            FakeExpenseRow(desc = "[Void] Cancelled Booking", tripTag = "", category = "Other", totalAmount = 0.0, myShare = 0.0),
+            FakeExpenseRow(desc = "[Void] Hand Edited NonZero Void", tripTag = "", category = "Dining", totalAmount = 750.0, myShare = 750.0)
         )
         val sheetInflows = listOf(
             FakeInflowRow(inflowType = "Refund / Return", reason = "Merchant return", amount = 600.0)

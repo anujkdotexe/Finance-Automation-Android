@@ -19,16 +19,19 @@ class DashboardFormulaParityTest {
         """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
 
     /**
-     * Owner decision: living burn subtracts the refunds of the month. The iOS SUMIFS is kept exactly as the first
-     * term; the refund terms and the MAX(0, ...) clamp are the only difference from the iOS template.
+     * Owner decision: living burn subtracts the refunds of the month and excludes [Void] transactions.
+     * The refund terms, [Void] exclusion, and the MAX(0, ...) clamp are the differences from the base iOS template.
      */
     private fun withRefunds(ios: String, tabInner: String): String {
         val core = ios.removePrefix("=IFERROR(").removeSuffix(", 0)")
         fun range(cols: String) = """INDIRECT("'" & $tabInner & "'!$cols")"""
+        val voidExclusion = """, ${range("D4:D")}, "<>[Void]*""""
+        val sumRange = range("I4:I")
+        val coreWithVoid = core.replace(sumRange, "$sumRange$voidExclusion")
         val refunds = listOf("Refund / Return", "Refund").joinToString("") {
             " - SUMIFS(${range("T4:T")}, ${range("Q4:Q")}, \"$it\")"
         }
-        return "=IFERROR(MAX(0, $core$refunds), 0)"
+        return "=IFERROR(MAX(0, $coreWithVoid$refunds), 0)"
     }
 
     private val currentTab = """TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2)"""

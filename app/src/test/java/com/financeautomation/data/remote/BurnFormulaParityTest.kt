@@ -49,11 +49,11 @@ class BurnFormulaParityTest {
 
     // The same month on the sheet: voided rows are zeroed in place, the row in review was never written
     private val sheetDebits = listOf(
-        mapOf("F" to "Food & Drink", "I" to 100.0),
-        mapOf("F" to "Food & Drink", "I" to 100.0),
-        mapOf("F" to "Food & Drink", "I" to 0.0),
-        mapOf("F" to "Savings", "I" to 200.0),
-        mapOf("F" to "Transfer", "I" to 30.0)
+        mapOf("D" to "plain", "F" to "Food & Drink", "I" to 100.0),
+        mapOf("D" to "split", "F" to "Food & Drink", "I" to 100.0),
+        mapOf("D" to "[Void] void", "F" to "Food & Drink", "I" to 0.0),
+        mapOf("D" to "sip", "F" to "Savings", "I" to 200.0),
+        mapOf("D" to "move", "F" to "Transfer", "I" to 30.0)
     )
     private val sheetInflows = listOf(
         mapOf("Q" to "Refund / Return", "T" to 60.0),
@@ -75,7 +75,16 @@ class BurnFormulaParityTest {
                 critCols.indices.all { i ->
                     val cell = row[critCols[i]]?.toString().orEmpty()
                     val c = criteria[i]
-                    if (c.startsWith("<>")) !cell.equals(c.removePrefix("<>"), ignoreCase = true) else cell.equals(c, ignoreCase = true)
+                    if (c.startsWith("<>")) {
+                        val target = c.removePrefix("<>")
+                        if (target.endsWith("*")) {
+                            !cell.startsWith(target.removeSuffix("*"), ignoreCase = true)
+                        } else {
+                            !cell.equals(target, ignoreCase = true)
+                        }
+                    } else {
+                        cell.equals(c, ignoreCase = true)
+                    }
                 }
             }.sumOf { (it[sumCol] as Double) }
         }

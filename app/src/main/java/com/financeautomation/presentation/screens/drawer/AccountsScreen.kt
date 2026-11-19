@@ -192,7 +192,7 @@ fun AccountsScreen(
                                         },
                                         onDragEnd = {
                                             val finalIds = currentLocalAccounts.map { it.id }
-                                            if (finalIds != currentAccounts.map { it.id }) {
+                                            if (ReorderLogic.hasOrderChanged(finalIds, currentAccounts.map { it.id })) {
                                                 viewModel.onReorderAccounts(finalIds)
                                             }
                                             draggingAccountId = null
@@ -201,29 +201,25 @@ fun AccountsScreen(
                                         onDragCancel = {
                                             draggingAccountId = null
                                             dragOffsetY = 0f
-                                            localAccounts = currentAccounts
+                                            localAccounts = ReorderLogic.resolveCancelReset(currentAccounts)
                                         },
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             dragOffsetY += dragAmount.y
-                                            val itemHeightPx = if (measuredRowHeightPx > 0f) measuredRowHeightPx else defaultRowHeightPx
-                                            val swapThreshold = itemHeightPx * 0.5f
-                                            val currentIndex = currentLocalAccounts.indexOfFirst { it.id == draggingAccountId }
-                                            if (currentIndex != -1) {
-                                                if (dragOffsetY > swapThreshold && currentIndex < currentLocalAccounts.size - 1) {
-                                                    val mutable = currentLocalAccounts.toMutableList()
-                                                    val item = mutable.removeAt(currentIndex)
-                                                    mutable.add(currentIndex + 1, item)
-                                                    localAccounts = mutable
-                                                    dragOffsetY -= itemHeightPx
-                                                } else if (dragOffsetY < -swapThreshold && currentIndex > 0) {
-                                                    val mutable = currentLocalAccounts.toMutableList()
-                                                    val item = mutable.removeAt(currentIndex)
-                                                    mutable.add(currentIndex - 1, item)
-                                                    localAccounts = mutable
-                                                    dragOffsetY += itemHeightPx
-                                                }
+                                            val itemHeightPx = ReorderLogic.calculateEffectiveRowHeight(measuredRowHeightPx, defaultRowHeightPx)
+                                            val swapThreshold = ReorderLogic.calculateSwapThreshold(itemHeightPx)
+                                            val stepResult = ReorderLogic.processDragStep(
+                                                currentList = currentLocalAccounts,
+                                                draggingId = draggingAccountId ?: "",
+                                                currentOffsetY = dragOffsetY,
+                                                rowHeightPx = itemHeightPx,
+                                                swapThresholdPx = swapThreshold,
+                                                idSelector = { it.id }
+                                            )
+                                            if (stepResult.didSwap) {
+                                                localAccounts = stepResult.updatedList
                                             }
+                                            dragOffsetY = stepResult.remainingOffsetY
                                         }
                                     )
                                 }
