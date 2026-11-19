@@ -345,6 +345,8 @@ class DefaultAppContainer(
             categoryRepository = categories,
             syncConfigUseCase = syncConfig,
             regenerateDashboardUseCase = regenDashboard,
+            subscriptionsSheetSyncCoordinatorProvider = { subscriptionsSheetSyncCoordinator },
+            tripsSheetSyncCoordinatorProvider = { tripsSheetSyncCoordinator },
             ioDispatcher = dispatcher,
             onWorkbookReplaced = { year, _, _ ->
                 txnRepoProvider().requeueYearForNewWorkbook(year)
@@ -376,7 +378,9 @@ class DefaultAppContainer(
             accountingSyncExecutor = accountingSyncExecutor,
             ioDispatcher = ioDispatcher,
             readGate = sheetsReadGate,
-            modifiedTimeProvider = { id -> googleDriveClient.getModifiedTime(id) }
+            modifiedTimeProvider = { id -> googleDriveClient.getModifiedTime(id) },
+            subscriptionsSheetSyncCoordinatorProvider = { subscriptionsSheetSyncCoordinator },
+            tripsSheetSyncCoordinatorProvider = { tripsSheetSyncCoordinator }
         ).also { impl ->
             // WorkManager keeps the retry alive across process death, unlike a plain coroutine
             impl.onTriggerSync = {
@@ -495,7 +499,10 @@ class DefaultAppContainer(
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             localGateway = configSyncLocalGateway,
             applicationScope = CoroutineScope(SupervisorJob() + ioDispatcher),
-            ioDispatcher = ioDispatcher
+            ioDispatcher = ioDispatcher,
+            subscriptionsSheetSyncCoordinatorProvider = { subscriptionsSheetSyncCoordinator },
+            tripsSheetSyncCoordinatorProvider = { tripsSheetSyncCoordinator },
+            preferencesRepository = preferencesRepository
         ).also { coordinator ->
             coordinator.onTriggerQueueSync = {
                 com.financeautomation.service.worker.SyncTransactionsWorker.enqueueExpedited(applicationContext)

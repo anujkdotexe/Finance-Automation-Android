@@ -2177,7 +2177,7 @@ open class GoogleSheetsClient(
      * Table 1 rows (A:L + AD) and Table 3 rows (W:AC + AF) are returned with their sheet row indices.
      */
     /** Reads the month tabs; [tabFilter] limits which ones (null reads all), so routine syncs can skip old months. */
-    suspend fun readLedgerSnapshot(
+    open suspend fun readLedgerSnapshot(
         spreadsheetId: String,
         tabFilter: ((String) -> Boolean)? = null
     ): Result<LedgerWorkbookSnapshot> = withContext(Dispatchers.IO) {

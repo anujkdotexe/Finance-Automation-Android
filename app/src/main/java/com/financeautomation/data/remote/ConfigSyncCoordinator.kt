@@ -5,6 +5,7 @@ import com.financeautomation.core.utils.safeCall
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.usecase.SyncConfigUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -28,21 +29,30 @@ class ConfigSyncCoordinator(
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     val localGateway: ConfigSyncLocalGateway,
     private val applicationScope: CoroutineScope,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val subscriptionsSheetSyncCoordinatorProvider: (() -> SubscriptionsSheetSyncCoordinator)? = null,
+    private val tripsSheetSyncCoordinatorProvider: (() -> TripsSheetSyncCoordinator)? = null,
+    private val preferencesRepository: PreferencesRepository? = null
 ) {
     constructor(
         syncConfigUseCase: SyncConfigUseCase,
         syncQueueDao: SyncQueueDao,
         localGateway: ConfigSyncLocalGateway,
         applicationScope: CoroutineScope,
-        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        subscriptionsSheetSyncCoordinatorProvider: (() -> SubscriptionsSheetSyncCoordinator)? = null,
+        tripsSheetSyncCoordinatorProvider: (() -> TripsSheetSyncCoordinator)? = null,
+        preferencesRepository: PreferencesRepository? = null
     ) : this(
         syncConfigUseCase = syncConfigUseCase,
         syncQueueDao = syncQueueDao,
         syncQueueDaoProvider = null,
         localGateway = localGateway,
         applicationScope = applicationScope,
-        ioDispatcher = ioDispatcher
+        ioDispatcher = ioDispatcher,
+        subscriptionsSheetSyncCoordinatorProvider = subscriptionsSheetSyncCoordinatorProvider,
+        tripsSheetSyncCoordinatorProvider = tripsSheetSyncCoordinatorProvider,
+        preferencesRepository = preferencesRepository
     )
 
     private suspend fun resolveSyncQueueDao(): SyncQueueDao =
@@ -116,6 +126,19 @@ class ConfigSyncCoordinator(
         safeCall {
             pushMutex.withLock {
                 val res = syncConfigUseCase.push()
+                val spreadsheetId = preferencesRepository?.getSpreadsheetIdSync()
+                if (!spreadsheetId.isNullOrBlank()) {
+                    try {
+                        subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(spreadsheetId)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
+                    try {
+                        tripsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(spreadsheetId)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
+                }
                 if (res is Result.Error) {
                     com.financeautomation.core.utils.CrashlyticsManager.recordNonFatal(
                         throwable = res.exception,
@@ -134,6 +157,19 @@ class ConfigSyncCoordinator(
         safeCall {
             if (force || syncConfigUseCase.shouldPull()) {
                 val res = syncConfigUseCase.pull()
+                val spreadsheetId = preferencesRepository?.getSpreadsheetIdSync()
+                if (!spreadsheetId.isNullOrBlank()) {
+                    try {
+                        subscriptionsSheetSyncCoordinatorProvider?.invoke()?.syncSubscriptionsTab(spreadsheetId)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
+                    try {
+                        tripsSheetSyncCoordinatorProvider?.invoke()?.syncTripsTab(spreadsheetId)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
+                }
                 if (res is Result.Error) {
                     com.financeautomation.core.utils.CrashlyticsManager.recordNonFatal(
                         throwable = res.exception,

@@ -40,6 +40,8 @@ open class WorkbookResolver(
     private val categoryRepository: CategoryRepository? = null,
     private val syncConfigUseCase: SyncConfigUseCase? = null,
     private val regenerateDashboardUseCase: RegenerateDashboardUseCase? = null,
+    private val subscriptionsSheetSyncCoordinatorProvider: (() -> SubscriptionsSheetSyncCoordinator)? = null,
+    private val tripsSheetSyncCoordinatorProvider: (() -> TripsSheetSyncCoordinator)? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val clock: java.time.Clock = java.time.Clock.system(ZoneId.of("Asia/Kolkata")),
     val onWorkbookReplaced: suspend (year: Int, oldId: String, newId: String) -> Unit = { _, _, _ -> }
@@ -248,6 +250,16 @@ open class WorkbookResolver(
                 if (syncConfigUseCase != null) {
                     when (val restoreRes = syncConfigUseCase.restoreFromCloud(candidateId)) {
                         is Result.Success -> {
+                            try {
+                                subscriptionsSheetSyncCoordinatorProvider?.invoke()?.syncSubscriptionsTab(candidateId)
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                            }
+                            try {
+                                tripsSheetSyncCoordinatorProvider?.invoke()?.syncTripsTab(candidateId)
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                            }
                             preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                             regenerateDashboardUseCase?.invoke()
                             return@withContext Result.Success(candidateId)
@@ -256,6 +268,16 @@ open class WorkbookResolver(
                             if (restoreRes.exception is EmptyOrMissingConfigTabException) {
                                 preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                                 syncConfigUseCase.mirrorToCloud(candidateId)
+                                try {
+                                    subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(candidateId)
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                }
+                                try {
+                                    tripsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(candidateId)
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                }
                                 regenerateDashboardUseCase?.invoke()
                                 return@withContext Result.Success(candidateId)
                             } else {
@@ -301,6 +323,16 @@ open class WorkbookResolver(
                         if (syncConfigUseCase != null) {
                             when (val restoreRes = syncConfigUseCase.restoreFromCloud(foundId)) {
                                 is Result.Success -> {
+                                    try {
+                                        subscriptionsSheetSyncCoordinatorProvider?.invoke()?.syncSubscriptionsTab(foundId)
+                                    } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
+                                    }
+                                    try {
+                                        tripsSheetSyncCoordinatorProvider?.invoke()?.syncTripsTab(foundId)
+                                    } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
+                                    }
                                     regenerateDashboardUseCase?.invoke()
                                     return@withContext Result.Success(foundId)
                                 }
@@ -308,6 +340,16 @@ open class WorkbookResolver(
                                     if (restoreRes.exception is EmptyOrMissingConfigTabException) {
                                         // Config tab is empty or absent: push local defaults once, then regenerate
                                         syncConfigUseCase.mirrorToCloud(foundId)
+                                        try {
+                                            subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(foundId)
+                                        } catch (e: Exception) {
+                                            if (e is CancellationException) throw e
+                                        }
+                                        try {
+                                            tripsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(foundId)
+                                        } catch (e: Exception) {
+                                            if (e is CancellationException) throw e
+                                        }
                                         regenerateDashboardUseCase?.invoke()
                                         return@withContext Result.Success(foundId)
                                     } else {
@@ -378,6 +420,18 @@ open class WorkbookResolver(
 
             // Newly created: mirror local default config to Config tab, then regenerate Dashboard
             syncConfigUseCase?.mirrorToCloud(newSpreadsheetId)
+            try {
+                subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(newSpreadsheetId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("WorkbookResolver", "mirrorSubscriptions: ${e.javaClass.simpleName}")
+            }
+            try {
+                tripsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(newSpreadsheetId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("WorkbookResolver", "mirrorTrips: ${e.javaClass.simpleName}")
+            }
             regenerateDashboardUseCase?.invoke()
 
             Result.Success(newSpreadsheetId)
@@ -441,6 +495,16 @@ open class WorkbookResolver(
             }
 
             syncConfigUseCase?.mirrorToCloud(newId)
+            try {
+                subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(newId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
+            try {
+                tripsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(newId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
             regenerateDashboardUseCase?.invoke()
 
             Result.Success(newId)

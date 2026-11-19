@@ -103,7 +103,11 @@ class TransactionRepositoryImpl(
     private val readGate: SheetsReadGate = SheetsReadGate(),
     /** Drive modified time of a spreadsheet; lets an idle sync skip the full read when nothing changed. */
     private val modifiedTimeProvider: (suspend (String) -> Result<String?>)? = null,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator? = null,
+    private val tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator? = null,
+    private val subscriptionsSheetSyncCoordinatorProvider: (() -> com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator)? = null,
+    private val tripsSheetSyncCoordinatorProvider: (() -> com.financeautomation.data.remote.TripsSheetSyncCoordinator)? = null
 ) : TransactionRepository {
 
     constructor(
@@ -126,7 +130,9 @@ class TransactionRepositoryImpl(
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
         readGate: SheetsReadGate = SheetsReadGate(),
         modifiedTimeProvider: (suspend (String) -> Result<String?>)? = null,
-        clock: () -> Long = System::currentTimeMillis
+        clock: () -> Long = System::currentTimeMillis,
+        subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator? = null,
+        tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator? = null
     ) : this(
         transactionDao = transactionDao,
         syncQueueDao = syncQueueDao,
@@ -153,8 +159,18 @@ class TransactionRepositoryImpl(
         ioDispatcher = ioDispatcher,
         readGate = readGate,
         modifiedTimeProvider = modifiedTimeProvider,
-        clock = clock
+        clock = clock,
+        subscriptionsSheetSyncCoordinator = subscriptionsSheetSyncCoordinator,
+        tripsSheetSyncCoordinator = tripsSheetSyncCoordinator,
+        subscriptionsSheetSyncCoordinatorProvider = null,
+        tripsSheetSyncCoordinatorProvider = null
     )
+
+    private fun resolveSubscriptionsSheetSyncCoordinator(): com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator? =
+        subscriptionsSheetSyncCoordinator ?: subscriptionsSheetSyncCoordinatorProvider?.invoke()
+
+    private fun resolveTripsSheetSyncCoordinator(): com.financeautomation.data.remote.TripsSheetSyncCoordinator? =
+        tripsSheetSyncCoordinator ?: tripsSheetSyncCoordinatorProvider?.invoke()
 
     internal val syncMutex = Mutex()
 
@@ -1031,6 +1047,21 @@ class TransactionRepositoryImpl(
                 try {
                     if (item.operationType == SyncQueueEntity.OP_CONFIG_PUSH) {
                     val configRes = syncConfigUseCase?.push()
+                    val targetSheetId = reconcileSpreadsheetId() ?: preferencesRepository?.getSpreadsheetIdSync()
+                    if (!targetSheetId.isNullOrBlank()) {
+                        try {
+                            resolveSubscriptionsSheetSyncCoordinator()?.mirrorToSheet(targetSheetId)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Diagnostics.record("TransactionRepository", "mirrorSubscriptions: ${e.javaClass.simpleName}")
+                        }
+                        try {
+                            resolveTripsSheetSyncCoordinator()?.mirrorToSheet(targetSheetId)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Diagnostics.record("TransactionRepository", "mirrorTrips: ${e.javaClass.simpleName}")
+                        }
+                    }
                     if (configRes is Result.Success) {
                         syncQueueDao.deleteById(item.id)
                         syncedCount++
@@ -1610,6 +1641,19 @@ class TransactionRepositoryImpl(
 
             val spreadsheetId = targetSpreadsheetId ?: reconcileSpreadsheetId()
                 ?: return@withContext Result.Success(0)
+
+            try {
+                resolveSubscriptionsSheetSyncCoordinator()?.syncSubscriptionsTab(spreadsheetId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("TransactionRepository", "syncSubscriptionsTab: ${e.javaClass.simpleName}")
+            }
+            try {
+                resolveTripsSheetSyncCoordinator()?.syncTripsTab(spreadsheetId)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Diagnostics.record("TransactionRepository", "syncTripsTab: ${e.javaClass.simpleName}")
+            }
 
             val snapRes = if (allTabs) {
                 sheets.readLedgerSnapshot(spreadsheetId)
