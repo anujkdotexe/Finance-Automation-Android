@@ -74,7 +74,14 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         PipelineTrail.record(PipelineStage.ALERT, PipelineCode.WHITELISTED_SEEN)
 
         val extras = sbn.notification.extras ?: Bundle.EMPTY
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+
+        // Reject non-bank SMS sender before reading any message text into memory (AGENTS Rule 15)
+        if (!NotificationPreFilter.isAllowedSender(sourcePackage, title)) {
+            PipelineTrail.recordDroppedNotWhitelisted()
+            return
+        }
+
         val extraText = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         // Sender and keyword filter on the title and a short prefix first; the long text is only read after it passes
         if (!NotificationPreFilter.shouldReadFullText(sourcePackage, title, extraText.take(NotificationPreFilter.PREFIX_LENGTH))) {

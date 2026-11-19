@@ -13,9 +13,14 @@ object NotificationPreFilter {
 
     const val PREFIX_LENGTH: Int = 400
 
-    fun shouldReadFullText(sourcePackage: String, title: String, textPrefix: String): Boolean {
+    fun isAllowedSender(sourcePackage: String, title: String): Boolean {
         if (!PackageWhitelist.isSmsPackage(sourcePackage)) return true
-        if (!RegexPatterns.isBankSenderId(title)) return false
+        return RegexPatterns.isBankSenderId(title)
+    }
+
+    fun shouldReadFullText(sourcePackage: String, title: String, textPrefix: String): Boolean {
+        if (!isAllowedSender(sourcePackage, title)) return false
+        if (!PackageWhitelist.isSmsPackage(sourcePackage)) return true
         val head = "$title. ${textPrefix.take(PREFIX_LENGTH)}"
         return RegexPatterns.hasFinancialKeywords(head)
     }

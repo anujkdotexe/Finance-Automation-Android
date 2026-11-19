@@ -14,6 +14,15 @@ class NotificationPreFilterTest {
     private val sms = PackageWhitelist.PACKAGE_GOOGLE_MESSAGES
 
     @Test
+    fun isAllowedSenderRejectsPersonalSmsAndAcceptsBankSmsAndPaymentApps() {
+        assertFalse(NotificationPreFilter.isAllowedSender(sms, "+919812345678"))
+        assertFalse(NotificationPreFilter.isAllowedSender(sms, "John Doe"))
+        assertTrue(NotificationPreFilter.isAllowedSender(sms, "HDFCBK"))
+        assertTrue(NotificationPreFilter.isAllowedSender(sms, "AX-SBIINB"))
+        assertTrue(NotificationPreFilter.isAllowedSender(PackageWhitelist.PACKAGE_GPAY, "Swiggy"))
+    }
+
+    @Test
     fun smsFromAPersonalNumberIsNotReadFurther() {
         assertFalse(NotificationPreFilter.shouldReadFullText(sms, "+919812345678", "Hi, paid you Rs 500 for lunch"))
         assertFalse(NotificationPreFilter.shouldReadFullText(sms, "98123 45678", "debited Rs 100"))
