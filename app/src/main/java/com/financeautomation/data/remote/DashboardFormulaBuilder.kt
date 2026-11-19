@@ -39,7 +39,7 @@ object DashboardFormulaBuilder {
      * below zero. Voided income rows have amount 0, so they drop out on their own, and rows still in review are not
      * on the sheet at all. Matches [com.financeautomation.domain.usecase.LivingBurn].
      */
-    private fun burnFormula(tabName: String, excludedCategoryNames: List<String>): String {
+    fun burnFormula(tabName: String, excludedCategoryNames: List<String>): String {
         val exclusions = livingBurnExclusions(excludedCategoryNames).joinToString("") { name ->
             val escapedCriterion = com.financeautomation.core.utils.SinkEscaper.sheetFormulaLiteral(
                 com.financeautomation.core.utils.SinkEscaper.sheetCriterion(name)
@@ -89,6 +89,27 @@ object DashboardFormulaBuilder {
     fun buildCategorySpendFormula(rowNumber: Int): String {
         return """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
     }
+
+    /**
+     * Category spend formula for the Insights table (Column V row [rowNum], referencing category in Column U).
+     * Excludes [Void] rows and trip-tagged rows (Column E blank).
+     */
+    fun buildInsightCategorySpendFormula(rowNum: Int): String =
+        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*"), 0)"""
+
+    /**
+     * Trips slice spend formula for the Insights table.
+     * Sums across tagged trip rows (Column E non-empty) excluding Void, Savings, Transfer.
+     */
+    fun buildInsightTripSpendFormula(): String =
+        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+
+    /**
+     * Refunds slice formula for the Insights table.
+     * Subtracts refund inflows from Table 2 so total of all Insights slices matches the Living Burn KPI.
+     */
+    fun buildInsightRefundsFormula(): String =
+        """=-IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!T4:T"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Q4:Q"), "Refund*"), 0)"""
 
     val MONTH_PREFIXES: List<String> = listOf(
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -220,7 +241,7 @@ object DashboardFormulaBuilder {
     fun buildTripTotalPaidFormula(year: Int, row1BasedIndex: Int): String {
         val tabs = monthTabsForYear(year)
         val terms = tabs.map { tab ->
-            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
         }
         return "=" + terms.joinToString(" + ")
     }
@@ -232,7 +253,7 @@ object DashboardFormulaBuilder {
     fun buildTripMyShareFormula(year: Int, row1BasedIndex: Int): String {
         val tabs = monthTabsForYear(year)
         val terms = tabs.map { tab ->
-            """IFERROR(SUMIFS(INDIRECT("'$tab'!I4:I"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!I4:I"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
         }
         return "=" + terms.joinToString(" + ")
     }

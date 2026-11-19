@@ -1467,7 +1467,7 @@ object SheetProvisioner {
             !it.equals(SheetSchemaConstants.SAVINGS_KEYWORD, ignoreCase = true) &&
             !it.equals("Transfer", ignoreCase = true)
         }
-        val insightsCount = insightsCategories.size + 1 // categories + 1 trip slice
+        val insightsCount = insightsCategories.size + 2 // categories + 1 trip slice + 1 refunds slice
 
         insightsCategories.forEachIndexed { idx, catName ->
             val rowNum = 65 + idx
@@ -1487,7 +1487,7 @@ object SheetProvisioner {
                 )
             )
             // Item Spend (Col V): Category spend where Column E is blank (non-trip) and not Void
-            val catNonTripFormula = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*"), 0)"""
+            val catNonTripFormula = DashboardFormulaBuilder.buildInsightCategorySpendFormula(rowNum)
             requests.add(
                 createCellRequest(
                     sheetId = dashboardSheetId,
@@ -1525,13 +1525,49 @@ object SheetProvisioner {
             )
         )
         // Trip Slice Spend: sum across tagged trip rows excluding Void, Savings, Transfer
-        val tripSliceFormula = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+        val tripSliceFormula = DashboardFormulaBuilder.buildInsightTripSpendFormula()
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
                 rowIndex = tripSliceRowNum - 1,
                 colIndex = 21,
                 value = mapOf("formulaValue" to tripSliceFormula),
+                format = mapOf(
+                    "backgroundColor" to bodyAltRowBg,
+                    "horizontalAlignment" to "RIGHT",
+                    "verticalAlignment" to "MIDDLE",
+                    "numberFormat" to mapOf(
+                        "type" to "CURRENCY",
+                        "pattern" to CURRENCY_PATTERN
+                    ),
+                    "textFormat" to mapOf("fontSize" to 10, "bold" to true)
+                )
+            )
+        )
+
+        // Refunds Slice row (subtracts refund inflows from Table 2 to maintain parity with Burn KPI)
+        val refundsSliceRowNum = tripSliceRowNum + 1
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = refundsSliceRowNum - 1,
+                colIndex = 20,
+                value = mapOf("stringValue" to "Refunds"),
+                format = mapOf(
+                    "backgroundColor" to bodyAltRowBg,
+                    "horizontalAlignment" to "LEFT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf("fontSize" to 10, "bold" to true)
+                )
+            )
+        )
+        val refundsSliceFormula = DashboardFormulaBuilder.buildInsightRefundsFormula()
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = refundsSliceRowNum - 1,
+                colIndex = 21,
+                value = mapOf("formulaValue" to refundsSliceFormula),
                 format = mapOf(
                     "backgroundColor" to bodyAltRowBg,
                     "horizontalAlignment" to "RIGHT",
