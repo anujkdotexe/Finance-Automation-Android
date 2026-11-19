@@ -282,6 +282,7 @@ class TransactionRepositorySyncTest {
     private class CountingSheetsMock {
         val appendDebitCount = AtomicInteger(0)
         val writtenUuids = ConcurrentHashMap<String, String>() // cell -> uuid
+        val recordedBodies = java.util.concurrent.CopyOnWriteArrayList<String>()
         var customBatchGetResponse: String? = null
         var failBatchGetOnce: Boolean = false
         var customGetHandler: ((url: String) -> String?)? = null
@@ -296,6 +297,15 @@ class TransactionRepositorySyncTest {
                 val request = chain.request()
                 val url = request.url.toString()
                 val method = request.method
+
+                val bodyText = request.body?.let { b ->
+                    val buf = okio.Buffer()
+                    b.writeTo(buf)
+                    buf.readUtf8()
+                }.orEmpty()
+                if (bodyText.isNotEmpty()) {
+                    recordedBodies.add(bodyText)
+                }
 
                 if (method == "GET" && url.contains("values:batchGet") && failBatchGetOnce) {
                     failBatchGetOnce = false
@@ -1906,6 +1916,92 @@ class TransactionRepositorySyncTest {
         assertNotNull(reconciledTxn)
         assertEquals(6, reconciledTxn!!.sheetRowIndex)
         assertEquals("Groceries Split", reconciledTxn.merchant)
+    }
+
+    @Test
+    fun testNewExpenseWithNoteWritesNoteToColumnLOnFirstWrite() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
+            ioDispatcher = Dispatchers.IO
+        )
+
+        // Expense with regular note
+        val regularNoteTxn = Transaction(
+            id = "txn_regular_note_1234567890abcdef",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.598,
+            account = "SBI",
+            merchant = "Office Lunch",
+            note = "Team celebration lunch",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.PENDING,
+            sheetRowIndex = null,
+            isPossibleDuplicate = false
+        )
+
+        repo.insertTransaction(regularNoteTxn)
+        val syncRes1 = repo.syncPendingTransactions()
+        assertTrue(syncRes1 is Result.Success)
+
+        // Verify column L contains plain text note
+        val body1 = mock.recordedBodies.find { it.contains("Team celebration lunch") }
+        assertNotNull("Request body must contain the note on first write", body1)
+        assertTrue(body1!!.contains("Team celebration lunch"))
+
+        // Expense with formula note starting with '='
+        val formulaNoteTxn = Transaction(
+            id = "txn_formula_note_1234567890abcdef",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.599,
+            account = "SBI",
+            merchant = "Stationery",
+            note = "=SUM(100+50)",
+            tripTag = "",
+            category = "Shopping",
+            totalAmount = 150.0,
+            companions = "Personal",
+            myShare = 150.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.PENDING,
+            sheetRowIndex = null,
+            isPossibleDuplicate = false
+        )
+
+        repo.insertTransaction(formulaNoteTxn)
+        val syncRes2 = repo.syncPendingTransactions()
+        assertTrue(syncRes2 is Result.Success)
+
+        // Verify note starting with '=' is guarded with leading single quote
+        val body2 = mock.recordedBodies.find { it.contains("=SUM(100+50)") }
+        assertNotNull("Request body must contain the formula note", body2)
+        assertTrue("Formula note must be guarded with leading single quote as plain text", body2!!.contains("'=SUM(100+50)"))
     }
 
     // The old "realign local id by row number" behaviour was removed (audit S-5); see ReconcileSafetyTest.

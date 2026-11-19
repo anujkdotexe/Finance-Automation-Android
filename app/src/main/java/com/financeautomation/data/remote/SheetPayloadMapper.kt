@@ -60,6 +60,7 @@ object SheetPayloadMapper {
      */
     fun mapTransactionToTable1(transaction: Transaction): List<Any?> {
         val normalizedCategory = CategoryConstants.normalizeCategory(transaction.category)
+        val safeNote = if (transaction.note.trimStart().startsWith("=")) "'${transaction.note}" else transaction.note
         return listOf(
             transaction.dateSerial,
             transaction.timeSerial,
@@ -72,7 +73,7 @@ object SheetPayloadMapper {
             transaction.myShare,
             transaction.owedToMe,
             transaction.status.value,
-            transaction.note
+            safeNote
         )
     }
 

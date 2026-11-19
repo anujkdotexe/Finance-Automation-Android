@@ -1463,7 +1463,8 @@ class TransactionRepositoryImpl(
                                 tabName = tabName,
                                 openPayables = openPayables,
                                 nettingUseCase = nettingUseCase,
-                                uuid = txn.id
+                                uuid = txn.id,
+                                note = txn.note
                             )
 
                             // Store plan before writing anything to guarantee idempotent retries

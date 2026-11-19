@@ -205,4 +205,40 @@ class CalculateSplitUseCaseTest {
         val (_, carried) = customUseCase.calculateRollover(original, "Feb26", 46030, 0.5)
         assertEquals(fixedMillis, carried.timestamp)
     }
+
+    @Test
+    fun testFirstWriteDebitRowIncludesGuardedNoteInColumnL() {
+        val useCase = CalculateSplitUseCase()
+        val planNormal = useCase(
+            amount = 100.0,
+            merchant = "Coffee",
+            category = "Food & Drink",
+            account = "SBI",
+            splitMode = com.financeautomation.core.model.SplitMode.JUST_ME,
+            companions = emptyList(),
+            dateSerial = 46000,
+            timeSerial = 0.5,
+            tabName = "Nov26",
+            note = "Met Alice"
+        )
+        val cellsNormal = planNormal.appends.first().cells
+        assertEquals("Debit row must have exactly 12 cells (Columns A to L)", 12, cellsNormal.size)
+        assertEquals("Column L must contain plain text note", "Met Alice", cellsNormal[11])
+
+        val planFormula = useCase(
+            amount = 100.0,
+            merchant = "Coffee",
+            category = "Food & Drink",
+            account = "SBI",
+            splitMode = com.financeautomation.core.model.SplitMode.JUST_ME,
+            companions = emptyList(),
+            dateSerial = 46000,
+            timeSerial = 0.5,
+            tabName = "Nov26",
+            note = "=A1+B1"
+        )
+        val cellsFormula = planFormula.appends.first().cells
+        assertEquals("Debit row must have exactly 12 cells (Columns A to L)", 12, cellsFormula.size)
+        assertEquals("Column L note starting with '=' must be escaped with single quote", "'=A1+B1", cellsFormula[11])
+    }
 }
