@@ -22,7 +22,7 @@ android {
         applicationId = "com.financeautomation"
         minSdk = 28
         targetSdk = 36
-        versionCode = maxOf(566, gitCommitCount)
+        versionCode = 1000 + gitCommitCount
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

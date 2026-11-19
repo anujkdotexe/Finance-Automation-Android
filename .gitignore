@@ -76,3 +76,5 @@ __pycache__/
 # Private test material, never commit (real messages, test account details)
 docs/testing/local-fixtures/
 docs/testing/test_results.md
+docs/reviews/
+docs/testing/
