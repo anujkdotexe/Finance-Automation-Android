@@ -1806,48 +1806,65 @@ open class GoogleSheetsClient(
                 )
             }
 
-            if (rows.isEmpty()) {
-                return@withContext Result.Success(Unit)
-            }
-
-            val rowValues = rows.map { rowCells ->
+            val requests = mutableListOf<Map<String, Any?>>()
+            // Clear existing data rows first so deleted or closed items do not remain on the sheet
+            requests.add(
                 mapOf(
-                    "values" to rowCells.mapIndexed { colIdx, cell ->
-                        val isSubFormulaCol = colIdx == SheetSchemaConstants.COL_INDEX_SUB_PER_MONTH ||
-                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_MONTH ||
-                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_YEAR ||
-                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_LAST_PAID_DATE ||
-                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_IN_TOTAL
-                        when (cell) {
-                            null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
-                            is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
-                            is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
-                            is String -> {
-                                if (isSubFormulaCol && cell.startsWith("=")) {
-                                    mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
-                                } else {
-                                    mapOf("userEnteredValue" to mapOf("stringValue" to cell))
-                                }
-                            }
-                            else -> mapOf("userEnteredValue" to mapOf("stringValue" to cell.toString()))
-                        }
-                    }
-                )
-            }
-
-            val req = mapOf(
-                "updateCells" to mapOf(
-                    "start" to mapOf(
-                        "sheetId" to sheetId,
-                        "rowIndex" to SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX,
-                        "columnIndex" to 0
-                    ),
-                    "rows" to rowValues,
-                    "fields" to "userEnteredValue"
+                    "updateCells" to mapOf(
+                        "range" to mapOf(
+                            "sheetId" to sheetId,
+                            "startRowIndex" to SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX,
+                            "endRowIndex" to 500,
+                            "startColumnIndex" to 0,
+                            "endColumnIndex" to SheetSchemaConstants.SUBSCRIPTIONS_COLUMN_COUNT
+                        ),
+                        "fields" to "userEnteredValue"
+                    )
                 )
             )
 
-            batchUpdate(spreadsheetId, listOf(req))
+            if (rows.isNotEmpty()) {
+                val rowValues = rows.map { rowCells ->
+                    mapOf(
+                        "values" to rowCells.mapIndexed { colIdx, cell ->
+                            val isSubFormulaCol = colIdx == SheetSchemaConstants.COL_INDEX_SUB_PER_MONTH ||
+                                colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_MONTH ||
+                                colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_YEAR ||
+                                colIdx == SheetSchemaConstants.COL_INDEX_SUB_LAST_PAID_DATE ||
+                                colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_IN_TOTAL
+                            when (cell) {
+                                null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
+                                is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
+                                is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
+                                is String -> {
+                                    if (isSubFormulaCol && cell.startsWith("=")) {
+                                        mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
+                                    } else {
+                                        mapOf("userEnteredValue" to mapOf("stringValue" to cell))
+                                    }
+                                }
+                                else -> mapOf("userEnteredValue" to mapOf("stringValue" to cell.toString()))
+                            }
+                        }
+                    )
+                }
+
+                requests.add(
+                    mapOf(
+                        "updateCells" to mapOf(
+                            "start" to mapOf(
+                                "sheetId" to sheetId,
+                                "rowIndex" to SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX,
+                                "columnIndex" to 0
+                            ),
+                            "rows" to rowValues,
+                            "fields" to "userEnteredValue"
+                        )
+                    )
+                )
+            }
+
+            batchUpdate(spreadsheetId, requests)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -1981,47 +1998,64 @@ open class GoogleSheetsClient(
                 )
             }
 
-            if (rows.isEmpty()) {
-                return@withContext Result.Success(Unit)
-            }
-
-            val rowValues = rows.map { rowCells ->
+            val requests = mutableListOf<Map<String, Any?>>()
+            // Clear existing data rows first so deleted trips do not remain on the sheet
+            requests.add(
                 mapOf(
-                    "values" to rowCells.mapIndexed { colIdx, cell ->
-                        val isFormulaCol = colIdx == SheetSchemaConstants.COL_INDEX_TRIP_DAYS ||
-                            colIdx == SheetSchemaConstants.COL_INDEX_TRIP_TOTAL_PAID ||
-                            colIdx == SheetSchemaConstants.COL_INDEX_TRIP_MY_SHARE ||
-                            colIdx == SheetSchemaConstants.COL_INDEX_TRIP_OWED_TO_ME
-                        when (cell) {
-                            null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
-                            is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
-                            is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
-                            is String -> {
-                                if (isFormulaCol && cell.startsWith("=")) {
-                                    mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
-                                } else {
-                                    mapOf("userEnteredValue" to mapOf("stringValue" to cell))
-                                }
-                            }
-                            else -> mapOf("userEnteredValue" to mapOf("stringValue" to cell.toString()))
-                        }
-                    }
-                )
-            }
-
-            val req = mapOf(
-                "updateCells" to mapOf(
-                    "start" to mapOf(
-                        "sheetId" to sheetId,
-                        "rowIndex" to SheetSchemaConstants.TRIPS_DATA_START_ROW_INDEX,
-                        "columnIndex" to 0
-                    ),
-                    "rows" to rowValues,
-                    "fields" to "userEnteredValue"
+                    "updateCells" to mapOf(
+                        "range" to mapOf(
+                            "sheetId" to sheetId,
+                            "startRowIndex" to SheetSchemaConstants.TRIPS_DATA_START_ROW_INDEX,
+                            "endRowIndex" to 200,
+                            "startColumnIndex" to 0,
+                            "endColumnIndex" to SheetSchemaConstants.TRIPS_COLUMN_COUNT
+                        ),
+                        "fields" to "userEnteredValue"
+                    )
                 )
             )
 
-            batchUpdate(spreadsheetId, listOf(req))
+            if (rows.isNotEmpty()) {
+                val rowValues = rows.map { rowCells ->
+                    mapOf(
+                        "values" to rowCells.mapIndexed { colIdx, cell ->
+                            val isFormulaCol = colIdx == SheetSchemaConstants.COL_INDEX_TRIP_DAYS ||
+                                colIdx == SheetSchemaConstants.COL_INDEX_TRIP_TOTAL_PAID ||
+                                colIdx == SheetSchemaConstants.COL_INDEX_TRIP_MY_SHARE ||
+                                colIdx == SheetSchemaConstants.COL_INDEX_TRIP_OWED_TO_ME
+                            when (cell) {
+                                null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
+                                is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
+                                is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
+                                is String -> {
+                                    if (isFormulaCol && cell.startsWith("=")) {
+                                        mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
+                                    } else {
+                                        mapOf("userEnteredValue" to mapOf("stringValue" to cell))
+                                    }
+                                }
+                                else -> mapOf("userEnteredValue" to mapOf("stringValue" to cell.toString()))
+                            }
+                        }
+                    )
+                }
+
+                requests.add(
+                    mapOf(
+                        "updateCells" to mapOf(
+                            "start" to mapOf(
+                                "sheetId" to sheetId,
+                                "rowIndex" to SheetSchemaConstants.TRIPS_DATA_START_ROW_INDEX,
+                                "columnIndex" to 0
+                            ),
+                            "rows" to rowValues,
+                            "fields" to "userEnteredValue"
+                        )
+                    )
+                )
+            }
+
+            batchUpdate(spreadsheetId, requests)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

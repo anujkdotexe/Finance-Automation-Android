@@ -19,11 +19,37 @@ import java.util.UUID
 open class SubscriptionsSheetSyncCoordinator(
     private val googleSheetsClient: GoogleSheetsClient,
     private val subscriptionRepository: SubscriptionRepository,
-    private val preferencesRepository: PreferencesRepository,
+    private val preferencesRepository: PreferencesRepository? = null,
     private val accountRepository: AccountRepository? = null,
     private val syncConfigUseCase: SyncConfigUseCase? = null,
+    private val clock: java.time.Clock = java.time.Clock.system(com.financeautomation.core.utils.DateSerialUtils.SHEET_ZONE),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
+
+    private val baseHashes = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun parseDateToEpochDay(dateStr: String): Long? {
+        if (dateStr.isBlank()) return null
+        val serial = dateStr.toDoubleOrNull()?.toInt()
+        if (serial != null && serial > 30000) {
+            return runCatching { com.financeautomation.core.utils.DateSerialUtils.fromDateSerial(serial).toEpochDay() }.getOrNull()
+        }
+        return runCatching { LocalDate.parse(dateStr).toEpochDay() }.getOrNull()
+    }
+
+    private fun computeRowHash(
+        name: String,
+        amount: Double?,
+        frequency: String,
+        epochDay: Long,
+        account: String,
+        active: Boolean,
+        note: String,
+        keywords: String
+    ): String = "$name|$amount|$frequency|$epochDay|$account|$active|$note|$keywords"
+
+    private fun computeSubHash(sub: Subscription): String =
+        computeRowHash(sub.name, sub.amount, sub.frequency.name, sub.anchorEpochDay, sub.account, sub.active, sub.note, sub.keywords)
 
     /**
      * Synchronizes the visible Subscriptions tab with local Room SQLite.
@@ -42,38 +68,44 @@ open class SubscriptionsSheetSyncCoordinator(
             val sheetRows = (readRes as Result.Success).data
             var roomModified = false
             val processedSubIds = mutableSetOf<String>()
+            val todayEpochDay = LocalDate.now(clock).toEpochDay()
+            val nowMillis = clock.millis()
 
             for (row in sheetRows) {
                 if (row.name.isBlank() && row.id.isNullOrBlank()) continue
 
-                val rowEpochDay = runCatching { LocalDate.parse(row.dueDateString).toEpochDay() }.getOrNull()
-                    ?: LocalDate.now().toEpochDay()
+                val parsedEpochDay = parseDateToEpochDay(row.dueDateString)
                 val rowFreq = SubscriptionFrequency.parse(row.frequency)
 
                 if (row.id.isNullOrBlank()) {
-                    // New row added on sheet without ID: generate UUID, upsert to Room, and write back ID to sheet
+                    val resolvedEpochDay = if (parsedEpochDay != null) {
+                        parsedEpochDay
+                    } else {
+                        Diagnostics.record("SubscriptionsSync", "REJECTED_BAD_DATE")
+                        todayEpochDay
+                    }
                     val newId = "sub_" + UUID.randomUUID().toString().replace("-", "").take(12)
                     val newSub = Subscription(
                         id = newId,
                         name = row.name,
                         amount = row.amount,
                         frequency = rowFreq,
-                        anchorEpochDay = rowEpochDay,
+                        anchorEpochDay = resolvedEpochDay,
                         account = row.account,
                         category = Subscription.DEFAULT_CATEGORY,
                         remind = true,
                         keywords = row.keywords,
                         active = row.active,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
+                        createdAt = nowMillis,
+                        updatedAt = nowMillis,
                         note = row.note,
-                        closedDateEpochDay = if (!row.active) LocalDate.now().toEpochDay() else null
+                        closedDateEpochDay = if (!row.active) todayEpochDay else null
                     )
                     subscriptionRepository.upsertSubscription(newSub)
                     processedSubIds.add(newId)
                     roomModified = true
+                    baseHashes[newId] = computeSubHash(newSub)
 
-                    // Write back new ID to cell in column O (COL_LETTER_SUB_ID)
                     googleSheetsClient.updateCell(
                         spreadsheetId = spreadsheetId,
                         tabName = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME,
@@ -83,60 +115,88 @@ open class SubscriptionsSheetSyncCoordinator(
                 } else {
                     val existing = subscriptionRepository.getSubscription(row.id)
                     if (existing == null) {
-                        // ID present on sheet but missing in Room: insert
+                        // If ID was previously synced and tracked in baseHashes, it was deleted in Room: do not resurrect!
+                        if (baseHashes.containsKey(row.id)) {
+                            Diagnostics.record("SubscriptionsSync", "DELETED_ROW_NOT_RESURRECTED")
+                            continue
+                        }
+                        val resolvedEpochDay = if (parsedEpochDay != null) {
+                            parsedEpochDay
+                        } else {
+                            Diagnostics.record("SubscriptionsSync", "REJECTED_BAD_DATE")
+                            todayEpochDay
+                        }
                         val newSub = Subscription(
                             id = row.id,
                             name = row.name,
                             amount = row.amount,
                             frequency = rowFreq,
-                            anchorEpochDay = rowEpochDay,
+                            anchorEpochDay = resolvedEpochDay,
                             account = row.account,
                             category = Subscription.DEFAULT_CATEGORY,
                             remind = true,
                             keywords = row.keywords,
                             active = row.active,
-                            createdAt = System.currentTimeMillis(),
-                            updatedAt = System.currentTimeMillis(),
+                            createdAt = nowMillis,
+                            updatedAt = nowMillis,
                             note = row.note,
-                            closedDateEpochDay = if (!row.active) LocalDate.now().toEpochDay() else null
+                            closedDateEpochDay = if (!row.active) todayEpochDay else null
                         )
                         subscriptionRepository.upsertSubscription(newSub)
                         processedSubIds.add(row.id)
                         roomModified = true
+                        baseHashes[row.id] = computeSubHash(newSub)
                     } else {
                         processedSubIds.add(row.id)
-                        // Check for field conflicts
-                        val hasConflict = existing.name != row.name ||
-                            existing.amount != row.amount ||
-                            existing.frequency != rowFreq ||
-                            existing.anchorEpochDay != rowEpochDay ||
-                            existing.account != row.account ||
-                            existing.active != row.active ||
-                            existing.note != row.note ||
-                            existing.keywords != row.keywords
+                        val resolvedEpochDay = if (parsedEpochDay != null) {
+                            parsedEpochDay
+                        } else {
+                            Diagnostics.record("SubscriptionsSync", "REJECTED_BAD_DATE")
+                            existing.anchorEpochDay
+                        }
 
-                        if (hasConflict) {
-                            // Sheet wins!
-                            Diagnostics.record("SubscriptionsSync", "CONFLICT_SHEET_WON")
-                            val closedEpoch = if (!row.active) {
-                                if (existing.active) LocalDate.now().toEpochDay() else (existing.closedDateEpochDay ?: LocalDate.now().toEpochDay())
-                            } else {
-                                null
+                        val rowHash = computeRowHash(
+                            row.name, row.amount, row.frequency, resolvedEpochDay,
+                            row.account, row.active, row.note, row.keywords
+                        )
+                        val lastBaseHash = baseHashes[row.id]
+                        val sheetChanged = lastBaseHash == null || lastBaseHash != rowHash
+
+                        if (sheetChanged) {
+                            val hasConflict = existing.name != row.name ||
+                                existing.amount != row.amount ||
+                                existing.frequency != rowFreq ||
+                                existing.anchorEpochDay != resolvedEpochDay ||
+                                existing.account != row.account ||
+                                existing.active != row.active ||
+                                existing.note != row.note ||
+                                existing.keywords != row.keywords
+
+                            if (hasConflict) {
+                                Diagnostics.record("SubscriptionsSync", "CONFLICT_SHEET_WON")
+                                val closedEpoch = if (!row.active) {
+                                    if (existing.active) todayEpochDay else (existing.closedDateEpochDay ?: todayEpochDay)
+                                } else {
+                                    null
+                                }
+                                val updatedSub = existing.copy(
+                                    name = row.name,
+                                    amount = row.amount,
+                                    frequency = rowFreq,
+                                    anchorEpochDay = resolvedEpochDay,
+                                    account = row.account,
+                                    active = row.active,
+                                    note = row.note,
+                                    keywords = row.keywords,
+                                    closedDateEpochDay = closedEpoch,
+                                    updatedAt = nowMillis
+                                )
+                                subscriptionRepository.upsertSubscription(updatedSub)
+                                roomModified = true
                             }
-                            val updatedSub = existing.copy(
-                                name = row.name,
-                                amount = row.amount,
-                                frequency = rowFreq,
-                                anchorEpochDay = rowEpochDay,
-                                account = row.account,
-                                active = row.active,
-                                note = row.note,
-                                keywords = row.keywords,
-                                closedDateEpochDay = closedEpoch,
-                                updatedAt = System.currentTimeMillis()
-                            )
-                            subscriptionRepository.upsertSubscription(updatedSub)
-                            roomModified = true
+                            baseHashes[row.id] = rowHash
+                        } else {
+                            baseHashes[row.id] = rowHash
                         }
                     }
                 }
@@ -162,7 +222,13 @@ open class SubscriptionsSheetSyncCoordinator(
         try {
             val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
             val activeSubs = subscriptionRepository.getActiveSubscriptions()
-            googleSheetsClient.writeSubscriptionsTab(spreadsheetId, activeSubs, accounts)
+            val res = googleSheetsClient.writeSubscriptionsTab(spreadsheetId, activeSubs, accounts)
+            if (res is Result.Success) {
+                for (sub in activeSubs) {
+                    baseHashes[sub.id] = computeSubHash(sub)
+                }
+            }
+            res
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
