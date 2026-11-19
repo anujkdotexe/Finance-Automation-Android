@@ -10,7 +10,7 @@ This project is the native Android companion and standalone client for the **Fin
 
 * **The Goal:** Eliminate manual expense logging friction on Android by combining real-time UPI/banking notification interception with a native, 1-tap categorization Bottom Sheet and automated Google Drive/Sheets provisioning.
 * **The Target Platform:** Android 9.0+ (minimum API 28, target and compile API 36), specifically optimized for Samsung Galaxy devices (One UI Side Key, Quick Settings Tiles, Edge Panels) while remaining universally compatible with all Android devices.
-* **Master Ledger Specification:** All transactions logged by this app must strictly comply with the proven master sheet schema (28 visible columns plus three hidden id columns, A to AE) and the net burn calculation rules established in the iOS predecessor.
+* **Master Ledger Specification:** All transactions logged by this app must strictly comply with the proven master sheet schema (29 visible columns plus three hidden id columns, A to AF) and the net burn calculation rules established in the iOS predecessor.
 
 ---
 
@@ -141,6 +141,7 @@ The application must faithfully reproduce the proven iOS split calculations:
 
 ## 5. Change Log For This Manual
 
+- **2026-11-19:** Master Ledger described as 29 visible columns plus three hidden id columns, A to AF. Reason: the owner approved a Note column right after Status (column L) for notes on every entry, and the sheet moved the inflow and payable tables one column to the right. Old 31-column workbooks are upgraded by the repair path.
 - **2026-11-18:** Added Rule 15 (Real Message Data) after the SMS parsing round: real message text stays local, committed test text is invented or approved scrubbed text, mixed-case sender headers only from a named registry, bill and recharge payments are captured. The status of the fix round is kept in docs/testing/ROUND_STATUS.md.
 - **2026-11-17:** Added Rule 14 (No Terminal Polling). Agents must never poll the terminal repeatedly in loops; use daemons, watchers, or reactive background notifications instead.
 - **2026-11-17:** Section 2B updated at the owner's request: a registry of payment apps (including Amazon Pay) with per-app switches; WhatsApp payment notifications allowed under a strict channel-only privacy rule; opt-in anonymous usage counts added next to opt-in crash reports. Reason: users pay through many apps and the owner wants broad capture and better field diagnostics without leaking financial data.
