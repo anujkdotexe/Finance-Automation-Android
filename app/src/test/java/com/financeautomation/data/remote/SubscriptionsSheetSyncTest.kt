@@ -78,9 +78,15 @@ class SubscriptionsSheetSyncTest {
             subscriptionRepository = fakeSubRepository,
             preferencesRepository = fakePrefsRepository,
             accountRepository = null,
-            syncConfigUseCase = fakeSyncConfigUseCase
+            syncConfigUseCase = fakeSyncConfigUseCase,
+            clock = fixedClock
         )
     }
+
+    private val fixedClock: java.time.Clock = java.time.Clock.fixed(
+        java.time.ZonedDateTime.of(2026, 11, 20, 12, 0, 0, 0, com.financeautomation.core.utils.DateSerialUtils.SHEET_ZONE).toInstant(),
+        com.financeautomation.core.utils.DateSerialUtils.SHEET_ZONE
+    )
 
     @Test
     fun buildSubscriptionsRequests_verifiesHeadersAndValidations() {
@@ -357,7 +363,7 @@ class SubscriptionsSheetSyncTest {
         assertNotNull(inRoom)
         assertFalse("Must be inactive in Room", inRoom!!.active)
         assertNotNull("closedDateEpochDay must be populated by the app", inRoom.closedDateEpochDay)
-        assertEquals("closedDateEpochDay must be today", LocalDate.now().toEpochDay(), inRoom.closedDateEpochDay)
+        assertEquals("closedDateEpochDay must be today on the injected clock", LocalDate.now(fixedClock).toEpochDay(), inRoom.closedDateEpochDay)
     }
 
     @Test
