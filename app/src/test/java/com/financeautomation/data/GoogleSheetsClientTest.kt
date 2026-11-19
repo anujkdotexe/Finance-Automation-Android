@@ -60,9 +60,9 @@ class GoogleSheetsClientTest {
         val frozenReq = requests.firstOrNull { it.containsKey("updateSheetProperties") }
         assertNotNull(frozenReq)
 
-        // 2. Verify dimension properties (34 total: 2 initial spacer config + 1 UUID hide + 28 column widths + 3 row heights)
+        // 2. Verify dimension properties (35 total: 2 initial spacer config + 1 UUID hide + 29 column widths + 3 row heights)
         val dimPropsReqs = requests.filter { it.containsKey("updateDimensionProperties") }
-        assertEquals(34, dimPropsReqs.size)
+        assertEquals(35, dimPropsReqs.size)
 
         // 3. Verify exactly 4 merges (Row 1 Title Banner + Table 1 Debits + Table 2 Inflows + Table 3 Payables)
         val mergeReqs = requests.filter { it.containsKey("mergeCells") }
@@ -277,7 +277,7 @@ class GoogleSheetsClientTest {
         assertTrue(result is Result.Success)
         assertEquals(8, (result as Result.Success).data)
         val putUrl = requireNotNull(capturedPutUrl)
-        assertTrue("Next debit must target A8:K8", putUrl.contains("A8:K8"))
+        assertTrue("Next debit must target A8:L8", putUrl.contains("A8:L8"))
     }
 
     @Test
@@ -860,11 +860,11 @@ class GoogleSheetsClientTest {
 
         // 3. Write debit with note, inflow, and payable
         val debitRow = listOf(46331, 0.5, "SBI", "Dinner", "", "Food & Drink", 500.0, "Personal", 500.0, 0.0, "Settled", "Dinner with team")
-        client.appendDebit("test_sheet_id", "Nov26", debitRow, uuid = "txn_debit_123")
+        client.appendDebit("test_sheet_id", "Nov26", debitRow)
         val inflowRow = listOf(46331, 0.5, "SBI", "Salary", "Employer", "Monthly Salary", 100000.0, "")
-        client.appendInflow("test_sheet_id", "Nov26", inflowRow, uuid = "inf_salary_456")
+        client.appendInflow("test_sheet_id", "Nov26", inflowRow)
         val payableRow = listOf(46331, 0.6, "Alice", "Lunch share", 250.0, "", "Pending")
-        client.appendPayable("test_sheet_id", "Nov26", payableRow, uuid = "pay_lunch_789")
+        client.appendPayable("test_sheet_id", "Nov26", payableRow)
 
         // Check target ranges
         assertTrue("Debit must write to A4:L4", putCalls.any { it.first.contains("A4:L4") && it.second.contains("Dinner with team") })

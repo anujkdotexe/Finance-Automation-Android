@@ -24,7 +24,7 @@ import java.time.Instant
  * and the Google Sheets hidden Config tab (schema v1).
  * Pure Kotlin use case with zero Android framework dependencies.
  */
-class SyncConfigUseCase(
+open class SyncConfigUseCase(
     private val configRepository: ConfigRepository,
     private val localGateway: ConfigSyncLocalGateway,
     private val preferencesRepository: PreferencesRepository,
@@ -198,7 +198,7 @@ class SyncConfigUseCase(
     /**
      * Pushes locally modified items (dirty = 1) to the remote Config tab.
      */
-    suspend fun push(targetSpreadsheetId: String? = null): Result<Unit> = withContext(ioDispatcher) {
+    open suspend fun push(targetSpreadsheetId: String? = null): Result<Unit> = withContext(ioDispatcher) {
         // One push at a time: the queued push and an immediate push must not append the same Config row twice
         pushMutex.withLock { safeCall {
             val spreadsheetId = targetSpreadsheetId ?: preferencesRepository.getSpreadsheetIdSync()

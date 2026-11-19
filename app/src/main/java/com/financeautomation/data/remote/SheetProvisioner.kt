@@ -2,6 +2,7 @@ package com.financeautomation.data.remote
 
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.SheetSchemaConstants
+import com.financeautomation.domain.model.Subscription
 
 /**
  * Generates Google Sheets API v4 batchUpdate requests to provision the complete
@@ -1656,4 +1657,254 @@ object SheetProvisioner {
             )
         )
     }
+
+    fun buildPaidThisMonthFormula(row1BasedIndex: Int): String {
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!G4:G"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "Subscriptions", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+    }
+
+    fun buildSubscriptionRowValues(
+        sub: Subscription,
+        row1BasedIndex: Int
+    ): List<Any?> {
+        val anchorDate = try {
+            java.time.LocalDate.ofEpochDay(sub.anchorEpochDay).toString()
+        } catch (_: Exception) {
+            ""
+        }
+        val freqText = sub.frequency.name.lowercase().replaceFirstChar { it.uppercase() }
+        val activeText = if (sub.active) "TRUE" else "FALSE"
+        val paidFormula = buildPaidThisMonthFormula(row1BasedIndex)
+
+        return listOf(
+            sub.name,
+            sub.amount ?: "",
+            freqText,
+            anchorDate,
+            sub.account,
+            activeText,
+            sub.note,
+            sub.keywords,
+            paidFormula,
+            sub.id
+        )
+    }
+
+    fun buildSubscriptionsRequests(
+        sheetId: Int,
+        accounts: List<String> = emptyList(),
+        rowCount: Int = 500,
+        columnCount: Int = 10
+    ): List<Map<String, Any?>> {
+        val requests = mutableListOf<Map<String, Any?>>()
+        val targetRows = maxOf(rowCount, 500)
+        val targetCols = maxOf(columnCount, 10)
+
+        // Ensure grid size
+        requests.add(
+            mapOf(
+                "updateSheetProperties" to mapOf(
+                    "properties" to mapOf(
+                        "sheetId" to sheetId,
+                        "gridProperties" to mapOf(
+                            "rowCount" to targetRows,
+                            "columnCount" to targetCols
+                        )
+                    ),
+                    "fields" to "gridProperties(rowCount,columnCount)"
+                )
+            )
+        )
+
+        // Banner merge A1:I1
+        val bannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 0,
+            "endRowIndex" to 1,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 9
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to bannerRange)))
+        requests.add(mapOf("mergeCells" to mapOf("range" to bannerRange, "mergeType" to "MERGE_ALL")))
+        requests.add(
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to bannerRange,
+                    "cell" to mapOf(
+                        "userEnteredFormat" to mapOf(
+                            "backgroundColor" to darkNavyBg
+                        )
+                    ),
+                    "fields" to "userEnteredFormat.backgroundColor"
+                )
+            )
+        )
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf(
+                        "sheetId" to sheetId,
+                        "rowIndex" to 0,
+                        "columnIndex" to 0
+                    ),
+                    "rows" to listOf(
+                        mapOf(
+                            "values" to listOf(
+                                mapOf(
+                                    "userEnteredValue" to mapOf("stringValue" to "RECURRING EXPENSES & SUBSCRIPTIONS"),
+                                    "userEnteredFormat" to mapOf(
+                                        "textFormat" to mapOf(
+                                            "fontSize" to 14,
+                                            "bold" to true,
+                                            "foregroundColor" to whiteColor
+                                        ),
+                                        "horizontalAlignment" to "CENTER",
+                                        "verticalAlignment" to "MIDDLE"
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
+
+        // Column headers Row 3 (index 2)
+        val headers = listOf(
+            "Name", "Expected Amount (₹)", "Frequency", "Due Date",
+            "Default Account", "Active", "Note", "Keywords",
+            "Paid This Month (₹)", "Subscription ID"
+        )
+        val row3Values = headers.map { header ->
+            mapOf(
+                "userEnteredValue" to mapOf("stringValue" to header),
+                "userEnteredFormat" to mapOf(
+                    "backgroundColor" to headerSlateBg,
+                    "textFormat" to mapOf("fontSize" to 9, "bold" to true, "foregroundColor" to whiteColor),
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "wrapStrategy" to "WRAP",
+                    "borders" to thinBorders()
+                )
+            )
+        }
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf("sheetId" to sheetId, "rowIndex" to 2, "columnIndex" to 0),
+                    "rows" to listOf(mapOf("values" to row3Values)),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
+
+        // Data Validations
+        // Frequency: Col C (index 2)
+        requests.add(
+            createDataValidationRequest(
+                sheetId = sheetId,
+                startRow = 3,
+                endRow = targetRows,
+                startCol = 2,
+                endCol = 3,
+                values = listOf("Weekly", "Monthly", "Yearly")
+            )
+        )
+        // Default Account: Col E (index 4)
+        if (accounts.isNotEmpty()) {
+            requests.add(
+                createDataValidationRequest(
+                    sheetId = sheetId,
+                    startRow = 3,
+                    endRow = targetRows,
+                    startCol = 4,
+                    endCol = 5,
+                    values = accounts
+                )
+            )
+        }
+        // Active: Col F (index 5)
+        requests.add(
+            createDataValidationRequest(
+                sheetId = sheetId,
+                startRow = 3,
+                endRow = targetRows,
+                startCol = 5,
+                endCol = 6,
+                values = listOf("TRUE", "FALSE")
+            )
+        )
+
+        // Column widths
+        val widths = listOf(
+            0 to 160, 1 to 130, 2 to 100, 3 to 110, 4 to 120,
+            5 to 80, 6 to 150, 7 to 150, 8 to 140, 9 to 130
+        )
+        widths.forEach { (colIdx, px) ->
+            requests.add(
+                createUpdateDimensionPropertiesRequest(
+                    sheetId = sheetId,
+                    dimension = "COLUMNS",
+                    startIndex = colIdx,
+                    endIndex = colIdx + 1,
+                    pixelSize = px
+                )
+            )
+        }
+
+        // Number Formats
+        // Expected Amount: Col B (1) -> CURRENCY
+        requests.add(createNumberFormatRequest(sheetId, 1, 2, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
+        // Paid This Month: Col I (8) -> CURRENCY
+        requests.add(createNumberFormatRequest(sheetId, 8, 9, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
+        // Due Date: Col D (3) -> DATE
+        requests.add(createNumberFormatRequest(sheetId, 3, 4, "DATE", "yyyy-mm-dd", "CENTER", targetRows))
+        // Plain text on Note and Keywords
+        requests.add(createNumberFormatRequest(sheetId, 6, 8, "TEXT", "@", "LEFT", targetRows))
+
+        // Hide Subscription ID (Col J, index 9)
+        requests.add(
+            mapOf(
+                "updateDimensionProperties" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "dimension" to "COLUMNS",
+                        "startIndex" to 9,
+                        "endIndex" to 10
+                    ),
+                    "properties" to mapOf("hiddenByUser" to true),
+                    "fields" to "hiddenByUser"
+                )
+            )
+        )
+
+        return requests
+    }
+
+    private fun createDataValidationRequest(
+        sheetId: Int,
+        startRow: Int,
+        endRow: Int,
+        startCol: Int,
+        endCol: Int,
+        values: List<String>
+    ): Map<String, Any?> = mapOf(
+        "setDataValidation" to mapOf(
+            "range" to mapOf(
+                "sheetId" to sheetId,
+                "startRowIndex" to startRow,
+                "endRowIndex" to endRow,
+                "startColumnIndex" to startCol,
+                "endColumnIndex" to endCol
+            ),
+            "rule" to mapOf(
+                "condition" to mapOf(
+                    "type" to "ONE_OF_LIST",
+                    "values" to values.map { mapOf("userEnteredValue" to it) }
+                ),
+                "showCustomUi" to true,
+                "strict" to true
+            )
+        )
+    )
 }

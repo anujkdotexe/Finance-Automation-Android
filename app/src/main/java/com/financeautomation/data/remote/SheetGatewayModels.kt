@@ -56,6 +56,22 @@ data class LedgerPayableRow(
 )
 
 /**
+ * A row from the Subscriptions tab (Cols A to J).
+ */
+data class SheetSubscriptionRow(
+    val rowNumber: Int,
+    val name: String,
+    val amount: Double?,
+    val frequency: String,
+    val dueDateString: String,
+    val account: String,
+    val active: Boolean,
+    val note: String,
+    val keywords: String,
+    val id: String?
+)
+
+/**
  * A row from Table 2 (Cols N to U plus AE hidden UUID) carrying its 1-based sheet row coordinate.
  */
 data class LedgerInflowRow(

@@ -496,15 +496,17 @@ open class WorkbookResolver(
             if (provRes is Result.Error) {
                 return Result.Error(provRes.exception)
             }
-        } else if (!tabsMap.containsKey(expectedMonthTab) || !checkTabHasValidLayout(spreadsheetId, expectedMonthTab)) {
-            val monthRes = googleSheetsClient.provisionMonthTab(
-                spreadsheetId = spreadsheetId,
-                tabName = expectedMonthTab,
-                accounts = accounts,
-                categories = categories
-            )
-            if (monthRes is Result.Error) {
-                return Result.Error(monthRes.exception)
+        } else {
+            if (!tabsMap.containsKey(expectedMonthTab) || !checkTabHasValidLayout(spreadsheetId, expectedMonthTab)) {
+                val monthRes = googleSheetsClient.provisionMonthTab(
+                    spreadsheetId = spreadsheetId,
+                    tabName = expectedMonthTab,
+                    accounts = accounts,
+                    categories = categories
+                )
+                if (monthRes is Result.Error) {
+                    return Result.Error(monthRes.exception)
+                }
             }
         }
         return Result.Success(Unit)

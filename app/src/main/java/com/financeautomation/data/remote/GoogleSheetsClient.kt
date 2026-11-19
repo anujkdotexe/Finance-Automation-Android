@@ -4,6 +4,7 @@ import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.DataResult
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.Diagnostics
+import com.financeautomation.domain.model.Subscription
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -485,7 +486,7 @@ open class GoogleSheetsClient(
      * Updates a single cell in [tabName] at [cellCoordinate] (e.g. "AC4", "AD5", "AE6").
      * Uses valueInputOption=RAW by default.
      */
-    suspend fun updateCell(
+    open suspend fun updateCell(
         spreadsheetId: String,
         tabName: String,
         cellCoordinate: String,
@@ -1467,6 +1468,18 @@ open class GoogleSheetsClient(
                 }
             }
 
+            // 5. Ensure Subscriptions tab exists
+            try {
+                val subRes = ensureSubscriptionsTabExists(spreadsheetId, accounts)
+                if (subRes is Result.Error) {
+                    com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Subscriptions tab skipped: ${subRes.exception.message}")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Subscriptions tab error: ${e.javaClass.simpleName}")
+            }
+
             Result.Success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -1569,6 +1582,159 @@ open class GoogleSheetsClient(
                 is Result.Error -> Result.Error(batchRes.exception)
                 else -> Result.Error(Exception("Unexpected batchGetValues state"))
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Ensures the visible Subscriptions tab exists in [spreadsheetId]; if missing, provisions it.
+     */
+    open suspend fun ensureSubscriptionsTabExists(
+        spreadsheetId: String,
+        accounts: List<String> = emptyList()
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val tabsResult = getSheetTabsWithIds(spreadsheetId)
+        if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
+        val tabsMap = (tabsResult as Result.Success).data
+        if (tabsMap.containsKey(SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME)) {
+            return@withContext Result.Success(false)
+        }
+
+        val addReq = mapOf(
+            "addSheet" to mapOf(
+                "properties" to mapOf(
+                    "title" to SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME,
+                    "gridProperties" to mapOf("rowCount" to 500, "columnCount" to SheetSchemaConstants.SUBSCRIPTIONS_COLUMN_COUNT)
+                )
+            )
+        )
+        val addRes = executeBatchUpdate(spreadsheetId, listOf(addReq))
+        if (addRes is Result.Error) return@withContext Result.Error(addRes.exception)
+
+        val recheck = getSheetTabsWithIds(spreadsheetId)
+        val newSheetId = if (recheck is Result.Success) {
+            recheck.data[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
+        } else null
+        val targetSheetId = newSheetId ?: 0
+
+        val provRequests = SheetProvisioner.buildSubscriptionsRequests(targetSheetId, accounts)
+        val provRes = executeBatchUpdate(spreadsheetId, provRequests)
+        if (provRes is Result.Error) return@withContext Result.Error(provRes.exception)
+
+        Result.Success(true)
+    }
+
+    /**
+     * Reads all rows from the Subscriptions tab ('Subscriptions'!A4:J).
+     */
+    open suspend fun readSubscriptionsTab(
+        spreadsheetId: String
+    ): Result<List<SheetSubscriptionRow>> = withContext(Dispatchers.IO) {
+        try {
+            val range = "'${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}'!${SheetSchemaConstants.SUBSCRIPTIONS_RANGE}"
+            val res = getRangeValuesRaw(spreadsheetId, range)
+            if (res is Result.Error) return@withContext Result.Error(res.exception)
+
+            val rawRows = (res as Result.Success).data
+            val result = mutableListOf<SheetSubscriptionRow>()
+            for (i in rawRows.indices) {
+                val row = rawRows[i]
+                if (row.isEmpty()) continue
+                val name = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NAME)?.toString()?.trim().orEmpty()
+                val id = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                if (name.isBlank() && id == null) continue
+
+                val amount = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_AMOUNT)?.toString()?.replace(",", "")?.toDoubleOrNull()
+                val frequency = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_FREQUENCY)?.toString()?.trim().orEmpty()
+                val dueDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_DUE_DATE)?.toString()?.trim().orEmpty()
+                val account = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ACCOUNT)?.toString()?.trim().orEmpty()
+                val active = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ACTIVE)?.toString()?.trim().equals("TRUE", ignoreCase = true)
+                val note = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NOTE)?.toString()?.trim().orEmpty()
+                val keywords = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_KEYWORDS)?.toString()?.trim().orEmpty()
+
+                result.add(
+                    SheetSubscriptionRow(
+                        rowNumber = i + SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX + 1,
+                        name = name,
+                        amount = amount,
+                        frequency = frequency,
+                        dueDateString = dueDate,
+                        account = account,
+                        active = active,
+                        note = note,
+                        keywords = keywords,
+                        id = id
+                    )
+                )
+            }
+            Result.Success(result)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Writes all subscriptions into the Subscriptions tab ('Subscriptions'!A4:J).
+     */
+    open suspend fun writeSubscriptionsTab(
+        spreadsheetId: String,
+        subscriptions: List<Subscription>,
+        accounts: List<String> = emptyList()
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            ensureSubscriptionsTabExists(spreadsheetId, accounts)
+
+            val tabsResult = getSheetTabsWithIds(spreadsheetId)
+            if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
+            val sheetId = (tabsResult as Result.Success).data[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
+                ?: return@withContext Result.Error(SheetNotFoundException(spreadsheetId, "Subscriptions sheetId missing"))
+
+            val rows = subscriptions.mapIndexed { idx, sub ->
+                SheetProvisioner.buildSubscriptionRowValues(sub, row1BasedIndex = idx + SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX + 1)
+            }
+
+            if (rows.isEmpty()) {
+                return@withContext Result.Success(Unit)
+            }
+
+            val rowValues = rows.map { rowCells ->
+                mapOf(
+                    "values" to rowCells.map { cell ->
+                        when (cell) {
+                            null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
+                            is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
+                            is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
+                            is String -> {
+                                if (cell.startsWith("=")) {
+                                    mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
+                                } else {
+                                    mapOf("userEnteredValue" to mapOf("stringValue" to cell))
+                                }
+                            }
+                            else -> mapOf("userEnteredValue" to mapOf("stringValue" to cell.toString()))
+                        }
+                    }
+                )
+            }
+
+            val req = mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf(
+                        "sheetId" to sheetId,
+                        "rowIndex" to SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX,
+                        "columnIndex" to 0
+                    ),
+                    "rows" to rowValues,
+                    "fields" to "userEnteredValue"
+                )
+            )
+
+            batchUpdate(spreadsheetId, listOf(req))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

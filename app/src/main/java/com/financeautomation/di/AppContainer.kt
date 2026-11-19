@@ -122,6 +122,7 @@ interface AppContainer {
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
     val subscriptionRepository: SubscriptionRepository
+    val subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator
     val budgetRepository: BudgetRepository
     val appLockManager: com.financeautomation.domain.security.AppLockManager
     val privacySettings: com.financeautomation.domain.security.PrivacySettings
@@ -409,6 +410,17 @@ class DefaultAppContainer(
             cycleDaoProvider = { awaitDatabase().subscriptionCycleDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
             localGatewayProvider = { configSyncLocalGateway },
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator by lazy {
+        com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator(
+            googleSheetsClient = googleSheetsClient,
+            subscriptionRepository = subscriptionRepository,
+            preferencesRepository = preferencesRepository,
+            accountRepository = accountRepository,
+            syncConfigUseCase = syncConfigUseCase,
             ioDispatcher = ioDispatcher
         )
     }

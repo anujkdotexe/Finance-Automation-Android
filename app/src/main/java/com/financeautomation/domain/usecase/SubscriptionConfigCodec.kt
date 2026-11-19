@@ -33,6 +33,7 @@ object SubscriptionConfigCodec {
         put("keywords", sub.keywords)
         put("active", sub.active)
         put("createdAt", sub.createdAt)
+        put("note", sub.note)
     }.toString()
 
     /** Decodes the Value1 JSON of a Config row. Returns null when it is unreadable or incomplete. */
@@ -56,7 +57,8 @@ object SubscriptionConfigCodec {
                 remind = obj["remind"]?.jsonPrimitive?.booleanOrNull ?: true,
                 keywords = obj["keywords"]?.jsonPrimitive?.content.orEmpty(),
                 active = obj["active"]?.jsonPrimitive?.booleanOrNull ?: true,
-                createdAt = obj["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+                createdAt = obj["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
+                note = obj["note"]?.jsonPrimitive?.content.orEmpty()
             )
         } catch (e: Exception) {
             null

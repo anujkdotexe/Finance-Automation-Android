@@ -345,13 +345,13 @@ class TransactionRepositorySyncTest {
                     }
                     // findOrphanDebitRow or table range read
                     method == "GET" && url.contains("/values/") -> {
-                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") }
+                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") || it.key.startsWith("AD") }
                         if (matchingEntries.isEmpty()) {
-                            """{"range":"'Sheet'!A3:K","majorDimension":"ROWS","values":[]}"""
+                            """{"range":"'Sheet'!A3:L","majorDimension":"ROWS","values":[]}"""
                         } else {
                             val maxRow = writtenUuids.keys.mapNotNull { Regex("""\d+""").find(it)?.value?.toIntOrNull() }.maxOrNull() ?: 3
                             val rows = (4..maxRow).map { rowIdx ->
-                                val hasEntry = writtenUuids.containsKey("AC$rowIdx")
+                                val hasEntry = writtenUuids.containsKey("AC$rowIdx") || writtenUuids.containsKey("AD$rowIdx")
                                 if (hasEntry) "[\"46358\"]" else "[\"\"]"
                             }
                             """{"range":"'Sheet'!A4:A","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
@@ -362,15 +362,15 @@ class TransactionRepositorySyncTest {
                         """{"spreadsheetId":"test_sheet_id","sheets":[{"properties":{"sheetId":0,"title":"Nov26","gridProperties":{"rowCount":1000,"columnCount":35}}}]}"""
                     }
                     // appendTableScoped (values.update to row range or legacy append)
-                    (method == "POST" && url.contains(":append")) || (method == "PUT" && url.contains("/values/") && (url.contains(":K") || url.contains("%3AK"))) -> {
+                    (method == "POST" && url.contains(":append")) || (method == "PUT" && url.contains("/values/") && (url.contains(":K") || url.contains("%3AK") || url.contains(":L") || url.contains("%3AL"))) -> {
                         val count = appendDebitCount.incrementAndGet()
                         val rowMatch = Regex("""\d+""").find(url)?.value?.toIntOrNull() ?: (3 + count)
-                        """{"spreadsheetId":"test_sheet_id","updatedRange":"'Sheet'!A$rowMatch:K$rowMatch","updatedCells":11}"""
+                        """{"spreadsheetId":"test_sheet_id","updatedRange":"'Sheet'!A$rowMatch:L$rowMatch","updatedCells":12}"""
                     }
-                    // updateCell (AC rowIdx)
+                    // updateCell (AC or AD rowIdx)
                     method == "PUT" && url.contains("/values/") -> {
                         val cellMatch = Regex("""'[^']+'!([A-Z0-9]+)""").find(url)
-                        val cellRef = cellMatch?.groupValues?.get(1) ?: "AC4"
+                        val cellRef = cellMatch?.groupValues?.get(1) ?: "AD4"
                         val bodyText = request.body?.let { b ->
                             val buf = okio.Buffer()
                             b.writeTo(buf)
@@ -387,13 +387,13 @@ class TransactionRepositorySyncTest {
                             b.writeTo(buf)
                             buf.readUtf8()
                         }.orEmpty()
-                        if (bodyText.contains(":K") || bodyText.contains(":k") || bodyText.contains("%3AK")) {
+                        if (bodyText.contains(":K") || bodyText.contains(":k") || bodyText.contains("%3AK") || bodyText.contains(":L") || bodyText.contains(":l") || bodyText.contains("%3AL")) {
                             appendDebitCount.incrementAndGet()
                         }
-                        val acMatch = Regex("""'[^']+'!(AC\d+)""").find(bodyText)
+                        val acMatch = Regex("""'[^']+'!((?:AC|AD)\d+)""").find(bodyText)
                         val acRef = acMatch?.groupValues?.get(1)
                         if (acRef != null) {
-                            val uuidMatch = Regex("""'[^']+'!AC\d+.*?"values":\s*\[\s*\[\s*"([^"]+)"""").find(bodyText)
+                            val uuidMatch = Regex("""'[^']+'!(?:AC|AD)\d+.*?"values":\s*\[\s*\[\s*"([^"]+)"""").find(bodyText)
                                 ?: Regex(""""values":\s*\[\s*\[\s*"([^"]+)""").findAll(bodyText).lastOrNull()
                             val uuidVal = uuidMatch?.groupValues?.get(1).orEmpty()
                             writtenUuids[acRef] = uuidVal

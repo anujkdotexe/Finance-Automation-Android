@@ -158,6 +158,25 @@ object SheetSchemaConstants {
     const val SAVINGS_KEYWORD: String = "Savings"
     const val FORBIDDEN_SINGULAR_SAVING: String = "Saving"
 
+    // Subscriptions Tab Constants
+    const val SUBSCRIPTIONS_TAB_NAME: String = "Subscriptions"
+    const val SUBSCRIPTIONS_HEADER_ROW_INDEX: Int = 2 // Row 3
+    const val SUBSCRIPTIONS_DATA_START_ROW_INDEX: Int = 3 // Row 4
+    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 10
+    const val SUBSCRIPTIONS_RANGE: String = "A4:J"
+
+    const val COL_INDEX_SUB_NAME: Int = 0
+    const val COL_INDEX_SUB_AMOUNT: Int = 1
+    const val COL_INDEX_SUB_FREQUENCY: Int = 2
+    const val COL_INDEX_SUB_DUE_DATE: Int = 3
+    const val COL_INDEX_SUB_ACCOUNT: Int = 4
+    const val COL_INDEX_SUB_ACTIVE: Int = 5
+    const val COL_INDEX_SUB_NOTE: Int = 6
+    const val COL_INDEX_SUB_KEYWORDS: Int = 7
+    const val COL_INDEX_SUB_PAID_MONTH: Int = 8
+    const val COL_INDEX_SUB_ID: Int = 9
+    const val COL_LETTER_SUB_ID: String = "J"
+
     fun columnLetter(index: Int): String {
         require(index in 0 until TOTAL_COLUMN_COUNT) {
             "Column index $index out of bounds [0, ${TOTAL_COLUMN_COUNT - 1}]"
