@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -87,7 +88,8 @@ class SubscriptionsSheetSyncTest {
             sheetId = 12345,
             accounts = listOf("Canara", "HDFC"),
             rowCount = 500,
-            columnCount = 10
+            columnCount = 12,
+            year = 2026
         )
 
         // Ensure grid size request exists
@@ -106,11 +108,11 @@ class SubscriptionsSheetSyncTest {
         }
         assertNotNull(headerReq)
 
-        // Hidden column J request
+        // Hidden column L request (index 11 to 12)
         val hideReq = requests.firstOrNull {
             val dimProps = it["updateDimensionProperties"] as? Map<*, *>
             val range = dimProps?.get("range") as? Map<*, *>
-            range?.get("startIndex") == 9 && range.get("endIndex") == 10
+            range?.get("startIndex") == 11 && range.get("endIndex") == 12
         }
         assertNotNull(hideReq)
     }
@@ -123,6 +125,106 @@ class SubscriptionsSheetSyncTest {
         assertTrue(formula.contains("Subscriptions"))
         assertTrue(formula.contains("!D4:D"))
         assertTrue(formula.contains("A4"))
+    }
+
+    @Test
+    fun buildPaidThisYearFormula_contains12IndependentIferrorTermsForGivenYearAndNoOtherYear() {
+        val formula2026 = DashboardFormulaBuilder.buildPaidThisYearFormula(year = 2026, row1BasedIndex = 4)
+        assertTrue("Formula must start with '='", formula2026.startsWith("="))
+
+        // Must split into exactly 12 independent IFERROR terms joined by '+'
+        val terms2026 = formula2026.removePrefix("=").split(" + ")
+        assertEquals("Must contain exactly 12 terms for 12 months", 12, terms2026.size)
+
+        val expectedMonths2026 = listOf("Jan26", "Feb26", "Mar26", "Apr26", "May26", "Jun26", "Jul26", "Aug26", "Sep26", "Oct26", "Nov26", "Dec26")
+        for ((idx, expectedTab) in expectedMonths2026.withIndex()) {
+            val term = terms2026[idx]
+            assertTrue("Term must be wrapped in IFERROR", term.startsWith("IFERROR(") && term.endsWith(", 0)"))
+            assertTrue("Term must reference tab '$expectedTab'", term.contains("'$expectedTab'!G4:G"))
+            assertTrue("Term must filter category Subscriptions", term.contains("'$expectedTab'!F4:F\"), \"Subscriptions\""))
+            assertTrue("Term must filter description by *A4*", term.contains("'$expectedTab'!D4:D\"), \"*\" & A4 & \"*\""))
+        }
+
+        // Must not reference any other year
+        assertFalse("Formula for 2026 must not mention 25", formula2026.contains("25'!"))
+        assertFalse("Formula for 2026 must not mention 27", formula2026.contains("27'!"))
+
+        // Pure test for year 2027
+        val formula2027 = DashboardFormulaBuilder.buildPaidThisYearFormula(year = 2027, row1BasedIndex = 5)
+        val terms2027 = formula2027.removePrefix("=").split(" + ")
+        assertEquals(12, terms2027.size)
+        assertTrue(terms2027[0].contains("'Jan27'!G4:G"))
+        assertTrue(terms2027[11].contains("'Dec27'!G4:G"))
+        assertFalse("Formula for 2027 must not mention 26", formula2027.contains("26'!"))
+    }
+
+    @Test
+    fun buildLastPaidDateFormula_contains12IndependentIferrorTermsForGivenYearAndNoOtherYear() {
+        val formula2026 = DashboardFormulaBuilder.buildLastPaidDateFormula(year = 2026, row1BasedIndex = 4)
+        assertTrue("Must start with =IFERROR(MAX(", formula2026.startsWith("=IFERROR(MAX("))
+        assertTrue("Must end with ), \"\")", formula2026.endsWith("), \"\")"))
+
+        // Extract inner content of MAX(...)
+        val inner = formula2026.removePrefix("=IFERROR(MAX(").removeSuffix("), \"\")")
+        // Split by the comma separating independent IFERROR terms: ", IFERROR("
+        val terms2026 = inner.split(", IFERROR(").mapIndexed { i, s -> if (i == 0) s else "IFERROR($s" }
+        assertEquals("Must contain exactly 12 terms inside MAX", 12, terms2026.size)
+
+        val expectedMonths2026 = listOf("Jan26", "Feb26", "Mar26", "Apr26", "May26", "Jun26", "Jul26", "Aug26", "Sep26", "Oct26", "Nov26", "Dec26")
+        for ((idx, expectedTab) in expectedMonths2026.withIndex()) {
+            val term = terms2026[idx]
+            assertTrue("Term must be wrapped in IFERROR", term.startsWith("IFERROR(") && term.endsWith(", 0)"))
+            assertTrue("Term must reference date range '$expectedTab'!A4:A", term.contains("'$expectedTab'!A4:A"))
+            assertTrue("Term must filter category Subscriptions", term.contains("'$expectedTab'!F4:F\"), \"Subscriptions\""))
+            assertTrue("Term must filter description by *A4*", term.contains("'$expectedTab'!D4:D\"), \"*\" & A4 & \"*\""))
+        }
+
+        // Must not reference any other year
+        assertFalse("Formula for 2026 must not mention 25", formula2026.contains("25'!"))
+        assertFalse("Formula for 2026 must not mention 27", formula2026.contains("27'!"))
+
+        // Pure test for year 2027
+        val formula2027 = DashboardFormulaBuilder.buildLastPaidDateFormula(year = 2027, row1BasedIndex = 5)
+        assertTrue(formula2027.contains("'Jan27'!A4:A"))
+        assertTrue(formula2027.contains("'Dec27'!A4:A"))
+        assertFalse("Formula for 2027 must not mention 26", formula2027.contains("26'!"))
+    }
+
+    @Test
+    fun extractWorkbookYear_extractsFromTabsOrTitle() {
+        assertEquals(2026, DashboardFormulaBuilder.extractWorkbookYear(listOf("Dashboard", "Nov26", "Config")))
+        assertEquals(2027, DashboardFormulaBuilder.extractWorkbookYear(emptyList(), "Finance2027"))
+        assertEquals(2028, DashboardFormulaBuilder.extractWorkbookYear(listOf("Jan28", "Dashboard")))
+        assertEquals(2029, DashboardFormulaBuilder.extractWorkbookYear(emptyList(), null, fallbackYear = 2029))
+    }
+
+    @Test
+    fun buildSubscriptionRowValues_produces12ColumnsWithFormulasAndHiddenIdAtEnd() {
+        val sub = Subscription(
+            id = "sub_spotify",
+            name = "Spotify",
+            amount = 119.0,
+            frequency = SubscriptionFrequency.MONTHLY,
+            anchorEpochDay = LocalDate.of(2026, 11, 1).toEpochDay(),
+            account = "HDFC",
+            note = "Premium individual",
+            keywords = "spotify,music",
+            active = true
+        )
+        val row = SheetProvisioner.buildSubscriptionRowValues(sub, row1BasedIndex = 4, year = 2026)
+        assertEquals(12, row.size)
+        assertEquals("Spotify", row[0])
+        assertEquals(119.0, row[1])
+        assertEquals("Monthly", row[2])
+        assertEquals("2026-11-01", row[3])
+        assertEquals("HDFC", row[4])
+        assertEquals("TRUE", row[5])
+        assertEquals("Premium individual", row[6])
+        assertEquals("spotify,music", row[7])
+        assertTrue((row[8] as String).contains("!G4:G")) // Paid this month formula
+        assertTrue((row[9] as String).contains("'Jan26'!G4:G")) // Paid this year formula
+        assertTrue((row[10] as String).contains("'Jan26'!A4:A")) // Last paid date formula
+        assertEquals("sub_spotify", row[11]) // ID at index 11 (Column L)
     }
 
     @Test
@@ -208,7 +310,7 @@ class SubscriptionsSheetSyncTest {
     }
 
     @Test
-    fun syncSubscriptionsTab_userAddedRowWithoutId_generatesUuidAndWritesBackToCellJ() = runBlocking {
+    fun syncSubscriptionsTab_userAddedRowWithoutId_generatesUuidAndWritesBackToCellL() = runBlocking {
         fakeSheetsClient.subscriptionsRows = listOf(
             SheetSubscriptionRow(
                 rowNumber = 5,
@@ -235,8 +337,8 @@ class SubscriptionsSheetSyncTest {
         assertEquals(1500.0, gymSub.amount)
         assertEquals("Gold gym", gymSub.note)
 
-        // Cell J5 must have been written back with the generated ID
-        val writtenId = fakeSheetsClient.updatedCells["${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}!J5"]
+        // Cell L5 must have been written back with the generated ID
+        val writtenId = fakeSheetsClient.updatedCells["${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}!L5"]
         assertEquals(gymSub.id, writtenId)
     }
 
@@ -272,7 +374,8 @@ class SubscriptionsSheetSyncTest {
 
         override suspend fun ensureSubscriptionsTabExists(
             spreadsheetId: String,
-            accounts: List<String>
+            accounts: List<String>,
+            year: Int?
         ): Result<Boolean> = Result.Success(true)
 
         override suspend fun readSubscriptionsTab(
@@ -282,7 +385,8 @@ class SubscriptionsSheetSyncTest {
         override suspend fun writeSubscriptionsTab(
             spreadsheetId: String,
             subscriptions: List<Subscription>,
-            accounts: List<String>
+            accounts: List<String>,
+            year: Int?
         ): Result<Unit> {
             lastWrittenSubscriptions = subscriptions
             return Result.Success(Unit)

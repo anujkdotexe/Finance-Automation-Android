@@ -162,8 +162,8 @@ object SheetSchemaConstants {
     const val SUBSCRIPTIONS_TAB_NAME: String = "Subscriptions"
     const val SUBSCRIPTIONS_HEADER_ROW_INDEX: Int = 2 // Row 3
     const val SUBSCRIPTIONS_DATA_START_ROW_INDEX: Int = 3 // Row 4
-    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 10
-    const val SUBSCRIPTIONS_RANGE: String = "A4:J"
+    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 12
+    const val SUBSCRIPTIONS_RANGE: String = "A4:L"
 
     const val COL_INDEX_SUB_NAME: Int = 0
     const val COL_INDEX_SUB_AMOUNT: Int = 1
@@ -174,8 +174,10 @@ object SheetSchemaConstants {
     const val COL_INDEX_SUB_NOTE: Int = 6
     const val COL_INDEX_SUB_KEYWORDS: Int = 7
     const val COL_INDEX_SUB_PAID_MONTH: Int = 8
-    const val COL_INDEX_SUB_ID: Int = 9
-    const val COL_LETTER_SUB_ID: String = "J"
+    const val COL_INDEX_SUB_PAID_YEAR: Int = 9
+    const val COL_INDEX_SUB_LAST_PAID_DATE: Int = 10
+    const val COL_INDEX_SUB_ID: Int = 11
+    const val COL_LETTER_SUB_ID: String = "L"
 
     fun columnLetter(index: Int): String {
         require(index in 0 until TOTAL_COLUMN_COUNT) {

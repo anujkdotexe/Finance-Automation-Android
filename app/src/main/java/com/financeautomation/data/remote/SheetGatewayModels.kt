@@ -56,7 +56,7 @@ data class LedgerPayableRow(
 )
 
 /**
- * A row from the Subscriptions tab (Cols A to J).
+ * A row from the Subscriptions tab (Cols A to L).
  */
 data class SheetSubscriptionRow(
     val rowNumber: Int,

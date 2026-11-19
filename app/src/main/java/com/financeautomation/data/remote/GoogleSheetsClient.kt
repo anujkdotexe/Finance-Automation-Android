@@ -1594,7 +1594,8 @@ open class GoogleSheetsClient(
      */
     open suspend fun ensureSubscriptionsTabExists(
         spreadsheetId: String,
-        accounts: List<String> = emptyList()
+        accounts: List<String> = emptyList(),
+        year: Int? = null
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         val tabsResult = getSheetTabsWithIds(spreadsheetId)
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
@@ -1602,6 +1603,8 @@ open class GoogleSheetsClient(
         if (tabsMap.containsKey(SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME)) {
             return@withContext Result.Success(false)
         }
+
+        val resolvedYear = year ?: DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
 
         val addReq = mapOf(
             "addSheet" to mapOf(
@@ -1620,7 +1623,7 @@ open class GoogleSheetsClient(
         } else null
         val targetSheetId = newSheetId ?: 0
 
-        val provRequests = SheetProvisioner.buildSubscriptionsRequests(targetSheetId, accounts)
+        val provRequests = SheetProvisioner.buildSubscriptionsRequests(targetSheetId, accounts, year = resolvedYear)
         val provRes = executeBatchUpdate(spreadsheetId, provRequests)
         if (provRes is Result.Error) return@withContext Result.Error(provRes.exception)
 
@@ -1628,7 +1631,7 @@ open class GoogleSheetsClient(
     }
 
     /**
-     * Reads all rows from the Subscriptions tab ('Subscriptions'!A4:J).
+     * Reads all rows from the Subscriptions tab ('Subscriptions'!A4:L).
      */
     open suspend fun readSubscriptionsTab(
         spreadsheetId: String
@@ -1644,7 +1647,7 @@ open class GoogleSheetsClient(
                 val row = rawRows[i]
                 if (row.isEmpty()) continue
                 val name = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NAME)?.toString()?.trim().orEmpty()
-                val id = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                val id = (row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID) ?: if (row.size == 10) row.getOrNull(9) else null)?.toString()?.trim()?.takeIf { it.isNotBlank() }
                 if (name.isBlank() && id == null) continue
 
                 val amount = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_AMOUNT)?.toString()?.replace(",", "")?.toDoubleOrNull()
@@ -1679,23 +1682,31 @@ open class GoogleSheetsClient(
     }
 
     /**
-     * Writes all subscriptions into the Subscriptions tab ('Subscriptions'!A4:J).
+     * Writes all subscriptions into the Subscriptions tab ('Subscriptions'!A4:L).
      */
     open suspend fun writeSubscriptionsTab(
         spreadsheetId: String,
         subscriptions: List<Subscription>,
-        accounts: List<String> = emptyList()
+        accounts: List<String> = emptyList(),
+        year: Int? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            ensureSubscriptionsTabExists(spreadsheetId, accounts)
-
             val tabsResult = getSheetTabsWithIds(spreadsheetId)
             if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
-            val sheetId = (tabsResult as Result.Success).data[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
+            val tabsMap = (tabsResult as Result.Success).data
+
+            val resolvedYear = year ?: DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
+            ensureSubscriptionsTabExists(spreadsheetId, accounts, resolvedYear)
+
+            val sheetId = tabsMap[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
                 ?: return@withContext Result.Error(SheetNotFoundException(spreadsheetId, "Subscriptions sheetId missing"))
 
             val rows = subscriptions.mapIndexed { idx, sub ->
-                SheetProvisioner.buildSubscriptionRowValues(sub, row1BasedIndex = idx + SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX + 1)
+                SheetProvisioner.buildSubscriptionRowValues(
+                    sub = sub,
+                    row1BasedIndex = idx + SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX + 1,
+                    year = resolvedYear
+                )
             }
 
             if (rows.isEmpty()) {

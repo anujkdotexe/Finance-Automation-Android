@@ -72,7 +72,7 @@ open class SubscriptionsSheetSyncCoordinator(
                     processedSubIds.add(newId)
                     roomModified = true
 
-                    // Write back new ID to cell J{row.rowNumber}
+                    // Write back new ID to cell L{row.rowNumber}
                     googleSheetsClient.updateCell(
                         spreadsheetId = spreadsheetId,
                         tabName = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME,

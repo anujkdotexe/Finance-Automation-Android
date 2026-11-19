@@ -1662,9 +1662,18 @@ object SheetProvisioner {
         return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!G4:G"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "Subscriptions", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
     }
 
+    fun buildPaidThisYearFormula(year: Int, row1BasedIndex: Int): String {
+        return DashboardFormulaBuilder.buildPaidThisYearFormula(year, row1BasedIndex)
+    }
+
+    fun buildLastPaidDateFormula(year: Int, row1BasedIndex: Int): String {
+        return DashboardFormulaBuilder.buildLastPaidDateFormula(year, row1BasedIndex)
+    }
+
     fun buildSubscriptionRowValues(
         sub: Subscription,
-        row1BasedIndex: Int
+        row1BasedIndex: Int,
+        year: Int = 2026
     ): List<Any?> {
         val anchorDate = try {
             java.time.LocalDate.ofEpochDay(sub.anchorEpochDay).toString()
@@ -1673,7 +1682,9 @@ object SheetProvisioner {
         }
         val freqText = sub.frequency.name.lowercase().replaceFirstChar { it.uppercase() }
         val activeText = if (sub.active) "TRUE" else "FALSE"
-        val paidFormula = buildPaidThisMonthFormula(row1BasedIndex)
+        val paidMonthFormula = buildPaidThisMonthFormula(row1BasedIndex)
+        val paidYearFormula = buildPaidThisYearFormula(year, row1BasedIndex)
+        val lastPaidDateFormula = buildLastPaidDateFormula(year, row1BasedIndex)
 
         return listOf(
             sub.name,
@@ -1684,7 +1695,9 @@ object SheetProvisioner {
             activeText,
             sub.note,
             sub.keywords,
-            paidFormula,
+            paidMonthFormula,
+            paidYearFormula,
+            lastPaidDateFormula,
             sub.id
         )
     }
@@ -1693,11 +1706,12 @@ object SheetProvisioner {
         sheetId: Int,
         accounts: List<String> = emptyList(),
         rowCount: Int = 500,
-        columnCount: Int = 10
+        columnCount: Int = SheetSchemaConstants.SUBSCRIPTIONS_COLUMN_COUNT,
+        year: Int = 2026
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
         val targetRows = maxOf(rowCount, 500)
-        val targetCols = maxOf(columnCount, 10)
+        val targetCols = maxOf(columnCount, SheetSchemaConstants.SUBSCRIPTIONS_COLUMN_COUNT)
 
         // Ensure grid size
         requests.add(
@@ -1715,13 +1729,13 @@ object SheetProvisioner {
             )
         )
 
-        // Banner merge A1:I1
+        // Banner merge A1:K1 (Columns 0 to 11, excluding hidden Col L)
         val bannerRange = mapOf(
             "sheetId" to sheetId,
             "startRowIndex" to 0,
             "endRowIndex" to 1,
             "startColumnIndex" to 0,
-            "endColumnIndex" to 9
+            "endColumnIndex" to 11
         )
         requests.add(mapOf("unmergeCells" to mapOf("range" to bannerRange)))
         requests.add(mapOf("mergeCells" to mapOf("range" to bannerRange, "mergeType" to "MERGE_ALL")))
@@ -1773,7 +1787,7 @@ object SheetProvisioner {
         val headers = listOf(
             "Name", "Expected Amount (₹)", "Frequency", "Due Date",
             "Default Account", "Active", "Note", "Keywords",
-            "Paid This Month (₹)", "Subscription ID"
+            "Paid This Month (₹)", "Paid This Year (₹)", "Last Paid Date", "Subscription ID"
         )
         val row3Values = headers.map { header ->
             mapOf(
@@ -1838,7 +1852,7 @@ object SheetProvisioner {
         // Column widths
         val widths = listOf(
             0 to 160, 1 to 130, 2 to 100, 3 to 110, 4 to 120,
-            5 to 80, 6 to 150, 7 to 150, 8 to 140, 9 to 130
+            5 to 80, 6 to 150, 7 to 150, 8 to 140, 9 to 140, 10 to 120, 11 to 130
         )
         widths.forEach { (colIdx, px) ->
             requests.add(
@@ -1855,22 +1869,26 @@ object SheetProvisioner {
         // Number Formats
         // Expected Amount: Col B (1) -> CURRENCY
         requests.add(createNumberFormatRequest(sheetId, 1, 2, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
-        // Paid This Month: Col I (8) -> CURRENCY
-        requests.add(createNumberFormatRequest(sheetId, 8, 9, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
         // Due Date: Col D (3) -> DATE
         requests.add(createNumberFormatRequest(sheetId, 3, 4, "DATE", "yyyy-mm-dd", "CENTER", targetRows))
-        // Plain text on Note and Keywords
+        // Plain text on Note and Keywords: Col G, H (6 to 8)
         requests.add(createNumberFormatRequest(sheetId, 6, 8, "TEXT", "@", "LEFT", targetRows))
+        // Paid This Month: Col I (8) -> CURRENCY
+        requests.add(createNumberFormatRequest(sheetId, 8, 9, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
+        // Paid This Year: Col J (9) -> CURRENCY
+        requests.add(createNumberFormatRequest(sheetId, 9, 10, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
+        // Last Paid Date: Col K (10) -> DATE with blank on zero
+        requests.add(createNumberFormatRequest(sheetId, 10, 11, "DATE", "yyyy-mm-dd;;", "CENTER", targetRows))
 
-        // Hide Subscription ID (Col J, index 9)
+        // Hide Subscription ID (Col L, index 11)
         requests.add(
             mapOf(
                 "updateDimensionProperties" to mapOf(
                     "range" to mapOf(
                         "sheetId" to sheetId,
                         "dimension" to "COLUMNS",
-                        "startIndex" to 9,
-                        "endIndex" to 10
+                        "startIndex" to 11,
+                        "endIndex" to 12
                     ),
                     "properties" to mapOf("hiddenByUser" to true),
                     "fields" to "hiddenByUser"

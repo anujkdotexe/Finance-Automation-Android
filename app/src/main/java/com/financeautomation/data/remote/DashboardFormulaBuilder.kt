@@ -89,6 +89,66 @@ object DashboardFormulaBuilder {
         return """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
     }
 
+    val MONTH_PREFIXES: List<String> = listOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    )
+
+    /** Returns the 12 month tab names for a given [year] (e.g. 2026 -> ["Jan26", "Feb26", ...]). */
+    fun monthTabsForYear(year: Int): List<String> {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return MONTH_PREFIXES.map { "$it$yy" }
+    }
+
+    /**
+     * Extracts the 4-digit fiscal year from workbook tab names or workbook title,
+     * falling back to the provided default year.
+     */
+    fun extractWorkbookYear(
+        tabNames: Collection<String>,
+        workbookTitle: String? = null,
+        fallbackYear: Int = 2026
+    ): Int {
+        if (!workbookTitle.isNullOrBlank()) {
+            val match = Regex("""(20\d{2})""").find(workbookTitle)
+            if (match != null) return match.value.toInt()
+        }
+        val tabRegex = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
+        for (tab in tabNames) {
+            val m = tabRegex.find(tab)
+            if (m != null) {
+                val yy = m.groupValues[2].toIntOrNull()
+                if (yy != null) return 2000 + yy
+            }
+        }
+        return fallbackYear
+    }
+
+    /**
+     * Builds the Paid This Year formula for row [row1BasedIndex] summing across the 12 month tabs of [year].
+     * Each month is evaluated as an independent IFERROR term returning 0 if the tab is missing or has no matches.
+     */
+    fun buildPaidThisYearFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /**
+     * Builds the Last Paid Date formula for row [row1BasedIndex] finding the latest date across the 12 month tabs of [year].
+     * Each month is evaluated as an independent IFERROR term inside MAX returning 0 if the tab is missing or has no matches.
+     * When all terms return 0, the outer IFERROR returns empty string or 0 formatted as date with blank on zero.
+     */
+    fun buildLastPaidDateFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val innerTerms = tabs.joinToString(", ") { tab ->
+            """IFERROR(MAXIFS(INDIRECT("'$tab'!A4:A"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+        }
+        return """=IFERROR(MAX($innerTerms), "")"""
+    }
+
     /**
      * Builds batchUpdate requests to update Dashboard formulas and Category table (Y5:Z15).
      */
