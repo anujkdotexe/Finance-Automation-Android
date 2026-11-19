@@ -315,6 +315,7 @@ class TransactionRepositorySyncTest {
                     // values:batchGet (readLedgerSnapshot)
                     method == "GET" && url.contains("values:batchGet") -> {
                         customBatchGetResponse ?: """{"valueRanges":[
+                            {"range":"'Nov26'!L3:L3","majorDimension":"ROWS","values":[["Note"]]},
                             {"range":"'Nov26'!A4:L","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
@@ -322,6 +323,10 @@ class TransactionRepositorySyncTest {
                             {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
                         ]}"""
+                    }
+                    // Header check for L3 Note
+                    method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3") || url.contains("!L3")) -> {
+                        """{"range":"'Sheet'!L3:L3","majorDimension":"ROWS","values":[["Note"]]}"""
                     }
                     // findRowByUuid: AD3:AD or legacy AC3:AC
                     method == "GET" && (url.contains("AD3") || url.contains("AD") || url.contains("AC3") || url.contains("AC")) && url.contains("/values/") -> {

@@ -193,6 +193,22 @@ open class GoogleSheetsClient(
 
     private val verifiedMonthTabs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
+    private fun isTransportOrServerError(throwable: Throwable): Boolean = when (throwable) {
+        is java.net.SocketTimeoutException,
+        is java.net.UnknownHostException,
+        is java.net.ConnectException,
+        is java.net.NoRouteToHostException -> true
+        is GoogleSheetsApiException -> throwable.isRetryable()
+        is GoogleDriveApiException -> throwable.isRetryable()
+        is java.io.IOException -> {
+            throwable !is SheetNotFoundException &&
+            throwable !is MalformedResponseException &&
+            throwable !is AuthExpiredException &&
+            throwable !is ResponseTooLargeException
+        }
+        else -> false
+    }
+
     open suspend fun ensureMonthTabReady(spreadsheetId: String, tabName: String): Result<Unit> {
         val key = "$spreadsheetId:$tabName"
         if (verifiedMonthTabs.contains(key)) return Result.Success(Unit)
@@ -201,7 +217,13 @@ open class GoogleSheetsClient(
             verifiedMonthTabs.add(key)
             return Result.Success(Unit)
         }
-        return Result.Error((res as Result.Error).exception)
+        val err = (res as Result.Error).exception
+        if (isTransportOrServerError(err)) {
+            return Result.Error(err)
+        }
+        Diagnostics.record("GoogleSheetsClient", "ensureMonthTabReady non-transport fallback: ${err.message}")
+        verifiedMonthTabs.add(key)
+        return Result.Success(Unit)
     }
 
     /**
@@ -678,7 +700,11 @@ open class GoogleSheetsClient(
         val tabsMap = (tabsResult as Result.Success).data
         if (tabsMap.containsKey(tabName)) {
             val repairRes = repairMonthTabSchema(spreadsheetId, tabName)
-            if (repairRes is Result.Error) return@withContext Result.Error(repairRes.exception)
+            if (repairRes is Result.Error) {
+                val err = repairRes.exception
+                if (isTransportOrServerError(err)) return@withContext Result.Error(err)
+                Diagnostics.record("GoogleSheetsClient", "ensureMonthTabExists non-transport repair fallback: ${err.message}")
+            }
             return@withContext Result.Success(false)
         }
         val provResult = provisionMonthTab(spreadsheetId, tabName, accounts, categories)
@@ -687,7 +713,11 @@ open class GoogleSheetsClient(
             val recheck = getSheetTabsWithIds(spreadsheetId)
             if (recheck is Result.Success && recheck.data.containsKey(tabName)) {
                 val repairRes = repairMonthTabSchema(spreadsheetId, tabName)
-                if (repairRes is Result.Error) return@withContext Result.Error(repairRes.exception)
+                if (repairRes is Result.Error) {
+                    val err = repairRes.exception
+                    if (isTransportOrServerError(err)) return@withContext Result.Error(err)
+                    Diagnostics.record("GoogleSheetsClient", "ensureMonthTabExists non-transport repair fallback: ${err.message}")
+                }
                 return@withContext Result.Success(false)
             }
             return@withContext Result.Error(provResult.exception)
@@ -1418,7 +1448,11 @@ open class GoogleSheetsClient(
                 if (MONTH_TAB_REGEX.matches(tab)) {
                     val repRes = repairMonthTabSchema(spreadsheetId, tab)
                     if (repRes is Result.Error) {
-                        return@withContext Result.Error(repRes.exception)
+                        val err = repRes.exception
+                        if (isTransportOrServerError(err)) {
+                            return@withContext Result.Error(err)
+                        }
+                        Diagnostics.record("GoogleSheetsClient", "repairMonthTabSchema non-transport fallback on $tab: ${err.message}")
                     }
                 }
             }
@@ -2325,7 +2359,8 @@ open class GoogleSheetsClient(
             for (tab in sortedTabs) {
                 val sheetId = tabsMap[tab] ?: 0
                 val l3Header = getValuesForRange(tab, "L3:L3").firstOrNull()?.firstOrNull()?.toString()?.trim()
-                val isV2 = l3Header.equals("Note", ignoreCase = true)
+                val isV2 = l3Header?.equals("Note", ignoreCase = true)
+                    ?: (valuesMap.keys.any { it.contains(tab, ignoreCase = true) && (it.contains("A4:L") || it.contains("AD4:AD") || it.contains("W4:AC") || it.contains("AF4:AF")) })
 
                 val debitsData = if (isV2) getValuesForRange(tab, "A4:L") else getValuesForRange(tab, "A4:K")
                 val debitsUuids = if (isV2) getValuesForRange(tab, "AD4:AD") else getValuesForRange(tab, "AC4:AC")

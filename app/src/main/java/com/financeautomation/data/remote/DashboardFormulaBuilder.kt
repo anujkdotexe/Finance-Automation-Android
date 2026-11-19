@@ -46,7 +46,7 @@ object DashboardFormulaBuilder {
             )
             ", ${tabRange(tabName, "F4:F")}, \"<>$escapedCriterion\""
         }
-        val spent = "SUMIFS(${tabRange(tabName, "I4:I")}, ${tabRange(tabName, "D4:D")}, \"<>[Void]*\"$exclusions)"
+        val spent = "SUMIFS(${tabRange(tabName, "I4:I")}$exclusions)"
         val refunds = REFUND_TYPES.joinToString("") { type ->
             val escapedType = com.financeautomation.core.utils.SinkEscaper.sheetFormulaLiteral(type)
             " - SUMIFS(${tabRange(tabName, "T4:T")}, ${tabRange(tabName, "Q4:Q")}, \"$escapedType\")"

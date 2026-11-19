@@ -90,6 +90,7 @@ class ScriptedSheetsServer(
             method == "GET" && url.contains("values:batchGet") -> {
                 val tab = tabs.first()
                 """{"valueRanges":[
+                    {"range":"'$tab'!L3:L3","majorDimension":"ROWS","values":[["Note"]]},
                     {"range":"'$tab'!A4:L","majorDimension":"ROWS","values":[]},
                     {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[]},
                     {"range":"'$tab'!N4:U","majorDimension":"ROWS","values":[]},
@@ -101,6 +102,9 @@ class ScriptedSheetsServer(
                     {"range":"'$tab'!M4:T","majorDimension":"ROWS","values":[]},
                     {"range":"'$tab'!V4:AB","majorDimension":"ROWS","values":[]}
                 ]}"""
+            }
+            method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3") || url.contains("!L3")) -> {
+                """{"range":"'Sheet'!L3:L3","majorDimension":"ROWS","values":[["Note"]]}"""
             }
             method == "GET" && url.contains("/values/") && (url.contains("AD") || url.contains("AE") || url.contains("AF") || url.contains("AC")) -> {
                 val values = uuidColumnValues(call).joinToString(",") { "[\"$it\"]" }
