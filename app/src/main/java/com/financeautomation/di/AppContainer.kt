@@ -69,6 +69,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -134,6 +136,11 @@ interface AppContainer {
     val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
     val subscriptionMatcher: SubscriptionMatcher
     val subscriptionActionUseCase: SubscriptionActionUseCase
+
+    /**
+     * Reusable single notification processing engine sharing a single processMutex.
+     */
+    suspend fun getNotificationProcessor(): com.financeautomation.service.NotificationProcessor
 }
 
 /**
@@ -675,6 +682,33 @@ class DefaultAppContainer(
             ledgerSnapshotGateway = gateway,
             ioDispatcher = ioDispatcher
         )
+    }
+
+    @Volatile
+    private var _notificationProcessor: com.financeautomation.service.NotificationProcessor? = null
+    private val notificationProcessorMutex = Mutex()
+
+    override suspend fun getNotificationProcessor(): com.financeautomation.service.NotificationProcessor {
+        _notificationProcessor?.let { return it }
+        return notificationProcessorMutex.withLock {
+            _notificationProcessor ?: run {
+                val db = awaitDatabase()
+                val runner: suspend (suspend () -> Unit) -> Unit = { block ->
+                    db.withTransaction { block() }
+                }
+                com.financeautomation.service.NotificationProcessor(
+                    pendingCaptureDao = db.pendingCaptureDao(),
+                    handledNotificationDao = db.handledNotificationDao(),
+                    accountDao = db.accountDao(),
+                    preferenceDao = db.preferenceDao(),
+                    transactionDao = db.transactionDao(),
+                    subscriptionMatcher = subscriptionMatcher,
+                    parseUseCase = parseNotificationUseCase,
+                    runInTransaction = runner,
+                    ownPackageName = applicationContext.packageName
+                ).also { _notificationProcessor = it }
+            }
+        }
     }
 }
 

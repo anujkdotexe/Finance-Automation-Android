@@ -369,4 +369,79 @@ class SubscriptionsAndTripsProductionSyncTest {
         assertEquals(1, fakeSheets.lastWrittenTrips.size)
         assertEquals("Kerala", fakeSheets.lastWrittenTrips[0].name)
     }
+
+    @Test
+    fun baseHashesPersistAcrossCoordinatorRestart_deletedRowNotResurrected() = runBlocking {
+        val fakeSheets = FakeProductionSheetsClient()
+        fakeSheets.remoteSubscriptionRows = listOf(
+            SheetSubscriptionRow(
+                rowNumber = 4,
+                name = "Netflix",
+                amount = 649.0,
+                frequency = "Monthly",
+                dueDateString = "2026-11-20",
+                account = "Canara",
+                active = true,
+                note = "Standard plan",
+                keywords = "netflix",
+                id = "sub_netflix_persisted"
+            )
+        )
+        fakeSheets.remoteTripRows = listOf(
+            SheetTripRow(
+                rowNumber = 4,
+                name = "Goa Trip",
+                status = "Active",
+                startDateString = "2026-11-15",
+                endDateString = "",
+                id = "trip_goa_persisted"
+            )
+        )
+
+        val fakeSubRepo = FakeSubscriptionRepository()
+        val fakeTripRepo = FakeTripTagRepository()
+        val fakePrefs = FakePreferencesRepository()
+
+        // First coordinator session
+        val subCoordinator1 = SubscriptionsSheetSyncCoordinator(
+            googleSheetsClient = fakeSheets,
+            subscriptionRepository = fakeSubRepo,
+            preferencesRepository = fakePrefs
+        )
+        val tripCoordinator1 = TripsSheetSyncCoordinator(
+            googleSheetsClient = fakeSheets,
+            tripTagRepository = fakeTripRepo,
+            preferencesRepository = fakePrefs
+        )
+
+        // Sync initial remote rows into Room
+        assertTrue(subCoordinator1.syncSubscriptionsTab("sheet_test_123") is Result.Success)
+        assertTrue(tripCoordinator1.syncTripsTab("sheet_test_123") is Result.Success)
+
+        assertNotNull(fakeSubRepo.getSubscription("sub_netflix_persisted"))
+        assertNotNull(fakeTripRepo.getTagById("trip_goa_persisted"))
+
+        // Locally delete the items in Room
+        fakeSubRepo.deleteSubscription("sub_netflix_persisted")
+        fakeTripRepo.deleteTripTag("trip_goa_persisted")
+
+        // Simulate app restart: re-instantiate coordinators with fresh in-memory state
+        val subCoordinator2 = SubscriptionsSheetSyncCoordinator(
+            googleSheetsClient = fakeSheets,
+            subscriptionRepository = fakeSubRepo,
+            preferencesRepository = fakePrefs
+        )
+        val tripCoordinator2 = TripsSheetSyncCoordinator(
+            googleSheetsClient = fakeSheets,
+            tripTagRepository = fakeTripRepo,
+            preferencesRepository = fakePrefs
+        )
+
+        // Sync again from sheet: because baseHashes are persisted in fakePrefs, deleted items must NOT be resurrected
+        assertTrue(subCoordinator2.syncSubscriptionsTab("sheet_test_123") is Result.Success)
+        assertTrue(tripCoordinator2.syncTripsTab("sheet_test_123") is Result.Success)
+
+        assertEquals("Deleted subscription must not be resurrected from sheet after restart", null, fakeSubRepo.getSubscription("sub_netflix_persisted"))
+        assertEquals("Deleted trip must not be resurrected from sheet after restart", null, fakeTripRepo.getTagById("trip_goa_persisted"))
+    }
 }

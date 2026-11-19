@@ -269,7 +269,7 @@ class CaptureMediumItemsTest {
     }
 
     @Test
-    fun exactDuplicateTextRepeatedWithin24hDroppedAsContentHashDuplicate() = runBlocking {
+    fun duplicateTextRepeatedWithinAlertWindowDroppedAsDuplicate() = runBlocking {
         val handledDao = FakeTestHandledDao()
         val captureDao = FakeTestCaptureDao()
         val parser = ParseNotificationUseCase()
@@ -296,10 +296,44 @@ class CaptureMediumItemsTest {
             title = "Google Pay",
             text = text,
             sbnKey = "0|gpay|502",
-            postTime = t0 + 3600_000L // 1 hour later
+            postTime = t0 + 60_000L // 1 minute later (< 3 min window)
         )
-        assertTrue("Exact duplicate text within 24h must be dropped", r2 is NotificationProcessingOutcome.Ignored)
+        assertTrue("Duplicate alert within window must be dropped", r2 is NotificationProcessingOutcome.Ignored)
         assertEquals("Only one capture should exist in DB", 1, captureDao.captures.size)
+    }
+
+    @Test
+    fun secondIdenticalPaymentOutsideWindowCapturedDistinctly() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao
+        )
+
+        val t0 = 1713600000000L
+        val text = "Paid ₹250 to Fresh Fruits"
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = text,
+            sbnKey = "0|gpay|501",
+            postTime = t0
+        )
+        assertTrue("First payment should be captured", r1 is NotificationProcessingOutcome.Captured)
+
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = text,
+            sbnKey = "0|gpay|503",
+            postTime = t0 + 3600_000L // 1 hour later (> 3 min window)
+        )
+        assertTrue("Second identical payment after 1 hour must be captured", r2 is NotificationProcessingOutcome.Captured)
+        assertEquals("Two distinct captures should exist in DB", 2, captureDao.captures.size)
     }
 
     @Test
@@ -769,6 +803,46 @@ class CaptureMediumItemsTest {
         )
         assertTrue("Aggregator receipt must be dropped without creating capture", r is NotificationProcessingOutcome.Ignored)
         assertEquals(0, captureDao.captures.size)
+    }
+
+    @Test
+    fun mergeDecisionExecutesInsideDatabaseTransaction() = runBlocking {
+        val handledDao = FakeTestHandledDao()
+        val captureDao = FakeTestCaptureDao()
+        val parser = ParseNotificationUseCase()
+        var transactionExecuted = false
+
+        val processor = NotificationProcessor(
+            parseUseCase = parser,
+            pendingCaptureDao = captureDao,
+            handledNotificationDao = handledDao,
+            runInTransaction = { block ->
+                transactionExecuted = true
+                block()
+            }
+        )
+
+        val t0 = 1713600000000L
+        val r1 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = "Paid ₹100.00 to Chai Point",
+            sbnKey = "0|gpay|950",
+            postTime = t0
+        )
+        assertTrue(r1 is NotificationProcessingOutcome.Captured)
+        assertTrue("Insert must execute in transaction", transactionExecuted)
+
+        transactionExecuted = false
+        val r2 = processor.process(
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "CANBNK-S",
+            text = "Paid thru UPI Rs. 100.00 to Chai Point. Ref 999888 - Canara Bank",
+            sbnKey = "0|sms|951",
+            postTime = t0 + 10_000L
+        )
+        assertTrue("Second alert must merge into first", r2 is NotificationProcessingOutcome.Merged)
+        assertTrue("Merge must execute in transaction", transactionExecuted)
     }
 
     private class FakeTestTransactionDao : com.financeautomation.data.local.dao.TransactionDao {

@@ -169,20 +169,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
         serviceScope.launch {
             try {
-                val processor = testProcessor ?: container?.let {
-                    val db = it.awaitDatabase()
-                    NotificationProcessor(
-                        pendingCaptureDao = db.pendingCaptureDao(),
-                        handledNotificationDao = db.handledNotificationDao(),
-                        accountDao = db.accountDao(),
-                        preferenceDao = db.preferenceDao(),
-                        transactionDao = db.transactionDao(),
-                        subscriptionMatcher = it.subscriptionMatcher,
-                        parseUseCase = it.parseNotificationUseCase,
-                        runInTransaction = { block -> db.withTransaction { block() } },
-                        ownPackageName = packageName
-                    )
-                } ?: return@launch
+                val processor = testProcessor ?: container?.getNotificationProcessor() ?: return@launch
 
                 val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey, channelId, category)
                 when (outcome) {

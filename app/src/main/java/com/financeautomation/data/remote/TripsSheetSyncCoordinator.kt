@@ -30,6 +30,24 @@ open class TripsSheetSyncCoordinator(
     private val tripSummaryUseCase = TripSummaryUseCase()
     private val baseHashes = java.util.concurrent.ConcurrentHashMap<String, String>()
 
+    private suspend fun getBaseHash(id: String): String? {
+        baseHashes[id]?.let { return it }
+        val persisted = preferencesRepository.getPreference("$PREFIX_TRIP_BASE_HASH$id")
+        if (persisted != null) {
+            baseHashes[id] = persisted
+        }
+        return persisted
+    }
+
+    private suspend fun hasBaseHash(id: String): Boolean {
+        return baseHashes.containsKey(id) || preferencesRepository.getPreference("$PREFIX_TRIP_BASE_HASH$id") != null
+    }
+
+    private suspend fun saveBaseHash(id: String, hash: String) {
+        baseHashes[id] = hash
+        preferencesRepository.setPreference("$PREFIX_TRIP_BASE_HASH$id", hash, isDirty = false)
+    }
+
     private fun parseDateToEpochDay(dateStr: String): Long? {
         if (dateStr.isBlank()) return null
         val serial = dateStr.toDoubleOrNull()?.toInt()
@@ -102,7 +120,7 @@ open class TripsSheetSyncCoordinator(
                     }
                     processedTripIds.add(newId)
                     roomModified = true
-                    baseHashes[newId] = computeTripTagHash(newTrip)
+                    saveBaseHash(newId, computeTripTagHash(newTrip))
 
                     // Write back new ID to cell K{row.rowNumber}
                     googleSheetsClient.updateCell(
@@ -115,7 +133,7 @@ open class TripsSheetSyncCoordinator(
                     val existing = tripTagRepository.getTagById(row.id)
                     if (existing == null) {
                         // If ID was previously synced and tracked in baseHashes, it was deleted in Room: do not resurrect!
-                        if (baseHashes.containsKey(row.id)) {
+                        if (hasBaseHash(row.id)) {
                             Diagnostics.record("TripsSync", "DELETED_ROW_NOT_RESURRECTED")
                             continue
                         }
@@ -148,7 +166,7 @@ open class TripsSheetSyncCoordinator(
                         }
                         processedTripIds.add(row.id)
                         roomModified = true
-                        baseHashes[row.id] = computeTripTagHash(newTrip)
+                        saveBaseHash(row.id, computeTripTagHash(newTrip))
                     } else {
                         processedTripIds.add(row.id)
 
@@ -163,7 +181,7 @@ open class TripsSheetSyncCoordinator(
                         } else parsedEnd
 
                         val rowHash = computeTripHash(row.name, isStatusActive, startEpochDay, endEpochDay)
-                        val lastBaseHash = baseHashes[row.id]
+                        val lastBaseHash = getBaseHash(row.id)
                         val sheetChanged = lastBaseHash == null || lastBaseHash != rowHash
 
                         if (sheetChanged) {
@@ -197,9 +215,9 @@ open class TripsSheetSyncCoordinator(
                                 }
                                 roomModified = true
                             }
-                            baseHashes[row.id] = rowHash
+                            saveBaseHash(row.id, rowHash)
                         } else {
-                            baseHashes[row.id] = rowHash
+                            saveBaseHash(row.id, rowHash)
                         }
                     }
                 }
@@ -242,7 +260,7 @@ open class TripsSheetSyncCoordinator(
             val res = googleSheetsClient.writeTripsTab(spreadsheetId, allTrips, repaidMap, topCategoryMap)
             if (res is Result.Success) {
                 for (trip in allTrips) {
-                    baseHashes[trip.id] = computeTripTagHash(trip)
+                    saveBaseHash(trip.id, computeTripTagHash(trip))
                 }
             }
             res
@@ -251,5 +269,9 @@ open class TripsSheetSyncCoordinator(
         } catch (e: Exception) {
             Result.Error(e)
         }
+    }
+
+    companion object {
+        const val PREFIX_TRIP_BASE_HASH = "trip_base_hash_"
     }
 }

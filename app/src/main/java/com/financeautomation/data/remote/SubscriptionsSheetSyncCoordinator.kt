@@ -28,6 +28,24 @@ open class SubscriptionsSheetSyncCoordinator(
 
     private val baseHashes = java.util.concurrent.ConcurrentHashMap<String, String>()
 
+    private suspend fun getBaseHash(id: String): String? {
+        baseHashes[id]?.let { return it }
+        val persisted = preferencesRepository?.getPreference("$PREFIX_SUB_BASE_HASH$id")
+        if (persisted != null) {
+            baseHashes[id] = persisted
+        }
+        return persisted
+    }
+
+    private suspend fun hasBaseHash(id: String): Boolean {
+        return baseHashes.containsKey(id) || preferencesRepository?.getPreference("$PREFIX_SUB_BASE_HASH$id") != null
+    }
+
+    private suspend fun saveBaseHash(id: String, hash: String) {
+        baseHashes[id] = hash
+        preferencesRepository?.setPreference("$PREFIX_SUB_BASE_HASH$id", hash, isDirty = false)
+    }
+
     private fun parseDateToEpochDay(dateStr: String): Long? {
         if (dateStr.isBlank()) return null
         val serial = dateStr.toDoubleOrNull()?.toInt()
@@ -104,7 +122,7 @@ open class SubscriptionsSheetSyncCoordinator(
                     subscriptionRepository.upsertSubscription(newSub)
                     processedSubIds.add(newId)
                     roomModified = true
-                    baseHashes[newId] = computeSubHash(newSub)
+                    saveBaseHash(newId, computeSubHash(newSub))
 
                     googleSheetsClient.updateCell(
                         spreadsheetId = spreadsheetId,
@@ -116,7 +134,7 @@ open class SubscriptionsSheetSyncCoordinator(
                     val existing = subscriptionRepository.getSubscription(row.id)
                     if (existing == null) {
                         // If ID was previously synced and tracked in baseHashes, it was deleted in Room: do not resurrect!
-                        if (baseHashes.containsKey(row.id)) {
+                        if (hasBaseHash(row.id)) {
                             Diagnostics.record("SubscriptionsSync", "DELETED_ROW_NOT_RESURRECTED")
                             continue
                         }
@@ -145,7 +163,7 @@ open class SubscriptionsSheetSyncCoordinator(
                         subscriptionRepository.upsertSubscription(newSub)
                         processedSubIds.add(row.id)
                         roomModified = true
-                        baseHashes[row.id] = computeSubHash(newSub)
+                        saveBaseHash(row.id, computeSubHash(newSub))
                     } else {
                         processedSubIds.add(row.id)
                         val resolvedEpochDay = if (parsedEpochDay != null) {
@@ -159,7 +177,7 @@ open class SubscriptionsSheetSyncCoordinator(
                             row.name, row.amount, row.frequency, resolvedEpochDay,
                             row.account, row.active, row.note, row.keywords
                         )
-                        val lastBaseHash = baseHashes[row.id]
+                        val lastBaseHash = getBaseHash(row.id)
                         val sheetChanged = lastBaseHash == null || lastBaseHash != rowHash
 
                         if (sheetChanged) {
@@ -194,9 +212,9 @@ open class SubscriptionsSheetSyncCoordinator(
                                 subscriptionRepository.upsertSubscription(updatedSub)
                                 roomModified = true
                             }
-                            baseHashes[row.id] = rowHash
+                            saveBaseHash(row.id, rowHash)
                         } else {
-                            baseHashes[row.id] = rowHash
+                            saveBaseHash(row.id, rowHash)
                         }
                     }
                 }
@@ -225,7 +243,7 @@ open class SubscriptionsSheetSyncCoordinator(
             val res = googleSheetsClient.writeSubscriptionsTab(spreadsheetId, activeSubs, accounts)
             if (res is Result.Success) {
                 for (sub in activeSubs) {
-                    baseHashes[sub.id] = computeSubHash(sub)
+                    saveBaseHash(sub.id, computeSubHash(sub))
                 }
             }
             res
@@ -234,5 +252,9 @@ open class SubscriptionsSheetSyncCoordinator(
         } catch (e: Exception) {
             Result.Error(e)
         }
+    }
+
+    companion object {
+        const val PREFIX_SUB_BASE_HASH = "sub_base_hash_"
     }
 }

@@ -201,18 +201,19 @@ class SyncRetryAndConfigResilienceTest {
     fun recoverRetryableFailedItemsRestrictsToTransientOnlyAndLeavesUnknownAndDiscardedIntact() = runBlocking {
         val queueDao = com.financeautomation.testutil.InMemoryQueueDao()
         val items = listOf(
-            com.financeautomation.data.local.entity.SyncQueueEntity(id = 1L, transactionId = "t1", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 8, lastErrorKind = "NO_NETWORK"),
+            com.financeautomation.data.local.entity.SyncQueueEntity(id = 1L, transactionId = "t1", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 2, lastErrorKind = "NO_NETWORK"),
             com.financeautomation.data.local.entity.SyncQueueEntity(id = 2L, transactionId = "t2", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 3, lastErrorKind = "RATE_LIMITED"),
             com.financeautomation.data.local.entity.SyncQueueEntity(id = 3L, transactionId = "t3", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 1, lastErrorKind = "SERVER_BUSY"),
             com.financeautomation.data.local.entity.SyncQueueEntity(id = 4L, transactionId = "t4", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 2, lastErrorKind = "UNKNOWN"),
             com.financeautomation.data.local.entity.SyncQueueEntity(id = 5L, transactionId = "t5", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 1, lastErrorKind = "SHEET_CHANGED"),
             com.financeautomation.data.local.entity.SyncQueueEntity(id = 6L, transactionId = "t6", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 1, lastErrorKind = "AUTH_EXPIRED"),
-            com.financeautomation.data.local.entity.SyncQueueEntity(id = 7L, transactionId = "t7", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "DISCARDED", retryCount = 0, lastErrorKind = "USER_DISCARDED")
+            com.financeautomation.data.local.entity.SyncQueueEntity(id = 7L, transactionId = "t7", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "DISCARDED", retryCount = 0, lastErrorKind = "USER_DISCARDED"),
+            com.financeautomation.data.local.entity.SyncQueueEntity(id = 8L, transactionId = "t8", operationType = "APPEND_TRANSACTION", payloadJson = "{}", status = "FAILED", retryCount = 8, lastErrorKind = "NO_NETWORK")
         )
         items.forEach { queueDao.insert(it) }
 
         val recoveredCount = queueDao.recoverRetryableFailedItems()
-        assertEquals("Only the 3 transient failure items should be recovered", 3, recoveredCount)
+        assertEquals("Only the 3 transient failure items under retry cap should be recovered", 3, recoveredCount)
 
         assertEquals("NO_NETWORK recovered to PENDING", "PENDING", queueDao.getById(1L)!!.status)
         assertEquals("RATE_LIMITED recovered to PENDING", "PENDING", queueDao.getById(2L)!!.status)
@@ -221,6 +222,7 @@ class SyncRetryAndConfigResilienceTest {
         assertEquals("SHEET_CHANGED stays FAILED", "FAILED", queueDao.getById(5L)!!.status)
         assertEquals("AUTH_EXPIRED stays FAILED", "FAILED", queueDao.getById(6L)!!.status)
         assertEquals("User-discarded stays DISCARDED", "DISCARDED", queueDao.getById(7L)!!.status)
+        assertEquals("NO_NETWORK with retryCount >= 8 stays FAILED", "FAILED", queueDao.getById(8L)!!.status)
     }
 
     @Test
