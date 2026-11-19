@@ -227,7 +227,7 @@ object DatabaseMigrations {
             db.execSQL("""
                 UPDATE trip_tags
                 SET startDateEpochDay = COALESCE(
-                    (SELECT MIN(dateSerial) - 25569 FROM transactions WHERE transactions.tag = trip_tags.name),
+                    (SELECT MIN(dateSerial) - 25569 FROM transactions WHERE transactions.tripTag = trip_tags.name),
                     createdAt / 86400000
                 )
                 WHERE startDateEpochDay IS NULL
@@ -236,7 +236,7 @@ object DatabaseMigrations {
             db.execSQL("""
                 UPDATE trip_tags
                 SET endDateEpochDay = COALESCE(
-                    (SELECT MAX(dateSerial) - 25569 FROM transactions WHERE transactions.tag = trip_tags.name),
+                    (SELECT MAX(dateSerial) - 25569 FROM transactions WHERE transactions.tripTag = trip_tags.name),
                     CASE WHEN updatedAt > 0 THEN updatedAt / 86400000 ELSE createdAt / 86400000 END
                 )
                 WHERE isActive = 0 AND endDateEpochDay IS NULL

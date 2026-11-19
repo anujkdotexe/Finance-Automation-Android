@@ -321,8 +321,9 @@ class DatabaseMigrationTest {
 
     @Test
     fun testDatabaseDeclaresVersion16() {
-        val source = java.io.File("src/main/java/com/financeautomation/data/local/FinanceDatabase.kt").readText()
-        assertTrue(source.contains("version = 16"))
+        val root = loadSchema(16)
+        assertEquals("16", root["database"]!!.jsonObject["version"]!!.jsonPrimitive.content)
+        assertEquals(16, DatabaseMigrations.MIGRATION_15_16.endVersion)
     }
 
     @Test
@@ -345,8 +346,8 @@ class DatabaseMigrationTest {
         assertTrue(executed.any { it.contains("ALTER TABLE `trip_tags` ADD COLUMN `startDateEpochDay`") })
         assertTrue(executed.any { it.contains("ALTER TABLE `trip_tags` ADD COLUMN `endDateEpochDay`") })
         assertTrue(executed.any { it.contains("ALTER TABLE `subscriptions` ADD COLUMN `closedDateEpochDay`") })
-        assertTrue(executed.any { it.contains("UPDATE trip_tags") && it.contains("startDateEpochDay") })
-        assertTrue(executed.any { it.contains("UPDATE trip_tags") && it.contains("endDateEpochDay") })
+        assertTrue(executed.any { it.contains("UPDATE trip_tags") && it.contains("startDateEpochDay") && it.contains("transactions.tripTag") })
+        assertTrue(executed.any { it.contains("UPDATE trip_tags") && it.contains("endDateEpochDay") && it.contains("transactions.tripTag") })
         assertTrue(executed.any { it.contains("UPDATE subscriptions") && it.contains("closedDateEpochDay") })
     }
 
@@ -360,29 +361,35 @@ class DatabaseMigrationTest {
         }
 
         if (hasJdbc) {
+            val v15Entities = loadSchema(15)["database"]!!.jsonObject["entities"]!!.jsonArray
+            fun getCreateSql(tableName: String): String {
+                val entity = v15Entities.first { it.jsonObject["tableName"]!!.jsonPrimitive.content == tableName }.jsonObject
+                return entity["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", tableName)
+            }
+
             val conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:")
             conn.createStatement().use { stmt ->
-                stmt.execute("CREATE TABLE trip_tags (id TEXT PRIMARY KEY, name TEXT, isActive INTEGER, isArchived INTEGER, createdAt INTEGER, updatedAt INTEGER, dirty INTEGER)")
-                stmt.execute("CREATE TABLE transactions (uuid TEXT PRIMARY KEY, tag TEXT, dateSerial INTEGER)")
-                stmt.execute("CREATE TABLE subscriptions (id TEXT PRIMARY KEY, name TEXT, active INTEGER, createdAt INTEGER, updatedAt INTEGER, dirty INTEGER, note TEXT)")
+                stmt.execute(getCreateSql("trip_tags"))
+                stmt.execute(getCreateSql("transactions"))
+                stmt.execute(getCreateSql("subscriptions"))
 
                 // 1. Active trip with transactions
-                stmt.execute("INSERT INTO trip_tags VALUES ('tag_goa', 'Goa 2026', 1, 0, 1731974400000, 1731974400000, 0)")
-                stmt.execute("INSERT INTO transactions VALUES ('tx_1', 'Goa 2026', 46330)")
-                stmt.execute("INSERT INTO transactions VALUES ('tx_2', 'Goa 2026', 46335)")
+                stmt.execute("INSERT INTO trip_tags (id, name, isActive, isArchived, createdAt, updatedAt, dirty) VALUES ('tag_goa', 'Goa 2026', 1, 0, 1731974400000, 1731974400000, 0)")
+                stmt.execute("INSERT INTO transactions (id, timestamp, dateSerial, timeSerial, account, merchant, tripTag, category, totalAmount, companions, myShare, owedToMe, status, sourcePackage, reviewState, syncState, isPossibleDuplicate) VALUES ('tx_1', 1731974400000, 46330, 0.5, 'HDFC', 'Hotel', 'Goa 2026', 'Travel', 1000.0, 'Personal', 1000.0, 0.0, 'Personal', 'com.google.android.apps.nbu.paisa.user', 'CONFIRMED', 'SYNCED', 0)")
+                stmt.execute("INSERT INTO transactions (id, timestamp, dateSerial, timeSerial, account, merchant, tripTag, category, totalAmount, companions, myShare, owedToMe, status, sourcePackage, reviewState, syncState, isPossibleDuplicate) VALUES ('tx_2', 1731974400000, 46335, 0.5, 'HDFC', 'Food', 'Goa 2026', 'Food', 500.0, 'Personal', 500.0, 0.0, 'Personal', 'com.google.android.apps.nbu.paisa.user', 'CONFIRMED', 'SYNCED', 0)")
 
                 // 2. Ended trip with transactions
-                stmt.execute("INSERT INTO trip_tags VALUES ('tag_delhi', 'Delhi 2026', 0, 0, 1731000000000, 1731500000000, 0)")
-                stmt.execute("INSERT INTO transactions VALUES ('tx_3', 'Delhi 2026', 46300)")
-                stmt.execute("INSERT INTO transactions VALUES ('tx_4', 'Delhi 2026', 46310)")
+                stmt.execute("INSERT INTO trip_tags (id, name, isActive, isArchived, createdAt, updatedAt, dirty) VALUES ('tag_delhi', 'Delhi 2026', 0, 0, 1731000000000, 1731500000000, 0)")
+                stmt.execute("INSERT INTO transactions (id, timestamp, dateSerial, timeSerial, account, merchant, tripTag, category, totalAmount, companions, myShare, owedToMe, status, sourcePackage, reviewState, syncState, isPossibleDuplicate) VALUES ('tx_3', 1731000000000, 46300, 0.5, 'HDFC', 'Cab', 'Delhi 2026', 'Travel', 800.0, 'Personal', 800.0, 0.0, 'Personal', 'com.google.android.apps.nbu.paisa.user', 'CONFIRMED', 'SYNCED', 0)")
+                stmt.execute("INSERT INTO transactions (id, timestamp, dateSerial, timeSerial, account, merchant, tripTag, category, totalAmount, companions, myShare, owedToMe, status, sourcePackage, reviewState, syncState, isPossibleDuplicate) VALUES ('tx_4', 1731500000000, 46310, 0.5, 'HDFC', 'Dinner', 'Delhi 2026', 'Food', 1200.0, 'Personal', 1200.0, 0.0, 'Personal', 'com.google.android.apps.nbu.paisa.user', 'CONFIRMED', 'SYNCED', 0)")
 
                 // 3. Trip with no transactions
-                stmt.execute("INSERT INTO trip_tags VALUES ('tag_kerala', 'Kerala 2026', 1, 0, 1728000000000, 1728000000000, 0)")
+                stmt.execute("INSERT INTO trip_tags (id, name, isActive, isArchived, createdAt, updatedAt, dirty) VALUES ('tag_kerala', 'Kerala 2026', 1, 0, 1728000000000, 1728000000000, 0)")
 
                 // 4. Inactive/cancelled subscription
-                stmt.execute("INSERT INTO subscriptions VALUES ('sub_gym', 'Gym', 0, 1720000000000, 1725000000000, 0, 'Cancelled')")
+                stmt.execute("INSERT INTO subscriptions (id, name, amount, frequency, anchorEpochDay, account, category, remind, keywords, active, createdAt, updatedAt, dirty, note) VALUES ('sub_gym', 'Gym', 2000.0, 'MONTHLY', 19800, 'HDFC', 'Fitness', 1, 'gym', 0, 1720000000000, 1725000000000, 0, 'Cancelled')")
                 // 5. Active subscription
-                stmt.execute("INSERT INTO subscriptions VALUES ('sub_netflix', 'Netflix', 1, 1720000000000, 1725000000000, 0, 'Active')")
+                stmt.execute("INSERT INTO subscriptions (id, name, amount, frequency, anchorEpochDay, account, category, remind, keywords, active, createdAt, updatedAt, dirty, note) VALUES ('sub_netflix', 'Netflix', 649.0, 'MONTHLY', 19800, 'HDFC', 'Entertainment', 1, 'netflix', 1, 1720000000000, 1725000000000, 0, 'Active')")
             }
 
             val db = java.lang.reflect.Proxy.newProxyInstance(
