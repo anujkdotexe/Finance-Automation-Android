@@ -216,9 +216,11 @@ class SubscriptionsSheetSyncTest {
         assertEquals("Spotify", row[0])
         assertEquals(119.0, row[1])
         assertEquals("Monthly", row[2])
-        assertEquals("2026-11-01", row[3])
+        val expectedAnchorSerial = com.financeautomation.core.utils.DateSerialUtils.toDateSerial(LocalDate.of(2026, 11, 1))
+        val expectedClosedSerial = com.financeautomation.core.utils.DateSerialUtils.toDateSerial(LocalDate.of(2026, 11, 19))
+        assertEquals(expectedAnchorSerial, row[3])
         assertEquals("HDFC", row[4])
-        assertEquals("TRUE", row[5])
+        assertEquals(true, row[5])
         assertEquals("Premium individual", row[6])
         assertEquals("spotify,music", row[7])
         assertTrue((row[8] as String).contains("B4")) // Per month helper formula
@@ -231,7 +233,7 @@ class SubscriptionsSheetSyncTest {
 
         val closedSub = sub.copy(active = false, closedDateEpochDay = LocalDate.of(2026, 11, 19).toEpochDay())
         val closedRow = SheetProvisioner.buildSubscriptionRowValues(closedSub, row1BasedIndex = 4, year = 2026)
-        assertEquals("2026-11-19", closedRow[12])
+        assertEquals(expectedClosedSerial, closedRow[12])
     }
 
     @Test

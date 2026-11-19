@@ -2273,22 +2273,26 @@ object SheetProvisioner {
         row1BasedIndex: Int,
         year: Int
     ): List<Any?> {
-        val anchorDate = try {
-            java.time.LocalDate.ofEpochDay(sub.anchorEpochDay).toString()
+        val anchorDateSerial: Any = try {
+            com.financeautomation.core.utils.DateSerialUtils.toDateSerial(
+                java.time.LocalDate.ofEpochDay(sub.anchorEpochDay)
+            )
         } catch (_: Exception) {
             ""
         }
         val freqText = sub.frequency.name.lowercase().replaceFirstChar { it.uppercase() }
-        val activeText = if (sub.active) "TRUE" else "FALSE"
+        val activeBool = sub.active
         val perMonthFormula = DashboardFormulaBuilder.buildSubscriptionPerMonthFormula(row1BasedIndex)
         val paidMonthFormula = buildPaidThisMonthFormula(row1BasedIndex)
         val paidYearFormula = buildPaidThisYearFormula(year, row1BasedIndex)
         val lastPaidDateFormula = buildLastPaidDateFormula(year, row1BasedIndex)
-        val closedDate = if (sub.active || sub.closedDateEpochDay == null) {
+        val closedDateSerial: Any = if (sub.active || sub.closedDateEpochDay == null) {
             ""
         } else {
             try {
-                java.time.LocalDate.ofEpochDay(sub.closedDateEpochDay).toString()
+                com.financeautomation.core.utils.DateSerialUtils.toDateSerial(
+                    java.time.LocalDate.ofEpochDay(sub.closedDateEpochDay)
+                )
             } catch (_: Exception) {
                 ""
             }
@@ -2299,16 +2303,16 @@ object SheetProvisioner {
             sub.name,
             sub.amount ?: "",
             freqText,
-            anchorDate,
+            anchorDateSerial,
             sub.account,
-            activeText,
+            activeBool,
             sub.note,
             sub.keywords,
             perMonthFormula,
             paidMonthFormula,
             paidYearFormula,
             lastPaidDateFormula,
-            closedDate,
+            closedDateSerial,
             paidInTotalFormula,
             sub.id
         )
@@ -2560,12 +2564,24 @@ object SheetProvisioner {
         row1BasedIndex: Int,
         year: Int
     ): List<Any?> {
-        val startDateStr = trip.startDateEpochDay?.let {
-            try { java.time.LocalDate.ofEpochDay(it).toString() } catch (_: Exception) { "" }
-        }.orEmpty()
-        val endDateStr = trip.endDateEpochDay?.let {
-            try { java.time.LocalDate.ofEpochDay(it).toString() } catch (_: Exception) { "" }
-        }.orEmpty()
+        val startDateSerial: Any = trip.startDateEpochDay?.let {
+            try {
+                com.financeautomation.core.utils.DateSerialUtils.toDateSerial(
+                    java.time.LocalDate.ofEpochDay(it)
+                )
+            } catch (_: Exception) {
+                ""
+            }
+        } ?: ""
+        val endDateSerial: Any = trip.endDateEpochDay?.let {
+            try {
+                com.financeautomation.core.utils.DateSerialUtils.toDateSerial(
+                    java.time.LocalDate.ofEpochDay(it)
+                )
+            } catch (_: Exception) {
+                ""
+            }
+        } ?: ""
         val statusText = if (trip.isActive) "Active" else "Ended"
         val daysFormula = DashboardFormulaBuilder.buildTripDaysFormula(row1BasedIndex)
         val totalPaidFormula = DashboardFormulaBuilder.buildTripTotalPaidFormula(year, row1BasedIndex)
@@ -2574,8 +2590,8 @@ object SheetProvisioner {
 
         return listOf(
             trip.name,
-            startDateStr,
-            endDateStr,
+            startDateSerial,
+            endDateSerial,
             statusText,
             daysFormula,
             totalPaidFormula,

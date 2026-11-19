@@ -1708,6 +1708,20 @@ open class GoogleSheetsClient(
         Result.Success(true)
     }
 
+    private fun normalizeDateCell(raw: String): String {
+        if (raw.isBlank()) return ""
+        val serial = raw.toDoubleOrNull()?.toInt()
+        return if (serial != null && serial > 30000) {
+            try {
+                com.financeautomation.core.utils.DateSerialUtils.fromDateSerial(serial).toString()
+            } catch (_: Exception) {
+                raw
+            }
+        } else {
+            raw
+        }
+    }
+
     /**
      * Reads all rows from the Subscriptions tab ('Subscriptions'!A4:L).
      */
@@ -1730,12 +1744,15 @@ open class GoogleSheetsClient(
 
                 val amount = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_AMOUNT)?.toString()?.replace(",", "")?.toDoubleOrNull()
                 val frequency = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_FREQUENCY)?.toString()?.trim().orEmpty()
-                val dueDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_DUE_DATE)?.toString()?.trim().orEmpty()
+                val dueDate = normalizeDateCell(row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_DUE_DATE)?.toString()?.trim().orEmpty())
                 val account = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ACCOUNT)?.toString()?.trim().orEmpty()
-                val active = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ACTIVE)?.toString()?.trim().equals("TRUE", ignoreCase = true)
+                val active = when (val a = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ACTIVE)) {
+                    is Boolean -> a
+                    else -> a?.toString()?.trim().equals("TRUE", ignoreCase = true)
+                }
                 val note = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NOTE)?.toString()?.trim().orEmpty()
                 val keywords = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_KEYWORDS)?.toString()?.trim().orEmpty()
-                val closedDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_CLOSED_DATE)?.toString()?.trim().orEmpty()
+                val closedDate = normalizeDateCell(row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_CLOSED_DATE)?.toString()?.trim().orEmpty())
 
                 result.add(
                     SheetSubscriptionRow(
@@ -1795,13 +1812,18 @@ open class GoogleSheetsClient(
 
             val rowValues = rows.map { rowCells ->
                 mapOf(
-                    "values" to rowCells.map { cell ->
+                    "values" to rowCells.mapIndexed { colIdx, cell ->
+                        val isSubFormulaCol = colIdx == SheetSchemaConstants.COL_INDEX_SUB_PER_MONTH ||
+                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_MONTH ||
+                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_YEAR ||
+                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_LAST_PAID_DATE ||
+                            colIdx == SheetSchemaConstants.COL_INDEX_SUB_PAID_IN_TOTAL
                         when (cell) {
                             null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
                             is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
                             is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
                             is String -> {
-                                if (cell.startsWith("=")) {
+                                if (isSubFormulaCol && cell.startsWith("=")) {
                                     mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
                                 } else {
                                     mapOf("userEnteredValue" to mapOf("stringValue" to cell))
@@ -1893,8 +1915,8 @@ open class GoogleSheetsClient(
                 val id = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_ID)?.toString()?.trim()?.takeIf { it.isNotBlank() }
                 if (name.isBlank() && id == null) continue
 
-                val startDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_START_DATE)?.toString()?.trim().orEmpty()
-                val endDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_END_DATE)?.toString()?.trim().orEmpty()
+                val startDate = normalizeDateCell(row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_START_DATE)?.toString()?.trim().orEmpty())
+                val endDate = normalizeDateCell(row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_END_DATE)?.toString()?.trim().orEmpty())
                 val status = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_STATUS)?.toString()?.trim().orEmpty().ifBlank { "Active" }
                 val days = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_DAYS)?.toString()?.trim()?.toIntOrNull()
                 val totalPaid = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_TOTAL_PAID)?.toString()?.replace(",", "")?.toDoubleOrNull()
@@ -1965,13 +1987,17 @@ open class GoogleSheetsClient(
 
             val rowValues = rows.map { rowCells ->
                 mapOf(
-                    "values" to rowCells.map { cell ->
+                    "values" to rowCells.mapIndexed { colIdx, cell ->
+                        val isFormulaCol = colIdx == SheetSchemaConstants.COL_INDEX_TRIP_DAYS ||
+                            colIdx == SheetSchemaConstants.COL_INDEX_TRIP_TOTAL_PAID ||
+                            colIdx == SheetSchemaConstants.COL_INDEX_TRIP_MY_SHARE ||
+                            colIdx == SheetSchemaConstants.COL_INDEX_TRIP_OWED_TO_ME
                         when (cell) {
                             null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
                             is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
                             is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
                             is String -> {
-                                if (cell.startsWith("=")) {
+                                if (isFormulaCol && cell.startsWith("=")) {
                                     mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
                                 } else {
                                     mapOf("userEnteredValue" to mapOf("stringValue" to cell))
