@@ -81,12 +81,14 @@ object FinanceSizes {
     val diagnosticsHeight: Dp = 240.dp
     val previewMaxHeight: Dp = 280.dp
     val shadowElevationSmall: Dp = 4.dp
+    val shadowElevationMedium: Dp = 8.dp
     val elevationSheet: Dp = 6.dp
     val elevationDialog: Dp = 24.dp
     val proportionBarHeight: Dp = 8.dp
     val kpiCardWidth: Dp = 140.dp
     val kpiCardMinHeight: Dp = 110.dp
     val minRowHeight: Dp = 56.dp
+    val accountRowHeight: Dp = 68.dp
     val accountChipMinWidth: Dp = 44.dp
     val accountChipHeight: Dp = 22.dp
     val icon48: Dp = 48.dp

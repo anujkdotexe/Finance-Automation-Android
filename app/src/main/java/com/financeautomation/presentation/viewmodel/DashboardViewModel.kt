@@ -50,7 +50,8 @@ data class CategorySpend(
     val category: String,
     val amount: Double,
     val percentage: Float,
-    val budgetProgress: BudgetProgress? = null
+    val budgetProgress: BudgetProgress? = null,
+    val isArchived: Boolean = false
 )
 
 /**
@@ -555,12 +556,12 @@ class DashboardViewModel(
                 val pct = if (grossBurn > 0.0) (sum / grossBurn).toFloat().coerceIn(0f, 1f) else 0f
                 val progress = budgetProgressMap[cat.trim().lowercase()]
                 val isArchived = categories.firstOrNull { it.name.trim().equals(cat.trim(), ignoreCase = true) }?.isArchived == true
-                val displayCat = if (isArchived) "$cat (archived)" else cat
                 CategorySpend(
-                    category = displayCat,
+                    category = cat,
                     amount = sum,
                     percentage = pct,
-                    budgetProgress = progress
+                    budgetProgress = progress,
+                    isArchived = isArchived
                 )
             }
             .sortedByDescending { it.amount }

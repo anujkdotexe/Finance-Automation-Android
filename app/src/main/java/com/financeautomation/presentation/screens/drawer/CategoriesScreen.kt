@@ -346,6 +346,9 @@ internal fun CategoryList(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var measuredRowHeightPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current.density
+    val defaultRowHeightPx = FinanceTheme.sizes.minRowHeight.value * density
+    val moveUpLabel = stringResource(R.string.accessibility_action_move_up)
+    val moveDownLabel = stringResource(R.string.accessibility_action_move_down)
     val currentCategories by rememberUpdatedState(categories)
     val currentLocalCategories by rememberUpdatedState(localCategories)
     val currentOnReorder by rememberUpdatedState(onReorderCategories)
@@ -398,7 +401,7 @@ internal fun CategoryList(
                         .semantics {
                             customActions = buildList {
                                 if (index > 0) {
-                                    add(CustomAccessibilityAction(label = "Move up") {
+                                    add(CustomAccessibilityAction(label = moveUpLabel) {
                                         val mutable = localCategories.toMutableList()
                                         val item = mutable.removeAt(index)
                                         mutable.add(index - 1, item)
@@ -408,7 +411,7 @@ internal fun CategoryList(
                                     })
                                 }
                                 if (index < localCategories.size - 1) {
-                                    add(CustomAccessibilityAction(label = "Move down") {
+                                    add(CustomAccessibilityAction(label = moveDownLabel) {
                                         val mutable = localCategories.toMutableList()
                                         val item = mutable.removeAt(index)
                                         mutable.add(index + 1, item)
@@ -441,7 +444,7 @@ internal fun CategoryList(
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 dragOffsetY += dragAmount.y
-                                val rowHeight = if (measuredRowHeightPx > 0f) measuredRowHeightPx else 56f * density
+                                val rowHeight = if (measuredRowHeightPx > 0f) measuredRowHeightPx else defaultRowHeightPx
                                 val swapThreshold = rowHeight * 0.5f
                                 val currentIndex = currentLocalCategories.indexOfFirst { it.id == draggingCategoryId }
                                 if (currentIndex != -1) {
@@ -490,7 +493,7 @@ private fun CategoryItemCard(
     Surface(
         color = if (isDragging) FinanceTheme.colors.surfaceContainerHigh else FinanceTheme.colors.surfaceContainerLowest,
         shape = FinanceShapes.large,
-        shadowElevation = if (isDragging) 8.dp else FinanceTheme.sizes.shadowElevationSmall,
+        shadowElevation = if (isDragging) FinanceTheme.sizes.shadowElevationMedium else FinanceTheme.sizes.shadowElevationSmall,
         modifier = modifier
             .fillMaxWidth()
             .clip(FinanceShapes.large)

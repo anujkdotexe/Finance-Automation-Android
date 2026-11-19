@@ -83,6 +83,9 @@ fun AccountsScreen(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var measuredRowHeightPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current.density
+    val defaultRowHeightPx = FinanceTheme.sizes.accountRowHeight.value * density
+    val moveUpLabel = stringResource(R.string.accessibility_action_move_up)
+    val moveDownLabel = stringResource(R.string.accessibility_action_move_down)
     val currentAccounts by rememberUpdatedState(state.accounts)
     val currentLocalAccounts by rememberUpdatedState(localAccounts)
 
@@ -160,7 +163,7 @@ fun AccountsScreen(
                                     .semantics {
                                         customActions = buildList {
                                             if (index > 0) {
-                                                add(CustomAccessibilityAction(label = "Move up") {
+                                                add(CustomAccessibilityAction(label = moveUpLabel) {
                                                     val mutable = localAccounts.toMutableList()
                                                     val item = mutable.removeAt(index)
                                                     mutable.add(index - 1, item)
@@ -170,7 +173,7 @@ fun AccountsScreen(
                                                 })
                                             }
                                             if (index < localAccounts.size - 1) {
-                                                add(CustomAccessibilityAction(label = "Move down") {
+                                                add(CustomAccessibilityAction(label = moveDownLabel) {
                                                     val mutable = localAccounts.toMutableList()
                                                     val item = mutable.removeAt(index)
                                                     mutable.add(index + 1, item)
@@ -203,7 +206,7 @@ fun AccountsScreen(
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             dragOffsetY += dragAmount.y
-                                            val itemHeightPx = if (measuredRowHeightPx > 0f) measuredRowHeightPx else 68f * density
+                                            val itemHeightPx = if (measuredRowHeightPx > 0f) measuredRowHeightPx else defaultRowHeightPx
                                             val swapThreshold = itemHeightPx * 0.5f
                                             val currentIndex = currentLocalAccounts.indexOfFirst { it.id == draggingAccountId }
                                             if (currentIndex != -1) {

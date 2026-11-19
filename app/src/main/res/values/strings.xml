@@ -1018,4 +1018,11 @@
     <string name="trip_by_category">By category</string>
     <string name="trip_by_person">By person</string>
     <string name="trip_range_days">%1$s to %2$s, %3$d days</string>
+
+    <!-- Accessibility and UI labels -->
+    <string name="accessibility_action_move_up">Move up</string>
+    <string name="accessibility_action_move_down">Move down</string>
+    <string name="transaction_split_indicator">Split (%1$s)</string>
+    <string name="category_spend_archived_format">%1$s (archived)</string>
+    <string name="category_archived_suffix">(archived)</string>
 </resources>

@@ -902,9 +902,10 @@ class DashboardViewModelTest {
 
         assertEquals(800.0, vm.uiState.value.currentBurn, 0.001)
         val categories = vm.uiState.value.allCategories
-        val electronics = categories.firstOrNull { it.category == "Electronics (archived)" }
+        val electronics = categories.firstOrNull { it.category == "Electronics" && it.isArchived }
         org.junit.Assert.assertNotNull(electronics)
         assertEquals(500.0, electronics!!.amount, 0.001)
+        org.junit.Assert.assertTrue(electronics.isArchived)
     }
 
     @Test

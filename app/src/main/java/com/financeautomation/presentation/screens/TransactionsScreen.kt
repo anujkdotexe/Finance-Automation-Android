@@ -633,7 +633,7 @@ fun TransactionsContent(
                             when (item) {
                                 is TransactionListItem.ExpenseItem -> {
                                     val txn = item.transaction
-                                    val splitText = if (txn.owedToMe > 0.0) "Split (${formatRupeesAuto(txn.myShare)})" else null
+                                    val splitText = if (txn.owedToMe > 0.0) stringResource(R.string.transaction_split_indicator, formatRupeesAuto(txn.myShare)) else null
                                     val timeStr = DisplayDateTime.time(txn.timestamp)
 
                                     SwipeableTransactionRow(
