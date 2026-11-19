@@ -179,4 +179,30 @@ class CalculateSplitUseCaseTest {
     fun testSingularSavingNormalizesToPluralSavings() {
         assertEquals("Savings", useCase.normalizeCategory("Saving"))
     }
+
+    @Test
+    fun testCalculateRolloverUsesInjectedClock() {
+        val fixedMillis = 1773489600000L
+        val fixedClock = java.time.Clock.fixed(
+            java.time.Instant.ofEpochMilli(fixedMillis),
+            java.time.ZoneId.of("Asia/Kolkata")
+        )
+        val customUseCase = CalculateSplitUseCase(fixedClock)
+        val original = Transaction(
+            id = "txn_123",
+            timestamp = 1000L,
+            dateSerial = 46000,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Dinner",
+            category = "Food",
+            totalAmount = 1000.0,
+            companions = "Alice",
+            myShare = 500.0,
+            owedToMe = 500.0,
+            status = TransactionStatus.PENDING
+        )
+        val (_, carried) = customUseCase.calculateRollover(original, "Feb26", 46030, 0.5)
+        assertEquals(fixedMillis, carried.timestamp)
+    }
 }

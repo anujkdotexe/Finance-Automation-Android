@@ -223,7 +223,7 @@ object SheetProvisioner {
         categories: List<String> = emptyList(),
         currentRowCount: Int = 1000,
         currentColumnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT,
-        year: Int = java.time.LocalDate.now().year
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
         val targetRowCount = maxOf(currentRowCount, 1000)

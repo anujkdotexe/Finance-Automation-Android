@@ -28,6 +28,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.net.SocketTimeoutException
 import java.net.URLEncoder
+import java.time.Clock
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -96,7 +97,8 @@ internal fun <T> Throwable.toDataResult(spreadsheetId: String = ""): DataResult<
 open class GoogleSheetsClient(
     private val okHttpClient: OkHttpClient,
     private val tokenProvider: TokenProvider? = null,
-    private val baseUrl: String = "https://sheets.googleapis.com/v4/spreadsheets"
+    private val baseUrl: String = "https://sheets.googleapis.com/v4/spreadsheets",
+    private val clock: Clock = Clock.system(DEFAULT_SHEET_ZONE_ID)
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -1358,7 +1360,7 @@ open class GoogleSheetsClient(
             }
 
             // 2. Ensure current month tab exists with at least 31 columns (never shrink existing rows or columns)
-            val currentMonthTab = ZonedDateTime.now(DEFAULT_SHEET_ZONE_ID)
+            val currentMonthTab = ZonedDateTime.now(clock.withZone(DEFAULT_SHEET_ZONE_ID))
                 .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
 
             if (!tabsMap.containsKey(currentMonthTab)) {

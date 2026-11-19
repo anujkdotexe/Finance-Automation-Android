@@ -14,6 +14,8 @@ import com.financeautomation.domain.model.TableType
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.utils.AccountingUtils
 import com.financeautomation.domain.utils.Tolerances
+import java.time.Clock
+import java.time.ZoneId
 import java.util.UUID
 import kotlin.math.abs
 
@@ -22,7 +24,9 @@ import kotlin.math.abs
  * and non-destructive in-place void logic with zero Android framework dependencies.
  * Port of split calculations and status determination from Code.gs v2.3.0 and spec section 3.2.
  */
-class CalculateSplitUseCase {
+class CalculateSplitUseCase(
+    private val clock: Clock = Clock.system(ZoneId.of("Asia/Kolkata"))
+) {
 
     /**
      * Just Me split: 100% personal living expense burn.
@@ -249,7 +253,7 @@ class CalculateSplitUseCase {
 
         val carriedTxn = Transaction(
             id = newUuid,
-            timestamp = System.currentTimeMillis(),
+            timestamp = clock.millis(),
             dateSerial = targetDateSerial ?: originalRow.dateSerial,
             timeSerial = targetTimeSerial ?: originalRow.timeSerial,
             account = originalRow.account,

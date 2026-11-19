@@ -108,7 +108,7 @@ object DashboardFormulaBuilder {
     fun extractWorkbookYear(
         tabNames: Collection<String>,
         workbookTitle: String? = null,
-        fallbackYear: Int = java.time.LocalDate.now().year
+        fallbackYear: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): Int {
         if (!workbookTitle.isNullOrBlank()) {
             val match = Regex("""(20\d{2})""").find(workbookTitle)
