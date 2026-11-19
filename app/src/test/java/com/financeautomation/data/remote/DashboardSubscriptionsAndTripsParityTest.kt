@@ -1,6 +1,12 @@
 package com.financeautomation.data.remote
 
 import com.financeautomation.core.constants.SheetSchemaConstants
+import com.financeautomation.core.model.ReviewState
+import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.domain.model.Inflow
+import com.financeautomation.domain.model.Transaction
+import com.financeautomation.domain.usecase.LivingBurn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -67,27 +73,203 @@ class DashboardSubscriptionsAndTripsParityTest {
         assertEquals(queryFormula, a50Value)
     }
 
+    data class FakeExpenseRow(
+        val desc: String,    // Col D
+        val tripTag: String, // Col E
+        val category: String,// Col F
+        val totalAmount: Double, // Col G
+        val myShare: Double  // Col I
+    )
+
+    data class FakeInflowRow(
+        val inflowType: String, // Col Q
+        val reason: String,     // Col S
+        val amount: Double      // Col T
+    )
+
+    private fun extractFunctionCalls(text: String, funcName: String): List<String> {
+        val results = mutableListOf<String>()
+        var searchIdx = 0
+        while (true) {
+            val start = text.indexOf("$funcName(", searchIdx)
+            if (start == -1) break
+            var depth = 0
+            var i = start + funcName.length
+            var end = -1
+            while (i < text.length) {
+                if (text[i] == '(') depth++
+                else if (text[i] == ')') {
+                    depth--
+                    if (depth == 0) {
+                        end = i
+                        break
+                    }
+                }
+                i++
+            }
+            if (end != -1) {
+                results.add(text.substring(start, end + 1))
+                searchIdx = end + 1
+            } else {
+                break
+            }
+        }
+        return results
+    }
+
+    private fun splitTopLevelArgs(inner: String): List<String> {
+        val args = mutableListOf<String>()
+        var depth = 0
+        var inQuotes = false
+        var cur = StringBuilder()
+        for (ch in inner) {
+            if (ch == '"') {
+                inQuotes = !inQuotes
+                cur.append(ch)
+            } else if (!inQuotes && ch == '(') {
+                depth++
+                cur.append(ch)
+            } else if (!inQuotes && ch == ')') {
+                depth--
+                cur.append(ch)
+            } else if (!inQuotes && depth == 0 && ch == ',') {
+                args.add(cur.toString().trim())
+                cur = StringBuilder()
+            } else {
+                cur.append(ch)
+            }
+        }
+        if (cur.isNotEmpty()) {
+            args.add(cur.toString().trim())
+        }
+        return args
+    }
+
+    private fun evaluateSumifs(
+        sumifsCall: String,
+        expenses: List<FakeExpenseRow>,
+        inflows: List<FakeInflowRow>
+    ): Double {
+        val inner = sumifsCall.trim().removePrefix("SUMIFS(").removeSuffix(")")
+        val args = splitTopLevelArgs(inner)
+        if (args.isEmpty()) return 0.0
+
+        val colRegex = Regex("""!([A-Z])4:[A-Z]""")
+        val sumCol = colRegex.find(args[0])?.groupValues?.get(1) ?: return 0.0
+
+        val criteria = mutableListOf<Pair<String, String>>()
+        var i = 1
+        while (i + 1 < args.size) {
+            val col = colRegex.find(args[i])?.groupValues?.get(1) ?: ""
+            val rawCrit = args[i + 1].trim().trim('"')
+            if (col.isNotEmpty()) {
+                criteria.add(col to rawCrit)
+            }
+            i += 2
+        }
+
+        fun matches(value: String, criterion: String): Boolean = when {
+            criterion.startsWith("<>") -> {
+                val target = criterion.removePrefix("<>")
+                if (target.endsWith("*")) {
+                    !value.startsWith(target.removeSuffix("*"), ignoreCase = true)
+                } else {
+                    !value.equals(target, ignoreCase = true)
+                }
+            }
+            criterion == "?*" -> value.isNotEmpty()
+            criterion == "" -> value.isEmpty()
+            criterion.endsWith("*") -> value.startsWith(criterion.removeSuffix("*"), ignoreCase = true)
+            else -> value.equals(criterion, ignoreCase = true)
+        }
+
+        return if (sumCol == "I") {
+            expenses.filter { row ->
+                criteria.all { (col, crit) ->
+                    val cellVal = when (col) {
+                        "D" -> row.desc
+                        "E" -> row.tripTag
+                        "F" -> row.category
+                        "G" -> row.totalAmount.toString()
+                        "I" -> row.myShare.toString()
+                        else -> ""
+                    }
+                    matches(cellVal, crit)
+                }
+            }.sumOf { it.myShare }
+        } else if (sumCol == "T") {
+            inflows.filter { row ->
+                criteria.all { (col, crit) ->
+                    val cellVal = when (col) {
+                        "Q" -> row.inflowType
+                        "S" -> row.reason
+                        "T" -> row.amount.toString()
+                        else -> ""
+                    }
+                    matches(cellVal, crit)
+                }
+            }.sumOf { it.amount }
+        } else {
+            0.0
+        }
+    }
+
+    private fun evaluateBurnFormula(
+        formula: String,
+        expenses: List<FakeExpenseRow>,
+        inflows: List<FakeInflowRow>
+    ): Double {
+        val sumifsMatches = extractFunctionCalls(formula, "SUMIFS")
+        if (sumifsMatches.isEmpty()) return 0.0
+        val spent = evaluateSumifs(sumifsMatches[0], expenses, inflows)
+        var refunds = 0.0
+        for (i in 1 until sumifsMatches.size) {
+            refunds += evaluateSumifs(sumifsMatches[i], expenses, inflows)
+        }
+        return maxOf(0.0, spent - refunds)
+    }
+
     @Test
     fun testInsightTableSlicesAddUpToBurnKpi_withTripSavingsAndTransfer() {
-        // Model simulated transaction set in the month
-        data class Txn(val desc: String, val category: String, val tripTag: String, val myShare: Double, val isVoid: Boolean)
+        val window = LivingBurn.monthWindow(2026, 11)
+        val testTs = window.first + 1000L
 
+        // Real domain transactions for authoritative LivingBurn calculation
         val txns = listOf(
-            Txn(desc = "Supermarket", category = "Groceries", tripTag = "", myShare = 1200.0, isVoid = false),
-            Txn(desc = "Cafe", category = "Dining", tripTag = "", myShare = 800.0, isVoid = false),
-            Txn(desc = "Goa Hotel", category = "Dining", tripTag = "Goa2026", myShare = 2500.0, isVoid = false),
-            Txn(desc = "Monthly SIP", category = "Savings", tripTag = "", myShare = 10000.0, isVoid = false),
-            Txn(desc = "Bank Transfer", category = "Transfer", tripTag = "", myShare = 5000.0, isVoid = false),
-            Txn(desc = "Cancelled Booking", category = "Other", tripTag = "", myShare = 700.0, isVoid = true)
+            Transaction(id = "1", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Supermarket", category = "Groceries", totalAmount = 1200.0, myShare = 1200.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
+            Transaction(id = "2", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Cafe", category = "Dining", totalAmount = 800.0, myShare = 800.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
+            Transaction(id = "3", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Goa Hotel", category = "Dining", totalAmount = 2500.0, myShare = 2500.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "Goa2026", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
+            Transaction(id = "4", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Monthly SIP", category = "Savings", totalAmount = 10000.0, myShare = 10000.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
+            Transaction(id = "5", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "Bank Transfer", category = "Transfer", totalAmount = 5000.0, myShare = 5000.0, owedToMe = 0.0, status = TransactionStatus.PERSONAL, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED),
+            Transaction(id = "6", timestamp = testTs, dateSerial = 46000, timeSerial = 0.5, account = "HDFC", merchant = "[Void] Cancelled Booking", category = "Other", totalAmount = 0.0, myShare = 0.0, owedToMe = 0.0, status = TransactionStatus.VOID, tripTag = "", reviewState = ReviewState.CONFIRMED, syncState = SyncState.SYNCED)
+        )
+        val domainInflows = listOf(
+            Inflow(id = "inf_1", timestamp = testTs, amount = 600.0, account = "HDFC", inflowType = "Refund / Return", source = "Store", note = "Merchant return")
         )
 
-        // 1. Calculate Burn KPI (Dashboard A5 logic: sum of non-void myShare where category <> Savings and category <> Transfer)
-        val burnKpiExpected = txns
-            .filter { !it.isVoid && it.category != "Savings" && it.category != "Transfer" }
-            .sumOf { it.myShare }
-        assertEquals(4500.0, burnKpiExpected, 0.001)
+        // Simulated fake sheet ledger mirroring the transactions and inflows
+        val sheetExpenses = listOf(
+            FakeExpenseRow(desc = "Supermarket", tripTag = "", category = "Groceries", totalAmount = 1200.0, myShare = 1200.0),
+            FakeExpenseRow(desc = "Cafe", tripTag = "", category = "Dining", totalAmount = 800.0, myShare = 800.0),
+            FakeExpenseRow(desc = "Goa Hotel", tripTag = "Goa2026", category = "Dining", totalAmount = 2500.0, myShare = 2500.0),
+            FakeExpenseRow(desc = "Monthly SIP", tripTag = "", category = "Savings", totalAmount = 10000.0, myShare = 10000.0),
+            FakeExpenseRow(desc = "Bank Transfer", tripTag = "", category = "Transfer", totalAmount = 5000.0, myShare = 5000.0),
+            FakeExpenseRow(desc = "[Void] Cancelled Booking", tripTag = "", category = "Other", totalAmount = 0.0, myShare = 0.0)
+        )
+        val sheetInflows = listOf(
+            FakeInflowRow(inflowType = "Refund / Return", reason = "Merchant return", amount = 600.0)
+        )
 
-        // 2. Evaluate Insights Table slices generated by SheetProvisioner
+        // 1. Authoritative living burn from domain calculation (LivingBurn rule: non-void minus refunds, excluding Savings and Transfer)
+        val burnKpiExpected = LivingBurn.total(txns, window, emptySet(), domainInflows)
+        assertEquals(3900.0, burnKpiExpected, 0.001)
+
+        // 2. Evaluate Burn KPI formula generated by DashboardFormulaBuilder
+        val burnFormula = DashboardFormulaBuilder.burnFormula("Nov26", emptyList())
+        val evaluatedBurnKpi = evaluateBurnFormula(burnFormula, sheetExpenses, sheetInflows)
+        assertEquals("Burn KPI formula must evaluate to LivingBurn domain total", burnKpiExpected, evaluatedBurnKpi, 0.001)
+
+        // 3. Evaluate Insights Table slices generated by SheetProvisioner
         val dashboardRequests = SheetProvisioner.buildDashboardRequests(
             dashboardSheetId = 4,
             categories = listOf("Groceries", "Dining", "Savings", "Transfer", "Other"),
@@ -102,10 +284,10 @@ class DashboardSubscriptionsAndTripsParityTest {
                 val start = it["start"] as? Map<*, *>
                 val rowIdx = (range?.get("startRowIndex") ?: start?.get("rowIndex")) as? Int
                 val colIdx = (range?.get("startColumnIndex") ?: start?.get("columnIndex")) as? Int
-                rowIdx != null && colIdx != null && rowIdx in 64..80 && colIdx in listOf(20, 21)
+                rowIdx != null && colIdx != null && rowIdx in 64..85 && colIdx in listOf(20, 21)
             }
 
-        // Verify Savings and Transfer are NOT in the insights slices
+        // Verify Savings and Transfer are NOT in the insights slices, but Trips and Refunds are
         val sliceLabels = cellUpdates
             .filter {
                 val range = it["range"] as? Map<*, *>
@@ -122,26 +304,46 @@ class DashboardSubscriptionsAndTripsParityTest {
         assertFalse("Insights slices must NOT contain Savings", sliceLabels.contains("Savings"))
         assertFalse("Insights slices must NOT contain Transfer", sliceLabels.contains("Transfer"))
         assertTrue("Insights slices must contain Trips", sliceLabels.contains("Trips"))
+        assertTrue("Insights slices must contain Refunds", sliceLabels.contains("Refunds"))
 
-        // Calculate slice sums based on the formula semantics:
-        // Category slices: sum where Category == cat && Col E == "" && !isVoid
-        var sliceSum = 0.0
-        val categorySlices = sliceLabels.filter { it != "Trips" }
-        for (cat in categorySlices) {
-            val catTotal = txns
-                .filter { it.category == cat && it.tripTag.isEmpty() && !it.isVoid }
-                .sumOf { it.myShare }
-            sliceSum += catTotal
+        // Extract formula cells (col index 21) and evaluate each slice using the evaluator
+        val formulaCells = cellUpdates
+            .filter {
+                val range = it["range"] as? Map<*, *>
+                val start = it["start"] as? Map<*, *>
+                val colIdx = (range?.get("startColumnIndex") ?: start?.get("columnIndex")) as? Int
+                colIdx == 21
+            }
+
+        var evaluatedSliceSum = 0.0
+        for (cell in formulaCells) {
+            @Suppress("UNCHECKED_CAST")
+            val row = (cell["rows"] as List<Map<String, Any?>>).first()
+            @Suppress("UNCHECKED_CAST")
+            val formula = ((row["values"] as List<Map<String, Any?>>).first()["userEnteredValue"] as Map<*, *>)["formulaValue"] as String
+            val sliceValue = if (formula.startsWith("=-")) {
+                val call = extractFunctionCalls(formula, "SUMIFS").firstOrNull()
+                if (call != null) -evaluateSumifs(call, sheetExpenses, sheetInflows) else 0.0
+            } else {
+                // If formula references Column U (like U65), resolve with category name
+                val resolvedFormula = if (formula.contains("U65")) {
+                    formula.replace("U65", "\"Groceries\"")
+                } else if (formula.contains("U66")) {
+                    formula.replace("U66", "\"Dining\"")
+                } else if (formula.contains("U67")) {
+                    formula.replace("U67", "\"Other\"")
+                } else {
+                    formula
+                }
+                val call = extractFunctionCalls(resolvedFormula, "SUMIFS").firstOrNull()
+                if (call != null) evaluateSumifs(call, sheetExpenses, sheetInflows) else 0.0
+            }
+            evaluatedSliceSum += sliceValue
         }
 
-        // Trips slice: sum where Col E != "" && Category <> Savings && Category <> Transfer && !isVoid
-        val tripSliceTotal = txns
-            .filter { it.tripTag.isNotEmpty() && it.category != "Savings" && it.category != "Transfer" && !it.isVoid }
-            .sumOf { it.myShare }
-        sliceSum += tripSliceTotal
-
-        // The slices MUST sum up to the exact same total as the Burn KPI!
-        assertEquals("Insights slices sum must match Dashboard burn KPI exactly", burnKpiExpected, sliceSum, 0.001)
+        // The evaluated slice sum MUST equal the authoritative LivingBurn and match Burn KPI formula!
+        assertEquals("Insights slices sum must match LivingBurn domain calculation", burnKpiExpected, evaluatedSliceSum, 0.001)
+        assertEquals("Insights slices sum must match Dashboard burn KPI exactly", evaluatedBurnKpi, evaluatedSliceSum, 0.001)
     }
 
     @Suppress("UNCHECKED_CAST")

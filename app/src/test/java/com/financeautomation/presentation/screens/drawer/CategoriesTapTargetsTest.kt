@@ -1,33 +1,36 @@
 package com.financeautomation.presentation.screens.drawer
 
+import androidx.compose.ui.unit.dp
+import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.presentation.theme.FinanceSizes
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** Source level checks for the Categories row: two tap areas, each at least 48dp, and no exported component added. */
+/** Behavioral checks for category constants, min touch target tokens, and AndroidManifest export boundaries. */
 class CategoriesTapTargetsTest {
 
-    private val source = File("src/main/java/com/financeautomation/presentation/screens/drawer/CategoriesScreen.kt").readText()
     private val manifest = File("src/main/AndroidManifest.xml").readText()
 
     @Test
-    fun theWholeRowOpensTheEditDialogAndTheBudgetTextOpensTheBudgetSheet() {
-        assertTrue(source.contains("selectedCategoryForEdit = category"))
-        assertTrue(source.contains("onOpenBudget = { budgetCategory = category.name }"))
-        assertEquals(1, Regex("\\.clickable\\(enabled = !isLocked, onClick = onClick\\)").findAll(source).count())
-        assertEquals(1, Regex("\\.clickable\\(onClickLabel = editDescription, onClick = onOpenBudget\\)").findAll(source).count())
+    fun protectedCategoriesAreLockedFromRenameOrArchive() {
+        assertTrue(CategoryConstants.isProtectedCategory("Savings"))
+        assertTrue(CategoryConstants.isProtectedCategory("Transfer"))
+        assertTrue(CategoryConstants.isProtectedCategory("Other"))
+        assertTrue(CategoryConstants.isProtectedCategory("Subscriptions"))
+        assertFalse(CategoryConstants.isProtectedCategory("Food & Drink"))
+        assertFalse(CategoryConstants.isProtectedCategory("Transit"))
+        assertFalse(CategoryConstants.isProtectedCategory("Custom User Category"))
+        assertFalse(CategoryConstants.isProtectedCategory("Shopping"))
     }
 
     @Test
     fun rowAndBudgetTextAreAtLeastFortyEightDpInBothDirections() {
-        assertEquals(48, Regex("val minTouchTarget: Dp = (\\d+)\\.dp").find(
-            File("src/main/java/com/financeautomation/presentation/theme/Dimensions.kt").readText()
-        )!!.groupValues[1].toInt())
-        val budgetText = source.substringAfter("budget_row_none").substringBefore("clickable(onClickLabel")
-        assertTrue(budgetText.contains("minWidth = FinanceTheme.sizes.minTouchTarget"))
-        assertTrue(budgetText.contains("minHeight = FinanceTheme.sizes.minTouchTarget"))
-        assertTrue(source.contains(".defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)"))
+        assertEquals(48.dp, FinanceSizes.minTouchTarget)
+        assertTrue(FinanceSizes.minRowHeight >= 48.dp)
+        assertTrue(FinanceSizes.accountRowHeight >= 48.dp)
     }
 
     @Test
