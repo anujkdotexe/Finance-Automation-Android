@@ -34,8 +34,7 @@ class CrashlyticsManagerOptInTest {
         val originalException = RuntimeException("Sensitive details: Paid Rs. 5000 to Swiggy from A/c 1824 with token ya29.secret")
         val locationTag = "SyncEngine.kt:42"
 
-        // Emulate sanitized exception creation from CrashlyticsManager
-        val sanitized = RuntimeException("${originalException.javaClass.simpleName} at $locationTag")
+        val sanitized = CrashlyticsManager.createSanitizedException(originalException, locationTag)
 
         // Assert message contains class name and location only
         assertEquals("RuntimeException at SyncEngine.kt:42", sanitized.message)

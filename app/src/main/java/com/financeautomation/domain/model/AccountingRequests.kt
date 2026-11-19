@@ -47,7 +47,9 @@ data class LogRepaymentRequest(
     val creditor: String,
     val amount: Double,
     val explicitRef: String? = null,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val account: String? = null,
+    val note: String? = null
 )
 
 /**

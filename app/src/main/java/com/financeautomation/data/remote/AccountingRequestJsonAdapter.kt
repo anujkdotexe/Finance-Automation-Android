@@ -103,18 +103,24 @@ object AccountingRequestJsonAdapter {
             put("amount", JsonPrimitive(req.amount))
             put("explicitRef", req.explicitRef?.let { JsonPrimitive(it) } ?: JsonNull)
             put("timestamp", JsonPrimitive(req.timestamp))
+            put("account", req.account?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("note", req.note?.let { JsonPrimitive(it) } ?: JsonNull)
         }.toString()
     }
 
     fun repaymentRequestFromJson(jsonStr: String): LogRepaymentRequest {
         val obj = json.parseToJsonElement(jsonStr).jsonObject
         val ref = obj["explicitRef"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content
+        val account = obj["account"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content
+        val note = obj["note"]?.jsonPrimitive?.takeIf { it !is JsonNull }?.content
         return LogRepaymentRequest(
             requestId = obj["requestId"]?.jsonPrimitive?.content.orEmpty(),
             creditor = obj["creditor"]?.jsonPrimitive?.content.orEmpty(),
             amount = obj["amount"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
             explicitRef = ref,
-            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
+            account = account,
+            note = note
         )
     }
 

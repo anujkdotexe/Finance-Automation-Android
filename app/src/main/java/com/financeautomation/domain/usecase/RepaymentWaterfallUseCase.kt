@@ -32,7 +32,9 @@ class RepaymentWaterfallUseCase(
         timeSerial: Double,
         tabName: String,
         allPayables: List<LedgerPayable>,
-        resolveCarriedFn: ((LedgerPayable) -> LedgerPayable?)? = null
+        resolveCarriedFn: ((LedgerPayable) -> LedgerPayable?)? = null,
+        account: String? = null,
+        note: String? = null
     ): AccountingPlan {
         var remaining = AccountingUtils.round2(amount)
         var repaidCount = 0
@@ -119,8 +121,8 @@ class RepaymentWaterfallUseCase(
             val debitCells = listOf(
                 dateSerial,
                 timeSerial,
-                "Cash",
-                "[Carried Over] Excess repayment balance",
+                account?.takeIf { it.isNotBlank() } ?: "Cash",
+                note?.takeIf { it.isNotBlank() } ?: "[Carried Over] Excess repayment balance",
                 "",
                 CategoryConstants.CATEGORY_OTHER,
                 AccountingUtils.round2(remaining),

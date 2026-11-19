@@ -9,6 +9,7 @@ object MerchantSimilarity {
 
     private const val UNKNOWN_PAYEE = "unknown payee"
     private const val MIN_TOKEN_LENGTH = 3
+    private val NON_ALPHANUMERIC_REGEX = Regex("[^a-z0-9]+")
 
     fun compatible(a: String, b: String): Boolean {
         if (isUnknown(a) || isUnknown(b)) return true
@@ -29,7 +30,7 @@ object MerchantSimilarity {
     /** Lower case, VPA handle removed, everything except letters and digits turned into single spaces. */
     private fun normalize(raw: String): String =
         raw.lowercase().substringBefore('@')
-            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(NON_ALPHANUMERIC_REGEX, " ")
             .trim()
 
     private fun tokens(normalized: String): Set<String> =

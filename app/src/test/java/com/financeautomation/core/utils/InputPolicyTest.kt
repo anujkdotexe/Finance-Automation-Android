@@ -103,7 +103,7 @@ class InputPolicyTest {
             "Gifts*",
             "=SUM(A1)",
             "~tilde",
-            "Rent 🏠",
+            "Rent \u2302",
             "Trip 2026",
             "A"
         )

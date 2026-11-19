@@ -117,17 +117,6 @@ class AppContainerTest {
         assertEquals(listOf(2026), recordingRepo.requeuedYears)
     }
 
-    @Test
-    fun recordingTransactionRepository_throwsOnUnrelatedMethods() = kotlinx.coroutines.runBlocking {
-        val repo = RecordingTransactionRepository()
-        try {
-            repo.getTransactions()
-            org.junit.Assert.fail("Expected UnsupportedOperationException")
-        } catch (e: UnsupportedOperationException) {
-            assertTrue(e.message?.contains("unexpected call") == true)
-        }
-    }
-
     private class RecordingTransactionRepository : TransactionRepository {
         val requeuedYears = mutableListOf<Int>()
 

@@ -140,7 +140,16 @@ interface TransactionRepository {
         amount: Double,
         explicitRef: String? = null,
         timestamp: Long = System.currentTimeMillis()
-    ): Result<String>
+    ): Result<String> = logRepayment(creditor, amount, explicitRef, timestamp, null, null)
+
+    suspend fun logRepayment(
+        creditor: String,
+        amount: Double,
+        explicitRef: String?,
+        timestamp: Long,
+        account: String?,
+        note: String?
+    ): Result<String> = logRepayment(creditor, amount, explicitRef, timestamp)
 
     /**
      * Enqueues monthly debt rollover from sourceTab into targetTab.

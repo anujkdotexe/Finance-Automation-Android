@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -88,12 +89,13 @@ object PipelineTrail {
     private val buffer = ConcurrentLinkedQueue<PipelineEventEntity>()
     private val isFlushing = AtomicBoolean(false)
 
+    private val KOLKATA_ZONE = ZoneId.of("Asia/Kolkata")
     private val heartbeatTime = AtomicLong(0L)
     private val droppedCount = AtomicLong(0L)
     private val lastPersistedAt = AtomicLong(0L)
     private val currentDayKey = AtomicReference<String>("")
 
-    internal var todayProvider: () -> String = { LocalDate.now().toString() }
+    internal var todayProvider: () -> String = { LocalDate.now(KOLKATA_ZONE).toString() }
 
     private var appContext: Context? = null
     private var daoProvider: (suspend () -> PipelineEventDao)? = null
@@ -182,7 +184,7 @@ object PipelineTrail {
         droppedCount.set(0L)
         lastPersistedAt.set(0L)
         currentDayKey.set("")
-        todayProvider = { LocalDate.now().toString() }
+        todayProvider = { LocalDate.now(KOLKATA_ZONE).toString() }
     }
 
     private fun ensureDayRollover(today: String = getTodayKey()) {

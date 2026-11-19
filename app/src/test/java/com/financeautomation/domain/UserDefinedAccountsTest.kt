@@ -137,5 +137,46 @@ class UserDefinedAccountsTest {
         repo.deleteAccount("acc_user")
         assertEquals(null, dao.getById("acc_user"))
     }
+
+    @Test
+    fun testAccountRepository_deletingDefaultAccount_resetsDefaultToOther() = runBlocking {
+        val dao = InMemoryAccountDao()
+        dao.insert(AccountEntity("acc_cash", "Cash", null, isDefault = false, isArchived = false, displayOrder = 0))
+        dao.insert(AccountEntity("acc_other", "Other", null, isDefault = false, isArchived = false, displayOrder = 1))
+        dao.insert(AccountEntity("acc_user", "My HDFC", null, isDefault = true, isArchived = false, displayOrder = 2))
+
+        val repo = AccountRepositoryImpl(accountDao = dao)
+
+        assertEquals("My HDFC", repo.getDefaultAccount()?.name)
+
+        repo.deleteAccount("acc_user")
+        assertEquals(null, dao.getById("acc_user"))
+
+        val def = repo.getDefaultAccount()
+        assertNotNull("Default account must not be null after deleting previous default", def)
+        assertEquals("Other", def!!.name)
+        assertTrue(def.isDefault)
+    }
+
+    @Test
+    fun testAccountRepository_archivingDefaultAccount_resetsDefaultToOther() = runBlocking {
+        val dao = InMemoryAccountDao()
+        dao.insert(AccountEntity("acc_cash", "Cash", null, isDefault = false, isArchived = false, displayOrder = 0))
+        dao.insert(AccountEntity("acc_other", "Other", null, isDefault = false, isArchived = false, displayOrder = 1))
+        dao.insert(AccountEntity("acc_user", "My HDFC", null, isDefault = true, isArchived = false, displayOrder = 2))
+
+        val repo = AccountRepositoryImpl(accountDao = dao)
+
+        assertEquals("My HDFC", repo.getDefaultAccount()?.name)
+
+        repo.archiveAccount("acc_user")
+        assertTrue(dao.getById("acc_user")!!.isArchived)
+        assertFalse(dao.getById("acc_user")!!.isDefault)
+
+        val def = repo.getDefaultAccount()
+        assertNotNull("Default account must not be null after archiving previous default", def)
+        assertEquals("Other", def!!.name)
+        assertTrue(def.isDefault)
+    }
 }
 

@@ -40,7 +40,7 @@ class InMemoryAccountDao : AccountDao {
         sync()
     }
     override suspend fun archiveAccount(id: String, updatedAt: Long) {
-        accounts[id]?.let { accounts[id] = it.copy(isArchived = true, updatedAt = updatedAt) }
+        accounts[id]?.let { accounts[id] = it.copy(isArchived = true, isDefault = false, updatedAt = updatedAt) }
         sync()
     }
     override suspend fun unarchiveAccount(id: String, updatedAt: Long) {

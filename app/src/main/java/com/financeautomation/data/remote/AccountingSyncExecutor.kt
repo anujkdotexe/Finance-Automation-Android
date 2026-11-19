@@ -307,7 +307,9 @@ open class AccountingSyncExecutor(
                 timeSerial = timeSerial,
                 tabName = tabName,
                 allPayables = allPayables,
-                resolveCarriedFn = resolveCarriedFn
+                resolveCarriedFn = resolveCarriedFn,
+                account = req.account,
+                note = req.note
             )
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
@@ -345,32 +347,38 @@ open class AccountingSyncExecutor(
         val sourceKey = sourceTab?.let { parseMonthKey(it) }
 
         // If source tab is in the previous year (e.g. Dec26 -> Jan27), source snapshot must come from previous year's workbook
-        if (targetKey != null && (targetKey % 12 == 1) && (sourceTab == null || (sourceKey != null && sourceKey / 12 < targetKey / 12))) {
-            val targetYear = targetKey / 12
+        val isTargetJan = targetKey != null && (targetKey % 12 == 0)
+        val isCrossYear = targetKey != null && (sourceTab == null || (sourceKey != null && sourceKey / 12 < targetKey / 12))
+        if (isTargetJan && isCrossYear) {
+            val targetYear = targetKey!! / 12
             val prevYear = targetYear - 1
             val prevSpreadsheetId = previousWorkbookIdProvider?.invoke(prevYear)
-            if (!prevSpreadsheetId.isNullOrBlank()) {
-                val prevSnapRes = googleSheetsClient.readLedgerSnapshot(prevSpreadsheetId)
-                if (prevSnapRes is Result.Success) {
-                    val prevSnap = prevSnapRes.data
-                    val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
-                    val foundDecTab = if (sourceTab != null) {
-                        prevSnap.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
-                    } else {
-                        prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
-                            ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
-                    }
-                    if (foundDecTab != null) {
-                        sourceTab = foundDecTab.tabName
-                        sourceSnapshot = prevSnap
-                        sourceSpreadsheetId = prevSpreadsheetId
-                    }
-                }
+            if (prevSpreadsheetId.isNullOrBlank()) {
+                return Result.Error(IllegalStateException("Previous year ($prevYear) workbook ID not found for carry forward to $targetTab"))
+            }
+            val prevSnapRes = googleSheetsClient.readLedgerSnapshot(prevSpreadsheetId)
+            if (prevSnapRes is Result.Error) {
+                return Result.Error(prevSnapRes.exception)
+            }
+            val prevSnap = (prevSnapRes as Result.Success).data
+            val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
+            val foundDecTab = if (sourceTab != null) {
+                prevSnap.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
+            } else {
+                prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
+                    ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
+            }
+            if (foundDecTab != null) {
+                sourceTab = foundDecTab.tabName
+                sourceSnapshot = prevSnap
+                sourceSpreadsheetId = prevSpreadsheetId
+            } else {
+                return Result.Error(IllegalStateException("No source month tab found in previous year ($prevYear) workbook for carry forward"))
             }
         }
 
         if (sourceTab == null) {
-            return Result.Success(Unit)
+            return Result.Error(IllegalStateException("Could not resolve source tab for carry forward into $targetTab"))
         }
 
         val targetMonth = snapshot.monthTabs.find { it.tabName.equals(targetTab, ignoreCase = true) }
@@ -498,9 +506,23 @@ open class AccountingSyncExecutor(
                     spreadsheetId
                 }
             }
+
+            // Map settled UUIDs to re-check and adjust row indexes if sheet was reordered
+            val settledRowMap = mutableMapOf<Pair<String, Int>, Int>()
+            for (settled in plan.settled) {
+                if (!settled.uuid.isNullOrBlank()) {
+                    val targetId = if (sourceSpreadsheetId != null && sourceSpreadsheetId != spreadsheetId) sourceSpreadsheetId else spreadsheetId
+                    val foundRow = googleSheetsClient.findRowByUuid(targetId, settled.tab, SheetSchemaConstants.COL_LETTER_DEBIT_UUID, settled.uuid)
+                    if (foundRow is Result.Success && foundRow.data != null) {
+                        settledRowMap[Pair(settled.tab, settled.row)] = foundRow.data
+                    }
+                }
+            }
+
             for ((targetId, edits) in editsByTarget) {
                 val rangesWithValues = edits.associate { edit ->
-                    "'${edit.tab}'!${edit.column}${edit.row}" to listOf(listOf(edit.value))
+                    val actualRow = settledRowMap[Pair(edit.tab, edit.row)] ?: edit.row
+                    "'${edit.tab}'!${edit.column}$actualRow" to listOf(listOf(edit.value))
                 }
                 val editRes = googleSheetsClient.batchUpdateValues(targetId, rangesWithValues)
                 if (editRes is Result.Error) return Result.Error(editRes.exception)
@@ -623,18 +645,18 @@ open class AccountingSyncExecutor(
         val mmm = match.groupValues[1].lowercase(Locale.US)
         val yy = match.groupValues[2].toIntOrNull() ?: return null
         val monthIdx = when (mmm) {
-            "jan" -> 1
-            "feb" -> 2
-            "mar" -> 3
-            "apr" -> 4
-            "may" -> 5
-            "jun" -> 6
-            "jul" -> 7
-            "aug" -> 8
-            "sep" -> 9
-            "oct" -> 10
-            "nov" -> 11
-            "dec" -> 12
+            "jan" -> 0
+            "feb" -> 1
+            "mar" -> 2
+            "apr" -> 3
+            "may" -> 4
+            "jun" -> 5
+            "jul" -> 6
+            "aug" -> 7
+            "sep" -> 8
+            "oct" -> 9
+            "nov" -> 10
+            "dec" -> 11
             else -> return null
         }
         return (2000 + yy) * 12 + monthIdx

@@ -441,11 +441,18 @@ class NotificationProcessor(
                     } else {
                         openMergeTarget.flags
                     }
+                    val targetMergedState = if (openMergeTarget.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS &&
+                        (wording == WordingClass.SUCCESS || targetState == PendingCaptureEntity.STATE_WAITING)) {
+                        PendingCaptureEntity.STATE_WAITING
+                    } else {
+                        openMergeTarget.state
+                    }
                     val merged = openMergeTarget.copy(
                         payee = richerPayee,
                         inferredAccount = if (openMergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else openMergeTarget.inferredAccount,
                         detectedAccountHint = openMergeTarget.detectedAccountHint ?: detectedAccountHint,
                         flags = mergedFlags,
+                        state = targetMergedState,
                         updatedAt = System.currentTimeMillis()
                     )
                     val mergeOp: suspend () -> Unit = {
@@ -533,6 +540,8 @@ class NotificationProcessor(
     }
 
     companion object {
+        private val ACCOUNT_DIGIT_REGEX = Regex("""(?i)(?:xx|ending\s+|a/c\s*no\.?\s*|\.\.)*(\d{3,4})\b""")
+
         const val WINDOW_SAME_PACKAGE_MERGE_MS: Long = 180_000L
         const val WINDOW_CROSS_PACKAGE_MERGE_MS: Long = 600_000L
         const val WINDOW_CONFIRMED_LATE_MERGE_MS: Long = 86_400_000L // 24 hours for matching reference id
@@ -567,7 +576,7 @@ class NotificationProcessor(
 
         private fun extractAccountDigits(raw: String?): String? {
             if (raw.isNullOrBlank()) return null
-            val match = Regex("""(?i)(?:xx|ending\s+|a/c\s*no\.?\s*|\.\.)*(\d{3,4})\b""").find(raw)
+            val match = ACCOUNT_DIGIT_REGEX.find(raw)
             return match?.groupValues?.get(1)
         }
 

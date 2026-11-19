@@ -166,7 +166,8 @@ class ConfigRepositoryImpl(
 
             // Read existing rows to map composite keys to row indices and remote edit timestamps
             val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:G${ConfigConstants.MAX_CONFIG_ROWS}")
-            val existingCells = if (rangeResult is Result.Success) rangeResult.data else emptyList()
+            if (rangeResult is Result.Error) throw rangeResult.exception
+            val existingCells = (rangeResult as Result.Success).data
 
             data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant, val futureStamped: Boolean)
             val keyToMetaMap = mutableMapOf<String, ExistingRowMeta>()

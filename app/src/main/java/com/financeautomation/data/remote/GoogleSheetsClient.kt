@@ -502,7 +502,8 @@ open class GoogleSheetsClient(
                 }?.jsonObject?.get("properties")?.jsonObject
 
                 if (targetSheet != null) {
-                    val sheetId = targetSheet["sheetId"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    val sheetId = targetSheet["sheetId"]?.jsonPrimitive?.content?.toIntOrNull()
+                        ?: return@withContext Result.Error(IllegalStateException("Could not resolve sheetId for tab $tabName"))
                     val totalRows = targetSheet["gridProperties"]?.jsonObject?.get("rowCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 1000
 
                     // The caller already scanned the sheet to find requiredRow, so do not read the column again
@@ -736,19 +737,27 @@ open class GoogleSheetsClient(
         tabName: String
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            // 1. Check header cell L3 first: stop on error or empty read, skip if already "Note"
+            // 1. Check header cell L3 first: skip if already "Note"
             val l3Res = getRangeValuesRaw(spreadsheetId, "'$tabName'!L3:L3")
             if (l3Res is Result.Error) {
                 return@withContext Result.Error(l3Res.exception)
             }
-            val headerVal = (l3Res as Result.Success).data.firstOrNull()?.firstOrNull()?.toString()?.trim()
-            if (headerVal.isNullOrEmpty()) {
-                return@withContext Result.Error(
-                    IllegalStateException("Cannot repair month tab schema: header cell L3 is empty or unreadable on tab '$tabName'")
-                )
-            }
-            if (headerVal.equals("Note", ignoreCase = true)) {
+            val initialL3 = (l3Res as Result.Success).data.firstOrNull()?.firstOrNull()?.toString()?.trim().orEmpty()
+            if (initialL3.equals("Note", ignoreCase = true)) {
                 return@withContext Result.Success(false)
+            }
+
+            // If L3 is not "Note", check M3:N3 to verify whether tab is already V2 (e.g. L3 was renamed/cleared)
+            val checkRes = getRangeValuesRaw(spreadsheetId, "'$tabName'!M3:N3")
+            val rowVals = if (checkRes is Result.Success) checkRes.data.firstOrNull() ?: emptyList() else emptyList()
+            val initialM3 = rowVals.getOrNull(0)?.toString()?.trim().orEmpty()
+            val initialN3 = rowVals.getOrNull(1)?.toString()?.trim().orEmpty()
+
+            val isAlreadyV2 = (initialM3.isEmpty() || initialM3.equals("Spacer 1", ignoreCase = true)) &&
+                    (initialN3.equals("Date", ignoreCase = true) || initialN3.contains("Inflow", ignoreCase = true))
+            if (isAlreadyV2) {
+                val restoreRes = batchUpdateValues(spreadsheetId, mapOf("'$tabName'!L3:L3" to listOf(listOf("Note"))))
+                return@withContext if (restoreRes is Result.Error) Result.Error(restoreRes.exception) else Result.Success(true)
             }
 
             // 2. Resolve sheetId
@@ -1682,8 +1691,7 @@ open class GoogleSheetsClient(
      */
     open suspend fun hasDataRows(spreadsheetId: String, tabTitles: List<String>): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            val monthRegex = Regex("^[A-Z][a-z]{2}\\d{2}$")
-            val monthTabs = tabTitles.filter { it.matches(monthRegex) }
+            val monthTabs = tabTitles.filter { it.matches(MONTH_TAB_FORMAT_REGEX) }
             if (monthTabs.isEmpty()) {
                 return@withContext Result.Success(false)
             }
@@ -1735,7 +1743,8 @@ open class GoogleSheetsClient(
         val newSheetId = if (recheck is Result.Success) {
             recheck.data[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
         } else null
-        val targetSheetId = newSheetId ?: 0
+        val targetSheetId = newSheetId
+            ?: return@withContext Result.Error(IllegalStateException("Could not resolve sheetId for newly created tab ${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}"))
 
         val provRequests = SheetProvisioner.buildSubscriptionsRequests(targetSheetId, accounts, year = resolvedYear)
         val provRes = executeBatchUpdate(spreadsheetId, provRequests)
@@ -1939,7 +1948,8 @@ open class GoogleSheetsClient(
         val newSheetId = if (recheck is Result.Success) {
             recheck.data[SheetSchemaConstants.TRIPS_TAB_NAME]
         } else null
-        val targetSheetId = newSheetId ?: 0
+        val targetSheetId = newSheetId
+            ?: return@withContext Result.Error(IllegalStateException("Could not resolve sheetId for newly created tab ${SheetSchemaConstants.TRIPS_TAB_NAME}"))
 
         val provRequests = SheetProvisioner.buildTripsRequests(targetSheetId, year = resolvedYear)
         val provRes = executeBatchUpdate(spreadsheetId, provRequests)
@@ -2357,7 +2367,8 @@ open class GoogleSheetsClient(
             val monthSnapshots = mutableListOf<MonthTabSnapshot>()
 
             for (tab in sortedTabs) {
-                val sheetId = tabsMap[tab] ?: 0
+                val sheetId = tabsMap[tab]
+                    ?: return@withContext Result.Error(SheetNotFoundException(spreadsheetId, "Tab '$tab' not found in spreadsheet"))
                 val l3Header = getValuesForRange(tab, "L3:L3").firstOrNull()?.firstOrNull()?.toString()?.trim()
                 val isV2 = l3Header?.equals("Note", ignoreCase = true)
                     ?: (valuesMap.keys.any { it.contains(tab, ignoreCase = true) && (it.contains("A4:L") || it.contains("AD4:AD") || it.contains("W4:AC") || it.contains("AF4:AF")) })
@@ -2500,6 +2511,7 @@ open class GoogleSheetsClient(
     }
 
     companion object {
+        private val MONTH_TAB_FORMAT_REGEX = Regex("^[A-Z][a-z]{2}\\d{2}$")
         const val MAX_SHEET_ROWS_PER_CALL = 5000
         const val MAX_CELL_STRING_LENGTH = 5000
 

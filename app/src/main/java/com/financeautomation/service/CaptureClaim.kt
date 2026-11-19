@@ -20,6 +20,9 @@ object CaptureClaim {
     ): Outcome {
         val capture = dao.getById(captureId) ?: return Outcome.NOT_FOUND
         if ((capture.amount ?: 0.0) <= 0.0) return Outcome.NO_AMOUNT
+        if (capture.state == PendingCaptureEntity.STATE_DONE || capture.state == PendingCaptureEntity.STATE_DISMISSED) {
+            return Outcome.ALREADY_HANDLED
+        }
         if (!dao.claimForLogging(captureId)) return Outcome.ALREADY_HANDLED
         val ok = try {
             log(capture)

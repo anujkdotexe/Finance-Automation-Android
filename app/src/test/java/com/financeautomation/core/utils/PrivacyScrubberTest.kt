@@ -9,15 +9,15 @@ class PrivacyScrubberTest {
 
     @Test
     fun spreadsheetIdIsRemoved() {
-        val out = PrivacyScrubber.scrub("Requested entity was not found: 1LJxB_EKUUowjQ-GzouTillSE03edCTtFZ8E8Kj1hc_Y")
-        assertFalse(out.contains("1LJxB_EKUUowjQ"))
+        val out = PrivacyScrubber.scrub("Requested entity was not found: 1abcDEFghiJKLmnoPQRstuVWXyz1234567890_-ABCDEF")
+        assertFalse(out.contains("1abcDEFghiJKL"))
         assertTrue(out.contains("[id]"))
     }
 
     @Test
     fun emailAddressIsRemoved() {
-        val out = PrivacyScrubber.scrub("The caller kondawaranuj7827@gmail.com does not have permission")
-        assertFalse(out.contains("@gmail.com"))
+        val out = PrivacyScrubber.scrub("The caller test.user@example.com does not have permission")
+        assertFalse(out.contains("@example.com"))
         assertTrue(out.contains("[email]"))
     }
 
@@ -49,9 +49,9 @@ class PrivacyScrubberTest {
     @Test
     fun diagnosticsRecordsAreScrubbed() {
         Diagnostics.clear()
-        Diagnostics.record("Test", "failure for kondawaranuj7827@gmail.com")
+        Diagnostics.record("Test", "failure for test.user@example.com")
         val reason = Diagnostics.getRecords().last().reason
-        assertFalse(reason.contains("@gmail.com"))
+        assertFalse(reason.contains("@example.com"))
         Diagnostics.clear()
     }
 }

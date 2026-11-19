@@ -109,6 +109,21 @@ class ParseNotificationUseCase(
         private val INVESTMENT_NON_MONEY_REGEX = Regex("""(?i)\b(?:cdsl|nsdl):?\s*(?:credit|debit)\b|\b(?:redemption\s+request|payout\s+shall\s+be\s+made)\b""")
         private val STORE_CREDIT_REGEX = Regex("""(?i)\b(?:can\s+be\s+redeemed\s+on\s+your\s+subsequent\s+orders|credits\s+have\s+been\s+added\s+to\s+your\s+\w+\s+account)\b""")
         private val AGGREGATOR_RECEIPT_REGEX = Regex("""(?i)\b(?:thank\s+you\s+for\s+(?:making\s+a\s+)?successful\s+transaction|transaction\s+with\s+txn\s+id\b.*has\s+been\s+successfully\s+processed)\b""")
+        private val ACCOUNT_DIGIT_PATTERN = Regex("""(?i)(?:xx|x|ending\s+|a/c\s*no\.?\s*|\.\.)(\d{3,4})\b""")
+
+        private fun containsWord(text: String, word: String): Boolean {
+            var start = 0
+            while (start < text.length) {
+                val idx = text.indexOf(word, start, ignoreCase = true)
+                if (idx < 0) return false
+                val beforeOk = idx == 0 || !text[idx - 1].isLetterOrDigit()
+                val afterIdx = idx + word.length
+                val afterOk = afterIdx >= text.length || !text[afterIdx].isLetterOrDigit()
+                if (beforeOk && afterOk) return true
+                start = idx + 1
+            }
+            return false
+        }
 
         fun classifyWording(text: String): WordingClass {
             if (FAILURE_REGEX.containsMatchIn(text)) return WordingClass.FAILURE
@@ -130,15 +145,14 @@ class ParseNotificationUseCase(
             defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
             accountDigits: Map<String, String?> = emptyMap()
         ): InferredAccountResult {
-            val digitMatch = Regex("""(?i)(?:xx|x|ending\s+|a/c\s*no\.?\s*|\.\.)(\d{3,4})\b""").find(text)
+            val digitMatch = ACCOUNT_DIGIT_PATTERN.find(text)
             val extractedDigits = digitMatch?.groupValues?.get(1)
 
             for (account in configuredAccounts) {
                 val trimmedAccount = account.trim()
                 if (trimmedAccount.isBlank()) continue
 
-                val wordPattern = Regex("""(?i)\b${Regex.escape(trimmedAccount)}\b""")
-                if (wordPattern.containsMatchIn(text)) {
+                if (containsWord(text, trimmedAccount)) {
                     return InferredAccountResult(trimmedAccount, false, null)
                 }
 

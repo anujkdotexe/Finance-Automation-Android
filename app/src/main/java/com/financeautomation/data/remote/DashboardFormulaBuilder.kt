@@ -16,6 +16,8 @@ import com.financeautomation.domain.model.Category
 object DashboardFormulaBuilder {
 
     private const val CATEGORY_TRANSFER = "Transfer"
+    private val YEAR_4_DIGIT_REGEX = Regex("""(20\d{2})""")
+    private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
 
     /**
      * Categories always left out of living burn, as in the iOS reference: Savings and Transfer (in that order),
@@ -132,12 +134,11 @@ object DashboardFormulaBuilder {
         fallbackYear: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): Int {
         if (!workbookTitle.isNullOrBlank()) {
-            val match = Regex("""(20\d{2})""").find(workbookTitle)
+            val match = YEAR_4_DIGIT_REGEX.find(workbookTitle)
             if (match != null) return match.value.toInt()
         }
-        val tabRegex = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
         for (tab in tabNames) {
-            val m = tabRegex.find(tab)
+            val m = MONTH_TAB_REGEX.find(tab)
             if (m != null) {
                 val yy = m.groupValues[2].toIntOrNull()
                 if (yy != null) return 2000 + yy

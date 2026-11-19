@@ -103,6 +103,9 @@ object CrashlyticsManager {
         }
     }
 
+    fun createSanitizedException(throwable: Throwable, locationTag: String): RuntimeException =
+        RuntimeException("${throwable.javaClass.simpleName} at $locationTag")
+
     /**
      * Non-fatal exception logging: records only exception class and location, NEVER message text.
      */
@@ -111,7 +114,7 @@ object CrashlyticsManager {
         if (ctx == null || !isOptedIn(ctx) || !isFirebaseAvailable(ctx)) return
 
         try {
-            val sanitizedException = RuntimeException("${throwable.javaClass.simpleName} at $locationTag")
+            val sanitizedException = createSanitizedException(throwable, locationTag)
             sanitizedException.stackTrace = throwable.stackTrace.take(5).toTypedArray()
             FirebaseCrashlytics.getInstance().recordException(sanitizedException)
         } catch (e: Exception) {

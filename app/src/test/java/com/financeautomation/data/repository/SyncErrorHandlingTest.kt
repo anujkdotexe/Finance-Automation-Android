@@ -1,5 +1,6 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
@@ -120,7 +121,7 @@ class SyncErrorHandlingTest {
         val h = SyncHarness()
         var uuidLookups = 0
         h.server.fail = { call, _ ->
-            if (call.method == "GET" && call.url.contains("/values/") && call.url.contains("AC")) {
+            if (call.method == "GET" && call.url.contains("/values/") && (call.url.contains(SheetSchemaConstants.COL_LETTER_DEBIT_UUID) || call.url.contains("AC"))) {
                 uuidLookups++
                 if (uuidLookups == 1) 500 to "boom" else null
             } else null
@@ -161,7 +162,7 @@ class SyncErrorHandlingTest {
         val item = h.queueOf("txn_a")
         h.qDao.updatePlanJson(item.id, AccountingPlanJsonAdapter.toJson(plan))
         h.server.fail = { call, _ ->
-            if (call.method == "GET" && call.url.contains("/values/") && call.url.contains("AC")) {
+            if (call.method == "GET" && call.url.contains("/values/") && (call.url.contains(SheetSchemaConstants.COL_LETTER_DEBIT_UUID) || call.url.contains("AC"))) {
                 403 to SyncHarness.errorBody(403, "forbidden")
             } else null
         }
