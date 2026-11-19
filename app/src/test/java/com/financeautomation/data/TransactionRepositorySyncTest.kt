@@ -2004,5 +2004,155 @@ class TransactionRepositorySyncTest {
         assertTrue("Formula note must be guarded with leading single quote as plain text", body2!!.contains("'=SUM(100+50)"))
     }
 
+    @Test
+    fun testDeliveredRowUpdateSucceedsIn32ColumnLayout() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val txnId = "txn_delivered_32col_1234567890abcdef"
+        // Row 5 in 32-column tab: UUID is at AD5
+        mock.writtenUuids["AD5"] = txnId
+
+        val deliveredTxn = Transaction(
+            id = txnId,
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.598,
+            account = "SBI",
+            merchant = "Dinner Original",
+            note = "Original Note",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.SYNCED,
+            sheetRowIndex = 5,
+            isPossibleDuplicate = false
+        )
+        tDao.insert(TransactionEntity.fromDomain(deliveredTxn))
+
+        // Edit transaction: change merchant and note
+        val updatedTxn = deliveredTxn.copy(
+            merchant = "Dinner Updated",
+            note = "Updated Note"
+        )
+        tDao.update(TransactionEntity.fromDomain(updatedTxn))
+
+        // Queue update operation
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = txnId,
+                operationType = SyncQueueEntity.OP_UPDATE,
+                payloadJson = txnId
+            )
+        )
+
+        // Execute sync
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue("Sync of OP_UPDATE in 32-column layout must succeed", syncRes is Result.Success)
+        assertEquals(1, (syncRes as Result.Success).data)
+
+        // Verify request body contains updated merchant and note
+        val updateBody = mock.recordedBodies.find { it.contains("Dinner Updated") }
+        assertNotNull("Request body must contain updated merchant", updateBody)
+        assertTrue(updateBody!!.contains("Updated Note"))
+    }
+
+    @Test
+    fun testDeliveredRowUpdateSucceedsIn31ColumnTab() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val txnId = "txn_delivered_31col_1234567890abcdef"
+        // Row 5 in legacy 31-column tab: UUID is at AC5 (not AD5)
+        mock.writtenUuids["AC5"] = txnId
+
+        val deliveredTxn = Transaction(
+            id = txnId,
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.598,
+            account = "SBI",
+            merchant = "Coffee Original",
+            note = "Old Note",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 100.0,
+            companions = "Personal",
+            myShare = 100.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.SYNCED,
+            sheetRowIndex = 5,
+            isPossibleDuplicate = false
+        )
+        tDao.insert(TransactionEntity.fromDomain(deliveredTxn))
+
+        // Edit transaction: change merchant and note
+        val updatedTxn = deliveredTxn.copy(
+            merchant = "Coffee Updated",
+            note = "Legacy Note Updated"
+        )
+        tDao.update(TransactionEntity.fromDomain(updatedTxn))
+
+        // Queue update operation
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = txnId,
+                operationType = SyncQueueEntity.OP_UPDATE,
+                payloadJson = txnId
+            )
+        )
+
+        // Execute sync
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue("Sync of OP_UPDATE in 31-column tab must succeed", syncRes is Result.Success)
+        assertEquals(1, (syncRes as Result.Success).data)
+
+        // Verify request body contains updated merchant and note
+        val updateBody = mock.recordedBodies.find { it.contains("Coffee Updated") }
+        assertNotNull("Request body must contain updated merchant", updateBody)
+        assertTrue(updateBody!!.contains("Legacy Note Updated"))
+    }
+
     // The old "realign local id by row number" behaviour was removed (audit S-5); see ReconcileSafetyTest.
 }
