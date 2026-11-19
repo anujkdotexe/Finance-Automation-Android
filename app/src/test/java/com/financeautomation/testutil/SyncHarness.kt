@@ -92,7 +92,7 @@ class SyncHarness(
 
     fun expense(id: String, merchant: String = "Tea", amount: Double = 40.0, ageMillis: Long = 60_000L) = Transaction(
         id = id,
-        timestamp = System.currentTimeMillis() - ageMillis,
+        timestamp = now - ageMillis,
         dateSerial = 46000,
         timeSerial = 0.5,
         account = "SBI",

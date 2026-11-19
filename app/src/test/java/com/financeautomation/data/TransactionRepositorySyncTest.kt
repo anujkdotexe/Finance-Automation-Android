@@ -68,7 +68,8 @@ class TransactionRepositorySyncTest {
             transactions.values.firstOrNull { it.sheetRowIndex == rowIndex }
         override suspend fun getAllBySheetRowIndex(rowIndex: Int): List<TransactionEntity> =
             transactions.values.filter { it.sheetRowIndex == rowIndex }
-        override suspend fun getRecentSimilar(minTimestamp: Long, maxTimestamp: Long, minAmount: Double, maxAmount: Double): List<TransactionEntity> = emptyList()
+        override suspend fun getRecentSimilar(minTimestamp: Long, maxTimestamp: Long, minAmount: Double, maxAmount: Double): List<TransactionEntity> =
+            transactions.values.filter { it.timestamp in minTimestamp..maxTimestamp && it.totalAmount in minAmount..maxAmount }.sortedByDescending { it.timestamp }
         override suspend fun insert(transaction: TransactionEntity) { transactions[transaction.id] = transaction }
         override suspend fun insertAll(transactions: List<TransactionEntity>) { transactions.forEach { insert(it) } }
         override suspend fun update(transaction: TransactionEntity) { transactions[transaction.id] = transaction }
@@ -82,6 +83,7 @@ class TransactionRepositorySyncTest {
                     owedToMe = 0.0,
                     status = "Void",
                     syncState = SyncState.VOID.name,
+                    reviewState = ReviewState.CONFIRMED.name,
                     merchant = voidTitle
                 )
             }
@@ -92,11 +94,32 @@ class TransactionRepositorySyncTest {
             }
         }
         override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {
-            transactions[id]?.let { transactions[id] = it.copy(reviewState = reviewState) }
+            transactions[id]?.let { transactions[id] = it.copy(reviewState = reviewState, category = category ?: it.category) }
         }
-        override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
-        override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
-        override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
+        override suspend fun updateAccountName(oldName: String, newName: String): Int {
+            var count = 0
+            transactions.values.filter { it.account == oldName }.forEach {
+                transactions[it.id] = it.copy(account = newName)
+                count++
+            }
+            return count
+        }
+        override suspend fun updateCategoryName(oldName: String, newName: String): Int {
+            var count = 0
+            transactions.values.filter { it.category == oldName }.forEach {
+                transactions[it.id] = it.copy(category = newName)
+                count++
+            }
+            return count
+        }
+        override suspend fun updateCompanionName(oldName: String, newName: String): Int {
+            var count = 0
+            transactions.values.filter { it.companions.contains(oldName) }.forEach {
+                transactions[it.id] = it.copy(companions = it.companions.replace(oldName, newName))
+                count++
+            }
+            return count
+        }
 
         override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> =
             transactions.values.filter {
@@ -131,11 +154,11 @@ class TransactionRepositorySyncTest {
             queue.values.filter { it.transactionId == transactionId }.forEach { queue.remove(it.id) }
         }
         override suspend fun getNextPending(maxRetries: Int): SyncQueueEntity? =
-            queue.values.firstOrNull { it.status == SyncQueueEntity.STATUS_PENDING }
+            queue.values.firstOrNull { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }
         override suspend fun getAllPending(maxRetries: Int): List<SyncQueueEntity> =
-            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING }
+            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }
         override suspend fun getPendingQueueFifo(maxRetries: Int): List<SyncQueueEntity> =
-            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING }.sortedBy { it.createdAt }
+            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }.sortedBy { it.createdAt }
         override suspend fun updateStatus(id: Long, status: String, retryIncrement: Int) {
             queue[id]?.let { queue[id] = it.copy(status = status, retryCount = it.retryCount + retryIncrement) }
         }

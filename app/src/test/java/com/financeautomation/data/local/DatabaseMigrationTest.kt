@@ -353,21 +353,13 @@ class DatabaseMigrationTest {
 
     @Test
     fun testMigration15to16_realRowsDataTransformation() {
-        val hasJdbc = try {
-            Class.forName("org.sqlite.JDBC")
-            true
-        } catch (_: Throwable) {
-            false
+        val v15Entities = loadSchema(15)["database"]!!.jsonObject["entities"]!!.jsonArray
+        fun getCreateSql(tableName: String): String {
+            val entity = v15Entities.first { it.jsonObject["tableName"]!!.jsonPrimitive.content == tableName }.jsonObject
+            return entity["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", tableName)
         }
 
-        if (hasJdbc) {
-            val v15Entities = loadSchema(15)["database"]!!.jsonObject["entities"]!!.jsonArray
-            fun getCreateSql(tableName: String): String {
-                val entity = v15Entities.first { it.jsonObject["tableName"]!!.jsonPrimitive.content == tableName }.jsonObject
-                return entity["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", tableName)
-            }
-
-            val conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:")
+        val conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:")
             conn.createStatement().use { stmt ->
                 stmt.execute(getCreateSql("trip_tags"))
                 stmt.execute(getCreateSql("transactions"))
@@ -443,4 +435,3 @@ class DatabaseMigrationTest {
             conn.close()
         }
     }
-}

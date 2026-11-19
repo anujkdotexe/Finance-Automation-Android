@@ -1,3 +1,4 @@
+import java.time.Duration
 import java.util.Properties
 
 plugins {
@@ -110,6 +111,7 @@ android {
         unitTests.isReturnDefaultValues = true
         unitTests.all {
             it.jvmArgs("-Djava.net.preferIPv4Stack=true")
+            it.timeout.set(Duration.ofSeconds(120))
         }
     }
 }
@@ -168,6 +170,7 @@ dependencies {
 
     // Unit Testing
     testImplementation(libs.junit)
+    testImplementation(libs.sqlite.jdbc)
     testImplementation(libs.coroutines.test)
 
     // Instrumented Testing

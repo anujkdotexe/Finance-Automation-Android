@@ -360,7 +360,7 @@ class TransactionRepositoryImpl(
         inSameTransaction: suspend () -> Unit
     ): Result<Unit> = withContext(ioDispatcher) {
         try {
-            if (isFuture(transaction.timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            if (isFuture(transaction.timestamp, nowMillis = clock())) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
@@ -388,7 +388,7 @@ class TransactionRepositoryImpl(
         // Wait for a running sync: it may be delivering this very row, and the edit must be queued after it
         withSyncLock {
         try {
-            if (isFuture(transaction.timestamp)) return@withSyncLock Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            if (isFuture(transaction.timestamp, nowMillis = clock())) return@withSyncLock Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
             val entity = TransactionEntity.fromDomain(transaction)
@@ -428,7 +428,7 @@ class TransactionRepositoryImpl(
     ): Result<String> = withContext(ioDispatcher) {
         try {
             if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
-            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            if (isFuture(timestamp, nowMillis = clock())) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "cred_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogCreditRequest(
                 requestId = reqId,
@@ -476,7 +476,7 @@ class TransactionRepositoryImpl(
     ): Result<String> = withContext(ioDispatcher) {
         try {
             if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
-            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            if (isFuture(timestamp, nowMillis = clock())) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "pay_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val effectiveCategory = category.trim().ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER }
@@ -561,7 +561,7 @@ class TransactionRepositoryImpl(
     ): Result<String> = withContext(ioDispatcher) {
         try {
             if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
-            if (isFuture(timestamp)) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
+            if (isFuture(timestamp, nowMillis = clock())) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val reqId = "rep_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogRepaymentRequest(
                 requestId = reqId,
