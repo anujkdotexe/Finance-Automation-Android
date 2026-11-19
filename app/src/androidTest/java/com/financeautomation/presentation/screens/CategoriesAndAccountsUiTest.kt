@@ -10,6 +10,7 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -118,5 +119,30 @@ class CategoriesAndAccountsUiTest {
         }
 
         assertEquals(listOf("c2", "c1"), savedOrder)
+    }
+
+    @Test
+    fun tappingCategoryRowOpensEditSheet() {
+        val categories = listOf(
+            Category(id = "c1", name = "Food & Drink", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 0),
+            Category(id = "c2", name = "Shopping", isDefault = false, isExcludedFromLivingBurn = false, isArchived = false, displayOrder = 1)
+        )
+        var clickedCategory: Category? = null
+
+        composeTestRule.setContent {
+            FinanceAutomationTheme(darkTheme = false) {
+                CategoryList(
+                    categories = categories,
+                    onReorderCategories = {},
+                    onClick = { clickedCategory = it }
+                )
+            }
+        }
+
+        // Tap the category row body text "Food & Drink"
+        composeTestRule.onNodeWithText("Food & Drink").performClick()
+
+        assertEquals("c1", clickedCategory?.id)
+        assertEquals("Food & Drink", clickedCategory?.name)
     }
 }

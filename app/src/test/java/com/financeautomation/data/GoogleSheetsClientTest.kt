@@ -18,6 +18,7 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -883,5 +884,261 @@ class GoogleSheetsClientTest {
         assertEquals("inf_salary_456", novTab.inflows.first().uuid)
         assertEquals(1, novTab.payables.size)
         assertEquals("pay_lunch_789", novTab.payables.first().uuid)
+    }
+
+    @Test
+    fun testNotesStartingWithFormulaCharactersWrittenAsPlainRawWithoutApostrophe() = runBlocking {
+        val testNotes = listOf(
+            """=HYPERLINK("x","y")""",
+            "+1",
+            "-1",
+            "@a"
+        )
+
+        for ((idx, note) in testNotes.withIndex()) {
+            var capturedPutUrl: String? = null
+            var capturedBody: String? = null
+
+            val client = createFakeSheetServer(
+                tabName = "Nov26",
+                existingDebits = emptyList(),
+                onPut = { url, body ->
+                    capturedPutUrl = url
+                    capturedBody = body
+                }
+            )
+
+            // Table 1 Debit row with 12 items: Note at index 11 (Column L)
+            val debitRow = listOf(
+                46331, 0.5, "SBI", "Item $idx", "", "Food & Drink", 100.0, "Personal", 100.0, 0.0, "Settled", note
+            )
+            val res = client.appendDebit("test_sheet_id", "Nov26", debitRow)
+
+            assertTrue("appendDebit should succeed for note: $note", res is Result.Success)
+            val putUrl = requireNotNull(capturedPutUrl)
+            assertTrue("URL must enforce valueInputOption=RAW", putUrl.contains("valueInputOption=RAW"))
+            assertTrue("Target must be Table 1 A4:L4", putUrl.contains("A4:L4"))
+
+            val body = requireNotNull(capturedBody)
+            val expectedInJson = note.replace("\"", "\\\"")
+            // Assert that the note is written verbatim as plain text in JSON
+            assertTrue("Body must contain exact note in JSON", body.contains(expectedInJson))
+            // Assert that no leading apostrophe was prepended to the note
+            assertFalse("Body must NOT contain apostrophe prefixed note", body.contains("'$note") || body.contains("'="))
+        }
+    }
+
+    @Test
+    fun testNotesStartingWithFormulaCharactersRestoredUnchangedFromSheet() = runBlocking {
+        val notes = listOf(
+            """=HYPERLINK("x","y")""",
+            "+1",
+            "-1",
+            "@a"
+        )
+
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                // Get spreadsheet metadata
+                method == "GET" && url.contains("/test_sheet_id?") -> {
+                    val body = """{
+                        "spreadsheetId": "test_sheet_id",
+                        "sheets": [
+                            {"properties": {"sheetId": 1234, "title": "Nov26", "gridProperties": {"rowCount": 1000, "columnCount": 32}}}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                // values:batchGet for readLedgerSnapshot
+                method == "GET" && url.contains("values:batchGet") -> {
+                    val debitsRows = notes.mapIndexed { i, n ->
+                        val escaped = n.replace("\"", "\\\"")
+                        """[46331, 0.5, "SBI", "Item $i", "", "Food & Drink", 100.0, "Personal", 100.0, 0.0, "Settled", "$escaped"]"""
+                    }.joinToString(",")
+
+                    val uuidRows = notes.mapIndexed { i, _ ->
+                        """["txn_$i"]"""
+                    }.joinToString(",")
+
+                    val body = """{
+                        "valueRanges": [
+                            {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": [$debitsRows]},
+                            {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": [$uuidRows]},
+                            {"range": "'Nov26'!N4:U", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!AE4:AE", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!W4:AC", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!AF4:AF", "majorDimension": "ROWS", "values": []}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        val snapshotRes = client.readLedgerSnapshot("test_sheet_id")
+        assertTrue(snapshotRes is Result.Success)
+        val snapshot = (snapshotRes as Result.Success).data
+        val novTab = snapshot.monthTabs.first { it.tabName == "Nov26" }
+        assertEquals(4, novTab.debits.size)
+
+        for ((idx, expectedNote) in notes.withIndex()) {
+            assertEquals("Note at index $idx must match exact plain text", expectedNote, novTab.debits[idx].note)
+        }
+    }
+
+    @Test
+    fun testReadLedgerSnapshot_31WideOldRow_parsesWithNoteEmpty() = runBlocking {
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                method == "GET" && url.contains("/test_sheet_id?") -> {
+                    val body = """{
+                        "spreadsheetId": "test_sheet_id",
+                        "sheets": [
+                            {"properties": {"sheetId": 1234, "title": "Nov26", "gridProperties": {"rowCount": 1000, "columnCount": 31}}}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                method == "GET" && url.contains("values:batchGet") -> {
+                    // Legacy 31-wide: A4:K has 11 columns, AC4:AC has uuid, A4:L is empty
+                    val body = """{
+                        "valueRanges": [
+                            {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!A4:K", "majorDimension": "ROWS", "values": [[46331, 0.5, "SBI", "Old Coffee", "", "Food & Drink", 150.0, "Personal", 150.0, 0.0, "Settled"]]},
+                            {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!AC4:AC", "majorDimension": "ROWS", "values": [["txn_legacy_31"]]},
+                            {"range": "'Nov26'!N4:U", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!AE4:AE", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!W4:AC", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!AF4:AF", "majorDimension": "ROWS", "values": []}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        val snapshotRes = client.readLedgerSnapshot("test_sheet_id")
+        assertTrue(snapshotRes is Result.Success)
+        val snapshot = (snapshotRes as Result.Success).data
+        val novTab = snapshot.monthTabs.first { it.tabName == "Nov26" }
+        assertEquals(1, novTab.debits.size)
+        assertEquals("Old Coffee", novTab.debits.first().description)
+        assertEquals("", novTab.debits.first().note) // Note is empty string for 31-wide row
+        assertEquals("txn_legacy_31", novTab.debits.first().uuid)
+    }
+
+    @Test
+    fun testReadLedgerSnapshot_32WideRow_parsesWithNote() = runBlocking {
+        val client = createMockClient { request ->
+            val url = request.url.toString()
+            val method = request.method
+
+            when {
+                method == "GET" && url.contains("/test_sheet_id?") -> {
+                    val body = """{
+                        "spreadsheetId": "test_sheet_id",
+                        "sheets": [
+                            {"properties": {"sheetId": 1234, "title": "Nov26", "gridProperties": {"rowCount": 1000, "columnCount": 32}}}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                method == "GET" && url.contains("values:batchGet") -> {
+                    // Modern 32-wide: A4:L has 12 columns with Note, AD4:AD has uuid
+                    val body = """{
+                        "valueRanges": [
+                            {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": [[46331, 0.5, "SBI", "New Coffee", "", "Food & Drink", 180.0, "Personal", 180.0, 0.0, "Settled", "Cappuccino with oat milk"]]},
+                            {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": [["txn_modern_32"]]},
+                            {"range": "'Nov26'!N4:U", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!AE4:AE", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!W4:AC", "majorDimension": "ROWS", "values": []},
+                            {"range": "'Nov26'!AF4:AF", "majorDimension": "ROWS", "values": []}
+                        ]
+                    }"""
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(body.toResponseBody(jsonMediaType))
+                        .build()
+                }
+                else -> {
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("""{}""".toResponseBody(jsonMediaType))
+                        .build()
+                }
+            }
+        }
+
+        val snapshotRes = client.readLedgerSnapshot("test_sheet_id")
+        assertTrue(snapshotRes is Result.Success)
+        val snapshot = (snapshotRes as Result.Success).data
+        val novTab = snapshot.monthTabs.first { it.tabName == "Nov26" }
+        assertEquals(1, novTab.debits.size)
+        assertEquals("New Coffee", novTab.debits.first().description)
+        assertEquals("Cappuccino with oat milk", novTab.debits.first().note)
+        assertEquals("txn_modern_32", novTab.debits.first().uuid)
     }
 }

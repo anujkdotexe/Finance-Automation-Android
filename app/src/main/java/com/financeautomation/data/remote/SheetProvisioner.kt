@@ -164,7 +164,7 @@ object SheetProvisioner {
         ColumnRowRange(25, 1000, 5)
     )
 
-    /** Month tab AC4:AC1000, C4:C1000, F4:F1000 and K4:K1000. */
+    /** Month tab dropdown ranges: C4:C1000 (Account), F4:F1000 (Category), K4:K1000 (Status), AC4:AC1000 (Repayment Status). */
     val MONTH_TAB_DROPDOWN_RANGES = listOf(
         ColumnRowRange(3, 1000, 28),
         ColumnRowRange(3, 1000, 2),

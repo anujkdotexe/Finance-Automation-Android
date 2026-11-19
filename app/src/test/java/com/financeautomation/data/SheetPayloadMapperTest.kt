@@ -280,4 +280,50 @@ class SheetPayloadMapperTest {
         assertEquals(225.0, targetRow.owedToMe, 0.001) // receivable carried
         assertEquals(TransactionStatus.PENDING, targetRow.status)
     }
+
+    @Test
+    fun testMapExistingRowToVoidRow_32WideRow_parsesWithNote() {
+        val row32 = MutableList<Any?>(32) { "" }
+        row32[3] = "Lunch"
+        row32[6] = 300.0
+        row32[8] = 150.0
+        row32[9] = 150.0
+        row32[10] = "Pending"
+        row32[11] = "Lunch with client"
+        row32[29] = "txn_debit_32_1"
+
+        val voided = SheetPayloadMapper.mapExistingRowToVoidRow(row32)
+        assertEquals(32, voided.size)
+        assertEquals("[Void] Lunch", voided[3])
+        assertEquals(0.0, voided[6])
+        assertEquals("Void", voided[10])
+        assertEquals("Lunch with client", voided[11]) // Note preserved
+        assertEquals("txn_debit_32_1", voided[29])
+    }
+
+    @Test
+    fun testMapExistingRowToVoidRow_31WideRow_parsesWithEmptyNote() {
+        val row31 = MutableList<Any?>(31) { "" }
+        row31[3] = "Dinner"
+        row31[6] = 400.0
+        row31[8] = 400.0
+        row31[9] = 0.0
+        row31[10] = "Settled"
+        row31[28] = "txn_debit_31_1"
+
+        val voided = SheetPayloadMapper.mapExistingRowToVoidRow(row31)
+        assertEquals(31, voided.size)
+        assertEquals("[Void] Dinner", voided[3])
+        assertEquals(0.0, voided[6])
+        assertEquals("Void", voided[10])
+        assertEquals("txn_debit_31_1", voided[28]) // AC UUID preserved
+    }
+
+    @Test
+    fun testMapExistingRowToVoidRow_30WideRow_isRejectedWithIllegalArgumentException() {
+        val row30 = MutableList<Any?>(30) { "" }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            SheetPayloadMapper.mapExistingRowToVoidRow(row30)
+        }
+    }
 }
