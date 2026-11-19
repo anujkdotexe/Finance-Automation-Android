@@ -252,3 +252,59 @@ object UsageEvents {
     const val EVENT_FEATURE_USED = "feature_used"
     const val EVENT_PAYMENT_APP_SEEN = "payment_app_seen"
 }
+
+/**
+ * Allow-list and field constraints for user-initiated problem reports sent to Firestore.
+ * Matches firebase/firestore.rules exactly.
+ *
+ * Strict Privacy Guarantees:
+ * - NEVER sends: transaction amounts, payee/merchant names, user-typed names (categories, accounts,
+ *   friends, trips, subscriptions, notes), account numbers, emails, spreadsheet IDs, file names,
+ *   notification/SMS message text, or free text that has not been reviewed and confirmed by the user.
+ */
+object ProblemReportFields {
+    const val FIELD_SCHEMA_VERSION = "schemaVersion"
+    const val FIELD_CREATED_AT = "createdAt"
+    const val FIELD_APP_VERSION = "appVersion"
+    const val FIELD_VERSION_CODE = "versionCode"
+    const val FIELD_DEVICE_MODEL = "deviceModel"
+    const val FIELD_ANDROID_SDK = "androidSdk"
+    const val FIELD_INSTALL_ID = "installId"
+    const val FIELD_SCREEN = "screen"
+    const val FIELD_REASON_CODE = "reasonCode"
+    const val FIELD_COUNTERS = "counters"
+    const val FIELD_TEXT = "text"
+
+    val ALLOWED_FIELDS: Set<String> = setOf(
+        FIELD_SCHEMA_VERSION,
+        FIELD_CREATED_AT,
+        FIELD_APP_VERSION,
+        FIELD_VERSION_CODE,
+        FIELD_DEVICE_MODEL,
+        FIELD_ANDROID_SDK,
+        FIELD_INSTALL_ID,
+        FIELD_SCREEN,
+        FIELD_REASON_CODE,
+        FIELD_COUNTERS,
+        FIELD_TEXT
+    )
+
+    val REQUIRED_FIELDS: Set<String> = setOf(
+        FIELD_SCHEMA_VERSION,
+        FIELD_CREATED_AT,
+        FIELD_APP_VERSION,
+        FIELD_VERSION_CODE,
+        FIELD_DEVICE_MODEL,
+        FIELD_ANDROID_SDK,
+        FIELD_INSTALL_ID,
+        FIELD_SCREEN,
+        FIELD_REASON_CODE,
+        FIELD_TEXT
+    )
+
+    val FORBIDDEN_WORDS: Set<String> = setOf(
+        "amount", "payee", "merchant", "account", "category",
+        "friend", "companion", "trip", "sheet", "spreadsheet",
+        "email", "token", "message", "sms", "notification"
+    )
+}

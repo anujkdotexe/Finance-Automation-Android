@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Security
@@ -96,6 +97,12 @@ fun PrivacyPolicyScreen(
                 icon = Icons.Rounded.Security,
                 title = stringResource(R.string.privacy_section_diagnostics_title),
                 description = stringResource(R.string.privacy_section_diagnostics_desc)
+            )
+
+            PrivacySectionCard(
+                icon = Icons.Rounded.BugReport,
+                title = stringResource(R.string.privacy_section_reports_title),
+                description = stringResource(R.string.privacy_section_reports_desc)
             )
 
             OutlinedButton(

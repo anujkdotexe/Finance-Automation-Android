@@ -382,6 +382,17 @@
     <string name="diag_view_sync_log_desc">Inspect timestamps and error codes</string>
     <string name="diag_export_logs">Export logs</string>
     <string name="diag_export_logs_desc">Share sanitized debug logs to disk</string>
+    <string name="diag_report_problem">Report a problem</string>
+    <string name="diag_report_problem_desc">Send technical diagnostics and a description to the developer</string>
+    <string name="problem_report_title">Report a problem</string>
+    <string name="problem_report_warning">Warning: Do not type private information, passwords, transaction amounts, account numbers, or personal message text. Reports are stored in Firebase and read only by the developer.</string>
+    <string name="problem_report_desc_label">Describe the problem</string>
+    <string name="problem_report_desc_placeholder">Explain what went wrong or what happened...</string>
+    <string name="problem_report_preview_title">Technical data to be sent:</string>
+    <string name="problem_report_send_button">Send</string>
+    <string name="problem_report_success">Thank you. Your report has been submitted.</string>
+    <string name="problem_report_error_prefix">Failed to send: </string>
+    <string name="problem_report_close">Close</string>
     <string name="diag_locked_title">Diagnostics locked</string>
     <string name="diag_locked_desc">Developer options are currently disabled. Open About and tap the version number 7 times to unlock.</string>
 
@@ -462,6 +473,8 @@
     <string name="privacy_section_notifications_desc">The notification listener filters incoming alerts using a built-in registry of 13 verified payment apps (including Google Pay, PhonePe, Paytm, BHIM, Supermoney, Amazon Pay, CRED, Navi) and 3 system SMS packages (debit alerts accepted only from verified bank-style sender IDs). For chat apps carrying payments (WhatsApp and WhatsApp Business), only notifications specifically categorized by the system as payment channels are read; all personal messages, groups, calls, media, OTPs, and other chat apps (Telegram, Signal) are strictly rejected without reading their text.</string>
     <string name="privacy_section_diagnostics_title">Opt-in diagnostics</string>
     <string name="privacy_section_diagnostics_desc">Technical diagnostics (Crashlytics crash reports and anonymous usage counts) are strictly opt-in and disabled by default. When enabled, reports never contain transaction amounts, payees, account digits, spreadsheet IDs, or message text.</string>
+    <string name="privacy_section_reports_title">User-initiated problem reports</string>
+    <string name="privacy_section_reports_desc">You can choose to send a technical problem report to help diagnose issues. A report is sent only when you explicitly tap Send after reviewing the exact technical payload. It contains app version, device model, Android SDK level, a random install identifier (not tied to your Google account), the active screen, diagnostics counters, and your optional typed description. It never contains transaction amounts, payees, account numbers, spreadsheet IDs, or message text. Reports are stored securely in Firebase Firestore and are read only by the developer.</string>
     <string name="privacy_section_permissions_title">Minimal permissions</string>
     <string name="privacy_section_permissions_desc">We only request Google Drive and Sheets scopes necessary to read and update your designated ledger file (drive.file). The app cannot access your other Drive documents.</string>
     <string name="privacy_open_online">View policy online</string>
