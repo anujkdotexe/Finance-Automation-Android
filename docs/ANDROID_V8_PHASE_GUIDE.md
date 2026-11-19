@@ -1,5 +1,7 @@
 # Finance Automation Android - Phase Guide for Build Agents
 
+Historical note (2026-11-20): this guide is the original build plan. Where it disagrees with `AGENTS.md` or the code, those win. Known differences: the debug notification simulator and the self-test button were removed (there is no simulator or sample data in any build type); the ledger is now 32 columns A to AF (Note at L, hidden ids AD to AF) instead of 31; capture covers a registry of payment apps with per-app switches and WhatsApp payment notifications under a channel-only rule; Subscriptions and Trips tabs, a Dashboard with insight bands, and one workbook per year exist; an opt-in problem report is being added.
+
 Status: Draft v8.1.0, detailed edition. Work the phases in order. Each action is written as Do, How, Watch out and
 Check, so that nothing has to be guessed. Phases 0 to 7 are finished and merged into `main`. Phase 8 (UI and UX), Phase 9
 (beta tooling and failure visibility) and Phase 10 (MVP closure) remain.

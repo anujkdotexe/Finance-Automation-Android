@@ -58,8 +58,21 @@
     <string name="action_sign_out">Sign out</string>
     <string name="action_repair_workbook">Repair workbook</string>
     <string name="action_create_fresh_workbook">Create a fresh workbook</string>
-    <string name="create_fresh_workbook_confirm_title">Create a fresh workbook</string>
-    <string name="create_fresh_workbook_confirm_body">This creates a new empty workbook and switches the app to it. Your old workbook stays in Google Drive.</string>
+    <string name="fresh_workbook_dialog_title">Create a fresh workbook?</string>
+    <string name="fresh_workbook_dialog_body">Your current workbook stays in Drive untouched. Choose what goes into the new one.</string>
+    <string name="fresh_workbook_action_copy_history">Copy my saved history</string>
+    <string name="fresh_workbook_action_start_empty">Start empty</string>
+    <string name="fresh_workbook_msg_copy_history">A fresh workbook was created. Your saved history is being copied into it.</string>
+    <string name="fresh_workbook_msg_copy_history_retry">A fresh workbook was created. Copying your saved history will retry automatically.</string>
+    <string name="fresh_workbook_msg_empty">A fresh workbook was created and is empty. Queued entries will still be added.</string>
+    <string name="repair_backup_dialog_title">Workbook backups</string>
+    <string name="repair_backup_dialog_body_one">You already have 1 backup of Finance%1$d. Creating another makes 2.</string>
+    <string name="repair_backup_dialog_body_many">You already have %1$d backups of Finance%2$d. Creating another makes %3$d.</string>
+    <string name="repair_backup_action_archive">Move older backups to the Archive folder</string>
+    <string name="repair_backup_action_keep">Keep them where they are</string>
+    <string name="repair_backup_msg_archived">Moved %1$d older backups to Archive.</string>
+    <string name="repair_backup_msg_partial_archive">The new backup was made, but %1$d older backups could not be moved.</string>
+    <string name="repair_backup_msg_archive_failed">The new backup was created, but the older ones could not be moved. They are still in your Personal Finance folder.</string>
     <string name="action_create">Create</string>
     <string name="raw_http_errors_title">Raw Google API Errors</string>
     <string name="raw_http_errors_notice">Contains Google error text. Shared only if you choose.</string>
@@ -292,6 +305,11 @@
     <string name="prompt_place_optional">Place (optional)</string>
     <string name="prompt_settlement_note">Settlement note</string>
     <string name="hint_optional">Optional</string>
+    <string name="notes_field_add_button">Notes</string>
+    <string name="notes_field_add_cd">Add note</string>
+    <string name="notes_field_label">Notes</string>
+    <string name="notes_field_placeholder">Add a note&#8230;</string>
+    <string name="notes_field_clear_cd">Clear note</string>
     <string name="prompt_friend_repaid">Friend repaid</string>
     <string name="prompt_friend_who_paid">Friend who paid</string>
     <string name="prompt_trip_name">Trip name</string>
@@ -326,8 +344,8 @@
 
     <!-- Capture and Permissions Screen -->
     <string name="capture_apps_title">Apps we read</string>
-    <string name="capture_apps_desc">Google Pay, BHIM, Supermoney, PhonePe, Paytm, Bank SMS</string>
-    <string name="capture_privacy_note">We never read WhatsApp, Telegram or OTP messages.</string>
+    <string name="capture_apps_desc">Google Pay, PhonePe, Paytm, BHIM, Supermoney, Amazon Pay, CRED, Bank SMS</string>
+    <string name="capture_privacy_note">We never read personal chats, emails or OTP messages.</string>
 
     <!-- Sync and Backup Screen -->
     <string name="sync_cloud_storage">Cloud storage</string>
@@ -364,6 +382,17 @@
     <string name="diag_view_sync_log_desc">Inspect timestamps and error codes</string>
     <string name="diag_export_logs">Export logs</string>
     <string name="diag_export_logs_desc">Share sanitized debug logs to disk</string>
+    <string name="diag_report_problem">Report a problem</string>
+    <string name="diag_report_problem_desc">Send technical diagnostics and a description to the developer</string>
+    <string name="problem_report_title">Report a problem</string>
+    <string name="problem_report_warning">Warning: Do not type private information, passwords, transaction amounts, account numbers, or personal message text. Reports are stored in Firebase and read only by the developer.</string>
+    <string name="problem_report_desc_label">Describe the problem</string>
+    <string name="problem_report_desc_placeholder">Explain what went wrong or what happened...</string>
+    <string name="problem_report_preview_title">Technical data to be sent:</string>
+    <string name="problem_report_send_button">Send</string>
+    <string name="problem_report_success">Thank you. Your report has been submitted.</string>
+    <string name="problem_report_error_prefix">Failed to send: </string>
+    <string name="problem_report_close">Close</string>
     <string name="diag_locked_title">Diagnostics locked</string>
     <string name="diag_locked_desc">Developer options are currently disabled. Open About and tap the version number 7 times to unlock.</string>
 
@@ -425,7 +454,7 @@
     <string name="about_version_label">Version %1$s (Build %2$d)</string>
     <string name="about_engine_active">On-device engine active</string>
     <string name="about_privacy_title">Strict privacy sandbox</string>
-    <string name="about_privacy_desc">We never read WhatsApp, Telegram, or OTP messages.</string>
+    <string name="about_privacy_desc">We never read personal chats, emails, or OTP messages.</string>
     <string name="about_metric_sms_filter">SMS filter</string>
     <string name="about_metric_sms_val">Zero log</string>
     <string name="about_metric_sms_sub">Ephemeral memory</string>
@@ -441,7 +470,11 @@
     <string name="privacy_section_data_title">Your data stays yours</string>
     <string name="privacy_section_data_desc">Finance Automation operates strictly local-first. All financial notifications are parsed entirely on your device. Transaction records are written directly to your private Google Sheets spreadsheet and never pass through any third-party backend servers.</string>
     <string name="privacy_section_notifications_title">Notification interception</string>
-    <string name="privacy_section_notifications_desc">The notification listener strictly checks incoming alerts against a whitelist of verified financial applications: Google Pay, PhonePe, Paytm, BHIM, Supermoney, and official bank debit SMS. Personal messaging applications (WhatsApp, Telegram, Signal) and OTP messages are never inspected, parsed, or logged.</string>
+    <string name="privacy_section_notifications_desc">The notification listener filters incoming alerts using a built-in registry of 13 verified payment apps (including Google Pay, PhonePe, Paytm, BHIM, Supermoney, Amazon Pay, CRED, Navi) and 3 system SMS packages (debit alerts accepted only from verified bank-style sender IDs). For chat apps carrying payments (WhatsApp and WhatsApp Business), only notifications specifically categorized by the system as payment channels are read; all personal messages, groups, calls, media, OTPs, and other chat apps (Telegram, Signal) are strictly rejected without reading their text.</string>
+    <string name="privacy_section_diagnostics_title">Opt-in diagnostics</string>
+    <string name="privacy_section_diagnostics_desc">Technical diagnostics (Crashlytics crash reports and anonymous usage counts) are strictly opt-in and disabled by default. When enabled, reports never contain transaction amounts, payees, account digits, spreadsheet IDs, or message text.</string>
+    <string name="privacy_section_reports_title">User-initiated problem reports</string>
+    <string name="privacy_section_reports_desc">You can choose to send a technical problem report to help diagnose issues. A report is sent only when you explicitly tap Send after reviewing the exact technical payload. It contains app version, device model, Android SDK level, a random install identifier (not tied to your Google account), the active screen, diagnostics counters, and your optional typed description. It never contains transaction amounts, payees, account numbers, spreadsheet IDs, or message text. Reports are stored securely in Firebase Firestore and are read only by the developer.</string>
     <string name="privacy_section_permissions_title">Minimal permissions</string>
     <string name="privacy_section_permissions_desc">We only request Google Drive and Sheets scopes necessary to read and update your designated ledger file (drive.file). The app cannot access your other Drive documents.</string>
     <string name="privacy_open_online">View policy online</string>
@@ -523,10 +556,8 @@
     <!-- Budgets -->
     <string name="budget_sheet_title">Monthly budget for %1$s</string>
     <string name="budget_sheet_amount_label">Amount per month</string>
-    <string name="budget_sheet_amount_placeholder">e.g. 5000 or 3000+2000</string>
     <string name="budget_sheet_hint">You can type a sum such as 1,200+300</string>
     <string name="budget_sheet_result">Budget: %1$s a month</string>
-    <string name="budget_sheet_invalid">Enter an amount above zero, for example 5000 or 3000+2000</string>
     <string name="budget_sheet_save_failed">Could not save the budget. Try again.</string>
     <string name="budget_sheet_clear">Clear budget</string>
     <string name="budget_row_none">No budget set</string>
@@ -566,6 +597,8 @@
     <string name="widget_month_burn_per_day">%1$s a day</string>
     <string name="widget_month_burn_up_to_date">Up to date</string>
     <string name="widget_month_burn_unlock">Unlock to view</string>
+    <string name="widget_month_burn_sign_in">Sign in to view</string>
+    <string name="widget_month_burn_unavailable">Open the app to refresh</string>
     <string name="widget_month_burn_waiting">%1$d waiting</string>
     <string name="widget_month_burn_description">%1$s living burn %2$s, %3$s, %4$s</string>
     <string name="widget_month_burn_placeholder_month">Month</string>
@@ -582,11 +615,27 @@
     <string name="accounts_field_last4">Last 4 digits</string>
     <string name="accounts_set_default">Set as default account</string>
     <string name="accounts_archive">Archive account</string>
+    <string name="accounts_menu_rename">Rename</string>
+    <string name="accounts_system_locked">System account (locked)</string>
     <string name="accounts_name_placeholder">e.g. HDFC Salary</string>
     <string name="accounts_last4_placeholder">e.g. 1234</string>
     <string name="categories_edit_title">Edit category</string>
     <string name="categories_field_name">Category name</string>
     <string name="categories_hide">Hide category</string>
+    <string name="categories_menu_rename">Rename</string>
+    <string name="categories_system_locked">System category (locked)</string>
+    <string name="categories_menu_color">Change colour</string>
+    <string name="categories_color_dialog_title">Choose category colour</string>
+    <string name="category_color_none">No colour</string>
+    <string name="categories_empty_message">No categories yet. Tap \'+ Add category\' in the top bar to create your first category.</string>
+    <string name="cd_reorder_category">Reorder %1$s</string>
+    <string name="cd_reorder_account">Reorder %1$s</string>
+    <string name="cd_category_options">Category options for %1$s</string>
+    <string name="cd_account_options">Account options for %1$s</string>
+    <string name="pref_section_customization_title">Categories and accounts</string>
+    <string name="pref_section_customization_subtitle">Manage spending categories and payment sources</string>
+    <string name="pref_categories_count">%1$d categories</string>
+    <string name="pref_accounts_count">%1$d accounts</string>
     <string name="trips_isolate_hint">Isolate living burn with a dedicated trip ledger</string>
     <string name="trips_end_trip">End trip</string>
     <string name="trips_reactivate">Reactivate</string>
@@ -703,6 +752,8 @@
 
     <!-- ViewModel and Coordinator user-visible messages -->
     <!-- SettingsSyncCoordinator -->
+    <string name="workbook_replaced_notice_partial">Your Finance workbook was missing, so a new one was created. Your saved entries are being added again. %1$s could not be restored automatically.</string>
+    <string name="workbook_replaced_lost_items">The repayment history and the links between income and debts</string>
     <string name="settings_msg_signed_in">Signed in as %1$s</string>
     <string name="settings_msg_signed_out">Signed out of Google account</string>
     <string name="settings_msg_provisioned_workbook">Successfully provisioned %1$s master workbook</string>
@@ -714,7 +765,6 @@
     <string name="settings_err_drive_search">Google Drive search failed: %1$s</string>
     <string name="settings_msg_spreadsheet_id_saved">Spreadsheet ID saved</string>
     <string name="settings_err_spreadsheet_id_rejected">The app can only open workbooks it created. Use Create a fresh workbook, or ask Google Drive to open the file with this app.</string>
-    <string name="settings_msg_fresh_workbook_switched">Created a fresh Finance%1$d workbook and switched to it</string>
     <string name="settings_err_fresh_workbook_failed">Failed to create a fresh workbook: %1$s</string>
     <string name="settings_msg_sync_completed">Sync completed successfully</string>
     <string name="settings_msg_reconciled_all_months">Reconciled %1$d change(s) across all months</string>
@@ -730,6 +780,7 @@
     <string name="settings_err_account_exists">Account \'%1$s\' already exists</string>
     <string name="settings_msg_added_account">Added account %1$s</string>
     <string name="settings_msg_account_archived">Account archived</string>
+    <string name="settings_msg_account_deleted">Account deleted</string>
     <string name="settings_err_category_blank">Category name cannot be blank</string>
     <string name="settings_err_category_exists">Category \'%1$s\' already exists</string>
     <string name="settings_msg_added_category">Added category %1$s</string>
@@ -889,4 +940,108 @@
     <string name="review_msg_void_discarded_returns">Discarded. The sheet still has this entry, so it will come back after the next sync.</string>
     <string name="onboarding_use_other_account">Use a different account</string>
     <string name="account_switch_message_plain">Sign in with this Google account instead of the previous one?</string>
+    <string name="amount_err_unreadable">This amount cannot be read. Check the numbers and signs.</string>
+    <string name="amount_err_too_large">This amount is too large.</string>
+    <string name="amount_err_zero">Enter an amount above zero.</string>
+    <string name="amount_preview">= %1$s</string>
+    <string name="amount_field_description">Amount in rupees</string>
+    <string name="amount_placeholder">0.00</string>
+    <string name="currency_symbol_inr">₹</string>
+    <string name="amount_key_plus">Plus</string>
+    <string name="amount_key_minus">Minus</string>
+    <string name="amount_key_times">Times</string>
+    <string name="amount_key_divide">Divide</string>
+    <string name="amount_key_open">Open bracket</string>
+    <string name="amount_key_close">Close bracket</string>
+
+    <!-- Input validation messages (P1-5) -->
+    <string name="input_err_blank">Enter a name.</string>
+    <string name="input_err_too_long">Use %1$d characters or fewer.</string>
+    <string name="input_err_invalid_chars">Some characters are not allowed here.</string>
+    <string name="input_err_duplicate">You already have one with this name.</string>
+    <string name="input_err_reserved">This name is used by the app. Choose another.</string>
+    <string name="spreadsheet_id_err">This is not a valid spreadsheet id or link.</string>
+    <string name="report_note_warning">Your note is shared exactly as you type it. Do not include amounts or names.</string>
+
+    <!-- Crash reporting & privacy (P1-6) -->
+    <string name="privacy_crash_title">Send crash reports</string>
+    <string name="privacy_crash_body">Off by default. When on, a crash sends the app version, build type, your phone brand, model and Android version, the place in the code where it failed, and counts of setup checks. It never sends amounts, payees, account names, category, friend or trip names, spreadsheet links, emails or message text.</string>
+    <string name="privacy_turn_off_note">You can turn this switch off at any time. Collection stops right away.</string>
+    <string name="privacy_test_report_action">Send a test report (beta only)</string>
+    <string name="privacy_test_report_sent">A test report was sent. It can take a few minutes to appear.</string>
+    <string name="privacy_test_report_off">Turn on crash reports first.</string>
+
+    <!-- Onboarding Accounts (P2-D) -->
+    <string name="onboarding_accounts_title">Which bank accounts and payment sources do you use?</string>
+    <string name="onboarding_accounts_subtitle">Add your bank accounts, cards, or wallets to categorize payments automatically. Cash and Other are built in.</string>
+    <string name="onboarding_accounts_add_button">Add account</string>
+    <string name="onboarding_accounts_name_label">Account or bank name</string>
+    <string name="onboarding_accounts_name_placeholder">e.g. SBI, HDFC, Canara</string>
+    <string name="onboarding_accounts_last4_label">Last 4 digits (optional)</string>
+    <string name="onboarding_accounts_last4_placeholder">e.g. 4821</string>
+    <string name="onboarding_accounts_type_bank">Bank</string>
+    <string name="onboarding_accounts_type_card">Card</string>
+    <string name="onboarding_accounts_type_wallet">Wallet</string>
+    <string name="onboarding_accounts_type_cash">Cash</string>
+    <string name="onboarding_accounts_your_accounts">Your accounts</string>
+    <string name="onboarding_accounts_builtin">Built-in</string>
+    <string name="onboarding_accounts_default_badge">Default</string>
+    <string name="onboarding_accounts_make_default">Make default</string>
+    <string name="onboarding_accounts_skip">Skip for now</string>
+    <string name="onboarding_accounts_cannot_remove_builtin">Cash and Other are built in and cannot be removed.</string>
+
+    <!-- Settings v3 screen -->
+    <string name="settings_screen_title">Settings</string>
+    <string name="settings_screen_subtitle">Preferences, accounts, categories and app options</string>
+    <string name="settings_nav_people_trips_subtitle">Balances and travel ledgers</string>
+    <string name="settings_nav_subscriptions_subtitle">Active recurring payments</string>
+    <string name="settings_nav_capture_subtitle">Notification access and listener</string>
+    <string name="settings_nav_sync_subtitle">Connected Google Sheet</string>
+    <string name="settings_nav_preferences_subtitle">Living burn and display settings</string>
+    <string name="settings_nav_diagnostics_subtitle">Logs and local cache</string>
+    <string name="settings_nav_about_subtitle">Version 1.0.0, privacy and licences</string>
+    <string name="settings_privacy_crash_title">Send crash reports</string>
+    <string name="settings_privacy_crash_desc">Off by default. Sends only technical details, never amounts, payees, names or message text.</string>
+    <string name="settings_privacy_analytics_title">Share anonymous usage counts</string>
+    <string name="settings_privacy_analytics_desc">Off by default. Counts of how often screens are used, never amounts, payees, names or message text.</string>
+    <string name="categories_locked_subtitle">Built in, cannot be renamed or archived</string>
+    <string name="accounts_type_bank">Bank</string>
+    <string name="accounts_type_card">Card</string>
+    <string name="accounts_type_wallet">Wallet</string>
+    <string name="accounts_type_cash">Cash</string>
+    <string name="accounts_default_pill">Default</string>
+    <string name="accounts_add_form_title">Add account</string>
+
+    <!-- Payment apps we watch -->
+    <string name="payment_apps_title">Payment apps we watch</string>
+    <string name="payment_apps_desc">The app reads payment notifications from these apps on your phone. Everything stays on your phone and goes only to your own Google Sheet.</string>
+    <string name="payment_apps_chat_note">WhatsApp: only payment notifications are read. Chat messages are never read.</string>
+    <string name="payment_apps_watch_another">Watch another app</string>
+    <string name="payment_apps_watch_another_desc">Pick an installed app. Its payments are always sent to Needs Review so you can confirm them.</string>
+    <string name="payment_apps_none_found">No other payment apps found on this phone.</string>
+    <string name="payment_apps_switch_cd">Watch %1$s</string>
+    <string name="payment_apps_custom_generic_note">Generic parser: always sent to Needs Review</string>
+    <string name="payment_apps_remove_action">Remove</string>
+
+    <!-- Trips Stitch v3 detail & insights -->
+    <string name="trip_delete_title">Delete %1$s?</string>
+    <string name="trip_delete_body">The trip is hidden from your lists. Your transactions stay in the ledger and in the sheet.</string>
+    <string name="trip_delete_action">Delete trip</string>
+    <string name="trip_delete_active_blocked">End the trip first.</string>
+    <string name="trip_reactivate">Reactivate trip</string>
+    <string name="trip_past_title">Past trips</string>
+    <string name="trip_insight_per_day">Per day</string>
+    <string name="trip_insight_biggest">Biggest expense</string>
+    <string name="trip_insight_count">Transactions</string>
+    <string name="trip_insight_people">People</string>
+    <string name="trip_by_category">By category</string>
+    <string name="trip_by_person">By person</string>
+    <string name="trip_range_days">%1$s to %2$s, %3$d days</string>
+
+    <!-- Accessibility and UI labels -->
+    <string name="accessibility_action_move_up">Move up</string>
+    <string name="accessibility_action_move_down">Move down</string>
+    <string name="transaction_split_indicator">Split (%1$s)</string>
+    <string name="category_spend_archived_format">%1$s (archived)</string>
+    <string name="category_archived_suffix">(archived)</string>
 </resources>

@@ -58,12 +58,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import com.financeautomation.R
-import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionFrequency
-import com.financeautomation.domain.usecase.ExpressionEvaluator
+import com.financeautomation.presentation.components.AmountEntry
+import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.NotesField
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
@@ -72,7 +73,7 @@ import com.financeautomation.presentation.theme.FinanceTheme
 fun AddSubscriptionSheet(
     accounts: List<String>,
     onDismiss: () -> Unit,
-    onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean) -> Unit,
+    onSave: (name: String, amount: Double?, frequency: SubscriptionFrequency, account: String, remind: Boolean, note: String, anchorEpochDay: Long?) -> Unit,
     modifier: Modifier = Modifier,
     /** Opens the sheet filled in from a detected repeating payment. */
     prefill: com.financeautomation.domain.usecase.RecurringSuggestion? = null,
@@ -88,6 +89,7 @@ fun AddSubscriptionSheet(
                 ?: ""
         )
     }
+    val amountEntry = AmountEntry(amountText)
     var isFixedAmount by rememberSaveable { mutableStateOf(existing?.let { it.amount != null } ?: true) }
     var selectedFrequency by rememberSaveable { mutableStateOf(existing?.frequency ?: prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
     val defaultAccount = existing?.account?.takeIf { it in accounts }
@@ -96,11 +98,14 @@ fun AddSubscriptionSheet(
         ?: CategoryConstants.ACCOUNT_OTHER
     var selectedAccount by rememberSaveable { mutableStateOf(defaultAccount) }
     var remindMe by rememberSaveable { mutableStateOf(existing?.remind ?: true) }
-
-    var anchorDateEpochDay by rememberSaveable { mutableStateOf<Long?>(existing?.anchorEpochDay) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var noteText by rememberSaveable { mutableStateOf(existing?.note.orEmpty()) }
 
     val todayEpochDay = remember { java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toEpochDay() }
+    var anchorDateEpochDay by rememberSaveable {
+        mutableStateOf<Long?>(existing?.anchorEpochDay ?: prefill?.anchorEpochDay ?: todayEpochDay)
+    }
+    var showDatePicker by remember { mutableStateOf(false) }
+
     val nextDueEpochDay = remember(anchorDateEpochDay, selectedFrequency) {
         anchorDateEpochDay?.let { anchor ->
             val anchorDate = java.time.LocalDate.ofEpochDay(anchor)
@@ -183,7 +188,10 @@ fun AddSubscriptionSheet(
                     )
                     OutlinedTextField(
                         value = name,
-                        onValueChange = { name = it },
+                        onValueChange = {
+                            name = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.sub_add_name_placeholder)) },
                         trailingIcon = {
                             Icon(
@@ -241,23 +249,10 @@ fun AddSubscriptionSheet(
                                     style = FinanceTheme.typography.amountHero,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                OutlinedTextField(
+                                AmountField(
                                     value = amountText,
-                                    onValueChange = {
-                                        if (AmountInputSanitizer.isValidExpressionInput(it)) {
-                                            amountText = it
-                                        }
-                                    },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                                    singleLine = true,
-                                    textStyle = FinanceTheme.typography.amountHero,
-                                    supportingText = if (amountText.any { it in "+-*/" }) {
-                                        val evaluated = ExpressionEvaluator().evaluate(amountText)
-                                        if (evaluated != null && evaluated > 0.0) {
-                                            { Text(text = "= ${formatRupeesAuto(evaluated)}", color = MaterialTheme.colorScheme.primary) }
-                                        } else null
-                                    } else null,
-                                    modifier = Modifier.fillMaxWidth()
+                                    onValueChange = { amountText = it },
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -571,6 +566,13 @@ fun AddSubscriptionSheet(
                     }
                 }
 
+                // 8. NOTES
+                NotesField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
                 // Action Button Pair (pinned above keyboard via imePadding)
@@ -580,11 +582,11 @@ fun AddSubscriptionSheet(
                     filledText = stringResource(R.string.action_save),
                     onFilledClick = {
                         if (name.isNotBlank()) {
-                            val amt = if (isFixedAmount) ExpressionEvaluator().evaluate(amountText) else null
-                            onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe)
+                            val amt = if (isFixedAmount) amountEntry.amountOrZero.takeIf { amountEntry.canSave } else null
+                            onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe, noteText, anchorDateEpochDay)
                         }
                     },
-                    filledEnabled = name.isNotBlank(),
+                    filledEnabled = name.isNotBlank() && (!isFixedAmount || amountEntry.canSave),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

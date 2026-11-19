@@ -39,8 +39,6 @@ class WhitelistedAppsParserTest {
 
     @Test
     fun blacklistedMessagingAndEmailPackagesAreRejected() {
-        assertTrue(PackageWhitelist.isBlacklisted("com.whatsapp"))
-        assertTrue(PackageWhitelist.isBlacklisted("com.whatsapp.w4b"))
         assertTrue(PackageWhitelist.isBlacklisted("org.telegram.messenger"))
         assertTrue(PackageWhitelist.isBlacklisted("org.thoughtcrime.securesms"))
         assertTrue(PackageWhitelist.isBlacklisted("com.facebook.orca"))
@@ -49,18 +47,30 @@ class WhitelistedAppsParserTest {
         assertTrue(PackageWhitelist.isBlacklisted("com.microsoft.office.outlook"))
         assertTrue(PackageWhitelist.isBlacklisted("com.google.android.gm"))
 
-        assertFalse(PackageWhitelist.isWhitelisted("com.whatsapp"))
         assertFalse(PackageWhitelist.isWhitelisted("org.telegram.messenger"))
         assertFalse(PackageWhitelist.isWhitelisted("org.thoughtcrime.securesms"))
+        assertTrue(PackageWhitelist.isWhitelisted("com.whatsapp"))
 
-        val parseResult = parseNotificationUseCase(
+        // WhatsApp chat notification without payment channel is dropped as BLACKLISTED
+        val chatResult = parseNotificationUseCase(
             sourcePackage = "com.whatsapp",
             title = "Mom",
             text = "Sent you Rs 500",
-            timestamp = 1700000000000L
+            timestamp = 1700000000000L,
+            channelId = "individual_chat"
         )
-        assertTrue(parseResult is NotificationParseResult.Dropped)
-        assertEquals(DropReason.BLACKLISTED, (parseResult as NotificationParseResult.Dropped).reason)
+        assertTrue(chatResult is NotificationParseResult.Dropped)
+        assertEquals(DropReason.BLACKLISTED, (chatResult as NotificationParseResult.Dropped).reason)
+
+        // WhatsApp payment notification on payment channel is accepted and parsed
+        val paymentResult = parseNotificationUseCase(
+            sourcePackage = "com.whatsapp",
+            title = "WhatsApp",
+            text = "Paid ₹350 to Cafe Coffee Day successfully",
+            timestamp = 1700000000000L,
+            channelId = "payments"
+        )
+        assertTrue("Payment on payment channel must succeed", paymentResult is NotificationParseResult.Success)
     }
 
     @Test

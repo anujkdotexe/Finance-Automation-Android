@@ -37,7 +37,9 @@ data class Subscription(
     val active: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = 0L,
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    val note: String = "",
+    val closedDateEpochDay: Long? = null
 ) {
     /** Lower-cased match tokens: the name plus every comma separated keyword. */
     val matchTokens: List<String>

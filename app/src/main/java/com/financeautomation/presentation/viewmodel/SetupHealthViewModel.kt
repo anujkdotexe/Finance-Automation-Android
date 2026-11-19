@@ -143,6 +143,12 @@ class SetupHealthViewModel(
                 )
 
                 val hasMissing = items.any { it.status == HealthStatus.MISSING }
+                items.filter { it.status == HealthStatus.MISSING }.forEach { item ->
+                    com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                        eventName = com.financeautomation.core.utils.UsageEvents.EVENT_SETUP_HEALTH_ISSUE,
+                        params = mapOf("item_id" to item.id.name.lowercase().take(20))
+                    )
+                }
                 com.financeautomation.service.NotificationAccessAlertManager.checkAndSyncAlert(context)
 
                 _uiState.update {
@@ -338,6 +344,10 @@ class SetupHealthViewModel(
                     }
                 }
                 HealthCheckId.OEM_BACKGROUND -> {
+                    com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                        eventName = com.financeautomation.core.utils.UsageEvents.EVENT_OEM_ROUTE_SHOWN,
+                        params = mapOf("route_id" to Build.MANUFACTURER.lowercase().take(20))
+                    )
                     return com.financeautomation.presentation.health.OemHardeningHelper.resolveCandidateIntent(context)
                 }
                 HealthCheckId.GOOGLE_CONNECTION -> {

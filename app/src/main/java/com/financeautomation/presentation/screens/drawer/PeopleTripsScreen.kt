@@ -234,26 +234,31 @@ fun PeopleTripsScreen(
                 ) {
                     state.tripTags.forEach { trip ->
                         val isActive = trip.isActive || trip.name.equals(state.activeTripTag, ignoreCase = true)
+                        val summary = summaryFor(trip.name)
                         TripCard(
                             tripName = trip.name,
                             isActive = isActive,
                             statusText = if (isActive) stringResource(R.string.trip_active) else "Inactive",
-                            peopleCount = summaryFor(trip.name).peopleCount,
-                            totalSpend = formatRupees(summaryFor(trip.name).totalPaid),
+                            peopleCount = summary.peopleCount,
+                            totalSpend = formatRupees(summary.totalPaid),
+                            costYou = formatRupees(summary.netExpenditure),
+                            dateRange = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(summary.transactions, isActive),
                             onOpen = { openTripName = trip.name },
                             onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
-                            onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) },
-                            onRemove = { tripToRemove = trip.name }
+                            onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) }
                         )
                     }
                 }
             } else if (state.activeTripTag.isNotBlank()) {
+                val summary = summaryFor(state.activeTripTag)
                 TripCard(
                     tripName = state.activeTripTag,
                     isActive = true,
                     statusText = stringResource(R.string.trip_active),
-                    peopleCount = summaryFor(state.activeTripTag).peopleCount,
-                    totalSpend = formatRupees(summaryFor(state.activeTripTag).totalPaid),
+                    peopleCount = summary.peopleCount,
+                    totalSpend = formatRupees(summary.totalPaid),
+                    costYou = formatRupees(summary.netExpenditure),
+                    dateRange = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(summary.transactions, true),
                     onOpen = { openTripName = state.activeTripTag },
                     onEndTrip = { viewModel.onActiveTripTagChanged("") },
                     onReactivateTrip = {}
@@ -268,7 +273,13 @@ fun PeopleTripsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(FinanceShapes.large)
-                    .clickable(onClick = onStartTrip)
+                    .clickable {
+                        com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                            eventName = com.financeautomation.core.utils.UsageEvents.EVENT_FEATURE_USED,
+                            params = mapOf("feature_name" to "trips")
+                        )
+                        onStartTrip()
+                    }
             ) {
                 Row(
                     modifier = Modifier
@@ -340,7 +351,22 @@ fun PeopleTripsScreen(
     }
 
     openTripName?.let { name ->
-        TripDetailSheet(summary = summaryFor(name), onDismiss = { openTripName = null })
+        val tripTag = state.tripTags.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        val isActive = tripTag?.isActive == true || name.equals(state.activeTripTag, ignoreCase = true)
+        TripDetailSheet(summary = summaryFor(name),
+            isActive = isActive,
+            onEndTrip = {
+                tripTag?.let { viewModel.onToggleTripTagActive(it.id) }
+                    ?: viewModel.onActiveTripTagChanged("")
+            },
+            onReactivateTrip = {
+                tripTag?.let { viewModel.onToggleTripTagActive(it.id) }
+            },
+            onDeleteTrip = { tripName ->
+                viewModel.onRemoveTripTag(tripName)
+            },
+            onDismiss = { openTripName = null }
+        )
     }
 
     if (showAddFriendSheet) {
@@ -507,6 +533,8 @@ private fun TripCard(
     statusText: String,
     peopleCount: Int,
     totalSpend: String,
+    costYou: String = "",
+    dateRange: String = "",
     onOpen: () -> Unit = {},
     onEndTrip: () -> Unit = {},
     onReactivateTrip: () -> Unit = {},
@@ -557,7 +585,7 @@ private fun TripCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (isActive) "Active travel ledger" else "Past travel ledger",
+                            text = if (dateRange.isNotBlank()) dateRange else if (isActive) "Active travel ledger" else "Past travel ledger",
                             style = FinanceTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -603,40 +631,47 @@ private fun TripCard(
                         Text(stringResource(R.string.trips_end_trip), style = FinanceTheme.typography.labelMedium)
                     }
                 } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-                        if (onRemove != null) {
-                            OutlinedButton(
-                                onClick = onRemove,
-                                shape = FinanceTheme.shapes.small,
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                                    .semantics { contentDescription = removeTripDescription }
-                            ) {
-                                Text(stringResource(R.string.people_remove_action), style = FinanceTheme.typography.labelMedium)
-                            }
-                        }
-                        Button(
-                            onClick = onReactivateTrip,
-                            shape = FinanceTheme.shapes.small,
-                            modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                        ) {
-                            Text(stringResource(R.string.trips_reactivate), style = FinanceTheme.typography.labelMedium)
-                        }
+                    Button(
+                        onClick = onReactivateTrip,
+                        shape = FinanceTheme.shapes.small,
+                        modifier = Modifier.defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.trips_reactivate), style = FinanceTheme.typography.labelMedium)
                     }
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = stringResource(R.string.trip_total_spend_label).uppercase(),
-                        style = FinanceTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = totalSpend,
-                        style = FinanceTheme.typography.kpiMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = stringResource(R.string.trip_total_spend_label).uppercase(),
+                            style = FinanceTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = totalSpend,
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    if (costYou.isNotBlank()) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "COST YOU",
+                                style = FinanceTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = costYou,
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -732,7 +767,10 @@ private fun FriendDetailSheet(
                 )
                 OutlinedTextField(
                     value = renameInput,
-                    onValueChange = { renameInput = it },
+                    onValueChange = {
+                        renameInput = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                            .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                    },
                     singleLine = true,
                     shape = FinanceShapes.card,
                     modifier = Modifier.fillMaxWidth()

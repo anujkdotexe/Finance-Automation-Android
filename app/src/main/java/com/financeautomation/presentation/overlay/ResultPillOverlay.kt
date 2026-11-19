@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
-import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.theme.FinanceTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -36,14 +36,24 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+interface ResultPill {
+    fun show(
+        message: String,
+        transactionId: String? = null,
+        onUndo: ((String) -> Unit)? = null
+    )
+}
+
 /**
  * Secondary floating pill overlay displayed at the top centre of the screen (Phase 5.3.5 / R10).
  * Displays a confirmation message and an optional Undo action active for 8 seconds.
  */
 class ResultPillOverlay(
     private val context: Context,
-    private val hidePreview: () -> Boolean = { false }
-) {
+    private val hidePreview: () -> Boolean = { false },
+    private val themeMode: kotlinx.coroutines.flow.Flow<com.financeautomation.domain.model.ThemeMode> =
+        kotlinx.coroutines.flow.flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
+) : ResultPill {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -69,10 +79,10 @@ class ResultPillOverlay(
     /**
      * Displays a result pill capsule with the provided message and optional Undo callback.
      */
-    fun show(
+    override fun show(
         message: String,
-        transactionId: String? = null,
-        onUndo: ((String) -> Unit)? = null
+        transactionId: String?,
+        onUndo: ((String) -> Unit)?
     ) {
         if (!Settings.canDrawOverlays(appContext)) return
 
@@ -115,7 +125,7 @@ class ResultPillOverlay(
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
-                        FinanceAutomationTheme {
+                        SavedThemeHost(themeMode) {
                             Surface(
                                 shape = FinanceTheme.shapes.pill,
                                 color = FinanceTheme.colors.primaryContainer,

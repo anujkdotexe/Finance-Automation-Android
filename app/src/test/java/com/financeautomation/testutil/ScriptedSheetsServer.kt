@@ -90,19 +90,27 @@ class ScriptedSheetsServer(
             method == "GET" && url.contains("values:batchGet") -> {
                 val tab = tabs.first()
                 """{"valueRanges":[
+                    {"range":"'$tab'!L3:L3","majorDimension":"ROWS","values":[["Note"]]},
+                    {"range":"'$tab'!A4:L","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!N4:U","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!W4:AC","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!AF4:AF","majorDimension":"ROWS","values":[]},
                     {"range":"'$tab'!A4:K","majorDimension":"ROWS","values":[]},
                     {"range":"'$tab'!AC4:AC","majorDimension":"ROWS","values":[]},
                     {"range":"'$tab'!M4:T","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!V4:AB","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]}
+                    {"range":"'$tab'!V4:AB","majorDimension":"ROWS","values":[]}
                 ]}"""
             }
-            method == "GET" && url.contains("/values/") && (url.contains("AC") || url.contains("AD") || url.contains("AE")) -> {
-                val values = uuidColumnValues(call).joinToString(",") { "[\"$it\"]" }
-                """{"range":"'Sheet'!AC3:AC","majorDimension":"ROWS","values":[$values]}"""
+            method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3") || url.contains("!L3")) -> {
+                """{"range":"'Sheet'!L3:L3","majorDimension":"ROWS","values":[["Note"]]}"""
             }
-            method == "GET" && url.contains("/values/") -> """{"range":"'Sheet'!A3:K","majorDimension":"ROWS","values":[]}"""
+            method == "GET" && url.contains("/values/") && (url.contains("AD") || url.contains("AE") || url.contains("AF") || url.contains("AC")) -> {
+                val values = uuidColumnValues(call).joinToString(",") { "[\"$it\"]" }
+                """{"range":"'Sheet'!AD3:AD","majorDimension":"ROWS","values":[$values]}"""
+            }
+            method == "GET" && url.contains("/values/") -> """{"range":"'Sheet'!A3:L","majorDimension":"ROWS","values":[]}"""
             method == "GET" -> {
                 val sheets = tabs.mapIndexed { i, t ->
                     """{"properties":{"sheetId":$i,"title":"$t","gridProperties":{"rowCount":1000,"columnCount":35}}}"""
@@ -110,9 +118,9 @@ class ScriptedSheetsServer(
                 """{"spreadsheetId":"test_sheet_id","sheets":[$sheets]}"""
             }
             (method == "POST" && url.contains(":append")) ||
-                (method == "PUT" && url.contains("/values/") && (url.contains(":K") || url.contains("%3AK"))) -> {
+                (method == "PUT" && url.contains("/values/") && (url.contains(":L") || url.contains("%3AL") || url.contains(":K") || url.contains("%3AK"))) -> {
                 appendedRow++
-                """{"spreadsheetId":"test_sheet_id","updatedRange":"'Sheet'!A$appendedRow:K$appendedRow","updatedCells":11}"""
+                """{"spreadsheetId":"test_sheet_id","updatedRange":"'Sheet'!A$appendedRow:L$appendedRow","updatedCells":12}"""
             }
             method == "PUT" -> """{"updatedCells":1}"""
             method == "POST" && url.contains("values:batchUpdate") -> """{"totalUpdatedCells":12,"responses":[]}"""

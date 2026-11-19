@@ -10,6 +10,8 @@ import com.financeautomation.domain.repository.ConfigRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
@@ -22,14 +24,31 @@ import java.time.format.DateTimeParseException
  */
 class ConfigRepositoryImpl(
     private val googleSheetsClient: GoogleSheetsClient,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: Clock = Clock.systemUTC()
 ) : ConfigRepository {
+
+    /**
+     * Parses an UpdatedAt cell. A value later than now plus [MAX_FUTURE_SKEW] (typed by hand or written by a phone with
+     * a wrong clock) is cut to that limit, so one such row cannot block every later edit of its item. Returns the
+     * parsed instant and whether it was cut.
+     */
+    private fun parseUpdatedAt(text: String): Pair<Instant, Boolean> {
+        val parsed = try {
+            if (text.isNotBlank()) Instant.parse(text.trim()) else Instant.EPOCH
+        } catch (e: DateTimeParseException) {
+            Diagnostics.record("ConfigRepositoryImpl", "parseUpdatedAt: ${e.javaClass.simpleName}")
+            Instant.EPOCH
+        }
+        val limit = clock.instant().plus(MAX_FUTURE_SKEW)
+        return if (parsed.isAfter(limit)) limit to true else parsed to false
+    }
 
     override suspend fun readAll(spreadsheetId: String): Result<List<ConfigRow>> = withContext(ioDispatcher) {
         safeCall {
             ensureConfigTabInitialized(spreadsheetId)
 
-            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:I")
+            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:I${ConfigConstants.MAX_CONFIG_ROWS}")
             if (rangeResult is Result.Error) {
                 throw rangeResult.exception
             }
@@ -40,6 +59,12 @@ class ConfigRepositoryImpl(
             }
 
             val configRows = mutableListOf<ConfigRow>()
+            var clampedCount = 0
+            var tooLongCount = 0
+            var badCharsCount = 0
+            if (rows.size >= ConfigConstants.MAX_CONFIG_ROWS) {
+                Diagnostics.record("ConfigRepositoryImpl", "CONFIG_ROW_LIMIT: ${ConfigConstants.MAX_CONFIG_ROWS}")
+            }
 
             // Row index is 1-based; row 1 is header, row 2 is meta, data rows start at row 3 (index 2)
             for (i in 1 until rows.size) {
@@ -58,12 +83,26 @@ class ConfigRepositoryImpl(
                 val updatedBy = rowCells.getOrNull(7)?.toString().orEmpty()
                 val deletedStr = rowCells.getOrNull(8)?.toString()?.trim().orEmpty()
 
-                val updatedAt = try {
-                    if (updatedStr.isNotBlank()) Instant.parse(updatedStr) else Instant.EPOCH
-                } catch (e: DateTimeParseException) {
-                    Diagnostics.record("ConfigRepositoryImpl", "parseUpdatedAt: ${e.javaClass.simpleName}")
-                    Instant.EPOCH
+                // A cell that is too long or holds control or direction-changing characters is not a name or value the
+                // app wrote. The whole row is skipped and counted, never partly used.
+                val valueLimit = if (type.equals(ConfigConstants.TYPE_SUBSCRIPTION, ignoreCase = true)) {
+                    ConfigConstants.MAX_SUBSCRIPTION_VALUE_LENGTH
+                } else {
+                    ConfigConstants.MAX_VALUE_LENGTH
                 }
+                if (type.length > ConfigConstants.MAX_KEY_LENGTH || key.length > ConfigConstants.MAX_KEY_LENGTH ||
+                    listOf(v1, v2, v3, v4, updatedBy).any { it.length > valueLimit }
+                ) {
+                    tooLongCount++
+                    continue
+                }
+                if (listOf(type, key, v1, v2, v3, v4, updatedBy).any { hasUnsafeCharacters(it) }) {
+                    badCharsCount++
+                    continue
+                }
+
+                val (updatedAt, clamped) = parseUpdatedAt(updatedStr)
+                if (clamped) clampedCount++
 
                 val isDeleted = deletedStr.equals("true", ignoreCase = true)
 
@@ -79,52 +118,109 @@ class ConfigRepositoryImpl(
                 )
             }
 
-            configRows
+            if (clampedCount > 0) {
+                Diagnostics.record("ConfigRepositoryImpl", "UPDATED_AT_CLAMPED: $clampedCount")
+            }
+            if (tooLongCount > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_ROW_TOO_LONG: $tooLongCount")
+            if (badCharsCount > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_ROW_BAD_CHARS: $badCharsCount")
+            keepNewestPerKey(configRows)
         }
     }
 
-    override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Unit> = withContext(ioDispatcher) {
+    /** True for control characters, line and paragraph separators, and format characters such as direction marks. */
+    private fun hasUnsafeCharacters(text: String): Boolean = text.any {
+        when (Character.getType(it).toByte()) {
+            Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR -> true
+            else -> false
+        }
+    }
+
+    /**
+     * Two rows with the same key (two devices appended at once, or a hand edit) must not both reach the local
+     * database, because which one wins would depend on the order of the rows. The row with the newest UpdatedAt is
+     * kept; on equal stamps the tombstone is kept.
+     */
+    private fun keepNewestPerKey(rows: List<ConfigRow>): List<ConfigRow> {
+        val byKey = LinkedHashMap<String, ConfigRow>()
+        var dropped = 0
+        for (row in rows) {
+            val current = byKey[row.compositeKey]
+            if (current == null) {
+                byKey[row.compositeKey] = row
+                continue
+            }
+            dropped++
+            val newer = row.updatedAt > current.updatedAt ||
+                (row.updatedAt == current.updatedAt && row.deleted && !current.deleted)
+            if (newer) byKey[row.compositeKey] = row
+        }
+        if (dropped > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_DUPLICATE_KEYS: $dropped")
+        return byKey.values.toList()
+    }
+
+    override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Set<String>> = withContext(ioDispatcher) {
         safeCall {
-            if (rows.isEmpty()) return@safeCall
+            if (rows.isEmpty()) return@safeCall emptySet<String>()
 
             ensureConfigTabInitialized(spreadsheetId)
 
             // Read existing rows to map composite keys to row indices and remote edit timestamps
-            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:G")
-            val existingCells = if (rangeResult is Result.Success) rangeResult.data else emptyList()
+            val rangeResult = googleSheetsClient.getRangeValuesRaw(spreadsheetId, "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:G${ConfigConstants.MAX_CONFIG_ROWS}")
+            if (rangeResult is Result.Error) throw rangeResult.exception
+            val existingCells = (rangeResult as Result.Success).data
 
-            data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant)
+            data class ExistingRowMeta(val rowIndex: Int, val updatedAt: Instant, val futureStamped: Boolean)
             val keyToMetaMap = mutableMapOf<String, ExistingRowMeta>()
+            var duplicateRows = 0
             for (i in existingCells.indices) {
                 val row = existingCells[i]
-                val type = row.getOrNull(0)?.toString()?.trim()?.lowercase().orEmpty()
-                val key = row.getOrNull(1)?.toString()?.trim()?.lowercase().orEmpty()
+                val type = row.getOrNull(0)?.toString()?.trim().orEmpty()
+                val key = row.getOrNull(1)?.toString()?.trim().orEmpty()
                 if (type.isNotBlank() && key.isNotBlank()) {
-                    val updatedStr = row.getOrNull(6)?.toString()?.trim().orEmpty()
-                    val updatedAt = try {
-                        if (updatedStr.isNotBlank()) Instant.parse(updatedStr) else Instant.EPOCH
-                    } catch (e: Exception) {
-                        Instant.EPOCH
+                    val (updatedAt, futureStamped) = parseUpdatedAt(row.getOrNull(6)?.toString().orEmpty())
+                    val compositeKey = ConfigRow.compositeKeyOf(type, key)
+                    val first = keyToMetaMap[compositeKey]
+                    if (first == null) {
+                        keyToMetaMap[compositeKey] = ExistingRowMeta(i + 1, updatedAt, futureStamped)
+                    } else {
+                        // A later duplicate is left alone. Writes go to the first row; the conflict check uses the
+                        // newest stamp of the duplicates so a local edit cannot lose to a row it does not replace.
+                        duplicateRows++
+                        keyToMetaMap[compositeKey] = first.copy(
+                            updatedAt = maxOf(first.updatedAt, updatedAt),
+                            futureStamped = first.futureStamped || futureStamped
+                        )
                     }
-                    keyToMetaMap["$type|$key"] = ExistingRowMeta(i + 1, updatedAt)
                 }
             }
+            if (duplicateRows > 0) Diagnostics.record("ConfigRepositoryImpl", "CONFIG_DUPLICATE_KEYS: $duplicateRows")
 
             val updatesMap = mutableMapOf<String, List<List<Any?>>>()
             val newRowsToAppend = mutableListOf<List<Any?>>()
+            val writtenKeys = mutableSetOf<String>()
 
             for (row in rows) {
                 val compositeKey = row.compositeKey
                 val existingMeta = keyToMetaMap[compositeKey]
                 if (existingMeta != null) {
-                    // Conflict resolution: only overwrite if local row is as new or newer than remote row
-                    if (row.updatedAt >= existingMeta.updatedAt) {
+                    // Conflict resolution: only overwrite if local row is as new or newer than remote row. A remote
+                    // stamp beyond the allowed future skew is not a real edit time: the local row replaces it, which
+                    // also repairs the cell. Without this a local edit (stamped now) could never beat it.
+                    if (existingMeta.futureStamped || row.updatedAt >= existingMeta.updatedAt) {
                         updatesMap["'${ConfigConstants.CONFIG_TAB_NAME}'!A${existingMeta.rowIndex}:I${existingMeta.rowIndex}"] = listOf(row.toRowCells())
+                        writtenKeys.add(compositeKey)
                     }
                 } else {
                     // New row to append
                     newRowsToAppend.add(row.toRowCells())
+                    writtenKeys.add(compositeKey)
                 }
+            }
+
+            if (newRowsToAppend.isNotEmpty()) {
+                val startRow = existingCells.size + 1
+                val endRow = startRow + newRowsToAppend.size - 1
+                updatesMap["'${ConfigConstants.CONFIG_TAB_NAME}'!A$startRow:I$endRow"] = newRowsToAppend
             }
 
             if (updatesMap.isNotEmpty()) {
@@ -132,16 +228,7 @@ class ConfigRepositoryImpl(
                 if (updateRes is Result.Error) throw updateRes.exception
             }
 
-            for (appendCells in newRowsToAppend) {
-                val appendRes = googleSheetsClient.appendTableScoped(
-                    spreadsheetId = spreadsheetId,
-                    tabName = ConfigConstants.CONFIG_TAB_NAME,
-                    tableRange = "A:I",
-                    row = appendCells,
-                    valueInputOption = "RAW"
-                )
-                if (appendRes is Result.Error) throw appendRes.exception
-            }
+            writtenKeys
         }
     }
 
@@ -156,7 +243,7 @@ class ConfigRepositoryImpl(
                 type = type,
                 key = key,
                 values = listOf("", "", "", ""),
-                updatedAt = Instant.now(),
+                updatedAt = clock.instant(),
                 updatedBy = deviceId,
                 deleted = true
             )
@@ -186,7 +273,7 @@ class ConfigRepositoryImpl(
             // Write Row 1 header and Row 2 metadata
             val initialRows = listOf(
                 listOf("Type", "Key", "Value1", "Value2", "Value3", "Value4", "UpdatedAt", "UpdatedBy", "Deleted"),
-                listOf(ConfigConstants.TYPE_META, ConfigConstants.KEY_SCHEMA_VERSION, ConfigConstants.CONFIG_SCHEMA_VERSION, "", "", "", Instant.now().toString(), "system", "")
+                listOf(ConfigConstants.TYPE_META, ConfigConstants.KEY_SCHEMA_VERSION, ConfigConstants.CONFIG_SCHEMA_VERSION, "", "", "", clock.instant().toString(), "system", "")
             )
             val initUpdate = mapOf(
                 "'${ConfigConstants.CONFIG_TAB_NAME}'!A1:I2" to initialRows
@@ -194,5 +281,9 @@ class ConfigRepositoryImpl(
             googleSheetsClient.batchUpdateValues(spreadsheetId, initUpdate, valueInputOption = "RAW")
         }
     }
-}
 
+    companion object {
+        /** A Config UpdatedAt later than now by more than this is treated as now plus this. */
+        val MAX_FUTURE_SKEW: Duration = Duration.ofMinutes(5)
+    }
+}

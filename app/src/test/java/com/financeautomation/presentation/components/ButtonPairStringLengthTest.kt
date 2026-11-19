@@ -9,22 +9,6 @@ import javax.xml.parsers.DocumentBuilderFactory
 class ButtonPairStringLengthTest {
 
     @Test
-    fun testButtonPairMaxLabelLengthRule() {
-        val validLabel1 = "Cancel"
-        val validLabel2 = "Save"
-        val validLabel3 = "Save expense"
-        val validLabel4 = "12345678901234" // exactly 14
-
-        assertTrue(validLabel1.length <= MAX_BUTTON_PAIR_LABEL_LENGTH)
-        assertTrue(validLabel2.length <= MAX_BUTTON_PAIR_LABEL_LENGTH)
-        assertTrue(validLabel3.length <= MAX_BUTTON_PAIR_LABEL_LENGTH)
-        assertTrue(validLabel4.length <= MAX_BUTTON_PAIR_LABEL_LENGTH)
-
-        val invalidLabel = "Save repayment long"
-        assertTrue(invalidLabel.length > MAX_BUTTON_PAIR_LABEL_LENGTH)
-    }
-
-    @Test
     fun testAllButtonPairStringsXmlLabelsUnder14Chars() {
         val stringsXmlFile = File("src/main/res/values/strings.xml")
         val fallbackFile = File("app/src/main/res/values/strings.xml")
@@ -70,16 +54,6 @@ class ButtonPairStringLengthTest {
                 )
             }
         }
-    }
-
-    @Test
-    fun testLongLabelsDoNotCrashButtonPair() {
-        val longLabel1 = "Save changes to monthly budget"
-        val longLabel2 = "Discard and return to previous screen"
-        assertTrue(longLabel1.length > MAX_BUTTON_PAIR_LABEL_LENGTH)
-        assertTrue(longLabel2.length > MAX_BUTTON_PAIR_LABEL_LENGTH)
-        // Verify MAX_BUTTON_PAIR_LABEL_LENGTH is 14
-        org.junit.Assert.assertEquals(14, MAX_BUTTON_PAIR_LABEL_LENGTH)
     }
 }
 

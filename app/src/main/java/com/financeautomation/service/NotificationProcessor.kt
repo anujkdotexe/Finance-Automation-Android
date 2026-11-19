@@ -6,10 +6,12 @@ import com.financeautomation.BuildConfig
 import com.financeautomation.FinanceApplication
 import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.PackageWhitelist
+import com.financeautomation.core.utils.CrashlyticsManager
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
+import com.financeautomation.core.utils.RegexPatterns
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
@@ -79,41 +81,55 @@ class NotificationProcessor(
 
     private val processMutex = Mutex()
 
+    private fun ignored(reason: String): NotificationProcessingOutcome.Ignored {
+        com.financeautomation.core.utils.Diagnostics.recordDrop(reason)
+        return NotificationProcessingOutcome.Ignored(reason)
+    }
+
     suspend fun process(
         sourcePackage: String,
         title: String,
         text: String,
         postTime: Long = System.currentTimeMillis(),
-        sbnKey: String = ""
+        sbnKey: String = "",
+        channelId: String? = null,
+        category: String? = null
     ): NotificationProcessingOutcome = processMutex.withLock {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
-            return NotificationProcessingOutcome.Ignored("Self notification dropped")
+            return ignored("Self notification dropped")
         }
 
         // 2. Blacklist check (privacy-sensitive messaging apps)
         if (PackageWhitelist.isBlacklisted(sourcePackage)) {
             PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
-            return NotificationProcessingOutcome.Ignored("Blacklisted privacy package: $sourcePackage")
+            return ignored("Blacklisted privacy package: $sourcePackage")
+        }
+
+        // 2b. Chat apps that carry payments (WhatsApp, WhatsApp Business):
+        // Only payment notifications on a payments channel or category are allowed. Any chat or general notification is dropped immediately.
+        if (PackageWhitelist.isChatApp(sourcePackage) && !PackageWhitelist.isPaymentNotification(channelId, category)) {
+            PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
+            return ignored("Non-payment chat notification dropped: $sourcePackage")
         }
 
         // 3. Whitelist check (financial applications and SMS alerts only, includes BuildConfig.DEBUG guard)
         if (!PackageWhitelist.isWhitelisted(sourcePackage)) {
             PipelineTrail.recordDroppedNotWhitelisted()
-            return NotificationProcessingOutcome.Ignored("Non-whitelisted package: $sourcePackage")
+            return ignored("Non-whitelisted package: $sourcePackage")
         }
 
         // 3b. SMS from a personal number is rejected on the sender alone, before any text is examined
         if (PackageWhitelist.isSmsPackage(sourcePackage) && !com.financeautomation.core.utils.RegexPatterns.isBankSenderId(title)) {
             PipelineTrail.recordDroppedNotWhitelisted()
-            return NotificationProcessingOutcome.Ignored("Personal sender SMS dropped")
+            return ignored("Personal sender SMS dropped")
         }
 
         // 4. OTP and verification suppression check
         val fullContent = if (title.isNotBlank()) "$title. $text".trim() else text.trim()
         if (PackageWhitelist.isOtpOrAuth(fullContent)) {
             PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_OTP)
-            return NotificationProcessingOutcome.Ignored("OTP or auth alert suppressed")
+            return ignored("OTP or auth alert suppressed")
         }
 
         // Memory-only content hash (SHA-256 of lowercase title + text, 16 hex characters)
@@ -121,29 +137,30 @@ class NotificationProcessor(
         val key = if (sbnKey.isNotBlank()) sbnKey else "$sourcePackage|$postTime"
 
         // 5. Handled-notification and reconnect replay check
-        val cutoff = postTime - 24L * 60L * 60L * 1000L
+        val replayCutoff = postTime - 24L * 60L * 60L * 1000L
+        val duplicateAlertCutoff = postTime - WINDOW_DUPLICATE_ALERT_MS
         if (handledNotificationDao != null) {
             val existingHandled = handledNotificationDao.get(key = key, postTime = postTime)
                 ?: handledNotificationDao.getLatestByKey(key)?.takeIf { it.contentHash == contentHash }
-                ?: handledNotificationDao.getByContentHash(contentHash, cutoff)
+                ?: handledNotificationDao.getByContentHash(contentHash, duplicateAlertCutoff)
             if (existingHandled != null) {
                 // Reconnect replay or duplicate posted alert
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
-                return NotificationProcessingOutcome.Ignored("Duplicate or reconnect replay notification dropped")
+                return ignored("Duplicate or reconnect replay notification dropped")
             }
 
             // Prune rows older than 24 hours
-            handledNotificationDao.pruneOlderThan(cutoff)
+            handledNotificationDao.pruneOlderThan(replayCutoff)
         }
 
         if (pendingCaptureDao != null) {
-            val existingCapture = pendingCaptureDao.getByContentHash(contentHash, cutoff)
+            val existingCapture = pendingCaptureDao.getByContentHash(contentHash, duplicateAlertCutoff)
             if (existingCapture != null && (existingCapture.state == PendingCaptureEntity.STATE_WAITING ||
                 existingCapture.state == PendingCaptureEntity.STATE_SHOWN ||
                 existingCapture.state == PendingCaptureEntity.STATE_DONE ||
                 existingCapture.state == PendingCaptureEntity.STATE_NEEDS_REVIEW)) {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
-                return NotificationProcessingOutcome.Ignored("Duplicate or reconnect replay notification dropped")
+                return ignored("Duplicate or reconnect replay notification dropped")
             }
         }
 
@@ -154,17 +171,20 @@ class NotificationProcessor(
             key = key,
             postTime = postTime,
             contentHash = contentHash,
-            handledAt = System.currentTimeMillis()
+            handledAt = postTime
         )
 
         // 6. Inferred account resolution from configured accounts
-        val configuredAccounts: List<String> = try {
-            accountDao?.getAllAccounts()?.map { it.name } ?: emptyList()
+        val allAccounts = try {
+            accountDao?.getAllAccounts() ?: emptyList()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("NotificationProcessor", "${e.javaClass.simpleName}: getAllAccounts fallback")
+            CrashlyticsManager.recordNonFatal(e, "NotificationProcessor.getAllAccounts")
             emptyList()
         }
+        val configuredAccounts: List<String> = allAccounts.map { it.name }
+        val accountDigits: Map<String, String?> = allAccounts.associate { it.name to it.lastFourDigits }
         val defaultAccount: String = try {
             preferenceDao?.getPreference(PreferencesRepository.KEY_DEFAULT_ACCOUNT) ?: CategoryConstants.ACCOUNT_OTHER
         } catch (e: Exception) {
@@ -181,14 +201,17 @@ class NotificationProcessor(
             appName = null,
             timestamp = postTime,
             configuredAccounts = configuredAccounts,
-            defaultAccount = defaultAccount
+            defaultAccount = defaultAccount,
+            accountDigits = accountDigits,
+            channelId = channelId,
+            category = category
         )
 
         return when (parseResult) {
             is NotificationParseResult.Dropped -> {
                 // Counted by reason only; the notification text is never recorded
                 PipelineTrail.record(PipelineStage.ALERT, pipelineCodeFor(parseResult.reason))
-                NotificationProcessingOutcome.Ignored("ParseUseCase dropped: ${parseResult.reason}")
+                ignored("ParseUseCase dropped: ${parseResult.reason}")
             }
             is NotificationParseResult.FailureAlert -> {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.FAILURE_WORDING)
@@ -201,7 +224,7 @@ class NotificationProcessor(
                         return NotificationProcessingOutcome.Dismissed(existing.id)
                     }
                 }
-                NotificationProcessingOutcome.Ignored("Payment failed, declined or reversed")
+                ignored("Payment failed, declined or reversed")
             }
             is NotificationParseResult.FallbackPrompt -> {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_UNREADABLE)
@@ -217,7 +240,8 @@ class NotificationProcessor(
                     sbnKey = sbnKey,
                     contentHash = contentHash,
                     handledEntity = handledEntity,
-                    detectedAccountHint = parseResult.detectedAccountHint
+                    detectedAccountHint = parseResult.detectedAccountHint,
+                    text = text
                 )
                 outcome
             }
@@ -254,7 +278,8 @@ class NotificationProcessor(
                     sbnKey = sbnKey,
                     contentHash = contentHash,
                     handledEntity = handledEntity,
-                    detectedAccountHint = parseResult.detectedAccountHint
+                    detectedAccountHint = parseResult.detectedAccountHint,
+                    text = text
                 )
                 outcome
             }
@@ -300,12 +325,17 @@ class NotificationProcessor(
         sbnKey: String,
         contentHash: String,
         handledEntity: HandledNotificationEntity,
-        detectedAccountHint: String? = null
+        detectedAccountHint: String? = null,
+        text: String = ""
     ): NotificationProcessingOutcome {
-        val targetState = if (wording == WordingClass.PROCESSING) {
-            PendingCaptureEntity.STATE_AWAITING_SUCCESS
-        } else {
-            PendingCaptureEntity.STATE_WAITING
+        val cleanPayee = com.financeautomation.core.utils.InputPolicy.cleanName(payee)
+            .take(com.financeautomation.core.utils.InputPolicy.MAX_MERCHANT_NAME_LENGTH)
+            .ifBlank { "Unknown Payee" }
+
+        val targetState = when {
+            flags.split(",").map { it.trim() }.contains(PendingCaptureEntity.FLAG_REFUND_REVERSAL) -> PendingCaptureEntity.STATE_NEEDS_REVIEW
+            wording == WordingClass.PROCESSING -> PendingCaptureEntity.STATE_AWAITING_SUCCESS
+            else -> PendingCaptureEntity.STATE_WAITING
         }
 
         // Check if an existing capture with the same sbn.key exists (e.g. processing -> success update)
@@ -314,7 +344,7 @@ class NotificationProcessor(
             if (existingByKey != null && existingByKey.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
                 val updated = existingByKey.copy(
                     amount = amount ?: existingByKey.amount,
-                    payee = if (payee != "Unknown Payee") payee else existingByKey.payee,
+                    payee = if (cleanPayee != "Unknown Payee") cleanPayee else existingByKey.payee,
                     inferredAccount = inferredAccount.ifBlank { existingByKey.inferredAccount },
                     state = if (targetState == PendingCaptureEntity.STATE_WAITING) PendingCaptureEntity.STATE_WAITING else existingByKey.state,
                     contentHash = contentHash,
@@ -330,93 +360,229 @@ class NotificationProcessor(
             }
         }
 
-        var activeFlags = flags
-
-        // Cross-source deduplication within 90 seconds
-        if (pendingCaptureDao != null && amount != null && amount > 0.0) {
-            val minTime = postTime - 90_000L
-            val maxTime = postTime + 90_000L
-            val similarCaptures = pendingCaptureDao.findSimilarByAmountAndTime(amount, minTime, maxTime)
-                .filter {
-                    // Same amount alone is not enough: the payee must also be compatible, so two real payments
-                    // of the same amount to different payees within 90 seconds stay separate
-                    it.sourcePackage != sourcePackage &&
-                        com.financeautomation.core.utils.MerchantSimilarity.compatible(it.payee, payee)
-                }
-
-            if (similarCaptures.isNotEmpty()) {
-                val mergeTarget = similarCaptures.firstOrNull {
-                    it.state == PendingCaptureEntity.STATE_WAITING || it.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS
-                }
-                if (mergeTarget != null) {
-                    val merged = mergeTarget.copy(
-                        payee = if (mergeTarget.payee == "Unknown Payee" && payee != "Unknown Payee") payee else mergeTarget.payee,
-                        inferredAccount = if (mergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else mergeTarget.inferredAccount,
-                        detectedAccountHint = mergeTarget.detectedAccountHint ?: detectedAccountHint,
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    val mergeOp: suspend () -> Unit = {
-                        handledNotificationDao?.insert(handledEntity)
-                        pendingCaptureDao.update(merged)
-                    }
-                    if (runInTransaction != null) runInTransaction.invoke(mergeOp) else mergeOp()
-                    PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED)
-                    return NotificationProcessingOutcome.Merged(merged.id, enriched = true)
-                }
-
-                // If already SHOWN or DONE, mark new capture as POSSIBLE_DUPLICATE
-                val hasShownOrDone = similarCaptures.any {
-                    it.state == PendingCaptureEntity.STATE_SHOWN || it.state == PendingCaptureEntity.STATE_DONE
-                }
-                if (hasShownOrDone) {
-                    PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.FLAGGED_DUPLICATE)
-                    activeFlags = if (activeFlags.isNotBlank()) {
-                        "$activeFlags,${PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE}"
-                    } else {
-                        PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE
-                    }
-                }
-            }
+        val incomingRefId = RegexPatterns.extractReferenceId(text)
+        var activeFlags = if (incomingRefId != null && !flags.contains("REF_")) {
+            if (flags.isNotBlank()) "$flags,REF_$incomingRefId" else "REF_$incomingRefId"
+        } else {
+            flags
         }
 
         val captureId = "cap_${UUID.randomUUID().toString().replace("-", "")}"
-        val capture = PendingCaptureEntity(
-            id = captureId,
-            sourcePackage = sourcePackage,
-            amount = amount,
-            payee = payee,
-            inferredAccount = inferredAccount,
-            timestamp = postTime,
-            kind = kind,
-            flags = activeFlags,
-            state = targetState,
-            notificationKey = sbnKey.takeIf { it.isNotBlank() },
-            contentHash = contentHash,
-            updatedAt = System.currentTimeMillis(),
-            detectedAccountHint = detectedAccountHint
-        )
+        var executionOutcome: NotificationProcessingOutcome? = null
 
-        val insertOp: suspend () -> Unit = {
-            val cutoffTime = postTime - 24L * 60L * 60L * 1000L
+        val dbAction: suspend () -> Unit = dbAction@{
+            // Deduplication (same-package, cross-package, and confirmed late-merge)
+            if (pendingCaptureDao != null && amount != null && amount > 0.0) {
+                val searchMinTime = postTime - WINDOW_CONFIRMED_LATE_MERGE_MS
+                val searchMaxTime = postTime + WINDOW_CONFIRMED_LATE_MERGE_MS
+                val similarCaptures = pendingCaptureDao.findSimilarByAmountAndTime(amount, searchMinTime, searchMaxTime)
+                    .filter { candidate ->
+                        // Must be the same transaction kind (debits merge with debits)
+                        if (candidate.kind != kind) return@filter false
+
+                        // Same-package merge is allowed for debits
+                        if (candidate.sourcePackage == sourcePackage && kind != PendingCaptureEntity.KIND_DEBIT) {
+                            return@filter false
+                        }
+
+                        // Account digits must be compatible if both are present
+                        if (!areAccountsCompatible(candidate.inferredAccount, candidate.detectedAccountHint, inferredAccount, detectedAccountHint)) {
+                            return@filter false
+                        }
+
+                        // Payees must be compatible, so two real payments of the same amount to different payees stay separate
+                        if (!com.financeautomation.core.utils.MerchantSimilarity.compatible(candidate.payee, cleanPayee)) {
+                            return@filter false
+                        }
+
+                        // Reference ID beats the window when both messages carry one
+                        val candidateRef = extractRefFromFlags(candidate.flags)
+                        if (candidateRef != null && incomingRefId != null) {
+                            if (!candidateRef.equals(incomingRefId, ignoreCase = true)) {
+                                return@filter false // Different reference IDs stay separate
+                            }
+                            return@filter true // Equal reference ID always merges up to 24h
+                        }
+
+                        // For late merge into a confirmed/done capture:
+                        if (candidate.state == PendingCaptureEntity.STATE_DONE) {
+                            // Allow late merge ONLY ONCE per confirmed transaction
+                            if (candidate.flags.contains("BANK_SMS_ATTACHED")) return@filter false
+
+                            val candidateRef = extractRefFromFlags(candidate.flags)
+                            val hasMatchingRef = candidateRef != null && incomingRefId != null && candidateRef == incomingRefId
+
+                            val delta = kotlin.math.abs(candidate.timestamp - postTime)
+                            if (hasMatchingRef) {
+                                // Equal reference id may still merge up to 24 h
+                                return@filter delta <= WINDOW_CONFIRMED_LATE_MERGE_MS
+                            }
+
+                            // Without matching ref, allow late merge ONLY for a generic bank SMS (Unknown Payee) within 30 minutes
+                            if (cleanPayee != "Unknown Payee") return@filter false
+                            return@filter delta <= WINDOW_CONFIRMED_GENERIC_MERGE_MS
+                        }
+
+                        // Window checks for open captures (WAITING, AWAITING_SUCCESS, NEEDS_REVIEW)
+                        val delta = kotlin.math.abs(candidate.timestamp - postTime)
+                        if (candidate.sourcePackage != sourcePackage) {
+                            delta <= WINDOW_CROSS_PACKAGE_MERGE_MS
+                        } else {
+                            delta <= WINDOW_SAME_PACKAGE_MERGE_MS
+                        }
+                    }
+
+                if (similarCaptures.isNotEmpty()) {
+                    val openMergeTarget = similarCaptures.firstOrNull {
+                        it.state == PendingCaptureEntity.STATE_WAITING ||
+                            it.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS ||
+                            it.state == PendingCaptureEntity.STATE_NEEDS_REVIEW
+                    }
+                    if (openMergeTarget != null) {
+                        val richerPayee = selectRicherPayee(openMergeTarget.payee, cleanPayee)
+                        val candidateRef = extractRefFromFlags(openMergeTarget.flags)
+                        val mergedFlags = if (candidateRef == null && incomingRefId != null) {
+                            if (openMergeTarget.flags.isNotBlank()) "${openMergeTarget.flags},REF_$incomingRefId" else "REF_$incomingRefId"
+                        } else {
+                            openMergeTarget.flags
+                        }
+                        val targetMergedState = if (openMergeTarget.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS &&
+                            (wording == WordingClass.SUCCESS || targetState == PendingCaptureEntity.STATE_WAITING)) {
+                            PendingCaptureEntity.STATE_WAITING
+                        } else {
+                            openMergeTarget.state
+                        }
+                        val merged = openMergeTarget.copy(
+                            payee = richerPayee,
+                            inferredAccount = if (openMergeTarget.inferredAccount.isNullOrBlank() && inferredAccount.isNotBlank()) inferredAccount else openMergeTarget.inferredAccount,
+                            detectedAccountHint = openMergeTarget.detectedAccountHint ?: detectedAccountHint,
+                            flags = mergedFlags,
+                            state = targetMergedState,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        handledNotificationDao?.insert(handledEntity)
+                        pendingCaptureDao.update(merged)
+                        PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED)
+                        executionOutcome = NotificationProcessingOutcome.Merged(merged.id, enriched = true)
+                        return@dbAction
+                    }
+
+                    // If match is already confirmed / DONE, attach missing facts to capture only (never touch confirmed transaction in DB)
+                    val confirmedTarget = similarCaptures.firstOrNull { it.state == PendingCaptureEntity.STATE_DONE }
+                    if (confirmedTarget != null) {
+                        val candidateRef = extractRefFromFlags(confirmedTarget.flags)
+                        val flagsWithBankAttached = buildList {
+                            add(confirmedTarget.flags)
+                            if (!confirmedTarget.flags.contains("BANK_SMS_ATTACHED")) add("BANK_SMS_ATTACHED")
+                            if (candidateRef == null && incomingRefId != null) add("REF_$incomingRefId")
+                        }.filter { it.isNotBlank() }.joinToString(",")
+
+                        val enrichedConfirmed = confirmedTarget.copy(
+                            inferredAccount = if ((confirmedTarget.inferredAccount.isNullOrBlank() || confirmedTarget.inferredAccount == CategoryConstants.ACCOUNT_OTHER) && inferredAccount.isNotBlank()) inferredAccount else confirmedTarget.inferredAccount,
+                            detectedAccountHint = confirmedTarget.detectedAccountHint ?: detectedAccountHint,
+                            flags = flagsWithBankAttached,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        handledNotificationDao?.insert(handledEntity)
+                        pendingCaptureDao.update(enrichedConfirmed)
+                        PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED_INTO_CONFIRMED)
+                        executionOutcome = NotificationProcessingOutcome.Merged(confirmedTarget.id, enriched = true)
+                        return@dbAction
+                    }
+
+                    // If already SHOWN, mark new capture as POSSIBLE_DUPLICATE
+                    val hasShown = similarCaptures.any { it.state == PendingCaptureEntity.STATE_SHOWN }
+                    if (hasShown) {
+                        PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.FLAGGED_DUPLICATE)
+                        activeFlags = if (activeFlags.isNotBlank()) {
+                            "$activeFlags,${PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE}"
+                        } else {
+                            PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE
+                        }
+                    }
+                }
+            }
+
+            val capture = PendingCaptureEntity(
+                id = captureId,
+                sourcePackage = sourcePackage,
+                amount = amount,
+                payee = cleanPayee,
+                inferredAccount = inferredAccount,
+                timestamp = postTime,
+                kind = kind,
+                flags = activeFlags,
+                state = targetState,
+                notificationKey = sbnKey.takeIf { it.isNotBlank() },
+                contentHash = contentHash,
+                updatedAt = System.currentTimeMillis(),
+                detectedAccountHint = detectedAccountHint
+            )
+
+            val cutoffTime = postTime - WINDOW_DUPLICATE_ALERT_MS
             val isDuplicate = handledNotificationDao?.getByContentHash(contentHash, cutoffTime) != null ||
                 pendingCaptureDao?.getByContentHash(contentHash, cutoffTime) != null
             if (!isDuplicate) {
                 handledNotificationDao?.insert(handledEntity)
                 pendingCaptureDao?.insert(capture)
             }
-        }
-        if (runInTransaction != null) runInTransaction.invoke(insertOp) else insertOp()
 
-        if (targetState == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
-            PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.AWAITING_SUCCESS)
-        } else {
-            PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.CREATED_WAITING)
+            if (targetState == PendingCaptureEntity.STATE_AWAITING_SUCCESS) {
+                PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.AWAITING_SUCCESS)
+            } else {
+                PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.CREATED_WAITING)
+            }
+
+            executionOutcome = NotificationProcessingOutcome.Captured(capture)
         }
 
-        return NotificationProcessingOutcome.Captured(capture)
+        if (runInTransaction != null) runInTransaction.invoke(dbAction) else dbAction()
+        return executionOutcome ?: ignored("Database transaction failed")
     }
 
     companion object {
+        private val ACCOUNT_DIGIT_REGEX = Regex("""(?i)(?:xx|ending\s+|a/c\s*no\.?\s*|\.\.)*(\d{3,4})\b""")
+
+        const val WINDOW_DUPLICATE_ALERT_MS: Long = 180_000L
+
+        const val WINDOW_SAME_PACKAGE_MERGE_MS: Long = 180_000L
+        const val WINDOW_CROSS_PACKAGE_MERGE_MS: Long = 600_000L
+        const val WINDOW_CONFIRMED_LATE_MERGE_MS: Long = 86_400_000L // 24 hours for matching reference id
+        const val WINDOW_CONFIRMED_GENERIC_MERGE_MS: Long = 1_800_000L // 30 minutes for generic bank SMS
+        const val WINDOW_CROSS_SOURCE_MERGE_MS: Long = WINDOW_SAME_PACKAGE_MERGE_MS
+
+        fun selectRicherPayee(existingPayee: String, incomingPayee: String): String = when {
+            existingPayee == "Unknown Payee" && incomingPayee != "Unknown Payee" -> incomingPayee
+            incomingPayee != "Unknown Payee" && existingPayee != "Unknown Payee" &&
+                incomingPayee.length > existingPayee.length &&
+                incomingPayee.contains(existingPayee, ignoreCase = true) -> incomingPayee
+            else -> existingPayee
+        }
+
+        fun extractRefFromFlags(flags: String): String? {
+            return flags.split(',').find { it.startsWith("REF_") }?.removePrefix("REF_")
+        }
+
+        fun areAccountsCompatible(
+            targetAcc: String?,
+            targetHint: String?,
+            incomingAcc: String?,
+            incomingHint: String?
+        ): Boolean {
+            val d1 = extractAccountDigits(targetAcc) ?: extractAccountDigits(targetHint)
+            val d2 = extractAccountDigits(incomingAcc) ?: extractAccountDigits(incomingHint)
+            if (d1 != null && d2 != null) {
+                return d1 == d2 || d1.endsWith(d2) || d2.endsWith(d1)
+            }
+            return true
+        }
+
+        private fun extractAccountDigits(raw: String?): String? {
+            if (raw.isNullOrBlank()) return null
+            val match = ACCOUNT_DIGIT_REGEX.find(raw)
+            return match?.groupValues?.get(1)
+        }
+
         /** Maps a drop reason to its diagnostics counter code. */
         fun pipelineCodeFor(reason: com.financeautomation.domain.usecase.DropReason): PipelineCode = when (reason) {
             com.financeautomation.domain.usecase.DropReason.OTP_MESSAGE -> PipelineCode.DROPPED_OTP
@@ -426,6 +592,9 @@ class NotificationProcessor(
             com.financeautomation.domain.usecase.DropReason.NOT_WHITELISTED -> PipelineCode.DROPPED_NOT_WHITELISTED_COUNT
             com.financeautomation.domain.usecase.DropReason.BLACKLISTED,
             com.financeautomation.domain.usecase.DropReason.SELF_NOTIFICATION -> PipelineCode.DROPPED_BLACKLIST
+            com.financeautomation.domain.usecase.DropReason.PAYMENT_REQUEST -> PipelineCode.DROPPED_PAYMENT_REQUEST
+            com.financeautomation.domain.usecase.DropReason.MANDATE_NOTICE -> PipelineCode.DROPPED_MANDATE_NOTICE
+            com.financeautomation.domain.usecase.DropReason.BALANCE_HOLD -> PipelineCode.DROPPED_BALANCE_HOLD
         }
 
         /**

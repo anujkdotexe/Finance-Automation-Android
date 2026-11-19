@@ -16,8 +16,10 @@ interface ConfigRepository {
 
     /**
      * Upserts [rows] into the Config tab: updates existing rows in place or appends new rows.
+     * A row is skipped when the sheet already holds a newer version of the same item. Returns the composite keys
+     * ([ConfigRow.compositeKey]) of the rows that were really written, so callers clear their dirty flags only for those.
      */
-    suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Unit>
+    suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Set<String>>
 
     /**
      * Writes a tombstone row marking [type] and [key] as deleted.

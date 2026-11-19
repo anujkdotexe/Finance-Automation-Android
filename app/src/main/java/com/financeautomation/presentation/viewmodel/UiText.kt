@@ -34,12 +34,26 @@ sealed interface UiText {
     @Composable
     fun asString(): String = when (this) {
         is DynamicString -> value
-        is StringResource -> if (args.isEmpty()) stringResource(resId) else stringResource(resId, *args.toTypedArray())
+        is StringResource -> {
+            if (args.isEmpty()) {
+                stringResource(resId)
+            } else {
+                val resolvedArgs = args.map { if (it is UiText) it.asString() else it }
+                stringResource(resId, *resolvedArgs.toTypedArray())
+            }
+        }
     }
 
     fun asString(context: Context): String = when (this) {
         is DynamicString -> value
-        is StringResource -> if (args.isEmpty()) context.getString(resId) else context.getString(resId, *args.toTypedArray())
+        is StringResource -> {
+            if (args.isEmpty()) {
+                context.getString(resId)
+            } else {
+                val resolvedArgs = args.map { if (it is UiText) it.asString(context) else it }
+                context.getString(resId, *resolvedArgs.toTypedArray())
+            }
+        }
     }
 
     companion object {

@@ -298,6 +298,18 @@ private fun HealthCheckRow(
         )
         return
     }
+    if (item.id == HealthCheckId.OEM_BACKGROUND) {
+        com.financeautomation.presentation.screens.drawer.OemBackgroundCard(
+            isOemDone = item.isOemToggleDone,
+            onToggleOemDone = onToggleOemDone,
+            onOpenSettings = onFix,
+            oemInstruction = oemInstruction,
+            oemFeedback = oemFeedback,
+            onOemFeedback = { onOemFeedback?.invoke(it) },
+            modifier = Modifier.fillMaxWidth()
+        )
+        return
+    }
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         shape = FinanceTheme.shapes.medium,
@@ -329,42 +341,6 @@ private fun HealthCheckRow(
                     )
                 } else if (item.status == HealthStatus.OK) {
                     Text(text = stringResource(R.string.health_status_ok), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
-                }
-            }
-
-            if (item.id == HealthCheckId.OEM_BACKGROUND) {
-                Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
-                if (!oemInstruction.isNullOrBlank()) {
-                    Text(text = oemInstruction, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = FinanceTheme.sizes.buttonHeightSmall))
-                }
-                Row(modifier = Modifier.fillMaxWidth().padding(start = FinanceTheme.sizes.iconLarge, top = FinanceTheme.sizes.badgeOffset), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = item.isOemToggleDone, onCheckedChange = onToggleOemDone, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
-                    Text(text = stringResource(R.string.health_oem_configured), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.weight(1f))
-                    com.financeautomation.presentation.components.OutlinedButton(
-                        text = stringResource(R.string.health_oem_open_settings),
-                        onClick = onFix
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = FinanceTheme.sizes.iconLarge, top = FinanceTheme.sizes.badgeOffset),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-                ) {
-                    Text(text = stringResource(R.string.oem_feedback_prompt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FilterChip(
-                        selected = oemFeedback == true,
-                        onClick = { onOemFeedback?.invoke(true) },
-                        label = { Text(stringResource(R.string.action_yes)) },
-                        shape = FinanceTheme.shapes.small
-                    )
-                    FilterChip(
-                        selected = oemFeedback == false,
-                        onClick = { onOemFeedback?.invoke(false) },
-                        label = { Text(stringResource(R.string.action_no)) },
-                        shape = FinanceTheme.shapes.small
-                    )
                 }
             }
         }

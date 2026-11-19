@@ -44,6 +44,8 @@ data class SettingsUiState(
     val googleAccountEmail: String? = null,
     /** Set while the user is asked to confirm switching to another Google account. */
     val pendingAccountSwitch: com.financeautomation.data.account.AccountSwitchPrompt? = null,
+    /** Non-null when a repair action found existing backups and awaits user confirmation (Archive / Keep / Cancel). Holds backup count. */
+    val pendingRepairConfirmation: Int? = null,
     val googleAccountDisplayName: String? = null,
     val accounts: List<Account> = emptyList(),
     val accountTransactionCounts: Map<String, Int> = emptyMap(),
@@ -65,6 +67,8 @@ data class SettingsUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val appLockEnabled: Boolean = false,
     val hideRecentsPreview: Boolean = false,
+    val crashlyticsOptIn: Boolean = false,
+    val analyticsOptIn: Boolean = false,
     val subscriptionReminderTime: String = PreferencesRepository.DEFAULT_SUBSCRIPTION_REMINDER_TIME
 )
 
@@ -215,6 +219,15 @@ class SettingsViewModel(
                 _uiState.update { it.copy(subscriptionReminderTime = time) }
             }
         }
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getWorkbookReplacedNoticePending().collect { isPending ->
+                if (isPending == true) {
+                    _uiState.update { it.copy(userMessage = WorkbookReplacedNotice.text()) }
+                } else if (WorkbookReplacedNotice.isReplacedNotice(_uiState.value.userMessage)) {
+                    _uiState.update { it.copy(userMessage = null) }
+                }
+            }
+        }
     }
 
     fun onSubscriptionReminderTimeChanged(time: String) {
@@ -236,12 +249,20 @@ class SettingsViewModel(
     fun cancelAccountSwitch() = syncCoordinator.cancelAccountSwitch()
 
     fun autoProvisionMasterSheet() = syncCoordinator.autoProvisionMasterSheet()
+    fun onRepairWorkbook(archiveOlder: Boolean = false) = syncCoordinator.onRepairWorkbook(archiveOlder = archiveOlder)
+    fun requestRepairWorkbook() = syncCoordinator.requestRepairWorkbook()
+    fun confirmRepair(archiveOlder: Boolean) = syncCoordinator.confirmRepair(archiveOlder)
+    fun cancelRepair() = syncCoordinator.cancelRepair()
+    suspend fun checkBackupsBeforeRepair(): Int {
+        val currentYear = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year
+        return syncCoordinator.getExistingBackupsCount(currentYear)
+    }
 
     // --- Google Sheets Connection & Sync ---
 
     fun onSpreadsheetIdChanged(newId: String) = syncCoordinator.onSpreadsheetIdChanged(newId)
 
-    fun onCreateFreshWorkbook() = syncCoordinator.onCreateFreshWorkbook()
+    fun onCreateFreshWorkbook(copyHistory: Boolean = false) = syncCoordinator.onCreateFreshWorkbook(copyHistory)
 
     fun onSyncNow() = syncCoordinator.onSyncNow()
     fun onCheckAllMonths() = syncCoordinator.onCheckAllMonths()
@@ -256,6 +277,10 @@ class SettingsViewModel(
 
     fun onArchiveAccount(accountId: String) = customizationCoordinator.onArchiveAccount(accountId)
 
+    fun onDeleteAccount(accountId: String) = customizationCoordinator.onDeleteAccount(accountId)
+
+    fun onReorderAccounts(accountIds: List<String>) = customizationCoordinator.onReorderAccounts(accountIds)
+
     // --- Expense Categories & Living Burn ---
 
     fun onAddCategory(name: String, isExcludedFromLivingBurn: Boolean = false, colorName: String = "default_tag") =
@@ -266,6 +291,10 @@ class SettingsViewModel(
     fun onToggleCategoryLivingBurnExclusion(categoryId: String, isExcluded: Boolean) = customizationCoordinator.onToggleCategoryLivingBurnExclusion(categoryId, isExcluded)
 
     fun onArchiveCategory(categoryId: String) = customizationCoordinator.onArchiveCategory(categoryId)
+
+    fun onReorderCategories(categoryIds: List<String>) = customizationCoordinator.onReorderCategories(categoryIds)
+
+    fun onUpdateCategoryColor(categoryId: String, colorName: String) = customizationCoordinator.onUpdateCategoryColor(categoryId, colorName)
 
     // --- Trip & Event Tags ---
 
@@ -368,7 +397,13 @@ class SettingsViewModel(
     fun onRegenerateDashboard() = syncCoordinator.onRegenerateDashboard()
 
     fun clearMessages() {
+        val wasShowingReplacedNotice = WorkbookReplacedNotice.isReplacedNotice(_uiState.value.userMessage)
         _uiState.update { it.copy(userMessage = null, errorMessage = null) }
+        if (wasShowingReplacedNotice) {
+            viewModelScope.launch(ioDispatcher) {
+                preferencesRepository.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, null, isDirty = false)
+            }
+        }
     }
 
     fun setErrorMessage(message: UiText?) {
@@ -377,6 +412,29 @@ class SettingsViewModel(
 
     fun setErrorMessage(message: String) {
         _uiState.update { it.copy(errorMessage = UiText.dynamic(message)) }
+    }
+
+    fun setCrashlyticsOptIn(context: android.content.Context, enabled: Boolean) {
+        com.financeautomation.core.utils.CrashlyticsManager.setOptIn(context, enabled)
+        _uiState.update { it.copy(crashlyticsOptIn = enabled) }
+    }
+
+    fun setAnalyticsOptIn(context: android.content.Context, enabled: Boolean) {
+        com.financeautomation.core.utils.AnalyticsManager.setOptIn(context, enabled)
+        _uiState.update { it.copy(analyticsOptIn = enabled) }
+    }
+
+    fun sendTestCrashReport(context: android.content.Context) {
+        if (!com.financeautomation.core.utils.CrashlyticsManager.isOptedIn(context)) {
+            _uiState.update { it.copy(userMessage = UiText.res(R.string.privacy_test_report_off)) }
+            return
+        }
+        com.financeautomation.core.utils.CrashlyticsManager.recordNonFatal(
+            context,
+            RuntimeException("Test verification non-fatal report"),
+            "PreferencesScreen"
+        )
+        _uiState.update { it.copy(userMessage = UiText.res(R.string.privacy_test_report_sent)) }
     }
 
     companion object {

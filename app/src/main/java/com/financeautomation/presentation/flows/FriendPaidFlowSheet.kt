@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.flows
 
+import com.financeautomation.presentation.components.ClearFocusOnUserDrag
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -54,10 +55,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
-import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Companion
-import com.financeautomation.domain.usecase.ExpressionEvaluator
+import com.financeautomation.presentation.components.AmountEntry
+import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.FilledButton
@@ -95,7 +96,7 @@ fun FriendPaidFlowSheet(
     var amountText by rememberSaveable { mutableStateOf("") }
     var creditorName by rememberSaveable { mutableStateOf("") }
     var whatForText by rememberSaveable { mutableStateOf("") }
-    var selectedCategory by rememberSaveable { mutableStateOf(CategoryConstants.CATEGORY_FOOD_AND_DRINK) }
+    var selectedCategory by rememberSaveable { mutableStateOf(CategoryConstants.CATEGORY_OTHER) }
 
     val todayFormatted = remember { LocalDate.now(SHEET_ZONE).format(DISPLAY_DATE_FORMATTER) }
     var dateText by rememberSaveable { mutableStateOf(todayFormatted) }
@@ -108,11 +109,7 @@ fun FriendPaidFlowSheet(
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
 
-    LaunchedEffect(scrollState.isScrollInProgress) {
-        if (scrollState.isScrollInProgress) {
-            focusManager.clearFocus()
-        }
-    }
+    ClearFocusOnUserDrag(scrollState, focusManager)
 
     Column(
         modifier = modifier
@@ -144,64 +141,12 @@ fun FriendPaidFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "₹",
-                    style = FinanceTheme.typography.amountHero,
-                    color = FinanceTheme.colors.primary,
-                    modifier = Modifier.padding(end = FinanceTheme.spacing.xs)
-                )
-
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { input ->
-                        if (AmountInputSanitizer.isValidExpressionInput(input)) {
-                            amountText = input
-                        }
-                    },
-                    singleLine = true,
-                    textStyle = FinanceTheme.typography.amountHero.copy(
-                        color = FinanceTheme.colors.onSurface,
-                        textAlign = TextAlign.Center
-                    ),
-                    cursorBrush = SolidColor(FinanceTheme.colors.primary),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Next
-                    ),
-                    modifier = Modifier
-                        .width(IntrinsicSize.Min)
-                        .defaultMinSize(minWidth = FinanceTheme.sizes.emptyStateIllustration)
-                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-                    decorationBox = { innerTextField ->
-                        Box(contentAlignment = Alignment.Center) {
-                            if (amountText.isEmpty()) {
-                                Text(
-                                    text = "0.00",
-                                    style = FinanceTheme.typography.amountHero,
-                                    color = FinanceTheme.colors.outlineVariant
-                                )
-                            }
-                            innerTextField()
-                        }
-                    }
-                )
-            }
-
-            val evaluated = remember(amountText) { ExpressionEvaluator().evaluate(amountText) }
-            if (amountText.any { it in "+-*/" } && evaluated != null && evaluated > 0.0) {
-                Text(
-                    text = "= ${formatRupeesAuto(evaluated)}",
-                    style = FinanceTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = FinanceTheme.spacing.xxs)
-                )
-            }
+            AmountField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                hero = true,
+                onFocusChanged = onKeyboardFocusChanged
+            )
         }
 
         // 2. Who Paid (Friend chips + Add friend)
@@ -265,7 +210,10 @@ fun FriendPaidFlowSheet(
                 ) {
                     OutlinedTextField(
                         value = newFriendName,
-                        onValueChange = { newFriendName = it },
+                        onValueChange = {
+                            newFriendName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
                         singleLine = true,
                         shape = FinanceShapes.card,
@@ -307,7 +255,10 @@ fun FriendPaidFlowSheet(
 
             OutlinedTextField(
                 value = creditorName,
-                onValueChange = { creditorName = it },
+                onValueChange = {
+                    creditorName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                },
                 placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
                 singleLine = true,
                 shape = FinanceShapes.card,
@@ -333,7 +284,10 @@ fun FriendPaidFlowSheet(
 
             OutlinedTextField(
                 value = whatForText,
-                onValueChange = { whatForText = it },
+                onValueChange = {
+                    whatForText = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+                },
                 placeholder = { Text(stringResource(R.string.hint_add_description), style = FinanceTheme.typography.bodyMedium) },
                 singleLine = true,
                 shape = FinanceShapes.card,
@@ -461,8 +415,9 @@ fun FriendPaidFlowSheet(
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // 6. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Record debt" outside scrollable area
-        val parsedAmount = ExpressionEvaluator().evaluate(amountText) ?: 0.0
-        val isValid = parsedAmount > 0.0 && creditorName.isNotBlank() && whatForText.isNotBlank()
+        val amountEntry = AmountEntry(amountText)
+        val parsedAmount = amountEntry.amountOrZero
+        val isValid = amountEntry.canSave && creditorName.isNotBlank() && whatForText.isNotBlank()
 
         ButtonPair(
             outlinedText = stringResource(R.string.action_cancel),

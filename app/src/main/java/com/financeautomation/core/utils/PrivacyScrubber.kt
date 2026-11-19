@@ -3,7 +3,7 @@ package com.financeautomation.core.utils
 /**
  * Removes anything that could identify the user or their data from technical text before it is stored in the
  * diagnostics trail, the failed queue reason or a shareable report. Google error messages can echo spreadsheet
- * ids, e-mail addresses and cell content, so text is scrubbed at the point where it is stored.
+ * ids, e-mail addresses, bearer tokens, and cell content, so text is scrubbed at the point where it is stored.
  * Pure Kotlin, no Android dependencies.
  */
 object PrivacyScrubber {
@@ -17,14 +17,20 @@ object PrivacyScrubber {
     private val LONG_NUMBER = Regex("""\d{6,}""")
     // A quoted value of more than a few characters is likely cell content, for example a payee typed by the user
     private val QUOTED_TEXT = Regex("""(['"])(?:(?!\1).){13,}\1""")
+    private val BEARER_TOKEN = Regex("""(?i)Bearer\s+[A-Za-z0-9._-]+""")
+    private val YA29_TOKEN = Regex("""ya29\.[A-Za-z0-9_-]+""")
 
-    fun scrub(text: String): String {
+    fun scrub(text: String, capLength: Boolean = true): String {
         var out = text
+        out = BEARER_TOKEN.replace(out, "Bearer [token]")
+        out = YA29_TOKEN.replace(out, "[token]")
         out = EMAIL.replace(out, "[email]")
         out = RUPEE_AMOUNT.replace(out, "[amount]")
         out = LONG_TOKEN.replace(out, "[id]")
         out = LONG_NUMBER.replace(out, "[number]")
         out = QUOTED_TEXT.replace(out, "[text]")
-        return if (out.length > MAX_LENGTH) out.take(MAX_LENGTH) else out
+        return if (capLength && out.length > MAX_LENGTH) out.take(MAX_LENGTH) else out
     }
+
+    fun scrubWithoutLengthCap(text: String): String = scrub(text, capLength = false)
 }

@@ -3,7 +3,9 @@ package com.financeautomation.testutil
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.entity.LineageEntity
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.InflowEntity
@@ -47,6 +49,9 @@ class InMemoryTransactionDao : TransactionDao {
     override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {
         rows[id]?.let { rows[id] = it.copy(reviewState = reviewState) }
     }
+    override suspend fun getByAccount(account: String): List<TransactionEntity> {
+        return rows.values.filter { it.account.equals(account, ignoreCase = true) }
+    }
     override suspend fun updateAccountName(oldName: String, newName: String): Int {
         var count = 0
         rows.values.filter { it.account.equals(oldName, ignoreCase = true) }.forEach {
@@ -54,6 +59,9 @@ class InMemoryTransactionDao : TransactionDao {
             count++
         }
         return count
+    }
+    override suspend fun getByCategory(category: String): List<TransactionEntity> {
+        return rows.values.filter { it.category.equals(category, ignoreCase = true) }
     }
     override suspend fun updateCategoryName(oldName: String, newName: String): Int {
         var count = 0
@@ -71,6 +79,17 @@ class InMemoryTransactionDao : TransactionDao {
         }
         return count
     }
+
+    override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> =
+        rows.values.filter {
+            it.timestamp in startMillis until endMillis &&
+                !it.status.equals("Void", ignoreCase = true) &&
+                it.reviewState != "NEEDS_REVIEW"
+        }.sortedBy { it.timestamp }
+
+    override suspend fun resetSyncStateForRequeue(id: String) {
+        rows[id]?.let { rows[id] = it.copy(syncState = SyncState.PENDING.name, sheetRowIndex = null) }
+    }
 }
 
 /** In-memory inflow table. */
@@ -87,6 +106,46 @@ class InMemoryInflowDao : InflowDao {
         storage[id]?.let { storage[id] = it.copy(status = status) }
     }
     override suspend fun deleteById(id: String) { storage.remove(id) }
+    override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<InflowEntity> =
+        storage.values.filter { it.timestamp in startMillis until endMillis && !it.status.equals("VOID", ignoreCase = true) }
+            .sortedBy { it.timestamp }
+}
+
+/** In-memory payables table. */
+class InMemoryPayableDao : PayableDao {
+    val storage = ConcurrentHashMap<String, PayableEntity>()
+    override fun observeAll(): Flow<List<PayableEntity>> = flowOf(storage.values.toList())
+    override fun observePending(): Flow<List<PayableEntity>> = flowOf(storage.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) })
+    override suspend fun getPending(): List<PayableEntity> = storage.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) }
+    override suspend fun getAll(): List<PayableEntity> = storage.values.toList()
+    override suspend fun getByUuid(uuid: String): PayableEntity? = storage[uuid]
+    override suspend fun upsert(payable: PayableEntity) { storage[payable.uuid] = payable }
+    override suspend fun upsertAll(payables: List<PayableEntity>) { payables.forEach { storage[it.uuid] = it } }
+    override suspend fun deleteByUuid(uuid: String) { storage.remove(uuid) }
+    override suspend fun updatePaidByName(oldName: String, newName: String): Int {
+        var count = 0
+        storage.values.filter { it.paidBy == oldName }.forEach {
+            storage[it.uuid] = it.copy(paidBy = newName)
+            count++
+        }
+        return count
+    }
+    override suspend fun deleteAll() { storage.clear() }
+    override suspend fun getAllForYear(
+        startSerial: Int,
+        endSerial: Int,
+        startMillis: Long,
+        endMillis: Long
+    ): List<PayableEntity> =
+        storage.values.filter {
+            val serial = it.dateIncurredSerial
+            val matchesYear = if (serial != null) {
+                serial in startSerial until endSerial
+            } else {
+                it.updatedAt in startMillis until endMillis
+            }
+            matchesYear && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+        }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
 }
 
 /** In-memory sync queue that mirrors the Room queries (a FAILED row below the retry cap is still pending). */
@@ -96,7 +155,7 @@ class InMemoryQueueDao : SyncQueueDao {
 
     private fun pendingList(maxRetries: Int) = queue.values
         .filter { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }
-        .sortedBy { it.id }
+        .sortedWith(compareBy({ it.createdAt }, { it.id }))
 
     override fun getPendingQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING })
     override fun getAllQueueFlow(): Flow<List<SyncQueueEntity>> = flowOf(queue.values.toList())
@@ -134,7 +193,7 @@ class InMemoryQueueDao : SyncQueueDao {
     }
     override suspend fun recoverRetryableFailedItems(): Int {
         var count = 0
-        queue.values.filter { it.status == SyncQueueEntity.STATUS_FAILED && it.lastErrorKind in listOf("NO_NETWORK", "RATE_LIMITED", "SERVER_BUSY") }
+        queue.values.filter { it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < 8 && it.lastErrorKind in listOf("NO_NETWORK", "RATE_LIMITED", "SERVER_BUSY") }
             .forEach {
                 queue[it.id] = it.copy(status = SyncQueueEntity.STATUS_PENDING)
                 count++
@@ -151,6 +210,19 @@ class InMemoryQueueDao : SyncQueueDao {
     }
     override suspend fun updatePlanJsonId(oldId: String, newId: String) {
         queue.values.filter { it.planJson?.contains(oldId) == true }.forEach { queue[it.id] = it.copy(planJson = it.planJson!!.replace(oldId, newId)) }
+    }
+
+    override suspend fun getActiveTransactionIds(): List<String> =
+        queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS }
+            .map { it.transactionId }
+
+    override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+        val idSet = transactionIds.toSet()
+        queue.values.filter {
+            it.transactionId in idSet &&
+            it.status == SyncQueueEntity.STATUS_PENDING &&
+            (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+        }.forEach { queue.remove(it.id) }
     }
 }
 

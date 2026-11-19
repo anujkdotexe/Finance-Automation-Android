@@ -93,13 +93,27 @@ class QuickActionReceiver : BroadcastReceiver() {
                 if (!captureId.isNullOrBlank() && container != null) {
                     val db = container.awaitDatabase()
                     val captureDao = db.pendingCaptureDao()
+                    val activeCategories = db.categoryDao().getActiveCategories()
+                    val matchedCategory = category?.trim()?.let { raw ->
+                        activeCategories.firstOrNull { it.name.trim().equals(raw, ignoreCase = true) }?.name
+                    }
+                    val resolvedCategory = matchedCategory
+                        ?: activeCategories.firstOrNull { it.name.trim().equals(CategoryConstants.CATEGORY_OTHER, ignoreCase = true) }?.name
+                        ?: activeCategories.firstOrNull()?.name
+
                     var loggedCapture: com.financeautomation.data.local.entity.PendingCaptureEntity? = null
-                    var loggedCategory = category ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
+                    var loggedCategoryName: String? = null
                     val outcome = CaptureClaim.logOnce(captureDao, captureId) { capture ->
                         if (capture.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
                             // Credit captures must never be saved as a debit expense
                             return@logOnce false
                         }
+                        if (resolvedCategory == null) {
+                            captureDao.updateState(capture.id, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_NEEDS_REVIEW)
+                            return@logOnce false
+                        }
+                        val loggedCategory = resolvedCategory
+                        loggedCategoryName = loggedCategory
                         val amount = capture.amount ?: 0.0
                         val account = capture.inferredAccount?.takeIf { it.isNotBlank() } ?: CategoryConstants.ACCOUNT_OTHER
                         val subscriptionId = com.financeautomation.data.local.entity.PendingCaptureEntity.flagValue(
@@ -133,7 +147,8 @@ class QuickActionReceiver : BroadcastReceiver() {
                         try {
                             val statDao = db.categoryStatDao()
                             val key = container.predictCategoryUseCase.computePayeeKey(capture.payee)
-                            statDao.incrementStat(key, loggedCategory, System.currentTimeMillis())
+                            val finalCat = loggedCategoryName ?: resolvedCategory ?: CategoryConstants.CATEGORY_OTHER
+                            statDao.incrementStat(key, finalCat, System.currentTimeMillis())
                         } catch (statEx: Exception) {
                             Diagnostics.record("QuickActionReceiver", "${statEx.javaClass.simpleName}: incrementStat")
                         }

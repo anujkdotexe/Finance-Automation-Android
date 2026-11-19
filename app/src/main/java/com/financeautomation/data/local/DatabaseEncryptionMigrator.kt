@@ -192,25 +192,32 @@ object DatabaseEncryptionMigrator {
             val escapedPath = plainBackupFile.absolutePath.replace("'", "''")
             encDb.execSQL("ATTACH DATABASE '$escapedPath' AS plain_backup KEY '';")
 
-            // 1. Transactions table FIRST (so foreign key / transactionId references exist when sync_queue rows arrive)
-            try {
-                encDb.execSQL("INSERT OR IGNORE INTO transactions SELECT * FROM plain_backup.transactions;")
-            } catch (e: Exception) {
-                Log.w(TAG, "Fallback restore transactions failed: ${e.javaClass.simpleName}")
-            }
+            // Copy tables in dependency order (transactions/sync_queue first, then inflows, payables, entities)
+            val tablesToRestore = listOf(
+                "transactions",
+                "sync_queue",
+                "inflows",
+                "payables",
+                "categories",
+                "accounts",
+                "companions",
+                "trip_tags",
+                "lineage",
+                "pending_captures",
+                "subscriptions",
+                "subscription_cycles",
+                "budgets",
+                "preferences_table",
+                "preferences",
+                "category_stats",
+                "handled_notifications"
+            )
 
-            // 2. Sync queue table SECOND
-            try {
-                encDb.execSQL("INSERT OR IGNORE INTO sync_queue SELECT * FROM plain_backup.sync_queue;")
-            } catch (e: Exception) {
-                Log.w(TAG, "Fallback restore sync_queue failed: ${e.javaClass.simpleName}")
-            }
-
-            // 3. Other config tables best effort
-            val otherTables = listOf("categories", "accounts", "companions", "trip_tags", "preferences_table", "preferences")
-            for (table in otherTables) {
+            var anyTableRestored = false
+            for (table in tablesToRestore) {
                 try {
                     encDb.execSQL("INSERT OR IGNORE INTO $table SELECT * FROM plain_backup.$table;")
+                    anyTableRestored = true
                 } catch (e: Exception) {
                     Log.w(TAG, "Fallback restore table $table skipped: ${e.javaClass.simpleName}")
                 }
@@ -222,8 +229,10 @@ object DatabaseEncryptionMigrator {
                 Log.w(TAG, "Fallback detach plain_backup failed: ${e.javaClass.simpleName}")
             }
 
-            Log.i(TAG, "Plain backup fallback restoration completed table-by-table.")
-            securelyDeleteFile(plainBackupFile)
+            if (anyTableRestored) {
+                Log.i(TAG, "Plain backup fallback restoration completed table-by-table.")
+                securelyDeleteFile(plainBackupFile)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to attach plain backup for recovery: ${e.javaClass.simpleName}")
         } finally {

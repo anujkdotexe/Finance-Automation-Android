@@ -4,13 +4,18 @@ import com.financeautomation.core.model.Result
 import com.financeautomation.R
 import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.entity.PayableEntity
+import com.financeautomation.data.remote.ArchiveBackupsOutcome
+import com.financeautomation.data.remote.DriveBackupFile
 import com.financeautomation.data.remote.GoogleApiError
 import com.financeautomation.data.remote.GoogleEndpoint
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsApiException
 import com.financeautomation.data.remote.GoogleSheetsClient
 import com.financeautomation.data.remote.TokenProvider
+import com.financeautomation.data.remote.WorkbookRepairResult
 import com.financeautomation.data.remote.WorkbookResolver
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import com.financeautomation.domain.model.Companion
 import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.model.Transaction
@@ -35,6 +40,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -111,12 +117,22 @@ class SettingsViewModelTest {
         override fun getThemeMode(): Flow<ThemeMode> = themeModeFlow.asStateFlow()
         override suspend fun getThemeModeSync(): ThemeMode = themeModeFlow.value
         override suspend fun setThemeMode(mode: ThemeMode) { themeModeFlow.value = mode }
+        val noticePendingFlow = MutableStateFlow(false)
+        override fun getWorkbookReplacedNoticePending(): Flow<Boolean> = noticePendingFlow.asStateFlow()
         private val generic = mutableMapOf<String, String>()
         override suspend fun getPreference(key: String): String? = generic[key]
         override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {
+            if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+                noticePendingFlow.value = (value == "true")
+            }
             if (value == null) generic.remove(key) else generic[key] = value
         }
-        override suspend fun deletePreference(key: String) { generic.remove(key) }
+        override suspend fun deletePreference(key: String) {
+            if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+                noticePendingFlow.value = false
+            }
+            generic.remove(key)
+        }
     }
 
     private class FakeWorkbookResolver(
@@ -126,15 +142,41 @@ class SettingsViewModelTest {
     ) : WorkbookResolver(driveClient, sheetsClient, prefs) {
         var resolveCalls = 0
         var lastForceValidateTabs: Boolean? = null
+        var lastCreateBackup: Boolean? = null
+        var lastArchiveOlderBackups: Boolean? = null
         var delayMs: Long = 0
 
-        override suspend fun resolveForYear(year: Int, forceValidateTabs: Boolean): Result<String> {
+        override suspend fun resolveForYear(
+            year: Int,
+            forceValidateTabs: Boolean,
+            createBackup: Boolean,
+            archiveOlderBackups: Boolean
+        ): Result<String> {
             resolveCalls++
             lastForceValidateTabs = forceValidateTabs
+            lastCreateBackup = createBackup
+            lastArchiveOlderBackups = archiveOlderBackups
             if (delayMs > 0) {
                 delay(delayMs)
             }
             return Result.Success("repaired_sheet_id_456")
+        }
+
+        var repairCalls = 0
+        var repairArchiveOutcomeToReturn: ArchiveBackupsOutcome? = null
+        override suspend fun repairWorkbook(
+            year: Int,
+            archiveOlderBackups: Boolean
+        ): Result<WorkbookRepairResult> {
+            repairCalls++
+            resolveCalls++
+            lastForceValidateTabs = true
+            lastCreateBackup = true
+            lastArchiveOlderBackups = archiveOlderBackups
+            if (delayMs > 0) {
+                delay(delayMs)
+            }
+            return Result.Success(WorkbookRepairResult("repaired_sheet_id_456", repairArchiveOutcomeToReturn))
         }
     }
 
@@ -167,9 +209,352 @@ class SettingsViewModelTest {
 
         assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
         assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
+        assertEquals("Expected createBackup to be false for autoProvisionMasterSheet", false, resolver.lastCreateBackup)
         assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
         assertFalse(stateFlow.value.isProvisioning)
         assertEquals(R.string.settings_msg_provisioned_workbook, stateFlow.value.userMessage?.resId)
+    }
+
+    @Test
+    fun testOnRepairWorkbookCallsResolverWithCreateBackupTrue() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+
+        val stateFlow = MutableStateFlow(SettingsUiState())
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook()
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
+        assertEquals("Expected createBackup to be true for onRepairWorkbook", true, resolver.lastCreateBackup)
+        assertEquals("Expected archiveOlderBackups to be false by default", false, resolver.lastArchiveOlderBackups)
+        assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
+        assertFalse(stateFlow.value.isProvisioning)
+        assertEquals(R.string.settings_msg_provisioned_workbook, stateFlow.value.userMessage?.resId)
+    }
+
+    @Test
+    fun testOnRepairWorkbookWithArchiveOlderCallsResolverWithArchiveOlderTrue() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook(archiveOlder = true)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
+        assertEquals("Expected createBackup to be true for onRepairWorkbook", true, resolver.lastCreateBackup)
+        assertEquals("Expected archiveOlderBackups to be true", true, resolver.lastArchiveOlderBackups)
+        assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
+    }
+
+    @Test
+    fun testRequestRepairWorkbookPromptsConfirmationWhenBackupsExist() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = object : GoogleDriveClient(okHttpClient, fakeTokenProvider) {
+            override suspend fun findBackups(year: Int): Result<List<DriveBackupFile>> {
+                return Result.Success(
+                    listOf(
+                        DriveBackupFile("b1", "Finance2026 (backup 1)"),
+                        DriveBackupFile("b2", "Finance2026 (backup 2)")
+                    )
+                )
+            }
+        }
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.requestRepairWorkbook()
+
+        assertEquals("Expected confirmation dialog to prompt with 2 backups", 2, stateFlow.value.pendingRepairConfirmation)
+        assertEquals("Expected resolver not called before user confirmation", 0, resolver.resolveCalls)
+    }
+
+    @Test
+    fun testRequestRepairWorkbookRunsImmediatelyWhenZeroBackups() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = object : GoogleDriveClient(okHttpClient, fakeTokenProvider) {
+            override suspend fun findBackups(year: Int): Result<List<DriveBackupFile>> {
+                return Result.Success(emptyList())
+            }
+        }
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.requestRepairWorkbook()
+
+        assertNull("Expected no confirmation dialog when zero backups", stateFlow.value.pendingRepairConfirmation)
+        assertEquals("Expected resolver called immediately", 1, resolver.resolveCalls)
+    }
+
+    @Test
+    fun testOnRepairWorkbookWithKeepChoiceCallsResolverWithArchiveOlderFalse() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook(archiveOlder = false)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected forceValidateTabs to be true", true, resolver.lastForceValidateTabs)
+        assertEquals("Expected createBackup to be true for onRepairWorkbook", true, resolver.lastCreateBackup)
+        assertEquals("Expected archiveOlderBackups to be false for Keep choice", false, resolver.lastArchiveOlderBackups)
+        assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
+    }
+
+    @Test
+    fun testConfirmRepairWithArchiveChoiceCallsResolverWithArchiveOlderTrue() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState(pendingRepairConfirmation = 2))
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.confirmRepair(archiveOlder = true)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected archiveOlderBackups to be true", true, resolver.lastArchiveOlderBackups)
+        assertNull("Pending confirmation must be cleared", stateFlow.value.pendingRepairConfirmation)
+        assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
+    }
+
+    @Test
+    fun testConfirmRepairWithKeepChoiceCallsResolverWithArchiveOlderFalse() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState(pendingRepairConfirmation = 2))
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.confirmRepair(archiveOlder = false)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected archiveOlderBackups to be false", false, resolver.lastArchiveOlderBackups)
+        assertNull("Pending confirmation must be cleared", stateFlow.value.pendingRepairConfirmation)
+        assertEquals("repaired_sheet_id_456", stateFlow.value.spreadsheetId)
+    }
+
+    @Test
+    fun testCancelRepairClearsConfirmationWithoutCallingResolver() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs)
+        val stateFlow = MutableStateFlow(SettingsUiState(pendingRepairConfirmation = 2))
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.cancelRepair()
+
+        assertNull("Pending confirmation must be cleared", stateFlow.value.pendingRepairConfirmation)
+        assertEquals("Expected zero resolver calls when cancelRepair is called", 0, resolver.resolveCalls)
+    }
+
+    @Test
+    fun testOnRepairWorkbookWithFindBackupsErrorShowsArchiveFailedMessage() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs).apply {
+            repairArchiveOutcomeToReturn = ArchiveBackupsOutcome(failedCount = 0, error = Exception("Drive find error"))
+        }
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook(archiveOlder = true)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected archive failed message without made-up counts", R.string.repair_backup_msg_archive_failed, stateFlow.value.userMessage?.resId)
+    }
+
+    @Test
+    fun testOnRepairWorkbookWithKnownFailedCountShowsCountedPartialArchiveMessage() = runBlocking<Unit> {
+        val okHttpClient = OkHttpClient.Builder().build()
+        val driveClient = GoogleDriveClient(okHttpClient, fakeTokenProvider)
+        val sheetsClient = GoogleSheetsClient(okHttpClient, fakeTokenProvider)
+        val prefs = FakePreferencesRepository()
+        val resolver = FakeWorkbookResolver(driveClient, sheetsClient, prefs).apply {
+            repairArchiveOutcomeToReturn = ArchiveBackupsOutcome(failedCount = 2, error = Exception("Drive move error"))
+        }
+        val stateFlow = MutableStateFlow(SettingsUiState())
+
+        val coordinator = SettingsSyncCoordinator(
+            preferencesRepository = prefs,
+            transactionRepository = null,
+            syncConfigUseCase = null,
+            regenerateDashboardUseCase = null,
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            googleAuthTokenProvider = null,
+            workbookResolver = resolver,
+            accountRepository = null,
+            categoryRepository = null,
+            scope = this,
+            uiState = stateFlow,
+            ioDispatcher = Dispatchers.Unconfined
+        )
+
+        coordinator.onRepairWorkbook(archiveOlder = true)
+
+        assertEquals("Expected resolver to be called once", 1, resolver.resolveCalls)
+        assertEquals("Expected counted partial archive message", R.string.repair_backup_msg_partial_archive, stateFlow.value.userMessage?.resId)
     }
 
     @Test
@@ -207,9 +592,11 @@ class SettingsViewModelTest {
         // Second tap while running: must be ignored
         coordinator.autoProvisionMasterSheet()
 
-        // Wait until completion
-        while (stateFlow.value.isProvisioning) {
-            delay(20)
+        // Wait until completion with a safety timeout
+        kotlinx.coroutines.withTimeout(5_000L) {
+            while (stateFlow.value.isProvisioning) {
+                delay(20)
+            }
         }
 
         // Verify resolver was called exactly once
@@ -259,7 +646,7 @@ class SettingsViewModelTest {
             httpStatus = 400,
             status = "INVALID_ARGUMENT",
             reason = "INVALID_ARGUMENT",
-            message = "Range ('Nov26'!AC4:AC) exceeds grid limits. Max rows: 1000, max columns: 26"
+            message = "Range ('Nov26'!AD4:AD) exceeds grid limits. Max rows: 1000, max columns: 26"
         )
         val exception = GoogleSheetsApiException(
             message = "Sheets batchUpdate failed (code 400)",
@@ -353,6 +740,21 @@ class SettingsViewModelTest {
         override suspend fun deleteByUuid(uuid: String) {}
         override suspend fun deleteAll() {}
         override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(
+            startSerial: Int,
+            endSerial: Int,
+            startMillis: Long,
+            endMillis: Long
+        ): List<PayableEntity> =
+            pending.filter {
+                val serial = it.dateIncurredSerial
+                val matchesYear = if (serial != null) {
+                    serial in startSerial until endSerial
+                } else {
+                    it.updatedAt in startMillis until endMillis
+                }
+                matchesYear && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+            }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
     }
 
     private class FakeTransactionRepo : TransactionRepository {
@@ -367,12 +769,13 @@ class SettingsViewModelTest {
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
-        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long, category: String): Result<String> = Result.Success("id")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
         var reconcileAllMonthsResult: Result<Int> = Result.Success(0)
         override suspend fun reconcileAllMonths(): Result<Int> = reconcileAllMonthsResult
+        override suspend fun requeueYearForNewWorkbook(year: Int) {}
     }
 
     @Test
@@ -552,7 +955,7 @@ class SettingsViewModelTest {
         private val prefs: FakePreferencesRepository,
         private val fail: Boolean
     ) : WorkbookResolver(driveClient, sheetsClient, prefs) {
-        override suspend fun createFreshWorkbook(year: Int): Result<String> {
+        override suspend fun createFreshWorkbook(year: Int, copyHistory: Boolean): Result<String> {
             if (fail) return Result.Error(java.io.IOException("Drive quota"))
             prefs.setSpreadsheetIdForYear(year, "fresh_id")
             prefs.setSpreadsheetId("fresh_id")
@@ -618,6 +1021,51 @@ class SettingsViewModelTest {
         val msg = (error as UiText.DynamicString).value
         assertTrue("Expected safe code, got: $msg", msg.contains("fresh workbook, IOException"))
         assertFalse("Raw message must never appear in errorMessage", msg.contains("Drive quota"))
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_copyHistoryShowsCopyMessage() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState())
+        val coord = freshCoordinator(this, prefs, fail = false, state = state)
+        coord.onCreateFreshWorkbook(copyHistory = true)
+
+        assertEquals(com.financeautomation.R.string.fresh_workbook_msg_copy_history, state.value.userMessage?.resId)
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_startEmptyShowsEmptyMessage() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        val state = MutableStateFlow(SettingsUiState())
+        val coord = freshCoordinator(this, prefs, fail = false, state = state)
+        coord.onCreateFreshWorkbook(copyHistory = false)
+
+        assertEquals(com.financeautomation.R.string.fresh_workbook_msg_empty, state.value.userMessage?.resId)
+    }
+
+    @Test
+    fun cancelCreatesNothing() = runBlocking<Unit> {
+        val calls = mutableListOf<String>()
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor { chain ->
+                calls += chain.request().url.toString()
+                chain.proceed(chain.request())
+            }.build(),
+            fakeTokenProvider
+        )
+        // User cancels dialog -> onCreateFreshWorkbook is never called, 0 Drive calls made
+        assertTrue("No Drive calls when fresh workbook creation is cancelled", calls.isEmpty())
+    }
+
+    @Test
+    fun testCreateFreshWorkbook_copyHistoryWithRequeueFailureShowsRetryMessage() = runBlocking<Unit> {
+        val prefs = FakePreferencesRepository()
+        prefs.setPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR, "2026")
+        val state = MutableStateFlow(SettingsUiState())
+        val coord = freshCoordinator(this, prefs, fail = false, state = state)
+        coord.onCreateFreshWorkbook(copyHistory = true)
+
+        assertEquals(com.financeautomation.R.string.fresh_workbook_msg_copy_history_retry, state.value.userMessage?.resId)
     }
 
     @Test
@@ -847,5 +1295,26 @@ class SettingsViewModelTest {
         vm.onSubscriptionReminderTimeChanged("08:30")
         assertEquals("08:30", vm.uiState.value.subscriptionReminderTime)
         assertEquals("08:30", prefs.getSubscriptionReminderTimeSync())
+    }
+
+    @Test
+    fun testSettingsViewModel_collectsWorkbookReplacedNoticeFlow_andClearsOnDismiss() = runBlocking {
+        val prefs = FakePreferencesRepository()
+        val vm = SettingsViewModel(
+            preferencesRepository = prefs,
+            peopleRepository = FakePeopleRepo(),
+            transactionRepository = FakeTransactionRepo(),
+            ioDispatcher = Dispatchers.Unconfined
+        )
+        assertNull(vm.uiState.value.userMessage)
+
+        prefs.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+        assertNotNull(vm.uiState.value.userMessage)
+        assertEquals(R.string.workbook_replaced_notice_partial, vm.uiState.value.userMessage?.resId)
+
+        vm.clearMessages()
+        assertNull(vm.uiState.value.userMessage)
+        assertNull(prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+        assertFalse(prefs.noticePendingFlow.value)
     }
 }

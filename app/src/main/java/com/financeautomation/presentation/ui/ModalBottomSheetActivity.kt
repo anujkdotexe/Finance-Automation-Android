@@ -42,7 +42,7 @@ import com.financeautomation.domain.model.TripTag
 import com.financeautomation.presentation.flows.OpenDebtItem
 import com.financeautomation.presentation.overlay.OverlayContentHost
 import com.financeautomation.presentation.overlay.OverlayFlowScreen
-import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
@@ -93,9 +93,9 @@ class ModalBottomSheetActivity : ComponentActivity() {
         handleIntent(intent, restoring = savedInstanceState != null)
 
         setContent {
-            FinanceAutomationTheme(transparentSystemBars = true) {
+            val app = application as FinanceApplication
+            SavedThemeHost(app.appContainer.preferencesRepository.getThemeMode(), transparentSystemBars = true) {
                 val state by quickLogViewModel.uiState.collectAsState()
-                val app = application as FinanceApplication
 
                 LaunchedEffect(state.isSaved, state.isVoided) {
                     if (state.isSaved || state.isVoided) {
@@ -166,11 +166,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                 } else if (isCreditCapture) {
                     OverlayFlowScreen.INCOME_RETURN
                 } else {
-                    resolveInitialScreen(
-                        intent = intent,
-                        callingPackage = callingPackage,
-                        ownPackageName = packageName
-                    )
+                    resolveInitialScreen(intent)
                 }
 
                 // Transparent clickable backdrop for 1-tap outside dismiss
@@ -203,15 +199,16 @@ class ModalBottomSheetActivity : ComponentActivity() {
                         },
                         onConfirmExpense = {
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
-                            quickLogViewModel.onConfirmAndSave { msg, txnId ->
-                                if (txnId != null) {
+                            quickLogViewModel.onConfirmAndSave(
+                                onSaved = { msg, txnId ->
                                     Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
                                     dismissSafely()
-                                } else {
+                                },
+                                onError = { msg ->
                                     isSubmitting.set(false)
                                     Toast.makeText(this@ModalBottomSheetActivity, msg.asString(this@ModalBottomSheetActivity), Toast.LENGTH_SHORT).show()
                                 }
-                            }
+                            )
                         },
                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
@@ -268,12 +265,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
-                                    val effectiveWhatFor = com.financeautomation.core.utils.PayableFormatUtils.buildEffectiveWhatFor(whatFor, category)
                                     val res = app.appContainer.transactionRepository.logPayable(
                                         creditor = creditor,
                                         amount = amount,
-                                        whatFor = effectiveWhatFor,
-                                        timestamp = timestamp
+                                        whatFor = whatFor,
+                                        timestamp = timestamp,
+                                        category = category
                                     )
                                     withContext(Dispatchers.Main) {
                                         when (res) {
@@ -303,7 +300,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                 }
                             }
                         },
-                        onConfirmRepaid = { amount, person, timestamp ->
+                        onConfirmRepaid = { amount, person, timestamp, account, note ->
                             if (!isSubmitting.compareAndSet(false, true)) return@OverlayContentHost
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
@@ -311,7 +308,9 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                         creditor = person,
                                         amount = amount,
                                         explicitRef = null,
-                                        timestamp = timestamp
+                                        timestamp = timestamp,
+                                        account = account,
+                                        note = note
                                     )
                                     withContext(Dispatchers.Main) {
                                         when (res) {
@@ -424,33 +423,12 @@ class ModalBottomSheetActivity : ComponentActivity() {
         const val EXTRA_CAPTURE_ID: String = "com.financeautomation.extra.CAPTURE_ID"
         const val EXTRA_FLOW: String = "com.financeautomation.extra.FLOW"
         const val EXTRA_PRESELECT_FRIEND: String = "com.financeautomation.extra.PRESELECT_FRIEND"
-        const val EXTRA_INTERNAL_AUTH: String = "com.financeautomation.extra.INTERNAL_AUTH"
 
-        fun resolveInitialScreen(
-            intent: Intent,
-            callingPackage: String?,
-            ownPackageName: String,
-            isDebug: Boolean = com.financeautomation.BuildConfig.DEBUG
-        ): OverlayFlowScreen {
-            val authPendingIntent = try {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(EXTRA_INTERNAL_AUTH, android.app.PendingIntent::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(EXTRA_INTERNAL_AUTH)
-                }
-            } catch (e: Exception) {
-                null
-            }
-            val hasAuthToken = authPendingIntent?.creatorPackage == ownPackageName
-            val isAuth = com.financeautomation.presentation.overlay.FlowAuthGate.isAuthorized(
-                hasAuthToken = hasAuthToken,
-                callingPackage = callingPackage,
-                ownPackageName = ownPackageName,
-                isDebug = isDebug
-            )
-            val rawFlow = if (isAuth) intent.getStringExtra(EXTRA_FLOW) else null
-            return com.financeautomation.presentation.overlay.FlowAuthGate.resolveScreen(rawFlow, isAuth)
-        }
+        /**
+         * The sheet is not exported, so only this app can start it and the flow name comes from our own code.
+         * External callers reach flows only through [EntryActivity], which drops the flow for them.
+         */
+        fun resolveInitialScreen(intent: Intent): OverlayFlowScreen =
+            com.financeautomation.presentation.overlay.FlowAuthGate.resolveScreen(intent.getStringExtra(EXTRA_FLOW))
     }
 }

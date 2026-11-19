@@ -103,8 +103,87 @@ class RegexPatternsTest {
         assertTrue(PackageWhitelist.isWhitelisted(PackageWhitelist.PACKAGE_PHONEPE))
         assertFalse(PackageWhitelist.isWhitelisted("com.random.app"))
 
-        assertTrue(PackageWhitelist.isBlacklisted("com.whatsapp"))
+        assertTrue(PackageWhitelist.isBlacklisted("org.thoughtcrime.securesms"))
         assertTrue(PackageWhitelist.isBlacklisted("org.telegram.messenger"))
         assertFalse(PackageWhitelist.isBlacklisted(PackageWhitelist.PACKAGE_GPAY))
+    }
+
+    @Test
+    fun testFinancialKeywordsRegexMatchesNewCandidatesAndEnforcesWordBoundaries() {
+        // Words added in P1-8 keyword gate
+        assertTrue("acct", RegexPatterns.hasFinancialKeywords("Acct XXX234 Dr. INR 1,499.00"))
+        assertTrue("dr.", RegexPatterns.hasFinancialKeywords("Dr. INR 500 on 15/09/26"))
+        assertTrue("dr", RegexPatterns.hasFinancialKeywords("INR 500 Dr to Demo Mart"))
+        assertTrue("cr.", RegexPatterns.hasFinancialKeywords("Cr. INR 500 on 15/09/26"))
+        assertTrue("cr", RegexPatterns.hasFinancialKeywords("INR 500 Cr from Demo Mart"))
+        assertTrue("debit", RegexPatterns.hasFinancialKeywords("debit of INR 500 processed"))
+        assertTrue("debits", RegexPatterns.hasFinancialKeywords("INR 500 debits on 12/03"))
+        assertTrue("credit", RegexPatterns.hasFinancialKeywords("credit of INR 500 received"))
+        assertTrue("credits", RegexPatterns.hasFinancialKeywords("INR 500 credits on 12/03"))
+        assertTrue("ac", RegexPatterns.hasFinancialKeywords("INR 500 from ac XX1234"))
+        assertTrue("a/c no", RegexPatterns.hasFinancialKeywords("INR 500 from A/c no 1234"))
+        assertTrue("payment of", RegexPatterns.hasFinancialKeywords("payment of Rs 500 done"))
+        assertTrue("successfully paid", RegexPatterns.hasFinancialKeywords("successfully paid Rs 200 via Autopay"))
+        assertTrue("upi ref", RegexPatterns.hasFinancialKeywords("upi ref 12345678"))
+        assertTrue("upi:", RegexPatterns.hasFinancialKeywords("UPI: 600000000002"))
+
+        // Word boundary tests: Dr. Rao is allowed through the gate (matches dr.) but dropped later
+        assertTrue("Dr. Rao allowed through gate", RegexPatterns.hasFinancialKeywords("Dr. Rao presents exciting offers on electronics"))
+
+        // Word boundary tests: cream, decree, acre must NOT match
+        assertFalse("cream must not match", RegexPatterns.hasFinancialKeywords("buy cold cream at 20% discount"))
+        assertFalse("decree must not match", RegexPatterns.hasFinancialKeywords("royal decree announced"))
+        assertFalse("acre must not match", RegexPatterns.hasFinancialKeywords("buy 5 acre land today"))
+        assertFalse("discredited must not match", RegexPatterns.hasFinancialKeywords("discredited news source"))
+        assertFalse("indebited must not match", RegexPatterns.hasFinancialKeywords("indebited party details"))
+    }
+
+    @Test
+    fun testHindiAndMarathiRechargePatternRecognition() {
+        // Z4: Hindi recharge confirmation
+        val hiText = "रिचार्ज सफल रहा!\nप्लान का नाम: 899.00 \nJio नंबर : 9876543210\nट्रांज़ैक्शन आईडी : BR123456"
+        assertEquals(899.0, RegexPatterns.extractAmount(hiText)!!, 0.001)
+        assertTrue("Hindi confirmation", RegexPatterns.hasConfirmation(hiText))
+        assertTrue("Hindi debit confirmation", RegexPatterns.hasDebitConfirmation(hiText))
+        assertTrue("Hindi payment successful", RegexPatterns.isPaymentSuccessful(hiText))
+        assertEquals("Jio", RegexPatterns.extractBiller("JioPay-S", hiText))
+
+        // Z4: Marathi recharge confirmation
+        val mrText = "रिचार्ज यशस्वी! \nप्लॅन चे नाव : 899.00 \nJio नंबर : 9876543210\nट्रान्झॅक्शन आयडी : BR123456"
+        assertEquals(899.0, RegexPatterns.extractAmount(mrText)!!, 0.001)
+        assertTrue("Marathi confirmation", RegexPatterns.hasConfirmation(mrText))
+        assertTrue("Marathi debit confirmation", RegexPatterns.hasDebitConfirmation(mrText))
+        assertTrue("Marathi payment successful", RegexPatterns.isPaymentSuccessful(mrText))
+        assertEquals("Jio", RegexPatterns.extractBiller("JioPay-S", mrText))
+
+        // English recharge confirmation
+        val engText = "Recharge Successful !\nPlan Name : 899.00\nJio Number : 9876543210\nTransaction ID : BR123456"
+        assertEquals(899.0, RegexPatterns.extractAmount(engText)!!, 0.001)
+        assertTrue("English confirmation", RegexPatterns.hasConfirmation(engText))
+        assertTrue("English debit confirmation", RegexPatterns.hasDebitConfirmation(engText))
+        assertTrue("English payment successful", RegexPatterns.isPaymentSuccessful(engText))
+        assertEquals("Jio", RegexPatterns.extractBiller("JioPay-S", engText))
+    }
+
+    @Test
+    fun testHyphenatedBankHeadersAndContactNameRejection() {
+        // Z1: DLT headers with channel suffix or operator prefix must be accepted
+        val validHeaders = listOf(
+            "JioPay-S", "JIOPAY-S", "CANBNK-S", "HDFCBK-S", "SBIBNK-S", "blnkit-S", "iPaytm-S",
+            "VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "HDFCBK", "5676766", "56161"
+        )
+        for (header in validHeaders) {
+            assertTrue("Header $header must be accepted as bank sender", RegexPatterns.isBankSenderId(header))
+        }
+
+        // Z1: Hyphenated personal contact names and numbers must be rejected
+        val rejectedContacts = listOf(
+            "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma", "Ali-Khan",
+            "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo",
+            "Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", ""
+        )
+        for (contact in rejectedContacts) {
+            assertFalse("Contact $contact must be rejected", RegexPatterns.isBankSenderId(contact))
+        }
     }
 }

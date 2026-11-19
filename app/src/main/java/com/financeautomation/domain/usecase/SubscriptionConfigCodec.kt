@@ -1,5 +1,6 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.utils.ConfigNumbers
 import com.financeautomation.domain.model.Subscription
 import com.financeautomation.domain.model.SubscriptionFrequency
 import kotlinx.serialization.json.Json
@@ -32,6 +33,7 @@ object SubscriptionConfigCodec {
         put("keywords", sub.keywords)
         put("active", sub.active)
         put("createdAt", sub.createdAt)
+        put("note", sub.note)
     }.toString()
 
     /** Decodes the Value1 JSON of a Config row. Returns null when it is unreadable or incomplete. */
@@ -40,11 +42,13 @@ object SubscriptionConfigCodec {
             val obj = json.parseToJsonElement(raw).jsonObject
             val name = obj["name"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: return null
             val amountRaw = obj["amount"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content.orEmpty()
+            // An empty amount means the amount varies; any other text must be a valid amount
+            val amount = if (amountRaw.isBlank()) null else ConfigNumbers.parseMoney(amountRaw) ?: return null
             val anchor = java.time.LocalDate.parse(obj["anchor"]?.jsonPrimitive?.content ?: return null).toEpochDay()
             Subscription(
                 id = id,
                 name = name,
-                amount = amountRaw.toDoubleOrNull(),
+                amount = amount,
                 frequency = SubscriptionFrequency.parse(obj["frequency"]?.jsonPrimitive?.content),
                 anchorEpochDay = anchor,
                 account = obj["account"]?.jsonPrimitive?.content.orEmpty(),
@@ -53,7 +57,8 @@ object SubscriptionConfigCodec {
                 remind = obj["remind"]?.jsonPrimitive?.booleanOrNull ?: true,
                 keywords = obj["keywords"]?.jsonPrimitive?.content.orEmpty(),
                 active = obj["active"]?.jsonPrimitive?.booleanOrNull ?: true,
-                createdAt = obj["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+                createdAt = obj["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
+                note = obj["note"]?.jsonPrimitive?.content.orEmpty()
             )
         } catch (e: Exception) {
             null

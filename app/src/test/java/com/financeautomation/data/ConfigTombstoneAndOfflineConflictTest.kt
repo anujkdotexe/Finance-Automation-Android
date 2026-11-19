@@ -232,7 +232,8 @@ class ConfigTombstoneAndOfflineConflictTest {
 
         override suspend fun readAll(spreadsheetId: String): Result<List<ConfigRow>> = Result.Success(rows.toList())
 
-        override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Unit> {
+        override suspend fun upsert(spreadsheetId: String, rows: List<ConfigRow>): Result<Set<String>> {
+            val written = mutableSetOf<String>()
             for (incoming in rows) {
                 val existing = this.rows.find { it.compositeKey == incoming.compositeKey }
                 if (existing != null) {
@@ -240,12 +241,14 @@ class ConfigTombstoneAndOfflineConflictTest {
                     if (incoming.updatedAt >= existing.updatedAt) {
                         this.rows.remove(existing)
                         this.rows.add(incoming)
+                        written.add(incoming.compositeKey)
                     }
                 } else {
                     this.rows.add(incoming)
+                    written.add(incoming.compositeKey)
                 }
             }
-            return Result.Success(Unit)
+            return Result.Success(written)
         }
 
         override suspend fun tombstone(spreadsheetId: String, type: String, key: String, deviceId: String): Result<Unit> =

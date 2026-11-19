@@ -20,6 +20,16 @@ object ConfigConstants {
     /** Monthly category budget: key = category name, Value1 = amount. */
     const val TYPE_BUDGET = "budget"
 
+    // Limits for what is read from the Config tab. The tab can be edited by hand or by another device, so nothing in it
+    // is trusted to be small or clean.
+    /** Rows requested from the Config tab (header and meta rows included). Rows below this are not read. */
+    const val MAX_CONFIG_ROWS = 2000
+    const val MAX_KEY_LENGTH = 80
+    const val MAX_VALUE_LENGTH = 400
+
+    /** A subscription travels as one JSON object in Value1 (name, keywords and more), so it gets a larger limit. */
+    const val MAX_SUBSCRIPTION_VALUE_LENGTH = 2000
+
     // Meta Keys
     const val KEY_SCHEMA_VERSION = "schemaVersion"
 
@@ -45,8 +55,30 @@ object ConfigConstants {
         "theme_mode",
         "key_theme_mode",
         "app_lock_enabled",
-        "hide_recents_preview"
+        "hide_recents_preview",
+        "crashlytics_opt_in",
+        "crash_reports_enabled",
+        "usage_counts_enabled",
+        "key_workbook_requeue_pending_year",
+        "key_workbook_replaced_notice_pending"
     )
+
+    /**
+     * Strict allow-list of preference keys that are synchronized across devices via the Config tab.
+     * All security, consent, credential, and local device preferences are strictly excluded.
+     */
+    val SYNCED_PREF_KEYS: Set<String> = setOf(
+        "key_default_account",
+        "key_active_trip",
+        "key_settle_delay_seconds",
+        "key_subscription_reminder_time",
+        "key_default_category",
+        "key_speed_dial_categories"
+    )
+
+    fun isSyncedPref(key: String): Boolean {
+        return key in SYNCED_PREF_KEYS && !isLocalOnlyPref(key)
+    }
 
     fun isLocalOnlyPref(key: String): Boolean {
         return key in LOCAL_ONLY_PREF_KEYS ||

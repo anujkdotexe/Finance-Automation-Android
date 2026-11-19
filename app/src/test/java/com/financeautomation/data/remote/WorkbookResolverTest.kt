@@ -1,6 +1,7 @@
 package com.financeautomation.data.remote
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.domain.repository.PreferencesRepository
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +16,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -61,9 +63,15 @@ class WorkbookResolverTest {
         override fun getThemeMode(): Flow<ThemeMode> = flowOf(ThemeMode.SYSTEM)
         override suspend fun getThemeModeSync(): ThemeMode = ThemeMode.SYSTEM
         override suspend fun setThemeMode(mode: ThemeMode) {}
-        override suspend fun getPreference(key: String): String? = null
-        override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {}
-        override suspend fun deletePreference(key: String) {}
+        val rawPrefs = mutableMapOf<String, String?>()
+        override suspend fun getPreference(key: String): String? = rawPrefs[key]
+        override suspend fun setPreference(key: String, value: String?, isDirty: Boolean) {
+            if (value != null) rawPrefs[key] = value else rawPrefs.remove(key)
+        }
+        override suspend fun deletePreference(key: String) { rawPrefs.remove(key) }
+        override suspend fun clearKeysWithPrefix(prefix: String) {
+            rawPrefs.keys.filter { it.startsWith(prefix) }.toList().forEach { rawPrefs.remove(it) }
+        }
     }
 
     @Test
@@ -919,7 +927,7 @@ class WorkbookResolverTest {
             clock = fixedClock
         )
 
-        val res = resolver.resolveForYear(2026, forceValidateTabs = true)
+        val res = resolver.resolveForYear(2026, forceValidateTabs = true, createBackup = true)
 
         assertTrue(res is Result.Success)
         assertTrue("Drive copyFile must be called before repair when data rows exist", copyFileCalled)
@@ -1034,9 +1042,444 @@ class WorkbookResolverTest {
             clock = fixedClock
         )
 
-        val res = resolver.resolveForYear(2026, forceValidateTabs = true)
+        val res = resolver.resolveForYear(2026, forceValidateTabs = true, createBackup = true)
 
         assertTrue(res is Result.Success)
         assertFalse("Drive copyFile must NOT be called when workbook has no data rows", copyFileCalled)
+    }
+
+    @Test
+    fun requeueFailureDoesNotBreakResolutionAndSchedulesARetry() = runBlocking {
+        Diagnostics.clear()
+        val storedId = "stored_wb_trashed"
+        val foundId = "found_replacement_wb"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                when {
+                    url.contains("/files/$storedId") -> {
+                        val body = """{"id": "$storedId", "name": "Finance2026", "trashed": true}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/files?") && request.method == "GET" -> {
+                        val body = """{"files": [{"id": "$foundId", "name": "Finance2026"}]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                when {
+                    url.contains("fields=sheets") && request.method == "GET" -> {
+                        val body = """{"sheets": [{"properties": {"sheetId": 0, "title": "Dashboard"}}, {"properties": {"sheetId": 1, "title": "Nov26"}}]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/") -> {
+                        val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
+                        val body = """{"range": "Nov26!A3:AE3", "values": [ [ $validHeaders ] ]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository().apply {
+            setSpreadsheetIdForYear(2026, storedId)
+        }
+
+        var requeueAttempted = false
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock,
+            onWorkbookReplaced = { _, _, _ ->
+                requeueAttempted = true
+                throw IllegalStateException("Requeue failed in test")
+            }
+        )
+
+        val res = resolver.resolveForYear(2026, forceValidateTabs = true)
+
+        assertTrue("Resolution must succeed even if requeue throws", res is Result.Success)
+        assertEquals(foundId, (res as Result.Success).data)
+        assertTrue(requeueAttempted)
+        assertEquals("2026", prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR))
+        assertNull(
+            "Notice flag must NOT be set when requeue fails",
+            prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+        )
+        val records = Diagnostics.getRecords()
+        assertTrue(
+            "Diagnostics must record REQUEUE_FAILED with exception class",
+            records.any { it.tag == "WorkbookResolver" && it.reason.contains("REQUEUE_FAILED") && it.reason.contains("IllegalStateException") }
+        )
+    }
+
+    @Test
+    fun retryHappensOnTheNextResolve() = runBlocking {
+        val storedId = "stored_healthy_wb"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                when {
+                    url.contains("/files/$storedId") -> {
+                        val body = """{"id": "$storedId", "name": "Finance2026", "trashed": false}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                when {
+                    url.contains("fields=sheets") && request.method == "GET" -> {
+                        val body = """{"sheets": [{"properties": {"sheetId": 0, "title": "Dashboard"}}, {"properties": {"sheetId": 1, "title": "Nov26"}}]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/") -> {
+                        val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
+                        val body = """{"range": "Nov26!A3:AE3", "values": [ [ $validHeaders ] ]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository().apply {
+            setSpreadsheetIdForYear(2026, storedId)
+            setPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR, "2026", isDirty = false)
+        }
+
+        var retryCalledWithYear: Int? = null
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock,
+            onWorkbookReplaced = { year, _, _ ->
+                retryCalledWithYear = year
+            }
+        )
+
+        val res = resolver.resolveForYear(2026)
+
+        assertTrue(res is Result.Success)
+        assertEquals(2026, retryCalledWithYear)
+        assertNull(
+            "Retry marker must be cleared on successful requeue",
+            prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR)
+        )
+        assertEquals(
+            "true",
+            prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+        )
+    }
+
+    @Test
+    fun noticeFlagIsNotSetWhenRequeueFails() = runBlocking {
+        Diagnostics.clear()
+        val storedId = "stored_wb_trashed"
+        val foundId = "found_replacement_wb"
+
+        val driveClient = GoogleDriveClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                when {
+                    url.contains("/files/$storedId") -> {
+                        val body = """{"id": "$storedId", "name": "Finance2026", "trashed": true}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/files?") && request.method == "GET" -> {
+                        val body = """{"files": [{"id": "$foundId", "name": "Finance2026"}]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val sheetsClient = GoogleSheetsClient(
+            OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                val request = chain.request()
+                val url = request.url.toString()
+                when {
+                    url.contains("fields=sheets") && request.method == "GET" -> {
+                        val body = """{"sheets": [{"properties": {"sheetId": 0, "title": "Dashboard"}}, {"properties": {"sheetId": 1, "title": "Nov26"}}]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    url.contains("/values/") -> {
+                        val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
+                        val body = """{"range": "Nov26!A3:AE3", "values": [ [ $validHeaders ] ]}"""
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(body.toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                    else -> {
+                        Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body("""{}""".toResponseBody(jsonMediaType))
+                            .build()
+                    }
+                }
+            }).build(),
+            fakeTokenProvider
+        )
+
+        val prefs = FakePreferencesRepository().apply {
+            setSpreadsheetIdForYear(2026, storedId)
+        }
+
+        val resolver = WorkbookResolver(
+            googleDriveClient = driveClient,
+            googleSheetsClient = sheetsClient,
+            preferencesRepository = prefs,
+            ioDispatcher = Dispatchers.IO,
+            clock = fixedClock,
+            onWorkbookReplaced = { _, _, _ ->
+                throw RuntimeException("Requeue error")
+            }
+        )
+
+        resolver.resolveForYear(2026, forceValidateTabs = true)
+
+        assertNull(
+            "Notice flag must be null when requeue fails",
+            prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING)
+        )
+    }
+
+    @Test(expected = kotlinx.coroutines.CancellationException::class)
+    fun cancellationExceptionIsRethrownAndNotSwallowed() {
+        runBlocking {
+            val storedId = "stored_wb_trashed"
+            val foundId = "found_replacement_wb"
+
+            val driveClient = GoogleDriveClient(
+                OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                    val request = chain.request()
+                    val url = request.url.toString()
+                    when {
+                        url.contains("/files/$storedId") -> {
+                            val body = """{"id": "$storedId", "name": "Finance2026", "trashed": true}"""
+                            Response.Builder()
+                                .request(request)
+                                .protocol(Protocol.HTTP_1_1)
+                                .code(200)
+                                .message("OK")
+                                .body(body.toResponseBody(jsonMediaType))
+                                .build()
+                        }
+                        url.contains("/files?") && request.method == "GET" -> {
+                            val body = """{"files": [{"id": "$foundId", "name": "Finance2026"}]}"""
+                            Response.Builder()
+                                .request(request)
+                                .protocol(Protocol.HTTP_1_1)
+                                .code(200)
+                                .message("OK")
+                                .body(body.toResponseBody(jsonMediaType))
+                                .build()
+                        }
+                        else -> {
+                            Response.Builder()
+                                .request(request)
+                                .protocol(Protocol.HTTP_1_1)
+                                .code(200)
+                                .message("OK")
+                                .body("""{}""".toResponseBody(jsonMediaType))
+                                .build()
+                        }
+                    }
+                }).build(),
+                fakeTokenProvider
+            )
+
+            val sheetsClient = GoogleSheetsClient(
+                OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
+                    val request = chain.request()
+                    val url = request.url.toString()
+                    when {
+                        url.contains("fields=sheets") && request.method == "GET" -> {
+                            val body = """{"sheets": [{"properties": {"sheetId": 0, "title": "Dashboard"}}, {"properties": {"sheetId": 1, "title": "Nov26"}}]}"""
+                            Response.Builder()
+                                .request(request)
+                                .protocol(Protocol.HTTP_1_1)
+                                .code(200)
+                                .message("OK")
+                                .body(body.toResponseBody(jsonMediaType))
+                                .build()
+                        }
+                        url.contains("/values/") -> {
+                            val validHeaders = com.financeautomation.core.constants.SheetSchemaConstants.SHEET_COLUMN_HEADERS.values.joinToString(", ") { "\"$it\"" }
+                            val body = """{"range": "Nov26!A3:AE3", "values": [ [ $validHeaders ] ]}"""
+                            Response.Builder()
+                                .request(request)
+                                .protocol(Protocol.HTTP_1_1)
+                                .code(200)
+                                .message("OK")
+                                .body(body.toResponseBody(jsonMediaType))
+                                .build()
+                        }
+                        else -> {
+                            Response.Builder()
+                                .request(request)
+                                .protocol(Protocol.HTTP_1_1)
+                                .code(200)
+                                .message("OK")
+                                .body("""{}""".toResponseBody(jsonMediaType))
+                                .build()
+                        }
+                    }
+                }).build(),
+                fakeTokenProvider
+            )
+
+            val prefs = FakePreferencesRepository().apply {
+                setSpreadsheetIdForYear(2026, storedId)
+            }
+
+            val resolver = WorkbookResolver(
+                googleDriveClient = driveClient,
+                googleSheetsClient = sheetsClient,
+                preferencesRepository = prefs,
+                ioDispatcher = Dispatchers.IO,
+                clock = fixedClock,
+                onWorkbookReplaced = { _, _, _ ->
+                    throw kotlinx.coroutines.CancellationException("Job cancelled")
+                }
+            )
+
+            resolver.resolveForYear(2026, forceValidateTabs = true)
+        }
     }
 }

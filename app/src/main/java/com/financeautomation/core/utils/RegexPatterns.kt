@@ -24,14 +24,14 @@ object RegexPatterns {
     )
 
     private val INVALID_MERCHANT_REGEX: Regex = Regex(
-        """(?i)^(?:[#\d\s\-+]+|.*your\s+account.*|.*your\s+a/c.*|.*blockupi.*|.*call\b.*)$"""
+        """(?i)^(?:[#\d\s\-+]+|.*your\s+account.*|.*your\s+a/c.*|.*blockupi.*|.*call\b.*|.*report\s+(?:cyber\s+)?fraud.*|.*dial\s+\d+.*)$"""
     )
 
     private val OWN_VPA_CONTEXT_REGEX: Regex = Regex("""(?i)\b(?:into|using|via|through|from|your\s+vpa|my\s+vpa|linked\s+to)\s+$""")
 
     // Financial transaction keywords check for SMS filtering
     val FINANCIAL_KEYWORDS_REGEX: Regex = Regex(
-        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c|account|spent|paid\s+thru|paid\s+to|received)\b"""
+        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c(?:\s+no)?|account|acct|ac|spent|paid\s+thru|paid\s+to|received|dr\.?|cr\.?|debit|debits|credit|credits|payment\s+of|bill\s+payment\s+of|successfully\s+paid|recharge\s+of|jiopay|upi\s*ref|upi:)(?=\W|$)"""
     )
 
     // UPI Virtual Payment Address (VPA) regex
@@ -41,8 +41,10 @@ object RegexPatterns {
 
     // The amount tied to a debit or credit verb: "debited Rs 450", "spent INR 349", "Rs 200 paid", "debited by 30"
     private val AMOUNT_NEXT_TO_VERB_REGEX: Regex = Regex(
-        """(?i)\b(?:debit(?:ed)?(?:\s+by|\s+for)?|spent|paid|withdrawn|sent|deducted|purchase|payment\s+of|credited|received|refunded)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d{1,2})?)""" +
-            """|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|credited|received|refunded)\b"""
+        """(?i)\b(?:debit(?:ed)?(?:\s+by|\s+for)?|spent|paid|withdrawn|sent|deducted|purchase|payment\s+of|bill\s+payment\s+of|credited|received|refunded|recharge\s+of|recharge\s+successful|dr\.?|cr\.?)\b[^\d₹]{0,15}(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""" +
+            """|\b(?:debit(?:ed)?\s+by|debited\s+for)\s*([\d,]+(?:\.\d{1,2})?)""" +
+            """|(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|credited|received|refunded|dr\.?|cr\.?)\b""" +
+            """|(?:Plan\s+Name|प्लान\s+का\s+नाम|प्लॅन\s+चे\s+नाव)\s*:\s*([\d,]+(?:\.\d{1,2})?)"""
     )
 
     // Words that mark an amount as a balance or limit, not the payment
@@ -51,12 +53,12 @@ object RegexPatterns {
 
     // Debit direction flag keywords
     val DEBIT_FLAG_REGEX: Regex = Regex(
-        """(?i)\b(debited|paid|spent|sent|withdrawn|deducted|purchased|debited\s+by|transfer\s+to)\b"""
+        """(?i)\b(debited|paid|spent|sent|withdrawn|deducted|purchased|debited\s+by|transfer\s+to|dr\.?)\b"""
     )
 
     // Credit direction flag keywords
     val CREDIT_FLAG_REGEX: Regex = Regex(
-        """(?i)\b(credited|received|deposited|refunded|credited\s+with|cashback|added)\b"""
+        """(?i)\b(credited|received|deposited|refunded|credited\s+with|cashback|added|cr\.?)\b"""
     )
 
     // Funding account regex matching bank name and last 3-4 digits
@@ -71,25 +73,27 @@ object RegexPatterns {
 
     // A completed payment: a direction verb directly tied to an amount ("Paid Rs 349", "Rs 500 debited")
     val CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
-            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|credited|received)\b"""
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|credited|received|refunded|recharge\s+of|recharge\s+successful|bill\s+payment\s+of|dr\.?|cr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|credited|received|dr\.?|cr\.?)\b""" +
+            """|(?:Plan\s+Name|प्लान\s+का\s+नाम|प्लॅन\s+चे\s+नाव)\s*:\s*[\d,]+(?:\.\d{1,2})?"""
     )
 
     // "Payment successful" style wording that confirms an outgoing payment without a separate debit verb
     val PAYMENT_SUCCESS_REGEX: Regex = Regex(
-        """(?i)\b(?:payment|recharge|bill|emi)\b[^.]{0,40}\bsuccessful(?:ly)?\b|\bsuccessful(?:ly)?\s+payment\b|\bpaid\s+successfully\b"""
+        """(?i)\b(?:payment|recharge|bill|emi)\b[^.]{0,40}\bsuccessful(?:ly)?\b|\bsuccessful(?:ly)?\s+payment\b|\bpaid\s+successfully\b|रिचार्ज\s+सफल|रिचार्ज\s+यशस्वी"""
     )
 
     // A completed outgoing payment: a debit verb tied to an amount
     val DEBIT_CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
-            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|purchased?)\b"""
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?|recharge\s+of|recharge\s+successful|bill\s+payment\s+of|dr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|purchased?|dr\.?)\b""" +
+            """|(?:Plan\s+Name|प्लान\s+का\s+नाम|प्लॅन\s+चे\s+नाव)\s*:\s*[\d,]+(?:\.\d{1,2})?"""
     )
 
     // A completed incoming payment: a credit verb tied to an amount
     val CREDIT_CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:credited|received|deposited|refunded)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
-            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:credited|received|deposited|refunded)\b"""
+        """(?i)\b(?:credited|received|deposited|refunded|cr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+            """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:credited|received|deposited|refunded|cr\.?)\b"""
     )
 
     // Advertising wording. It marks a message as a promotion even next to an amount, unless a purchase was paid.
@@ -128,7 +132,12 @@ object RegexPatterns {
     fun extractAmount(text: String): Double? {
         // 1. The amount next to a debit or credit verb is the payment; a balance or limit mentioned first must not win
         val near = AMOUNT_NEXT_TO_VERB_REGEX.find(text)
-        val nearRaw = near?.let { it.groupValues[1].ifEmpty { it.groupValues[2] } }
+        val nearRaw = near?.let {
+            it.groupValues.getOrNull(1)?.ifEmpty { "" }?.takeIf { s -> s.isNotEmpty() }
+                ?: it.groupValues.getOrNull(2)?.ifEmpty { "" }?.takeIf { s -> s.isNotEmpty() }
+                ?: it.groupValues.getOrNull(3)?.ifEmpty { "" }?.takeIf { s -> s.isNotEmpty() }
+                ?: it.groupValues.getOrNull(4)?.ifEmpty { "" }?.takeIf { s -> s.isNotEmpty() }
+        }
         nearRaw?.replace(",", "")?.toDoubleOrNull()?.let { return it }
         // 2. Otherwise the first amount that is not labelled as a balance or limit
         val all = AMOUNT_REGEX.findAll(text).toList()
@@ -182,16 +191,74 @@ object RegexPatterns {
         return cleaned.startsWith("+") || (cleaned.length >= 7 && cleaned.all { it.isDigit() })
     }
 
+    private val MIXED_CASE_BILLER_REGISTRY: Set<String> = setOf(
+        "JioPay-S", "JioSvc-S", "iPaytm-S", "blnkit-S", "IRCTCi-S", "IRSMSa-S"
+    )
+
+    private val BANK_SENDER_UPPER_REGEX: Regex = Regex("""^[A-Z0-9][A-Z0-9-]{2,19}$""")
+
     /**
      * True for sender ids that look like a bank or payment header: letters and digits in capitals with dashes and no
-     * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK), or a 4 to 9 digit short code (56161, 5676766). Contact names such as
-     * "Rahul" or "Ravi Kumar", mixed or lower case words and personal phone numbers are not bank senders.
+     * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK, JIOPAY-S), a 4 to 9 digit short code (56161, 5676766), or a registered
+     * mixed-case biller header (JioPay-S). Contact names such as "Rahul", "Mom", "Dr-Rao", "Mr-Sharma", "Rahul-K",
+     * "Mom-S", "Raj-Mo", "Mary-Jane", or "Smith-Jones", and personal phone numbers are not bank senders.
      */
     fun isBankSenderId(sender: String): Boolean {
         val s = sender.trim()
         if (s.isEmpty() || s.any { it.isWhitespace() } || s.startsWith("+")) return false
         if (s.all { it.isDigit() }) return s.length in 4..9
-        return Regex("""[A-Z0-9][A-Z0-9-]{2,19}""").matches(s) && s.any { it.isLetter() }
+        if (!s.any { it.isLetter() }) return false
+        if (MIXED_CASE_BILLER_REGISTRY.contains(s)) return true
+        return BANK_SENDER_UPPER_REGEX.matches(s)
+    }
+
+    private val TOWARDS_BILLER_REGEX: Regex = Regex(
+        """(?i)\btowards\s+([A-Za-z0-9\s&._\-]+?)(?:\s+(?:electricity|water|gas|utility|broadband|mobile|phone))?(?:\s+bill\b|,\s*|\.|\s+ref\b|\s+using\b|$)"""
+    )
+
+    private val EXECUTED_RECHARGE_REGEX: Regex = Regex(
+        """(?i)\b(?:recharge\s+successful|Plan\s+Name)\b|रिचार्ज\s+सफल|रिचार्ज\s+यशस्वी|प्लान\s+का\s+नाम|प्लॅन\s+चे\s+नाव"""
+    )
+
+    /**
+     * Extracts biller name from bill payment or recharge messages.
+     */
+    fun extractBiller(title: String, text: String): String? {
+        val towardsMatch = TOWARDS_BILLER_REGEX.find(text)
+        if (towardsMatch != null) {
+            val candidate = towardsMatch.groupValues[1].trim()
+            if (candidate.isNotBlank() && !INVALID_MERCHANT_REGEX.matches(candidate)) {
+                return candidate
+            }
+        }
+        if (EXECUTED_RECHARGE_REGEX.containsMatchIn(text)) {
+            val senderClean = title.split("-").firstOrNull()?.trim() ?: ""
+            return when {
+                senderClean.equals("JioPay", ignoreCase = true) || senderClean.equals("Jio", ignoreCase = true) -> "Jio"
+                senderClean.isNotBlank() -> senderClean
+                else -> null
+            }
+        }
+        return null
+    }
+
+    private val REFERENCE_ID_REGEX: Regex = Regex(
+        """(?i)\b(?:ref(?:\s*no\.?)?|upi\s*(?:ref(?:\s*no\.?)?)?|utr(?:\s*no\.?)?|txn\s*(?:id|no\.?)?)[:\s\-]+([A-Za-z0-9]{6,25})\b"""
+    )
+
+    /**
+     * Extracts transaction / UPI reference id or UTR number from message text.
+     * Requires at least 6 characters with at least 4 digits so words like "payment", "successful",
+     * or "transaction" following a prefix are never mistaken for a reference number.
+     */
+    fun extractReferenceId(text: String): String? {
+        for (match in REFERENCE_ID_REGEX.findAll(text)) {
+            val candidate = match.groupValues.getOrNull(1)?.trim() ?: continue
+            if (candidate.length >= 6 && candidate.count { it.isDigit() } >= 4) {
+                return candidate
+            }
+        }
+        return null
     }
 
     /**

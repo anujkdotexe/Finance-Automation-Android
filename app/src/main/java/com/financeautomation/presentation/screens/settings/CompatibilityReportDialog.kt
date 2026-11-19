@@ -106,9 +106,17 @@ fun CompatibilityReportDialog(
                         style = FinanceTheme.typography.labelMedium,
                         color = FinanceTheme.colors.onSurfaceVariant
                     )
+                    Text(
+                        text = stringResource(R.string.report_note_warning),
+                        style = FinanceTheme.typography.bodySmall,
+                        color = FinanceTheme.colors.onSurfaceVariant
+                    )
                     OutlinedTextField(
                         value = userNote,
-                        onValueChange = { userNote = it },
+                        onValueChange = {
+                            userNote = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.report_user_note_placeholder), style = FinanceTheme.typography.bodyMedium) },
                         shape = FinanceTheme.shapes.card,
                         modifier = Modifier.fillMaxWidth()

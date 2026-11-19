@@ -55,6 +55,11 @@ interface TripTagRepository {
     suspend fun updateTripTag(tripTag: TripTag)
 
     /**
+     * Inserts or updates a trip tag preserving its explicit ID and dates.
+     */
+    suspend fun upsertTripTag(tripTag: TripTag) { updateTripTag(tripTag) }
+
+    /**
      * Sets a trip tag as active, clearing active status from all others.
      * Passing null clears active status from all tags.
      */

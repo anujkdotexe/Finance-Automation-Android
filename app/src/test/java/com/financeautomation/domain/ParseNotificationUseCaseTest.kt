@@ -5,6 +5,7 @@ import com.financeautomation.domain.usecase.DropReason
 import com.financeautomation.domain.usecase.NotificationParseResult
 import com.financeautomation.domain.usecase.ParseNotificationUseCase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -123,5 +124,22 @@ class ParseNotificationUseCaseTest {
         assertTrue(result is NotificationParseResult.FallbackPrompt)
         val fallback = result as NotificationParseResult.FallbackPrompt
         assertEquals("Payment detected, tap to enter amount", fallback.message)
+    }
+
+    @Test
+    fun hostilePayeeWithBidiAndControlCharactersIsSanitizedAndCapped() {
+        val longHostileMerchant = "A".repeat(120) + "\u202E\u0000Evil"
+        val hostileText = "Paid ₹500.00 to $longHostileMerchant via UPI"
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Google Pay",
+            text = hostileText
+        )
+
+        assertTrue(result is NotificationParseResult.Success)
+        val txn = (result as NotificationParseResult.Success).transaction
+        assertTrue("Merchant length must be capped at 80", txn.merchant.length <= 80)
+        assertFalse("Must not contain bidi overrides", txn.merchant.contains("\u202E"))
+        assertFalse("Must not contain null control character", txn.merchant.contains("\u0000"))
     }
 }

@@ -12,6 +12,7 @@ import com.financeautomation.domain.model.SubscriptionCycleState
 import com.financeautomation.domain.model.SubscriptionCycleWithSubscription
 import com.financeautomation.domain.repository.ConfigSyncLocalGateway
 import com.financeautomation.domain.repository.SubscriptionRepository
+import com.financeautomation.domain.usecase.SubscriptionScheduleUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -187,5 +188,35 @@ class SubscriptionRepositoryImpl(
 
     override suspend fun markCyclePaid(cycleId: String, transactionId: String): Unit = withContext(ioDispatcher) {
         cycleDaoProvider().markPaid(cycleId, transactionId, clock())
+    }
+
+    override suspend fun skipPausedCycles(
+        subscriptionId: String,
+        fromEpochDay: Long,
+        toEpochDay: Long
+    ): Unit = withContext(ioDispatcher) {
+        val sub = subscriptionDaoProvider().getById(subscriptionId)?.toDomain() ?: return@withContext
+        val schedule = SubscriptionScheduleUseCase()
+        val dueDays = schedule.dueDates(sub.copy(active = true), fromEpochDay, toEpochDay, todayEpochDay = toEpochDay + 1)
+        val dao = cycleDaoProvider()
+        val now = clock()
+        for (day in dueDays) {
+            val entity = SubscriptionCycleEntity(
+                id = "cyc_${UUID.randomUUID().toString().replace("-", "").take(16)}",
+                subscriptionId = subscriptionId,
+                dueEpochDay = day,
+                state = SubscriptionCycleState.SKIPPED.name,
+                transactionId = null,
+                remindCount = 0,
+                updatedAt = now
+            )
+            val rowId = dao.insertIgnore(entity)
+            if (rowId == -1L) {
+                val existing = dao.getOpenForSubscription(subscriptionId).firstOrNull { it.dueEpochDay == day }
+                if (existing != null && existing.state == SubscriptionCycleState.DUE.name) {
+                    dao.setState(existing.id, SubscriptionCycleState.SKIPPED.name, existing.remindCount, now)
+                }
+            }
+        }
     }
 }

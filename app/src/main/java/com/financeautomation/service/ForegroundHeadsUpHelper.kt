@@ -14,6 +14,7 @@ import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.core.utils.formatRupees
+import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
@@ -25,11 +26,41 @@ import kotlinx.coroutines.CancellationException
  */
 object ForegroundHeadsUpHelper {
 
+    /**
+     * Pure function to pick candidate categories for quick action buttons.
+     * Uses the user's own live categories list (never hardcoded defaults).
+     * If availableCategories is empty, returns Pair(null, null).
+     */
+    fun pickCategories(
+        payee: String,
+        availableCategories: List<String>,
+        payeeHistory: List<String> = emptyList(),
+        globalRank: List<String> = emptyList(),
+        predictCategoryUseCase: PredictCategoryUseCase? = null
+    ): Pair<String?, String?> {
+        val candidates = availableCategories.filter { it.isNotBlank() }
+        if (candidates.isEmpty()) return Pair(null, null)
+
+        val ranked = if (predictCategoryUseCase != null) {
+            predictCategoryUseCase(payee, payeeHistory, globalRank, candidates)
+                .filter { it in candidates }
+        } else {
+            emptyList()
+        }
+
+        val first = ranked.getOrNull(0) ?: candidates.getOrNull(0)
+        val remaining = candidates.filter { it != first }
+        val second = ranked.firstOrNull { it != first } ?: remaining.getOrNull(0)
+
+        return Pair(first, second)
+    }
+
     suspend fun postHeadsUpNotification(
         context: Context,
         capture: PendingCaptureEntity,
         categoryStatDaoProvider: (suspend () -> CategoryStatDao)?,
-        predictCategoryUseCase: PredictCategoryUseCase?
+        predictCategoryUseCase: PredictCategoryUseCase?,
+        categoryDaoProvider: (suspend () -> CategoryDao)? = null
     ) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -65,55 +96,60 @@ object ForegroundHeadsUpHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Top two predicted categories (spec 5.4 point 5 & 5.5 point 2)
+        // Top two predicted categories from user's live categories (finding 25)
+        val categoryDao = categoryDaoProvider?.invoke()
+        val userCategories = categoryDao?.getActiveCategories()?.map { it.name }.orEmpty()
+
         val statDao = categoryStatDaoProvider?.invoke()
         val (cat1, cat2) = if (statDao != null && predictCategoryUseCase != null) {
             try {
                 val key = predictCategoryUseCase.computePayeeKey(capture.payee)
                 val stats = statDao.getStatsForPayee(key).map { it.category }
                 val global = statDao.getGlobalCategoryRank()
-                val ranked = predictCategoryUseCase(
-                    capture.payee,
-                    stats,
-                    global,
-                    CategoryConstants.DEFAULT_CATEGORIES
+                pickCategories(
+                    payee = capture.payee,
+                    availableCategories = userCategories,
+                    payeeHistory = stats,
+                    globalRank = global,
+                    predictCategoryUseCase = predictCategoryUseCase
                 )
-                val first = ranked.getOrNull(0) ?: CategoryConstants.CATEGORY_FOOD_AND_DRINK
-                val second = ranked.getOrNull(1) ?: CategoryConstants.CATEGORY_GROCERIES
-                Pair(first, second)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                Pair(CategoryConstants.CATEGORY_FOOD_AND_DRINK, CategoryConstants.CATEGORY_GROCERIES)
+                pickCategories(capture.payee, userCategories)
             }
         } else {
-            Pair(CategoryConstants.CATEGORY_FOOD_AND_DRINK, CategoryConstants.CATEGORY_GROCERIES)
+            pickCategories(capture.payee, userCategories)
         }
 
-        val intentCat1 = Intent(context, QuickActionReceiver::class.java).apply {
-            action = QuickActionReceiver.ACTION_QUICK_CATEGORIZE
-            putExtra(QuickActionReceiver.EXTRA_CAPTURE_ID, capture.id)
-            putExtra(QuickActionReceiver.EXTRA_CATEGORY, cat1)
-            putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+        val pendingCat1 = cat1?.let { categoryName ->
+            val intentCat1 = Intent(context, QuickActionReceiver::class.java).apply {
+                action = QuickActionReceiver.ACTION_QUICK_CATEGORIZE
+                putExtra(QuickActionReceiver.EXTRA_CAPTURE_ID, capture.id)
+                putExtra(QuickActionReceiver.EXTRA_CATEGORY, categoryName)
+                putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            }
+            PendingIntent.getBroadcast(
+                context,
+                notificationId * 10 + 1,
+                intentCat1,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         }
-        val pendingCat1 = PendingIntent.getBroadcast(
-            context,
-            notificationId * 10 + 1,
-            intentCat1,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
 
-        val intentCat2 = Intent(context, QuickActionReceiver::class.java).apply {
-            action = QuickActionReceiver.ACTION_QUICK_CATEGORIZE
-            putExtra(QuickActionReceiver.EXTRA_CAPTURE_ID, capture.id)
-            putExtra(QuickActionReceiver.EXTRA_CATEGORY, cat2)
-            putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+        val pendingCat2 = cat2?.let { categoryName ->
+            val intentCat2 = Intent(context, QuickActionReceiver::class.java).apply {
+                action = QuickActionReceiver.ACTION_QUICK_CATEGORIZE
+                putExtra(QuickActionReceiver.EXTRA_CAPTURE_ID, capture.id)
+                putExtra(QuickActionReceiver.EXTRA_CATEGORY, categoryName)
+                putExtra(QuickActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            }
+            PendingIntent.getBroadcast(
+                context,
+                notificationId * 10 + 2,
+                intentCat2,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         }
-        val pendingCat2 = PendingIntent.getBroadcast(
-            context,
-            notificationId * 10 + 2,
-            intentCat2,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
 
         val dismissIntent = Intent(context, QuickActionReceiver::class.java).apply {
             action = QuickActionReceiver.ACTION_DISMISS_CAPTURE
@@ -143,8 +179,12 @@ object ForegroundHeadsUpHelper {
         if (isCredit) {
             builder.addAction(0, context.getString(R.string.action_menu_income_title), pendingDetails)
         } else {
-            builder.addAction(0, cat1, pendingCat1)
-            builder.addAction(0, cat2, pendingCat2)
+            if (cat1 != null && pendingCat1 != null) {
+                builder.addAction(0, cat1, pendingCat1)
+            }
+            if (cat2 != null && pendingCat2 != null) {
+                builder.addAction(0, cat2, pendingCat2)
+            }
             builder.addAction(0, context.getString(R.string.label_details), pendingDetails)
         }
         NotificationPrivacy.apply(

@@ -47,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.financeautomation.R
 import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PrivacyScrubber
@@ -90,7 +92,7 @@ fun SyncBackupScreen(
 
     val showNameAndEmail = !accountDisplayName.isNullOrBlank() && !accountEmail.isNullOrBlank()
 
-    var showCreateFreshDialog by remember { mutableStateOf(false) }
+    var showCreateFreshDialog by rememberSaveable { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
 
     val gso = remember {
@@ -182,34 +184,117 @@ fun SyncBackupScreen(
             onDismissRequest = { showCreateFreshDialog = false },
             title = {
                 Text(
-                    text = stringResource(R.string.create_fresh_workbook_confirm_title),
+                    text = stringResource(R.string.fresh_workbook_dialog_title),
                     style = FinanceTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
                 Text(
-                    text = stringResource(R.string.create_fresh_workbook_confirm_body),
+                    text = stringResource(R.string.fresh_workbook_dialog_body),
                     style = FinanceTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showCreateFreshDialog = false
-                        viewModel.onCreateFreshWorkbook()
-                    }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
-                    Text(stringResource(R.string.action_create))
+                    Button(
+                        onClick = {
+                            showCreateFreshDialog = false
+                            viewModel.onCreateFreshWorkbook(copyHistory = true)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.fresh_workbook_action_copy_history))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showCreateFreshDialog = false
+                            viewModel.onCreateFreshWorkbook(copyHistory = false)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.fresh_workbook_action_start_empty))
+                    }
+                    TextButton(
+                        onClick = { showCreateFreshDialog = false },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
                 }
             },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showCreateFreshDialog = false }
-                ) {
-                    Text(stringResource(R.string.action_cancel))
+            dismissButton = null
+        )
+    }
+
+    val pendingRepairCount = state.pendingRepairConfirmation
+    if (pendingRepairCount != null) {
+        val currentYear = remember { java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Kolkata")).year }
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelRepair() },
+            title = {
+                Text(
+                    text = stringResource(R.string.repair_backup_dialog_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                val bodyText = if (pendingRepairCount == 1) {
+                    stringResource(R.string.repair_backup_dialog_body_one, currentYear, 2)
+                } else {
+                    stringResource(R.string.repair_backup_dialog_body_many, pendingRepairCount, currentYear, pendingRepairCount + 1)
                 }
-            }
+                Text(
+                    text = bodyText,
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.confirmRepair(archiveOlder = true)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.repair_backup_action_archive))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.confirmRepair(archiveOlder = false)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.repair_backup_action_keep))
+                    }
+                    TextButton(
+                        onClick = { viewModel.cancelRepair() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                    ) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            },
+            dismissButton = null
         )
     }
 
@@ -573,7 +658,9 @@ fun SyncBackupScreen(
                 }
 
                 OutlinedButton(
-                    onClick = viewModel::autoProvisionMasterSheet,
+                    onClick = {
+                        viewModel.requestRepairWorkbook()
+                    },
                     enabled = !state.isProvisioning,
                     shape = FinanceTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()

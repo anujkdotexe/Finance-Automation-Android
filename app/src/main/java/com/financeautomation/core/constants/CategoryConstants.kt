@@ -16,6 +16,7 @@ object CategoryConstants {
     const val CATEGORY_FAMILY: String = "Family"
     const val CATEGORY_SAVINGS: String = "Savings"
     const val CATEGORY_OTHER: String = "Other"
+    const val CATEGORY_REFUND: String = "Refund"
 
     val DEFAULT_CATEGORIES: List<String> = listOf(
         CATEGORY_FOOD_AND_DRINK,
@@ -30,6 +31,13 @@ object CategoryConstants {
         CATEGORY_OTHER
     )
 
+    const val CATEGORY_TRANSFER: String = "Transfer"
+
+    /** Categories the sheet may not rename, archive or delete: Savings and Transfer have their own burn rule, Subscriptions drives the KPI, Other is the fallback. */
+    val PROTECTED_CATEGORIES: Set<String> = setOf(CATEGORY_SAVINGS, CATEGORY_TRANSFER, CATEGORY_OTHER, CATEGORY_SUBSCRIPTIONS)
+
+    fun isProtectedCategory(name: String): Boolean = PROTECTED_CATEGORIES.any { it.equals(name.trim(), ignoreCase = true) }
+
     const val ACCOUNT_CASH: String = "Cash"
     const val ACCOUNT_OTHER: String = "Other"
 
@@ -37,6 +45,11 @@ object CategoryConstants {
         ACCOUNT_CASH,
         ACCOUNT_OTHER
     )
+
+    /** Accounts the sheet may not archive or delete: the app itself refuses to delete Cash and Other. */
+    val PROTECTED_ACCOUNTS: Set<String> = setOf(ACCOUNT_CASH, ACCOUNT_OTHER)
+
+    fun isProtectedAccount(name: String): Boolean = PROTECTED_ACCOUNTS.any { it.equals(name.trim(), ignoreCase = true) }
 
     /**
      * Normalizes category name according to master ledger rules.

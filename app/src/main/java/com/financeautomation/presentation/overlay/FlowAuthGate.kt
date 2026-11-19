@@ -12,28 +12,12 @@ data class SettlementFlowExtras(
 object FlowAuthGate {
 
     /**
-     * Determines whether a caller is authorized to choose an arbitrary overlay/sheet flow.
-     * External applications in non-debug builds are strictly rejected.
+     * Resolves the target flow screen from the raw flow name. Unknown or blank names give the expense sheet.
+     * Callers must already be trusted: the sheet activity is not exported, and the exported EntryActivity
+     * removes the flow for outside callers before it reaches here.
      */
-    fun isAuthorized(
-        hasAuthToken: Boolean,
-        callingPackage: String?,
-        ownPackageName: String,
-        isDebug: Boolean = com.financeautomation.BuildConfig.DEBUG
-    ): Boolean {
-        if (isDebug) return true
-        if (!callingPackage.isNullOrBlank() && callingPackage == ownPackageName) return true
-        return hasAuthToken
-    }
-
-    /**
-     * Resolves the target flow screen from the raw flow parameter given authorization status.
-     */
-    fun resolveScreen(
-        rawFlow: String?,
-        isAuthorized: Boolean
-    ): OverlayFlowScreen {
-        if (!isAuthorized || rawFlow.isNullOrBlank()) {
+    fun resolveScreen(rawFlow: String?): OverlayFlowScreen {
+        if (rawFlow.isNullOrBlank()) {
             return OverlayFlowScreen.EXPENSE
         }
         return when (rawFlow.uppercase()) {

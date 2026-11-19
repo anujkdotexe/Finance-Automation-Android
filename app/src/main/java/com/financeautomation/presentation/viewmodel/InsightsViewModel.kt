@@ -32,6 +32,7 @@ data class InsightsUiState(
     val total: Double = 0.0,
     /** Last 6 months ending at the current month, oldest first. */
     val series: List<MonthlyBurn> = emptyList(),
+    val categories: List<Category> = emptyList(),
     val isLoading: Boolean = true
 ) {
     val isCurrentMonth: Boolean get() = selectedMonth == currentMonth
@@ -93,6 +94,7 @@ class InsightsViewModel(
             slices = calculator.slices(transactions, categories, month, otherLabel),
             total = calculator.total(transactions, categories, month, inflows),
             series = calculator.monthlySeries(transactions, categories, currentMonth, inflows = inflows),
+            categories = categories,
             isLoading = false
         )
 

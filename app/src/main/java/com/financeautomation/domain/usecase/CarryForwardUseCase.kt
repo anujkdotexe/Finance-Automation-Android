@@ -1,5 +1,6 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.CellEdit
 import com.financeautomation.domain.model.LedgerDebit
@@ -197,7 +198,7 @@ class CarryForwardUseCase {
                 )
 
                 appends.add(NewRow(TableType.PAYABLE, targetTab, newUuid, newCells))
-                edits.add(CellEdit(payable.tab, payable.row, "AB", "Carried Fwd"))
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, "Carried Fwd"))
 
                 lineage.add(
                     LineageRecord(

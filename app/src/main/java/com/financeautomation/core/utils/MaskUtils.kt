@@ -24,4 +24,7 @@ object MaskUtils {
 
     fun diagnosticsShareText(email: String?, spreadsheetId: String?): String =
         "Finance Automation Diagnostics Dump\nAccount: ${maskEmail(email)}\nSpreadsheet: ${maskId(spreadsheetId)}"
+
+    fun diagnosticsShareText(context: android.content.Context): String =
+        ProblemReportManager.buildDiagnosticsExportReport(context)
 }

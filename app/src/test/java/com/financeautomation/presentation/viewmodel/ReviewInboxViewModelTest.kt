@@ -102,11 +102,12 @@ class ReviewInboxViewModelTest {
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
-        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long, category: String): Result<String> = Result.Success("id")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
         override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
+        override suspend fun requeueYearForNewWorkbook(year: Int) {}
     }
 
     private class FakeSyncQueueDao : SyncQueueDao {
@@ -153,6 +154,16 @@ class ReviewInboxViewModelTest {
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
         override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
         override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
+        override suspend fun getActiveTransactionIds(): List<String> = emptyList()
+        override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+            val idSet = transactionIds.toSet()
+            queue.values.filter {
+                it.transactionId in idSet &&
+                it.status == SyncQueueEntity.STATUS_PENDING &&
+                (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+            }.forEach { queue.remove(it.id) }
+            refreshFlow()
+        }
     }
 
     private class FakePendingCaptureDao : PendingCaptureDao {
@@ -990,6 +1001,55 @@ class ReviewInboxViewModelTest {
         )
         advanceUntilIdle()
         assertTrue(vm2.uiState.value.isHintDismissed)
+    }
+
+    @Test
+    fun testFailedQueueDetailsResolvedForFailedItems() = runTest {
+        val tRepo = FakeTransactionRepo()
+        val qDao = FakeSyncQueueDao()
+        val txn = Transaction(
+            id = "txn_failed_1",
+            timestamp = 1000L,
+            dateSerial = 46330,
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Starbucks Coffee",
+            category = "Food & Drink",
+            totalAmount = 250.0,
+            companions = "Personal",
+            myShare = 250.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PENDING,
+            reviewState = ReviewState.NEEDS_REVIEW
+        )
+        tRepo.insertTransaction(txn)
+
+        val queueItem = SyncQueueEntity(
+            id = 42L,
+            transactionId = "txn_failed_1",
+            operationType = SyncQueueEntity.OP_UPDATE,
+            payloadJson = "txn_failed_1",
+            status = SyncQueueEntity.STATUS_FAILED,
+            lastErrorKind = "AUTH_EXPIRED",
+            lastErrorDetail = "401 Unauthorized"
+        )
+        qDao.insert(queueItem)
+
+        val vm = ReviewInboxViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = qDao,
+            directPendingCaptureDao = FakePendingCaptureDao(),
+            accountRepository = FakeAccountRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(1, state.failedQueueItems.size)
+        val detail = state.failedQueueDetails[42L]
+        assertTrue("Detail should resolve merchant and amount", detail?.contains("Starbucks Coffee") == true)
+        assertTrue("Detail should resolve amount", detail?.contains("250.00") == true)
+        assertTrue("Detail should resolve category", detail?.contains("Food & Drink") == true)
     }
 }
 

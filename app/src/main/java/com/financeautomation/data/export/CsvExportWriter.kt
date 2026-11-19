@@ -17,7 +17,7 @@ class ExportFileStore(
     fun write(fileName: String, text: String): File {
         directory.mkdirs()
         purgeOld()
-        val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val safeName = fileName.replace(SAFE_FILENAME_REGEX, "_")
         val file = File(directory, safeName)
         file.writeText(text, Charsets.UTF_8)
         return file
@@ -34,6 +34,7 @@ class ExportFileStore(
     }
 
     companion object {
+        private val SAFE_FILENAME_REGEX = Regex("[^A-Za-z0-9._-]")
         const val ONE_HOUR_MILLIS: Long = 60L * 60L * 1000L
     }
 }

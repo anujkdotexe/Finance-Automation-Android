@@ -52,4 +52,10 @@ interface SubscriptionRepository {
 
     /** Marks the cycle PAID with [transactionId]. */
     suspend fun markCyclePaid(cycleId: String, transactionId: String)
+
+    /**
+     * Skips cycles that fell due while a subscription was paused within [fromEpochDay, toEpochDay].
+     * Creates them as SKIPPED or transitions existing DUE cycles to SKIPPED.
+     */
+    suspend fun skipPausedCycles(subscriptionId: String, fromEpochDay: Long, toEpochDay: Long)
 }

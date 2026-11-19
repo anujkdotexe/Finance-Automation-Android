@@ -125,7 +125,8 @@ class SubscriptionsViewModel(
         account: String = "Primary",
         remind: Boolean = true,
         anchorEpochDay: Long? = null,
-        category: String = Subscription.DEFAULT_CATEGORY
+        category: String = Subscription.DEFAULT_CATEGORY,
+        note: String = ""
     ) {
         viewModelScope.launch {
             val subscription = Subscription(
@@ -137,25 +138,40 @@ class SubscriptionsViewModel(
                 account = account,
                 category = category,
                 remind = remind,
-                active = true
+                active = true,
+                note = note.trim()
             )
             subscriptionRepository.upsertSubscription(subscription)
         }
     }
 
     fun toggleSubscriptionActive(id: String, active: Boolean) {
-        viewModelScope.launch {
-            val current = subscriptionRepository.getSubscription(id) ?: return@launch
-            subscriptionRepository.upsertSubscription(current.copy(active = active))
+        if (active) {
+            resumeSubscription(id)
+        } else {
+            pauseSubscription(id)
         }
     }
 
     fun pauseSubscription(id: String) {
-        toggleSubscriptionActive(id, false)
+        viewModelScope.launch {
+            val current = subscriptionRepository.getSubscription(id) ?: return@launch
+            subscriptionRepository.upsertSubscription(current.copy(active = false))
+        }
     }
 
     fun resumeSubscription(id: String) {
-        toggleSubscriptionActive(id, true)
+        viewModelScope.launch {
+            val current = subscriptionRepository.getSubscription(id) ?: return@launch
+            if (!current.active) {
+                val today = todayEpochDay()
+                val monthStart = java.time.LocalDate.ofEpochDay(today).withDayOfMonth(1).toEpochDay()
+                if (monthStart < today) {
+                    subscriptionRepository.skipPausedCycles(current.id, monthStart, today - 1)
+                }
+                subscriptionRepository.upsertSubscription(current.copy(active = true))
+            }
+        }
     }
 
     fun deleteSubscription(id: String) {

@@ -48,14 +48,55 @@ class BudgetSheetStateHolderTest {
     fun invalidInputIsRejectedAndNeverSaved() {
         val repo = FakeBudgetRepository()
         val h = holder(repo)
-        for (bad in listOf("abc", "5/0", "0", "-5", "1+", "1e5")) {
+        for (bad in listOf("5/0", "0", "-5", "9999999999*99")) {
             h.onInputChanged(bad)
             assertNull(bad, h.state.value.preview)
             assertTrue(bad, h.state.value.showInvalid)
             h.save()
         }
+        // an unfinished sum shows no error yet but still cannot be saved
+        h.onInputChanged("1+")
+        assertNull(h.state.value.preview)
+        assertFalse(h.state.value.showInvalid)
+        assertFalse(h.state.value.canSave)
+        h.save()
         assertTrue(repo.budgets.value.isEmpty())
         assertFalse(h.state.value.finished)
+    }
+
+    @Test
+    fun hostileTextIsCleanedWhileTypingAndNeverSavesZero() {
+        val repo = FakeBudgetRepository()
+        val h = holder(repo)
+        h.onInputChanged(" ".repeat(50) + "5")
+        assertEquals("5", h.state.value.input)
+        h.onInputChanged(" 12 34 ")
+        assertEquals("1234", h.state.value.input)
+        h.onInputChanged("₹ 1,00,000.50")
+        assertEquals("100000.50", h.state.value.input)
+        assertEquals(100000.5, h.state.value.preview!!, 0.0)
+        h.onInputChanged("1.2345")
+        assertEquals("1.23", h.state.value.input)
+        h.onInputChanged("5++3")
+        assertEquals("5+3", h.state.value.input)
+        h.onInputChanged("((((1))))")
+        assertEquals("(((1)))", h.state.value.input)
+        h.onInputChanged("1..2")
+        assertEquals("1.2", h.state.value.input)
+        h.onInputChanged("١٢٣")
+        assertEquals("123", h.state.value.input)
+        h.onInputChanged("1234567890".repeat(4))
+        assertEquals("1234567890", h.state.value.input)
+        h.onInputChanged("007")
+        assertEquals("7", h.state.value.input)
+        h.onInputChanged("*5")
+        assertEquals("5", h.state.value.input)
+        h.onInputChanged("5​+‎3")
+        assertEquals("5+3", h.state.value.input)
+        h.onInputChanged("0")
+        assertFalse(h.state.value.canSave)
+        h.save()
+        assertTrue(repo.budgets.value.isEmpty())
     }
 
     @Test

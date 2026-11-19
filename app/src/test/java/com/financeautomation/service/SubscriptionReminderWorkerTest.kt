@@ -19,9 +19,16 @@ import java.time.ZonedDateTime
 
 class SubscriptionReminderWorkerTest {
 
-    private class RecordingNotifier : SubscriptionReminderNotifier {
+    private class RecordingNotifier(var shouldSucceed: Boolean = true) : SubscriptionReminderNotifier {
         val posted = mutableListOf<Pair<Subscription, SubscriptionCycle>>()
-        override fun post(subscription: Subscription, cycle: SubscriptionCycle) { posted.add(subscription to cycle) }
+        override fun post(subscription: Subscription, cycle: SubscriptionCycle): Boolean {
+            return if (shouldSucceed) {
+                posted.add(subscription to cycle)
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private val schedule = SubscriptionScheduleUseCase()
@@ -164,5 +171,40 @@ class SubscriptionReminderWorkerTest {
         val after = ZonedDateTime.of(2026, 4, 15, 22, 0, 0, 0, ist)
         assertEquals(23 * 60L, SubscriptionReminderWorker.initialDelay("21:00", after).toMinutes())
         assertEquals(60L, SubscriptionReminderWorker.initialDelay("not a time", before).toMinutes())
+    }
+
+    @Test
+    fun notPostedDoesNotIncrementRemindCount() {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(testSubscription(id = "sub1", anchorEpochDay = today))
+        val notifier = RecordingNotifier(shouldSucceed = false)
+
+        val postedCount = run(repo, notifier)
+        assertEquals(0, postedCount)
+        val cycle = repo.cycles.value.values.single()
+        assertEquals(0, cycle.remindCount)
+        assertEquals(SubscriptionCycleState.DUE, cycle.state)
+    }
+
+    @Test
+    fun postedThreeTimesMovesToNeedsReview() {
+        val repo = FakeSubscriptionRepository()
+        repo.addSubscription(testSubscription(id = "sub1", anchorEpochDay = today))
+        val notifier = RecordingNotifier(shouldSucceed = true)
+
+        // 1st run
+        run(repo, notifier)
+        assertEquals(1, repo.cycles.value.values.single().remindCount)
+        assertEquals(SubscriptionCycleState.DUE, repo.cycles.value.values.single().state)
+
+        // 2nd run
+        run(repo, notifier)
+        assertEquals(2, repo.cycles.value.values.single().remindCount)
+        assertEquals(SubscriptionCycleState.DUE, repo.cycles.value.values.single().state)
+
+        // 3rd run
+        run(repo, notifier)
+        assertEquals(3, repo.cycles.value.values.single().remindCount)
+        assertEquals(SubscriptionCycleState.NEEDS_REVIEW, repo.cycles.value.values.single().state)
     }
 }

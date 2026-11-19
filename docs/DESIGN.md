@@ -139,7 +139,7 @@ This screen is overloaded and is the main target of the redesign (section 12). T
 10.4 Capture
 - Display over other apps: status (active or missing), explanation, Enable button.
 - Setup health card: rows for Notification access, Display over other apps, Usage access, Notification alerts, Battery optimisation, OEM background autostart, Google account and ledger. Each row shows OK, Missing or Manual check and a Fix button that opens the right Android settings page. OEM row shows brand-specific instructions (Samsung, Xiaomi, Oppo, Vivo, OnePlus, Standard) and asks "Did this open the right screen?" Yes or No. A warning explains that force-stopping the app turns capture off. Listener state: Connected or Disconnected.
-- Run self-test button: shows a test sheet marked "TEST MODE - Verification Prompt (Not Saved)" and reports pass or fail.
+- There is no self-test button and no sample-data generator in any build type. A capture comes only from a real notification of a registered app or from manual entry.
 - Add expense shortcuts card: Pin 1x1 widget button, Add as app icon button, explanation (and a message when the launcher cannot pin).
 
 10.5 Categories and living burn
@@ -167,7 +167,7 @@ This screen is overloaded and is the main target of the redesign (section 12). T
 - Capture sheet over other apps: the expense sheet in section 8, in a floating window with a dimmed or blurred background, appears after a payment alert once the payment app returns to the home state. Needs the "display over other apps" permission.
 - Heads-up notification (used when the overlay is not allowed or the screen state prevents it): shows merchant and amount with up to two quick category buttons and a Details button. Tapping a category saves immediately.
 - Persistent notification "Capture is off - tap to fix" when notification access is lost. Channels: Expense Alerts, Cloud Sync Status, Authentication Alerts (reconnect Google), Health and Setup Alerts.
-- Result pill: short toast-like confirmation after saving or voiding. Self-test variant says "Self-test completed (not saved)".
+- Result pill: short toast-like confirmation after saving or voiding. There is no self-test variant.
 - Home widget: 1x1 icon, opens the expense sheet.
 - Quick Settings tile: "Add expense".
 - App shortcut: "Add an expense".
@@ -219,7 +219,7 @@ Today "See all" under Recent opens Needs Review, which only lists items waiting 
 - Empty month: one button "Go to current month".
 - No results: buttons "Search all months" and "Clear search". Search has two scopes, this month and all months.
 - Accounts list: each row also shows "N transactions this month" (real data, replaces the invented subtitles).
-- Capture and Permissions: a small line with the device ("Android 14, Samsung One UI") and a read-only "Apps we read" list (Google Pay, BHIM, Supermoney, PhonePe, Paytm, bank SMS) with the line "We never read WhatsApp, Telegram or OTP messages."
+- Capture and Permissions: a small line with the device ("Android 14, Samsung One UI") and the list of payment apps with an independent switch for each (Google Pay, BHIM, Supermoney, PhonePe, Paytm, Amazon Pay, CRED, MobiKwik, Freecharge, Navi, Samsung Wallet, bank SMS), a "Watch another app" picker limited to financial apps, and the line "We read WhatsApp only when it marks a message as a payment. We never read other chats, mail or OTP messages."
 - Dashboard: the Savings (SIPs and investments) and Income (total inflows) cards from the first brief come back under "Where it went", showing this month's totals.
 - Onboarding: one privacy line, "Your data stays on your phone and your Google Sheet."
 Rejected: retroactive expense dates (backlog for a later release), suggestion chips, capture integrity percentages, scrolling month chips.

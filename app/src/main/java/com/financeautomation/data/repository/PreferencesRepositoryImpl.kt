@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -68,6 +69,7 @@ class PreferencesRepositoryImpl(
     private val memDeviceId = MutableStateFlow<String?>(null)
     private val memDeveloperMode = MutableStateFlow(false)
     private val memThemeMode = MutableStateFlow(ThemeMode.SYSTEM)
+    private val memWorkbookReplacedNoticePending = MutableStateFlow(false)
     private val memGenericPrefs = ConcurrentHashMap<String, String>()
 
     var configSyncCoordinator: ConfigSyncCoordinator?
@@ -299,18 +301,18 @@ class PreferencesRepositoryImpl(
             emitAll(memSettleDelay.asStateFlow())
         } else {
             emitAll(dao.getPreferenceFlow(KEY_SETTLE_DELAY_SECONDS).map {
-                it?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS
+                settleDelayOf(it)
             })
         }
     }.flowOn(ioDispatcher)
 
     override suspend fun getSettleDelaySecondsSync(): Int = withContext(ioDispatcher) {
         val dao = resolveDao() ?: return@withContext memSettleDelay.value
-        dao.getPreference(KEY_SETTLE_DELAY_SECONDS)?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS
+        settleDelayOf(dao.getPreference(KEY_SETTLE_DELAY_SECONDS))
     }
 
     override suspend fun setSettleDelaySeconds(seconds: Int): Unit = withContext(ioDispatcher) {
-        val bounded = seconds.coerceIn(30, 300)
+        val bounded = seconds.coerceIn(MIN_SETTLE_DELAY_SECONDS, MAX_SETTLE_DELAY_SECONDS)
         val dao = resolveDao()
         if (dao != null) {
             dao.setPreference(PreferenceEntity(KEY_SETTLE_DELAY_SECONDS, bounded.toString(), updatedAt = System.currentTimeMillis(), dirty = 1))
@@ -319,6 +321,10 @@ class PreferencesRepositoryImpl(
         }
         configSyncCoordinator?.schedulePush()
     }
+
+    /** The stored delay, kept inside the allowed range even when the value came from the sheet. */
+    private fun settleDelayOf(stored: String?): Int =
+        (stored?.toIntOrNull() ?: DEFAULT_SETTLE_DELAY_SECONDS).coerceIn(MIN_SETTLE_DELAY_SECONDS, MAX_SETTLE_DELAY_SECONDS)
 
     override suspend fun getOrCreateDeviceId(): String = withContext(ioDispatcher) {
         val existing = getDeviceIdSync()
@@ -417,11 +423,25 @@ class PreferencesRepositoryImpl(
         dao.getPreference(key)
     }
 
+    override fun getWorkbookReplacedNoticePending(): Flow<Boolean> = flow {
+        val dao = resolveDao()
+        if (dao == null) {
+            emitAll(memWorkbookReplacedNoticePending.asStateFlow())
+        } else {
+            emitAll(dao.getPreferenceFlow(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING).map {
+                it == "true"
+            }.distinctUntilChanged())
+        }
+    }.flowOn(ioDispatcher)
+
     override suspend fun setPreference(key: String, value: String?, isDirty: Boolean): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val trimmed = value?.trim()
         val isLocalOnly = ConfigConstants.isLocalOnlyPref(key)
         val dirtyFlag = if (isDirty && !isLocalOnly) 1 else 0
+        if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+            memWorkbookReplacedNoticePending.value = (trimmed == "true")
+        }
         if (dao != null) {
             if (trimmed != null) {
                 dao.setPreference(PreferenceEntity(key, trimmed, updatedAt = System.currentTimeMillis(), dirty = dirtyFlag))
@@ -447,6 +467,9 @@ class PreferencesRepositoryImpl(
     override suspend fun deletePreference(key: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val isLocalOnly = ConfigConstants.isLocalOnlyPref(key)
+        if (key == PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING) {
+            memWorkbookReplacedNoticePending.value = false
+        }
         if (dao != null) {
             if (!isLocalOnly) {
                 dao.setPreference(PreferenceEntity(key, null, updatedAt = System.currentTimeMillis(), dirty = 1))
@@ -458,6 +481,19 @@ class PreferencesRepositoryImpl(
         }
         if (!isLocalOnly) {
             configSyncCoordinator?.schedulePush()
+        }
+    }
+
+    override suspend fun clearKeysWithPrefix(prefix: String): Unit = withContext(ioDispatcher) {
+        if (PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING.startsWith(prefix)) {
+            memWorkbookReplacedNoticePending.value = false
+        }
+        val dao = resolveDao()
+        if (dao != null) {
+            dao.deletePreferencesWithPrefix(prefix)
+        } else {
+            val toRemove = memGenericPrefs.keys.filter { it.startsWith(prefix) }
+            toRemove.forEach { memGenericPrefs.remove(it) }
         }
     }
 
@@ -475,5 +511,7 @@ class PreferencesRepositoryImpl(
         const val KEY_DEVELOPER_MODE: String = "key_developer_mode"
         const val KEY_THEME_MODE: String = "key_theme_mode"
         const val DEFAULT_SETTLE_DELAY_SECONDS: Int = 120
+        const val MIN_SETTLE_DELAY_SECONDS: Int = 30
+        const val MAX_SETTLE_DELAY_SECONDS: Int = 300
     }
 }

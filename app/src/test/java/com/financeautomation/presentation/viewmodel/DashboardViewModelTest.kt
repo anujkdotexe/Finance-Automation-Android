@@ -12,17 +12,23 @@ import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.repository.PreferencesRepositoryImpl
+import com.financeautomation.data.repository.TransactionRepositoryImpl
+import com.financeautomation.testutil.InMemoryQueueDao
+import com.financeautomation.testutil.InMemoryTransactionDao
+import com.financeautomation.testutil.createTestAccountingSyncExecutor
 import com.financeautomation.domain.model.Budget
 import com.financeautomation.domain.model.Category
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.domain.repository.CategoryRepository
+import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.domain.repository.TransactionRepository
 import com.financeautomation.domain.usecase.BudgetState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -76,11 +82,12 @@ class DashboardViewModelTest {
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
-        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long, category: String): Result<String> = Result.Success("id")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
         override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
+        override suspend fun requeueYearForNewWorkbook(year: Int) {}
     }
 
     private class FakeSyncQueueDao : SyncQueueDao {
@@ -128,6 +135,16 @@ class DashboardViewModelTest {
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
         override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
         override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
+        override suspend fun getActiveTransactionIds(): List<String> = emptyList()
+        override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+            val idSet = transactionIds.toSet()
+            queue.values.filter {
+                it.transactionId in idSet &&
+                it.status == SyncQueueEntity.STATUS_PENDING &&
+                (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+            }.forEach { queue.remove(it.id) }
+            refreshFlow()
+        }
     }
 
     private class FakePayableDao : PayableDao {
@@ -147,6 +164,21 @@ class DashboardViewModelTest {
         override suspend fun deleteByUuid(uuid: String) { payables.value = payables.value.filter { it.uuid != uuid } }
         override suspend fun deleteAll() { payables.value = emptyList() }
         override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(
+            startSerial: Int,
+            endSerial: Int,
+            startMillis: Long,
+            endMillis: Long
+        ): List<PayableEntity> =
+            payables.value.filter {
+                val serial = it.dateIncurredSerial
+                val matchesYear = if (serial != null) {
+                    serial in startSerial until endSerial
+                } else {
+                    it.updatedAt in startMillis until endMillis
+                }
+                matchesYear && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+            }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
     }
 
     private class FakePendingCaptureDao : PendingCaptureDao {
@@ -806,6 +838,77 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun testArchivedCategorySpendStillShowsInMonthWithArchivedLabel() = runTest {
+        val now = System.currentTimeMillis()
+        val txns = listOf(
+            Transaction(
+                id = "t1",
+                timestamp = now,
+                dateSerial = 46331,
+                timeSerial = 0.5,
+                account = "SBI",
+                merchant = "Canteen",
+                category = "Food & Drink",
+                totalAmount = 300.0,
+                myShare = 300.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED,
+                reviewState = ReviewState.CONFIRMED
+            ),
+            Transaction(
+                id = "t2",
+                timestamp = now,
+                dateSerial = 46331,
+                timeSerial = 0.5,
+                account = "SBI",
+                merchant = "Headphones",
+                category = "Electronics",
+                totalAmount = 500.0,
+                myShare = 500.0,
+                owedToMe = 0.0,
+                status = TransactionStatus.SETTLED,
+                reviewState = ReviewState.CONFIRMED
+            )
+        )
+        val tRepo = object : FakeTransactionRepo() {
+            override fun getTransactions(): Flow<List<Transaction>> = flowOf(txns)
+        }
+        val customCatRepo = object : CategoryRepository {
+            override fun getCategories(includeArchived: Boolean): Flow<List<Category>> = flowOf(
+                listOf(
+                    Category("1", "Food & Drink", isExcludedFromLivingBurn = false, isArchived = false),
+                    Category("2", "Electronics", isExcludedFromLivingBurn = false, isArchived = true)
+                )
+            )
+            override suspend fun getAllCategories(includeArchived: Boolean): List<Category> = emptyList()
+            override suspend fun getActiveCategories(): List<Category> = emptyList()
+            override suspend fun getCategoryById(id: String): Category? = null
+            override suspend fun getCategoryByName(name: String): Category? = null
+            override suspend fun insertCategory(category: Category) {}
+            override suspend fun updateCategory(category: Category) {}
+            override suspend fun setExcludedFromLivingBurn(id: String, excluded: Boolean) {}
+            override suspend fun archiveCategory(id: String) {}
+            override suspend fun unarchiveCategory(id: String) {}
+            override suspend fun deleteCategory(id: String) {}
+            override suspend fun reorderCategories(categoryIds: List<String>) {}
+        }
+        val vm = DashboardViewModel(
+            transactionRepository = tRepo,
+            directSyncQueueDao = FakeSyncQueueDao(),
+            categoryRepository = customCatRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(800.0, vm.uiState.value.currentBurn, 0.001)
+        val categories = vm.uiState.value.allCategories
+        val electronics = categories.firstOrNull { it.category == "Electronics" && it.isArchived }
+        org.junit.Assert.assertNotNull(electronics)
+        assertEquals(500.0, electronics!!.amount, 0.001)
+        org.junit.Assert.assertTrue(electronics.isArchived)
+    }
+
+    @Test
     fun testVoidingAnInflowReducesTheIncomeFigure() = runTest {
         val now = System.currentTimeMillis()
         val inflowRepo = FakeInflowRepo()
@@ -1337,5 +1440,186 @@ class DashboardViewModelTest {
 
         val diagRecord = Diagnostics.getRecords().find { it.tag == "DashboardViewModel" && it.reason.contains("sync_exception: dashboard sync, IllegalStateException") }
         assertNotNull("Diagnostics should record the stage and safe code", diagRecord)
+    }
+
+    @Test
+    fun testDashboardViewModel_workbookReplacedNotice_showsPartialWithLostItemsArgument() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+        val cRepo = FakeCategoryRepo()
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        val syncMessage = vm.uiState.value.syncMessage
+        assertNotNull("Sync message must be set when workbook is replaced", syncMessage)
+        assertEquals(R.string.workbook_replaced_notice_partial, syncMessage?.resId)
+        val firstArg = syncMessage?.args?.firstOrNull() as? UiText
+        assertNotNull("Format argument must be a UiText instance", firstArg)
+        assertEquals(R.string.workbook_replaced_lost_items, firstArg?.resId)
+
+        vm.clearMessages()
+        advanceUntilIdle()
+        assertNull("Pending notice preference must be cleared after being dismissed",
+            pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+    }
+
+    @Test
+    fun testDashboardViewModel_collectsTheNoticeFlagFromPreferencesAsAFlow() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+        val cRepo = FakeCategoryRepo()
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertNull("Initially syncMessage should be null", vm.uiState.value.syncMessage)
+
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+        advanceUntilIdle()
+
+        val syncMessage = vm.uiState.value.syncMessage
+        assertNotNull("Sync message must be set when Flow emits pending notice", syncMessage)
+        assertEquals(R.string.workbook_replaced_notice_partial, syncMessage?.resId)
+        val firstArg = syncMessage?.args?.firstOrNull() as? UiText
+        assertNotNull("Format argument must be a UiText instance", firstArg)
+        assertEquals(R.string.workbook_replaced_lost_items, firstArg?.resId)
+    }
+
+    @Test
+    fun testDashboardViewModel_clearsTheNoticeWhenTheUserDismissesIt() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+        val cRepo = FakeCategoryRepo()
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = cRepo,
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertNotNull(vm.uiState.value.syncMessage)
+
+        vm.clearMessages()
+        advanceUntilIdle()
+
+        assertNull("Sync message in UI state must be cleared after user dismisses it", vm.uiState.value.syncMessage)
+        assertNull("Pending notice preference must be cleared when user dismisses notice",
+            pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+        assertFalse(pRepo.getWorkbookReplacedNoticePending().first())
+    }
+
+    @Test
+    fun testDashboardViewModel_dismissingTheNoticeClearsTheFlag() = runTest {
+        val tDao = InMemoryTransactionDao()
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
+            ioDispatcher = testDispatcher
+        )
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        assertEquals(WorkbookReplacedNotice.text(), vm.uiState.value.syncMessage)
+
+        vm.clearMessages()
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.syncMessage)
+        assertNull(pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+    }
+
+    @Test
+    fun testDashboardViewModel_dismissingAnUnrelatedMessageKeepsThePendingNotice() = runTest {
+        val qDao = InMemoryQueueDao()
+        val pRepo = PreferencesRepositoryImpl(isTestHeadless = true, ioDispatcher = testDispatcher)
+
+        val repo = object : FakeTransactionRepo() {
+            override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(5)
+        }
+
+        val vm = DashboardViewModel(
+            transactionRepository = repo,
+            directSyncQueueDao = qDao,
+            preferencesRepository = pRepo,
+            categoryRepository = FakeCategoryRepo(),
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+
+        // Set pending notice flag in repo and observe it displayed
+        pRepo.setPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING, "true")
+        advanceUntilIdle()
+        assertEquals(R.string.workbook_replaced_notice_partial, vm.uiState.value.syncMessage?.resId)
+
+        // An unrelated sync operation runs and replaces syncMessage with its own message
+        vm.syncNow()
+        advanceUntilIdle()
+        assertEquals(R.string.dashboard_msg_synced_sheets, vm.uiState.value.syncMessage?.resId)
+
+        // User clears messages while showing only the unrelated message
+        vm.clearMessages()
+        advanceUntilIdle()
+
+        // Pending flag in preferences must NOT be cleared by dismissing an unrelated message
+        assertEquals("true", pRepo.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
+        assertTrue(pRepo.getWorkbookReplacedNoticePending().first())
     }
 }

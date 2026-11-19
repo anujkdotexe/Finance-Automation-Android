@@ -1,5 +1,6 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.CellEdit
 import com.financeautomation.domain.model.LedgerDebit
@@ -32,11 +33,11 @@ class VoidTransactionUseCase {
         }
 
         val edits = listOf(
-            CellEdit(tab = row.tab, row = row.row, column = "D", value = voidDesc),
-            CellEdit(tab = row.tab, row = row.row, column = "G", value = 0.0),
-            CellEdit(tab = row.tab, row = row.row, column = "I", value = 0.0),
-            CellEdit(tab = row.tab, row = row.row, column = "J", value = 0.0),
-            CellEdit(tab = row.tab, row = row.row, column = "K", value = "Void")
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION, value = voidDesc),
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT, value = 0.0),
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_DEBIT_MY_SHARE, value = 0.0),
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_DEBIT_OWED_TO_ME, value = 0.0),
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_DEBIT_STATUS, value = "Void")
         )
 
         return AccountingPlan(
@@ -46,18 +47,18 @@ class VoidTransactionUseCase {
     }
 
     /**
-     * Voids a Table 2 inflow row in-place, with the same convention as a debit: the row and its UUID in column AD
+     * Voids a Table 2 inflow row in-place, with the same convention as a debit: the row and its UUID in column AE
      * stay, the amount is zeroed and the text is prefixed with "[Void] ". Table 2 has no status column.
      * Edits:
-     * - Column R (Reason): prefixed with "[Void] " if not already present
-     * - Column S (Amount Received): 0.0
+     * - Column S (Reason): prefixed with "[Void] " if not already present
+     * - Column T (Amount Received): 0.0
      */
     fun voidInflow(tab: String, row: Int, currentReason: String): AccountingPlan {
         val voidReason = if (currentReason.startsWith("[Void] ")) currentReason else "[Void] $currentReason"
         return AccountingPlan(
             edits = listOf(
-                CellEdit(tab = tab, row = row, column = "R", value = voidReason),
-                CellEdit(tab = tab, row = row, column = "S", value = 0.0)
+                CellEdit(tab = tab, row = row, column = SheetSchemaConstants.COL_LETTER_INFLOW_REASON, value = voidReason),
+                CellEdit(tab = tab, row = row, column = SheetSchemaConstants.COL_LETTER_INFLOW_AMOUNT, value = 0.0)
             ),
             message = "Voided inflow in $tab row $row"
         )
@@ -66,10 +67,10 @@ class VoidTransactionUseCase {
     /**
      * Voids a Table 3 payable row in-place without deleting or blanking the row.
      * Edits:
-     * - Column Y (What For): prefixed with "[Void] " if not already present
-     * - Column Z (Amount Owed): 0.0
-     * - Column AB (Status): "Void"
-     * Preserves the row's UUID in column AE.
+     * - Column Z (What For): prefixed with "[Void] " if not already present
+     * - Column AA (Amount I Owe): 0.0
+     * - Column AC (Status): "Void"
+     * Preserves the row's UUID in column AF.
      */
     fun voidPayable(row: LedgerPayable): AccountingPlan {
         val voidDesc = if (row.whatFor.startsWith("[Void] ")) {
@@ -79,9 +80,9 @@ class VoidTransactionUseCase {
         }
 
         val edits = listOf(
-            CellEdit(tab = row.tab, row = row.row, column = "Y", value = voidDesc),
-            CellEdit(tab = row.tab, row = row.row, column = "Z", value = 0.0),
-            CellEdit(tab = row.tab, row = row.row, column = "AB", value = "Void")
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_PAYABLE_WHAT_FOR, value = voidDesc),
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, value = 0.0),
+            CellEdit(tab = row.tab, row = row.row, column = SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, value = "Void")
         )
 
         return AccountingPlan(

@@ -46,6 +46,18 @@ jobs:
       - name: Unit tests
         run: ./gradlew testBetaUnitTest --no-daemon
 
+      - name: Create the debug keystore the beta signing config falls back to
+        # Without keystore.properties the beta signing config uses the Android debug keystore,
+        # and a clean runner has none. This creates a throwaway one (public debug credentials,
+        # no secret) at the path the Android Gradle plugin reads.
+        run: |
+          KEYSTORE_DIR="${ANDROID_USER_HOME:-$HOME/.config/.android}"
+          mkdir -p "$KEYSTORE_DIR"
+          keytool -genkeypair -keystore "$KEYSTORE_DIR/debug.keystore" \
+            -alias androiddebugkey -storepass android -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Beta build (includes lint checks)
         run: ./gradlew assembleBeta --no-daemon
 

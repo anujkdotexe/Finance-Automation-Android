@@ -49,11 +49,12 @@ class InsightsAndCategoryFilterTest {
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
-        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long, category: String): Result<String> = Result.Success("id")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
         override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
+        override suspend fun requeueYearForNewWorkbook(year: Int) {}
     }
 
     private class TestCategoryRepo(private val categories: List<Category>) : CategoryRepository {

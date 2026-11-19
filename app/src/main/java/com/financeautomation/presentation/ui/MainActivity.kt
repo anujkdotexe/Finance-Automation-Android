@@ -19,9 +19,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.financeautomation.FinanceApplication
 import com.financeautomation.R
-import com.financeautomation.domain.model.ThemeMode
 import com.financeautomation.presentation.screens.OnboardingScreen
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.viewmodel.DashboardViewModel
 import com.financeautomation.presentation.viewmodel.OnboardingViewModel
 import com.financeautomation.presentation.viewmodel.ReviewInboxViewModel
@@ -31,6 +31,7 @@ import com.financeautomation.presentation.viewmodel.SetupHealthViewModelFactory
 import com.financeautomation.presentation.viewmodel.SubscriptionsViewModel
 import com.financeautomation.presentation.viewmodel.TransactionsViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -117,7 +118,8 @@ class MainActivity : FragmentActivity() {
             preferencesRepository = app.appContainer.preferencesRepository,
             profileAvatarManager = app.appContainer.profileAvatarManager,
             accountSwitchGuard = app.appContainer.accountSwitchGuard,
-            ioDispatcher = app.appContainer.ioDispatcher
+            ioDispatcher = app.appContainer.ioDispatcher,
+            accountRepository = app.appContainer.accountRepository
         )
     }
 
@@ -202,9 +204,13 @@ class MainActivity : FragmentActivity() {
           com.financeautomation.presentation.screens.StorageGate(application as FinanceApplication) {
             val app = application as FinanceApplication
             val currentYear = ZonedDateTime.now(ZoneId.of("Asia/Kolkata")).year
-            val googleEmail by app.appContainer.preferencesRepository.getGoogleAccountEmail().collectAsState(initial = null)
-            val spreadsheetId by app.appContainer.preferencesRepository.getSpreadsheetIdForYear(currentYear).collectAsState(initial = null)
-            val themeMode by app.appContainer.preferencesRepository.getThemeMode().collectAsState(initial = ThemeMode.SYSTEM)
+            val prefs = app.appContainer.preferencesRepository
+            val emailFlow = remember { prefs.getGoogleAccountEmail().map<String?, SetupGate.Pref> { SetupGate.Pref.Loaded(it) } }
+            val yearIdFlow = remember { prefs.getSpreadsheetIdForYear(currentYear).map<String?, SetupGate.Pref> { SetupGate.Pref.Loaded(it) } }
+            val legacyIdFlow = remember { prefs.getSpreadsheetId().map<String?, SetupGate.Pref> { SetupGate.Pref.Loaded(it) } }
+            val googleEmail by emailFlow.collectAsState(initial = SetupGate.Pref.Loading)
+            val spreadsheetId by yearIdFlow.collectAsState(initial = SetupGate.Pref.Loading)
+            val legacySpreadsheetId by legacyIdFlow.collectAsState(initial = SetupGate.Pref.Loading)
             var forceOnboarding by remember { mutableStateOf(false) }
             var lockReady by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
@@ -213,19 +219,20 @@ class MainActivity : FragmentActivity() {
             }
             val locked by app.appContainer.appLockManager.locked.collectAsState()
 
-            val setupIncomplete = googleEmail.isNullOrBlank() || spreadsheetId.isNullOrBlank()
+            val setupDecision = SetupGate.decide(googleEmail, spreadsheetId, legacySpreadsheetId)
             // Once the Setup page is shown it stays until Continue is pressed, so a finished sign in shows Continue
-            // instead of jumping away on its own.
+            // instead of jumping away on its own. Only a real incomplete state latches, never the loading frame.
             var setupLatched by remember { mutableStateOf(false) }
-            LaunchedEffect(setupIncomplete) { if (setupIncomplete) setupLatched = true }
-            val needsOnboarding = forceOnboarding || setupLatched || setupIncomplete
+            LaunchedEffect(setupDecision) { setupLatched = SetupGate.latch(setupLatched, setupDecision) }
+            val setupLoading = setupDecision == SetupGate.Decision.LOADING
+            val needsOnboarding = forceOnboarding || setupLatched || setupDecision == SetupGate.Decision.INCOMPLETE
 
-            FinanceAutomationTheme(themeMode = themeMode) {
+            SavedThemeHost(savedMode = app.appContainer.preferencesRepository.getThemeMode()) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (!lockReady) {
+                    if (!lockReady || setupLoading) {
                         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize())
                     } else if (locked) {
                         com.financeautomation.presentation.security.AppLockScreen(onUnlock = { promptUnlock() })

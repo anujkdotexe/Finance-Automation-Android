@@ -1,5 +1,6 @@
 package com.financeautomation.data.remote
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.domain.model.AccountingPlan
@@ -29,9 +30,11 @@ class VoidInflowExecutorTest {
 
     private class Recorder {
         val writes = mutableListOf<String>()
+        val appends = mutableListOf<String>()
+        val readRanges = mutableListOf<String>()
     }
 
-    /** Serves AD (uuid) and R (reason) reads and records value writes. */
+    /** Serves AE (inflow uuid) and S (reason) reads and records value writes. */
     private fun executor(recorder: Recorder, uuidColumn: List<String>, reason: String): AccountingSyncExecutor {
         val interceptor = Interceptor { chain ->
             val request: Request = chain.request()
@@ -43,9 +46,28 @@ class VoidInflowExecutorTest {
                     recorder.writes.add(buffer.readUtf8())
                     "{}"
                 }
-                url.contains("!AD4:AD") ->
+                request.method == "POST" && url.contains("values/") && url.contains(":append") -> {
+                    val buffer = Buffer()
+                    request.body?.writeTo(buffer)
+                    recorder.appends.add(buffer.readUtf8())
+                    "{}"
+                }
+                url.contains("!${SheetSchemaConstants.COL_LETTER_INFLOW_UUID}4:${SheetSchemaConstants.COL_LETTER_INFLOW_UUID}") -> {
+                    recorder.readRanges.add(SheetSchemaConstants.COL_LETTER_INFLOW_UUID)
                     """{"values":[${uuidColumn.joinToString(",") { """["$it"]""" }}]}"""
-                url.contains("!R") -> """{"values":[["$reason"]]}"""
+                }
+                url.contains("!${SheetSchemaConstants.COL_LETTER_DEBIT_UUID}4:${SheetSchemaConstants.COL_LETTER_DEBIT_UUID}") -> {
+                    recorder.readRanges.add(SheetSchemaConstants.COL_LETTER_DEBIT_UUID)
+                    """{"values":[${uuidColumn.joinToString(",") { """["$it"]""" }}]}"""
+                }
+                url.contains("!${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID}4:${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID}") -> {
+                    recorder.readRanges.add(SheetSchemaConstants.COL_LETTER_PAYABLE_UUID)
+                    """{"values":[${uuidColumn.joinToString(",") { """["$it"]""" }}]}"""
+                }
+                url.contains("!${SheetSchemaConstants.COL_LETTER_INFLOW_REASON}") -> {
+                    recorder.readRanges.add(SheetSchemaConstants.COL_LETTER_INFLOW_REASON)
+                    """{"values":[["$reason"]]}"""
+                }
                 else -> "{}"
             }
             Response.Builder()
@@ -80,11 +102,13 @@ class VoidInflowExecutorTest {
         assertEquals(1, recorder.writes.size)
         val payload = recorder.writes[0]
         // The second entry of the uuid column is row 5
-        assertTrue(payload, payload.contains("'Nov26'!R5"))
+        assertTrue(payload, payload.contains("'Nov26'!${SheetSchemaConstants.COL_LETTER_INFLOW_REASON}5"))
         assertTrue(payload, payload.contains("[Void] Salary"))
-        assertTrue(payload, payload.contains("'Nov26'!S5"))
+        assertTrue(payload, payload.contains("'Nov26'!${SheetSchemaConstants.COL_LETTER_INFLOW_AMOUNT}5"))
         assertTrue(payload, payload.contains("[[0.0]]"))
         assertTrue(payload, !payload.contains("'Nov26'!K5"))
+        // Proves lookup queried column AE (Inflow UUID), not AD (Debit UUID)
+        assertTrue(recorder.readRanges.contains(SheetSchemaConstants.COL_LETTER_INFLOW_UUID))
     }
 
     @Test
@@ -122,5 +146,39 @@ class VoidInflowExecutorTest {
         assertEquals("pay_1", fixed.appends[0].uuid)
         assertEquals("cred_abc123", fixed.appends[1].uuid)
         assertEquals(plan, plan.withInflowRowUuid(""))
+    }
+
+    @Test
+    fun retriedPlanDoesNotAppendDuplicateRowsWhenUuidsExistInColumnsAD_AE_AF() = runBlocking {
+        val recorder = Recorder()
+        val exec = executor(
+            recorder,
+            uuidColumn = listOf("deb_123", "inf_456", "pay_789"),
+            reason = "Test"
+        )
+
+        val plan = AccountingPlan(
+            appends = listOf(
+                NewRow(TableType.DEBIT, "Nov26", "deb_123", listOf("d1")),
+                NewRow(TableType.INFLOW, "Nov26", "inf_456", listOf("i1")),
+                NewRow(TableType.PAYABLE, "Nov26", "pay_789", listOf("p1"))
+            )
+        )
+        val item = SyncQueueEntity(
+            transactionId = "tx_retry",
+            operationType = SyncQueueEntity.OP_LOG_CREDIT,
+            payloadJson = "{}",
+            planJson = AccountingPlanJsonAdapter.toJson(plan)
+        )
+
+        val result = exec.executeLogCredit(item, "sheet1", "Nov26")
+
+        assertTrue(result is Result.Success)
+        // Since all three UUIDs were found in columns AD, AE, and AF, no appends must be made!
+        assertTrue("No appends should occur on retry when rows exist", recorder.appends.isEmpty())
+        // Proves that all three 32-column UUID letters were checked
+        assertTrue(recorder.readRanges.contains(SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+        assertTrue(recorder.readRanges.contains(SheetSchemaConstants.COL_LETTER_INFLOW_UUID))
+        assertTrue(recorder.readRanges.contains(SheetSchemaConstants.COL_LETTER_PAYABLE_UUID))
     }
 }

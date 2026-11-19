@@ -3,6 +3,8 @@ package com.financeautomation.testutil
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.data.remote.GoogleSheetsClient
+import com.financeautomation.data.remote.WorkbookResolver
 import com.financeautomation.data.repository.TransactionRepositoryImpl
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PreferencesRepository
@@ -15,7 +17,10 @@ import java.lang.reflect.Proxy
  * A real [TransactionRepositoryImpl] over in-memory tables and a [ScriptedSheetsServer]. Nothing here accepts every
  * call: the server can fail a chosen request, and the tables behave like the Room queries.
  */
-class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())) {
+class SyncHarness(
+    tabs: List<String> = listOf(ScriptedSheetsServer.currentTab()),
+    resolverFactory: ((PreferencesRepository, GoogleSheetsClient) -> WorkbookResolver)? = null
+) {
     val tDao = InMemoryTransactionDao()
     val qDao = InMemoryQueueDao()
     val iDao = InMemoryInflowDao()
@@ -41,6 +46,22 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
             method.name == "setGoogleAccountEmail" -> { googleEmail = args!![0] as String?; null }
             method.name == "getPreference" -> preferences[args!![0] as String]
             method.name == "setPreference" -> { preferences[args!![0] as String] = args[1] as String?; null }
+            method.name == "clearKeysWithPrefix" -> {
+                val prefix = args!![0] as String
+                preferences.keys.filter { it.startsWith(prefix) }.toList().forEach { preferences.remove(it) }
+                null
+            }
+            method.name == "getWorkbookReplacedNoticePending" -> flowOf(preferences[PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING] == "true")
+            method.name == "getAppLockEnabled" || method.name == "getHideRecentsPreview" -> false
+            method.name == "getDeveloperMode" -> flowOf(false)
+            method.name == "getThemeMode" -> flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
+            method.name == "getSettleDelaySeconds" -> flowOf(60)
+            method.name == "getDefaultAccount" -> flowOf(preferences[PreferencesRepository.KEY_DEFAULT_ACCOUNT] ?: "Other")
+            method.name == "getDefaultAccountSync" -> preferences[PreferencesRepository.KEY_DEFAULT_ACCOUNT] ?: "Other"
+            method.name == "setDefaultAccount" -> { preferences[PreferencesRepository.KEY_DEFAULT_ACCOUNT] = args!![0] as String; null }
+            method.name == "isOnboardingAccountsSeen" -> preferences[PreferencesRepository.KEY_ONBOARDING_ACCOUNTS_SEEN] == "true"
+            method.name == "setOnboardingAccountsSeen" -> { preferences[PreferencesRepository.KEY_ONBOARDING_ACCOUNTS_SEEN] = (args!![0] as Boolean).toString(); null }
+            method.name == "getSubscriptionReminderTime" -> flowOf("21:00")
             method.name == "getSpreadsheetIdSync" || method.name == "getSpreadsheetIdForYearSync" -> "test_sheet_id"
             Flow::class.java.isAssignableFrom(method.returnType) -> flowOf<Any?>(null)
             method.returnType == java.lang.Boolean.TYPE -> false
@@ -49,6 +70,8 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
         }
     } as PreferencesRepository
 
+    val workbookResolver: WorkbookResolver? = resolverFactory?.invoke(prefs, sheets)
+
     val repo = TransactionRepositoryImpl(
         transactionDao = tDao,
         syncQueueDao = qDao,
@@ -56,6 +79,7 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
         lineageDao = lDao,
         googleSheetsClient = sheets,
         preferencesRepository = prefs,
+        workbookResolver = workbookResolver,
         accountingSyncExecutor = createTestAccountingSyncExecutor(
             sheetsClient = sheets, syncQueueDao = qDao, lineageDao = lDao, transactionDao = tDao
         ),
@@ -68,7 +92,7 @@ class SyncHarness(tabs: List<String> = listOf(ScriptedSheetsServer.currentTab())
 
     fun expense(id: String, merchant: String = "Tea", amount: Double = 40.0, ageMillis: Long = 60_000L) = Transaction(
         id = id,
-        timestamp = System.currentTimeMillis() - ageMillis,
+        timestamp = now - ageMillis,
         dateSerial = 46000,
         timeSerial = 0.5,
         account = "SBI",

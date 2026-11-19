@@ -1,3 +1,4 @@
+import java.time.Duration
 import java.util.Properties
 
 plugins {
@@ -21,7 +22,7 @@ android {
         applicationId = "com.financeautomation"
         minSdk = 28
         targetSdk = 36
-        versionCode = gitCommitCount
+        versionCode = 1000 + gitCommitCount
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -108,6 +109,10 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.jvmArgs("-Djava.net.preferIPv4Stack=true")
+            it.timeout.set(Duration.ofSeconds(120))
+        }
     }
 }
 
@@ -157,18 +162,23 @@ dependencies {
     // KotlinX Serialization JSON
     implementation(libs.kotlinx.serialization.json)
 
-    // Firebase Crashlytics (inert without google-services.json)
+    // Firebase Crashlytics & Analytics (inert without google-services.json or when opted out)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.firestore)
 
     // Unit Testing
     testImplementation(libs.junit)
+    testImplementation(libs.sqlite.jdbc)
     testImplementation(libs.coroutines.test)
 
     // Instrumented Testing
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 ksp {

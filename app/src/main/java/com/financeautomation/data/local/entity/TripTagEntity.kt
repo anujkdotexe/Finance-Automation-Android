@@ -38,7 +38,13 @@ data class TripTagEntity(
     val updatedAt: Long = 0L,
 
     @ColumnInfo(name = "dirty", defaultValue = "0")
-    val dirty: Int = 0
+    val dirty: Int = 0,
+
+    @ColumnInfo(name = "startDateEpochDay", defaultValue = "NULL")
+    val startDateEpochDay: Long? = null,
+
+    @ColumnInfo(name = "endDateEpochDay", defaultValue = "NULL")
+    val endDateEpochDay: Long? = null
 ) {
     fun toDomain(): TripTag {
         return TripTag(
@@ -47,7 +53,9 @@ data class TripTagEntity(
             isActive = isActive,
             isArchived = isArchived,
             createdAt = createdAt,
-            updatedAt = updatedAt
+            updatedAt = updatedAt,
+            startDateEpochDay = startDateEpochDay,
+            endDateEpochDay = endDateEpochDay
         )
     }
 
@@ -60,7 +68,9 @@ data class TripTagEntity(
                 isArchived = tripTag.isArchived,
                 createdAt = tripTag.createdAt,
                 updatedAt = updatedAt,
-                dirty = dirty
+                dirty = dirty,
+                startDateEpochDay = tripTag.startDateEpochDay,
+                endDateEpochDay = tripTag.endDateEpochDay
             )
         }
     }

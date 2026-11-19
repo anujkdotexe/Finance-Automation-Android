@@ -69,7 +69,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
 import com.financeautomation.core.constants.CategoryConstants
-import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupeesAuto
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -98,6 +97,7 @@ fun QuickLogSheet(
     state: QuickLogUiState,
     onAmountChanged: (String) -> Unit,
     onPayeeChanged: (String) -> Unit,
+    onNoteChanged: (String) -> Unit = {},
     onDateSelected: (Long) -> Unit = {},
     onAccountSelected: (String) -> Unit,
     onCategorySelected: (String) -> Unit,
@@ -124,11 +124,7 @@ fun QuickLogSheet(
         }
     }
 
-    LaunchedEffect(verticalScroll.isScrollInProgress) {
-        if (verticalScroll.isScrollInProgress) {
-            focusManager.clearFocus()
-        }
-    }
+    ClearFocusOnUserDrag(verticalScroll, focusManager)
 
     Column(
         modifier = modifier
@@ -160,65 +156,14 @@ fun QuickLogSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "₹",
-                    style = FinanceTheme.typography.amountHero,
-                    color = FinanceTheme.colors.primary,
-                    modifier = Modifier.padding(end = FinanceTheme.spacing.xs)
-                )
-
-                BasicTextField(
-                    value = state.amountText,
-                    onValueChange = { input ->
-                        if (AmountInputSanitizer.isValidExpressionInput(input)) {
-                            onAmountChanged(input)
-                        }
-                    },
-                    enabled = !state.isFinancialLocked,
-                    singleLine = true,
-                    textStyle = FinanceTheme.typography.amountHero.copy(
-                        color = FinanceTheme.colors.onSurface,
-                        textAlign = TextAlign.Center
-                    ),
-                    cursorBrush = SolidColor(FinanceTheme.colors.primary),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Next
-                    ),
-                    modifier = Modifier
-                        .width(IntrinsicSize.Min)
-                        .defaultMinSize(minWidth = FinanceTheme.sizes.emptyStateIllustration)
-                        .focusRequester(amountFocusRequester)
-                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-                    decorationBox = { innerTextField ->
-                        Box(contentAlignment = Alignment.Center) {
-                            if (state.amountText.isEmpty()) {
-                                Text(
-                                    text = "0.00",
-                                    style = FinanceTheme.typography.amountHero,
-                                    color = FinanceTheme.colors.outlineVariant
-                                )
-                            }
-                            innerTextField()
-                        }
-                    }
-                )
-            }
-
-            if (state.amountText.any { it in "+-*/" } && state.amount > 0.0) {
-                Text(
-                    text = "= ${formatRupeesAuto(state.amount)}",
-                    style = FinanceTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = FinanceTheme.spacing.xxs)
-                )
-            }
+            AmountField(
+                value = state.amountText,
+                onValueChange = onAmountChanged,
+                hero = true,
+                enabled = !state.isFinancialLocked,
+                focusRequester = amountFocusRequester,
+                onFocusChanged = onKeyboardFocusChanged
+            )
 
             // Unreadable Amount Fallback State - only shown for captured notifications with no parsed amount
             if (state.isNeedsAmount && !state.captureId.isNullOrBlank()) {
@@ -312,6 +257,14 @@ fun QuickLogSheet(
                     .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
             )
         }
+
+        // 2b. Notes Field (collapsed Notes button, expands to 120 char limited field)
+        NotesField(
+            value = state.note,
+            onValueChange = onNoteChanged,
+            onFocusChanged = onKeyboardFocusChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // Date Chips: Today, Yesterday, Pick date (no future dates)
         Column(modifier = Modifier.fillMaxWidth()) {

@@ -43,4 +43,15 @@ class StubSyncQueueDao(initial: List<SyncQueueEntity> = emptyList()) : SyncQueue
     override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
     override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
     override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
+    override suspend fun getActiveTransactionIds(): List<String> =
+        items.value.filter { it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS }
+            .map { it.transactionId }
+    override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+        val idSet = transactionIds.toSet()
+        items.value = items.value.filterNot {
+            it.transactionId in idSet &&
+            it.status == SyncQueueEntity.STATUS_PENDING &&
+            (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+        }
+    }
 }

@@ -72,3 +72,10 @@ tools/watch_inbox.py
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Private test material, never commit (real messages, test account details)
+docs/testing/local-fixtures/
+docs/testing/test_results.md
+docs/reviews/
+docs/testing/
+docs/handoff/

@@ -117,6 +117,7 @@ object QuickLogTransactionHelper {
             amount = txn.totalAmount,
             amountText = formatAmountInput(txn.totalAmount),
             payee = txn.merchant,
+            note = txn.note,
             selectedCategory = txn.category,
             selectedAccount = txn.account,
             availableCompanions = if (allCompanions.isNotEmpty()) allCompanions else currentState.availableCompanions,
@@ -147,10 +148,19 @@ object QuickLogTransactionHelper {
             existing.status.value.equals("Carried Fwd", ignoreCase = true) ||
             (existing.owedToMe > 0.0 && existing.owedToMe < (existing.totalAmount - existing.myShare - 0.01))
 
+        val cleanNote = com.financeautomation.core.utils.InputPolicy.cleanNote(state.note)
+        val newTimestamp = state.captureTimestamp ?: existing.timestamp
+        val newDateSerial = if (state.captureTimestamp != null) com.financeautomation.core.utils.DateSerialUtils.toDateSerial(newTimestamp) else existing.dateSerial
+        val newTimeSerial = if (state.captureTimestamp != null) com.financeautomation.core.utils.DateSerialUtils.toTimeSerial(newTimestamp) else existing.timeSerial
+
         val updated = if (isSettledOrCarried) {
             // For Settled/Carried Fwd rows or modified owed, allow only description, category, and account edits. Keep existing tripTag.
             existing.copy(
+                timestamp = newTimestamp,
+                dateSerial = newDateSerial,
+                timeSerial = newTimeSerial,
                 merchant = state.payee.ifBlank { existing.merchant },
+                note = cleanNote,
                 category = state.selectedCategory,
                 account = state.selectedAccount,
                 tripTag = existing.tripTag,
@@ -169,7 +179,11 @@ object QuickLogTransactionHelper {
                 TransactionStatus.PENDING
             }
             existing.copy(
+                timestamp = newTimestamp,
+                dateSerial = newDateSerial,
+                timeSerial = newTimeSerial,
                 merchant = state.payee.ifBlank { "Expense" },
+                note = cleanNote,
                 category = state.selectedCategory,
                 totalAmount = state.amount,
                 myShare = state.myShare,
@@ -243,7 +257,8 @@ object QuickLogTransactionHelper {
             isPossibleDuplicate = state.isPossibleDuplicate,
             duplicateOfId = state.duplicateOfId,
             afterInsert = subscriptionPaidHook(state, subscriptionRepository),
-            transactionId = state.captureId?.let { com.financeautomation.service.CaptureClaim.expenseIdFor(it) }
+            transactionId = state.captureId?.let { com.financeautomation.service.CaptureClaim.expenseIdFor(it) },
+            note = com.financeautomation.core.utils.InputPolicy.cleanNote(state.note)
         )
 
         if (result !is Result.Success && state.captureId != null && captureDao != null && previousState != null) {

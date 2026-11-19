@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Lock
@@ -67,6 +68,7 @@ fun DiagnosticsScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     var showSyncLog by remember { mutableStateOf(false) }
+    var showProblemReportDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.userMessage) {
         state.userMessage?.let {
@@ -192,13 +194,26 @@ fun DiagnosticsScreen(
                         onClick = {
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, com.financeautomation.core.utils.MaskUtils.diagnosticsShareText(state.googleAccountEmail, state.spreadsheetId))
+                                putExtra(Intent.EXTRA_TEXT, com.financeautomation.core.utils.ProblemReportManager.buildDiagnosticsExportReport(context))
                                 type = "text/plain"
                             }
                             context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.diag_share_chooser_title)).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             })
                         }
+                    )
+
+                    HorizontalDivider(
+                        color = FinanceTheme.colors.surfaceContainerLow,
+                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                    )
+
+                    // Row 5: Report a problem
+                    DiagnosticActionRow(
+                        icon = Icons.Rounded.BugReport,
+                        title = stringResource(R.string.diag_report_problem),
+                        subtitle = stringResource(R.string.diag_report_problem_desc),
+                        onClick = { showProblemReportDialog = true }
                     )
                 }
             }
@@ -208,6 +223,13 @@ fun DiagnosticsScreen(
             }
 
             CaptureHealthCard(modifier = Modifier.fillMaxWidth())
+        }
+
+        if (showProblemReportDialog) {
+            ProblemReportDialog(
+                onDismiss = { showProblemReportDialog = false },
+                initialScreen = "Diagnostics"
+            )
         }
     }
 }

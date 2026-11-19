@@ -255,9 +255,46 @@ interface PreferencesRepository {
         setPreference(KEY_NEEDS_REVIEW_HINT_DISMISSED, dismissed.toString(), isDirty = false)
     }
 
+    /** Whether the first-run onboarding accounts setup step has been seen or completed (default false). */
+    suspend fun isOnboardingAccountsSeen(): Boolean = getPreference(KEY_ONBOARDING_ACCOUNTS_SEEN) == "true"
+
+    suspend fun setOnboardingAccountsSeen(seen: Boolean) {
+        setPreference(KEY_ONBOARDING_ACCOUNTS_SEEN, seen.toString(), isDirty = false)
+    }
+
+    /**
+     * Observes whether a notice should be displayed alerting the user that their
+     * workbook was replaced (e.g. because it was trashed or missing in Drive).
+     */
+    fun getWorkbookReplacedNoticePending(): Flow<Boolean> = kotlinx.coroutines.flow.flowOf(false)
+
+    /** Set of package IDs that have been explicitly disabled by the user in capture settings. */
+    suspend fun getDisabledPackages(): Set<String> =
+        getPreference(KEY_DISABLED_PACKAGES)?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+
+    suspend fun setDisabledPackages(packages: Set<String>) {
+        setPreference(KEY_DISABLED_PACKAGES, packages.joinToString(","), isDirty = false)
+    }
+
+    /** Set of custom package IDs that the user explicitly added to watch. */
+    suspend fun getUserWatchedPackages(): Set<String> =
+        getPreference(KEY_USER_WATCHED_PACKAGES)?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+
+    suspend fun setUserWatchedPackages(packages: Set<String>) {
+        setPreference(KEY_USER_WATCHED_PACKAGES, packages.joinToString(","), isDirty = false)
+    }
+
+    suspend fun clearKeysWithPrefix(prefix: String) {}
+
     companion object {
+        const val KEY_DISABLED_PACKAGES: String = "disabled_packages"
+        const val KEY_USER_WATCHED_PACKAGES: String = "user_watched_packages"
+        const val KEY_WORKBOOK_REPLACED_NOTICE_PENDING: String = "key_workbook_replaced_notice_pending"
+        const val KEY_WORKBOOK_REQUEUE_PENDING_YEAR: String = "key_workbook_requeue_pending_year"
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
+        const val KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX: String = "last_workbook_verified_date_"
+        fun keyLastWorkbookVerifiedDate(year: Int): String = "$KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX$year"
         const val KEY_SPREADSHEET_TITLE: String = "key_spreadsheet_title"
         const val KEY_DEFAULT_ACCOUNT: String = "key_default_account"
         const val KEY_ACTIVE_TRIP: String = "key_active_trip"
@@ -271,6 +308,7 @@ interface PreferencesRepository {
 
         const val KEY_DASHBOARD_HINT_DISMISSED: String = "dashboard_hint_dismissed"
         const val KEY_NEEDS_REVIEW_HINT_DISMISSED: String = "needs_review_hint_dismissed"
+        const val KEY_ONBOARDING_ACCOUNTS_SEEN: String = "onboarding_accounts_seen"
         const val KEY_SUBSCRIPTION_REMINDER_TIME: String = "subscription_reminder_time"
         const val DISMISSED_RECURRING_KEY: String = "dismissed_recurring"
         const val KEY_APP_LOCK_ENABLED: String = "app_lock_enabled"

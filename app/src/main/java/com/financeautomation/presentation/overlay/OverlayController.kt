@@ -46,7 +46,7 @@ import com.financeautomation.domain.usecase.GetOpenDebtsForPersonUseCase
 import com.financeautomation.domain.usecase.PredictCategoryUseCase
 import com.financeautomation.presentation.flows.OpenDebtItem
 import com.financeautomation.presentation.theme.DefaultOverlayScrim
-import com.financeautomation.presentation.theme.FinanceAutomationTheme
+import com.financeautomation.presentation.theme.SavedThemeHost
 import com.financeautomation.presentation.viewmodel.QuickLogViewModel
 import com.financeautomation.presentation.viewmodel.QuickLogViewModelFactory
 import kotlinx.coroutines.CancellationException
@@ -84,11 +84,14 @@ class OverlayController(
     /** True while the app lock is active: the overlay then shows no friend names, balances or flows that list them. */
     private val isLocked: suspend () -> Boolean = { false },
     /** True when windows must hide their content from screenshots and the recents list. */
-    private val hidePreview: () -> Boolean = { false }
+    private val hidePreview: () -> Boolean = { false },
+    /** The saved theme choice, so the overlay follows the app setting and not only the phone setting. */
+    private val themeMode: kotlinx.coroutines.flow.Flow<com.financeautomation.domain.model.ThemeMode> =
+        kotlinx.coroutines.flow.flowOf(com.financeautomation.domain.model.ThemeMode.SYSTEM)
 ) {
     private val appContext = context.applicationContext
     private val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val resultPill = ResultPillOverlay(appContext, hidePreview)
+    private val resultPill = ResultPillOverlay(appContext, hidePreview, themeMode)
     private val blurHelper = OverlayBlurHelper(windowManager)
     private val mainScope = CoroutineScope(mainDispatcher + SupervisorJob())
 
@@ -98,6 +101,7 @@ class OverlayController(
     )
 
     private val showRequested = AtomicBoolean(false)
+    private val isSubmittingExpense = AtomicBoolean(false)
 
     val isShowing: Boolean
         get() = showRequested.get() || currentView != null
@@ -233,7 +237,7 @@ class OverlayController(
                 val composeView = ComposeView(appContext).apply {
                     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
                     setContent {
-                        FinanceAutomationTheme {
+                        SavedThemeHost(themeMode) {
                             var isVisible by remember { mutableStateOf(false) }
 
                             LaunchedEffect(Unit) {
@@ -280,34 +284,41 @@ class OverlayController(
                                         openDebts = openDebtsState.value,
                                         onPersonChanged = ::loadOpenDebtsForPerson,
                                         onConfirmExpense = {
-                                            viewModel.onConfirmAndSave { message, txnId ->
-                                                PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
-                                                dismiss()
-                                                resultPill.show(
-                                                    message = message.asString(appContext),
-                                                    transactionId = txnId,
-                                                    onUndo = if (txnId != null) {
-                                                        { id ->
+                                            if (!isSubmittingExpense.compareAndSet(false, true)) return@OverlayContentHost
+                                            viewModel.onConfirmAndSave(
+                                                onSaved = { message, txnId ->
+                                                    isSubmittingExpense.set(false)
+                                                    PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_SAVED)
+                                                    dismiss()
+                                                    resultPill.show(
+                                                        message = message.asString(appContext),
+                                                        transactionId = txnId,
+                                                        onUndo = { id ->
                                                             mainScope.launch(ioDispatcher) {
                                                                 transactionRepository.undoRecentSave(id)
                                                             }
                                                         }
-                                                    } else null
-                                                )
-                                            }
+                                                    )
+                                                },
+                                                onError = { err ->
+                                                    isSubmittingExpense.set(false)
+                                                    resultPill.show(err.asString(appContext))
+                                                }
+                                            )
                                         },
                                         onConfirmIncome = { amount, account, inflowType, settler, reason, explicitRefs ->
                                             val capId = currentCaptureId
-                                            if (capId != null) {
-                                                mainScope.launch(ioDispatcher) {
-                                                    try {
-                                                        pendingCaptureDaoProvider().updateState(capId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
-                                                    } catch (e: Exception) {
-                                                        if (e is CancellationException) throw e
+                                            actionDispatcher.confirmIncome(amount, account, inflowType, settler, reason, explicitRefs) { success ->
+                                                if (success && capId != null) {
+                                                    mainScope.launch(ioDispatcher) {
+                                                        try {
+                                                            pendingCaptureDaoProvider().updateState(capId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DONE)
+                                                        } catch (e: Exception) {
+                                                            if (e is CancellationException) throw e
+                                                        }
                                                     }
                                                 }
                                             }
-                                            actionDispatcher.confirmIncome(amount, account, inflowType, settler, reason, explicitRefs)
                                         },
                                         onConfirmFriendPaid = actionDispatcher::confirmPayable,
                                         onConfirmRepaid = actionDispatcher::confirmRepaid,
@@ -402,27 +413,26 @@ class OverlayController(
 
     private fun clearCurrentWindow() {
         blurHelper.teardownWindowBlur()
+        isSubmittingExpense.set(false)
         val view = currentView
         val owners = currentTreeOwners
-        try {
-            if (view != null) {
-                try {
-                    windowManager.removeView(view)
-                } catch (e: Exception) {
-                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: removeView failed")
-                }
+        currentView = null
+        currentTreeOwners = null
+        currentLayoutParams = null
+
+        if (view != null) {
+            try {
+                windowManager.removeView(view)
+            } catch (e: Exception) {
+                Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: removeView failed")
             }
-            if (owners != null) {
-                try {
-                    owners.destroy()
-                } catch (e: Exception) {
-                    Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: owners.destroy failed")
-                }
+        }
+        if (owners != null) {
+            try {
+                owners.destroy()
+            } catch (e: Exception) {
+                Diagnostics.record("OverlayController", "${e.javaClass.simpleName}: owners.destroy failed")
             }
-        } finally {
-            currentView = null
-            currentTreeOwners = null
-            currentLayoutParams = null
         }
     }
 
@@ -430,10 +440,12 @@ class OverlayController(
      * Dismisses the currently displayed overlay window and recycles resources.
      */
     fun dismiss() {
-        clearCurrentWindow()
-        currentCaptureId = null
-        showRequested.set(false)
-        _isShowingFlow.value = false
+        mainScope.launch {
+            clearCurrentWindow()
+            currentCaptureId = null
+            showRequested.set(false)
+            _isShowingFlow.value = false
+        }
     }
 
     /**

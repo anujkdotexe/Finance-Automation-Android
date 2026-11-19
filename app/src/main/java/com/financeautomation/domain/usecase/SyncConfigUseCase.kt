@@ -1,8 +1,12 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.ConfigNumbers
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.safeCall
+import com.financeautomation.domain.model.AppConfigSnapshot
 import com.financeautomation.domain.model.EmptyOrMissingConfigTabException
 import com.financeautomation.domain.repository.LegacyConfigGateway
 import com.financeautomation.domain.model.ConfigRow
@@ -20,7 +24,7 @@ import java.time.Instant
  * and the Google Sheets hidden Config tab (schema v1).
  * Pure Kotlin use case with zero Android framework dependencies.
  */
-class SyncConfigUseCase(
+open class SyncConfigUseCase(
     private val configRepository: ConfigRepository,
     private val localGateway: ConfigSyncLocalGateway,
     private val preferencesRepository: PreferencesRepository,
@@ -61,32 +65,43 @@ class SyncConfigUseCase(
             }
 
             val rows = (readResult as Result.Success).data
-            if (rows.isEmpty()) {
+            val hasDataRows = rows.any { it.type != ConfigConstants.TYPE_META }
+            if (rows.isEmpty() || !hasDataRows) {
                 // Check if legacy fixed-grid Config!A1:P50 exists for backwards compatibility
                 if (legacyConfigGateway != null) {
                     val legacyResult = legacyConfigGateway.readLegacyConfig(spreadsheetId)
-                    if (legacyResult is Result.Success) {
+                    if (legacyResult is Result.Success &&
+                        (legacyResult.data.accounts.isNotEmpty() ||
+                         legacyResult.data.categories.isNotEmpty() ||
+                         legacyResult.data.companions.isNotEmpty())
+                    ) {
+                        applyLegacySnapshot(legacyResult.data)
                         localGateway.markAllLocalItemsDirty()
                         push(spreadsheetId)
                         lastPullTimestamp = System.currentTimeMillis()
                         return@safeCall
                     }
                 }
-                throw EmptyOrMissingConfigTabException("Config tab is empty or absent")
+                if (rows.isEmpty()) {
+                    throw EmptyOrMissingConfigTabException("Config tab is empty or absent")
+                }
             }
 
             // Inspect schema version
             val metaRow = rows.find { it.type == ConfigConstants.TYPE_META && it.key == ConfigConstants.KEY_SCHEMA_VERSION }
             val remoteVersion = metaRow?.value1?.toIntOrNull() ?: 1
             val supportedVersion = ConfigConstants.CONFIG_SCHEMA_VERSION.toInt()
-            if (remoteVersion > supportedVersion) {
-                isRemoteSchemaNewerThanSupported = true
-            }
+            isRemoteSchemaNewerThanSupported = remoteVersion > supportedVersion
 
             for (row in rows) {
                 val epochMilli = row.updatedAt.toEpochMilli()
                 when (row.type) {
                     ConfigConstants.TYPE_ACCOUNT -> {
+                        val archived = row.value3.equals("true", ignoreCase = true)
+                        if (CategoryConstants.isProtectedAccount(row.key) && (row.deleted || archived)) {
+                            Diagnostics.record("SyncConfigUseCase", "CONFIG_PROTECTED_ITEM: account")
+                            continue
+                        }
                         localGateway.applyRemoteAccount(
                             name = row.key,
                             lastFour = row.value1.ifEmpty { null },
@@ -98,6 +113,12 @@ class SyncConfigUseCase(
                         )
                     }
                     ConfigConstants.TYPE_CATEGORY -> {
+                        if (CategoryConstants.isProtectedCategory(row.key) &&
+                            (row.deleted || row.value3.equals("true", ignoreCase = true))
+                        ) {
+                            Diagnostics.record("SyncConfigUseCase", "CONFIG_PROTECTED_ITEM: category")
+                            continue
+                        }
                         val parts = row.value4.split("|")
                         val displayOrder = parts[0].toIntOrNull() ?: 0
                         val colorName = parts.getOrNull(1)?.takeIf { it.isNotBlank() } ?: "Teal"
@@ -140,8 +161,8 @@ class SyncConfigUseCase(
                         }
                     }
                     ConfigConstants.TYPE_BUDGET -> {
-                        val amount = row.value1.replace(",", "").trim().toDoubleOrNull()
-                        if (row.key.isNotBlank() && amount != null && amount > 0.0) {
+                        val amount = ConfigNumbers.parseMoney(row.value1)
+                        if (row.key.isNotBlank() && amount != null) {
                             localGateway.applyRemoteBudget(
                                 category = row.key,
                                 monthlyAmount = amount,
@@ -158,7 +179,7 @@ class SyncConfigUseCase(
                         }
                     }
                     ConfigConstants.TYPE_PREF -> {
-                        if (!ConfigConstants.isLocalOnlyPref(row.key)) {
+                        if (ConfigConstants.isSyncedPref(row.key)) {
                             localGateway.applyRemotePreference(
                                 key = row.key,
                                 value = row.value1.ifEmpty { null },
@@ -177,7 +198,7 @@ class SyncConfigUseCase(
     /**
      * Pushes locally modified items (dirty = 1) to the remote Config tab.
      */
-    suspend fun push(targetSpreadsheetId: String? = null): Result<Unit> = withContext(ioDispatcher) {
+    open suspend fun push(targetSpreadsheetId: String? = null): Result<Unit> = withContext(ioDispatcher) {
         // One push at a time: the queued push and an immediate push must not append the same Config row twice
         pushMutex.withLock { safeCall {
             val spreadsheetId = targetSpreadsheetId ?: preferencesRepository.getSpreadsheetIdSync()
@@ -324,16 +345,73 @@ class SyncConfigUseCase(
                 throw upsertResult.exception
             }
 
-            // Clear dirty flags
-            localGateway.markAccountsClean(dirty.accounts.map { it.id })
-            localGateway.markCategoriesClean(dirty.categories.map { it.id })
-            localGateway.markCompanionsClean(dirty.companions.map { it.id })
-            localGateway.markTripTagsClean(dirty.tripTags.map { it.id })
-            localGateway.markPreferencesClean(dirty.preferences.map { it.key })
-            localGateway.markSubscriptionsClean(dirty.subscriptions.map { it.id })
-            localGateway.markBudgetsClean(dirty.budgets.map { it.category })
+            // Clear dirty flags only for items the sheet really took. A row the sheet already holds in a newer
+            // version was skipped: it stays dirty and the next pull brings the sheet value down.
+            val written = (upsertResult as Result.Success).data
+            fun isWritten(type: String, key: String) = ConfigRow.compositeKeyOf(type, key) in written
+            localGateway.markAccountsClean(dirty.accounts.filter { isWritten(ConfigConstants.TYPE_ACCOUNT, it.name) }.map { it.id })
+            localGateway.markCategoriesClean(dirty.categories.filter { isWritten(ConfigConstants.TYPE_CATEGORY, it.name) }.map { it.id })
+            localGateway.markCompanionsClean(dirty.companions.filter { isWritten(ConfigConstants.TYPE_PERSON, it.name) }.map { it.id })
+            localGateway.markTripTagsClean(dirty.tripTags.filter { isWritten(ConfigConstants.TYPE_TRIP, it.name) }.map { it.id })
+            localGateway.markPreferencesClean(dirty.preferences.filter { isWritten(ConfigConstants.TYPE_PREF, it.key) }.map { it.key })
+            localGateway.markSubscriptionsClean(dirty.subscriptions.filter { isWritten(ConfigConstants.TYPE_SUBSCRIPTION, it.id) }.map { it.id })
+            localGateway.markBudgetsClean(dirty.budgets.filter { isWritten(ConfigConstants.TYPE_BUDGET, it.category) }.map { it.category })
         }
     } }
+
+    private suspend fun applyLegacySnapshot(snapshot: AppConfigSnapshot) {
+        val legacyUpdatedAt = 1L
+        for (acc in snapshot.accounts) {
+            localGateway.applyRemoteAccount(
+                name = acc.name,
+                lastFour = acc.lastFourDigits,
+                isDefault = acc.isDefault,
+                isArchived = acc.isArchived,
+                displayOrder = acc.displayOrder,
+                updatedAt = legacyUpdatedAt,
+                deleted = false
+            )
+        }
+        for (cat in snapshot.categories) {
+            localGateway.applyRemoteCategory(
+                name = cat.name,
+                excludedFromBurn = cat.isExcludedFromLivingBurn,
+                isDefault = cat.isDefault,
+                isArchived = cat.isArchived,
+                displayOrder = cat.displayOrder,
+                updatedAt = legacyUpdatedAt,
+                deleted = false,
+                iconName = cat.iconName
+            )
+        }
+        for (p in snapshot.companions) {
+            localGateway.applyRemoteCompanion(
+                name = p.name,
+                isArchived = p.isArchived,
+                updatedAt = legacyUpdatedAt,
+                deleted = false
+            )
+        }
+        for (trip in snapshot.tripTags) {
+            localGateway.applyRemoteTripTag(
+                name = trip.name,
+                isActive = trip.isActive,
+                isArchived = trip.isArchived,
+                updatedAt = legacyUpdatedAt,
+                deleted = false
+            )
+        }
+        for ((key, value) in snapshot.preferences) {
+            if (ConfigConstants.isSyncedPref(key)) {
+                localGateway.applyRemotePreference(
+                    key = key,
+                    value = value,
+                    updatedAt = legacyUpdatedAt,
+                    deleted = false
+                )
+            }
+        }
+    }
 
     /**
      * Marks all local items dirty and pushes them to populate an initially empty Config tab.

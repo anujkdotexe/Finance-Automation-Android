@@ -99,8 +99,8 @@ class SubscriptionMatcherTest {
     }
 
     @Test
-    fun paidCycleOutsideOneDayIsNotADuplicate() = runBlocking {
-        val (m, _) = setup(dueOffset = -2L, state = SubscriptionCycleState.PAID, txn = "txn_answered")
+    fun paidCycleOutsideThreeDaysIsNotADuplicate() = runBlocking {
+        val (m, _) = setup(dueOffset = -4L, state = SubscriptionCycleState.PAID, txn = "txn_answered")
         assertNull(m.match(649.0, "netflix", today))
     }
 
@@ -192,5 +192,28 @@ class SubscriptionMatcherTest {
 
         assertNull(SubscriptionMatcher(repo).match(649.0, "Paid to Netflix", earlyApril))
         assertTrue(repo.cycles.value.isEmpty())
+    }
+
+    @Test
+    fun debitTwoDaysAfterYesIsFlaggedDuplicate() = runBlocking {
+        val (m, _) = setup(dueOffset = -2L, state = SubscriptionCycleState.PAID, txn = "txn_prev")
+        val match = m.match(649.0, "netflix", today)
+        assertNotNull(match)
+        assertTrue("A debit 2 days after answering Yes is flagged as duplicate", match!!.isDuplicate)
+        assertEquals("txn_prev", match.duplicateOfTransactionId)
+    }
+
+    @Test
+    fun debitFourDaysAfterIsNotDuplicate() = runBlocking {
+        val (m, _) = setup(dueOffset = -4L, state = SubscriptionCycleState.PAID, txn = "txn_prev")
+        val match = m.match(649.0, "netflix", today)
+        assertNull("A debit 4 days after is outside the duplicate window", match)
+    }
+
+    @Test
+    fun differentAmountIsNotDuplicate() = runBlocking {
+        val (m, _) = setup(amount = 649.0, dueOffset = -1L, state = SubscriptionCycleState.PAID, txn = "txn_prev")
+        val match = m.match(199.0, "netflix", today)
+        assertNull("A different amount is not matched as a duplicate", match)
     }
 }

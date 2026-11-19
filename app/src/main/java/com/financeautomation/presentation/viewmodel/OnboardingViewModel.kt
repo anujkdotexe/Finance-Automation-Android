@@ -47,7 +47,12 @@ data class OnboardingUiState(
     val workbookName: String = "",
     val spreadsheetId: String = "",
     /** Set while the user is asked to confirm switching to another Google account. */
-    val pendingAccountSwitch: com.financeautomation.data.account.AccountSwitchPrompt? = null
+    val pendingAccountSwitch: com.financeautomation.data.account.AccountSwitchPrompt? = null,
+    val showAccountSetupStep: Boolean = false,
+    val accounts: List<com.financeautomation.domain.model.Account> = emptyList(),
+    val defaultAccountName: String = com.financeautomation.core.constants.CategoryConstants.ACCOUNT_OTHER,
+    val isAccountsSeen: Boolean = false,
+    val accountSetupError: UiText? = null
 ) {
     /** Signed in and the workbook exists: the Continue button is enabled. */
     val isReady: Boolean get() = step1State == StepState.COMPLETED && step2State == StepState.COMPLETED
@@ -87,7 +92,8 @@ class OnboardingViewModel(
     private val preferencesRepository: PreferencesRepository,
     private val profileAvatarManager: ProfileAvatarManager? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null
+    private val accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null,
+    private val accountRepository: com.financeautomation.domain.repository.AccountRepository? = null
 ) : ViewModel() {
 
     /** The account details chosen in the Google picker, kept until the guard has been asked. */
@@ -111,6 +117,20 @@ class OnboardingViewModel(
     /** Follows the saved Google account and workbook for as long as the screen model lives. */
     private fun checkInitialState() {
         viewModelScope.launch(ioDispatcher) {
+            val seen = preferencesRepository.isOnboardingAccountsSeen()
+            val existingEmail = preferencesRepository.getGoogleAccountEmailSync()
+            val existingSheetId = preferencesRepository.getSpreadsheetIdSync()
+            val isExistingInstall = !existingEmail.isNullOrBlank() && !existingSheetId.isNullOrBlank()
+            if (isExistingInstall && !seen) {
+                // Existing install already past onboarding: do not ask accounts again
+                preferencesRepository.setOnboardingAccountsSeen(true)
+                _uiState.update { it.copy(isAccountsSeen = true) }
+            } else {
+                _uiState.update { it.copy(isAccountsSeen = seen) }
+            }
+        }
+
+        viewModelScope.launch(ioDispatcher) {
             kotlinx.coroutines.flow.combine(
                 preferencesRepository.getGoogleAccountEmail(),
                 preferencesRepository.getSpreadsheetIdForYear(currentYear)
@@ -118,6 +138,123 @@ class OnboardingViewModel(
                 .collect { (email, sheetId) ->
                     _uiState.update { it.withPreferences(email, sheetId) }
                 }
+        }
+
+        accountRepository?.let { repo ->
+            viewModelScope.launch(ioDispatcher) {
+                repo.getAccounts().collect { accountsList ->
+                    val defaultAcc = accountsList.firstOrNull { it.isDefault }?.name
+                        ?: preferencesRepository.getDefaultAccountSync()
+                    val hasCustomAccounts = accountsList.any { !com.financeautomation.core.constants.CategoryConstants.isProtectedAccount(it.name) }
+                    if (hasCustomAccounts && !_uiState.value.isAccountsSeen) {
+                        preferencesRepository.setOnboardingAccountsSeen(true)
+                        _uiState.update { it.copy(accounts = accountsList, defaultAccountName = defaultAcc, isAccountsSeen = true) }
+                    } else {
+                        _uiState.update { it.copy(accounts = accountsList, defaultAccountName = defaultAcc) }
+                    }
+                }
+            }
+        }
+
+        viewModelScope.launch(ioDispatcher) {
+            preferencesRepository.getDefaultAccount().collect { defAcc ->
+                _uiState.update { it.copy(defaultAccountName = defAcc) }
+            }
+        }
+    }
+
+    fun openAccountSetup() {
+        _uiState.update { it.copy(showAccountSetupStep = true, accountSetupError = null) }
+    }
+
+    fun dismissAccountSetup() {
+        _uiState.update { it.copy(showAccountSetupStep = false, accountSetupError = null) }
+    }
+
+    fun skipAccountSetup() {
+        viewModelScope.launch(ioDispatcher) {
+            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "accounts", "status" to "skipped")
+            )
+            preferencesRepository.setOnboardingAccountsSeen(true)
+            _uiState.update { it.copy(showAccountSetupStep = false, isAccountsSeen = true, accountSetupError = null) }
+        }
+    }
+
+    fun completeAccountSetup() {
+        viewModelScope.launch(ioDispatcher) {
+            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "accounts", "status" to "done")
+            )
+            preferencesRepository.setOnboardingAccountsSeen(true)
+            _uiState.update { it.copy(showAccountSetupStep = false, isAccountsSeen = true, accountSetupError = null) }
+        }
+    }
+
+    fun addAccount(name: String, lastFourDigits: String? = null) {
+        val existing = _uiState.value.accounts.map { it.name }
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+        if (!validation.isValid) {
+            val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
+            val errorText = when (err.reason) {
+                com.financeautomation.core.utils.InputPolicy.InputError.BLANK -> UiText.res(R.string.input_err_blank)
+                com.financeautomation.core.utils.InputPolicy.InputError.TOO_LONG -> UiText.res(R.string.input_err_too_long, err.limit ?: com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                com.financeautomation.core.utils.InputPolicy.InputError.DUPLICATE_NAME -> UiText.res(R.string.input_err_duplicate)
+                else -> UiText.res(R.string.input_err_invalid_chars)
+            }
+            _uiState.update { it.copy(accountSetupError = errorText) }
+            return
+        }
+        val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
+        val cleanDigits = lastFourDigits?.let { com.financeautomation.core.utils.InputPolicy.cleanDigits4(it) }?.ifEmpty { null }
+
+        viewModelScope.launch(ioDispatcher) {
+            val repo = accountRepository
+            if (repo != null) {
+                val existingAccounts = repo.getAllAccounts()
+                val isFirstUserAccount = existingAccounts.none { !com.financeautomation.core.constants.CategoryConstants.isProtectedAccount(it.name) }
+                val newId = "acc_${java.util.UUID.randomUUID().toString().take(8)}"
+                val newAcc = com.financeautomation.domain.model.Account(
+                    id = newId,
+                    name = cleanName,
+                    lastFourDigits = cleanDigits,
+                    isDefault = isFirstUserAccount,
+                    isArchived = false,
+                    displayOrder = existingAccounts.size
+                )
+                repo.insertAccount(newAcc)
+                if (isFirstUserAccount) {
+                    repo.setDefaultAccount(newId)
+                    preferencesRepository.setDefaultAccount(cleanName)
+                }
+            }
+            _uiState.update { it.copy(accountSetupError = null) }
+        }
+    }
+
+    fun setDefaultAccount(accountId: String, accountName: String) {
+        viewModelScope.launch(ioDispatcher) {
+            accountRepository?.setDefaultAccount(accountId)
+            preferencesRepository.setDefaultAccount(accountName)
+            _uiState.update { it.copy(defaultAccountName = accountName) }
+        }
+    }
+
+    fun deleteAccount(accountId: String) {
+        val target = _uiState.value.accounts.firstOrNull { it.id == accountId } ?: return
+        if (com.financeautomation.core.constants.CategoryConstants.isProtectedAccount(target.name)) {
+            _uiState.update { it.copy(accountSetupError = UiText.res(R.string.onboarding_accounts_cannot_remove_builtin)) }
+            return
+        }
+        viewModelScope.launch(ioDispatcher) {
+            accountRepository?.deleteAccount(accountId)
+            if (_uiState.value.defaultAccountName.equals(target.name, ignoreCase = true)) {
+                preferencesRepository.setDefaultAccount(com.financeautomation.core.constants.CategoryConstants.ACCOUNT_OTHER)
+                _uiState.update { it.copy(defaultAccountName = com.financeautomation.core.constants.CategoryConstants.ACCOUNT_OTHER) }
+            }
+            _uiState.update { it.copy(accountSetupError = null) }
         }
     }
 
@@ -239,6 +376,10 @@ class OnboardingViewModel(
             saveAccountDetails(picked.first, picked.second, picked.third)
         }
         val email = preferencesRepository.getGoogleAccountEmailSync()?.takeIf { it.isNotBlank() } ?: picked?.first.orEmpty()
+        com.financeautomation.core.utils.AnalyticsManager.logEvent(
+            eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+            params = mapOf("step_id" to "sign_in", "status" to "done")
+        )
         _uiState.update {
             it.copy(
                 step1State = StepState.COMPLETED,
@@ -246,15 +387,19 @@ class OnboardingViewModel(
                 step1Error = null
             )
         }
-        startWorkspaceProvisioning()
+        startWorkspaceProvisioning(forceValidateTabs = true)
     }
 
     fun startWorkspaceProvisioning(forceValidateTabs: Boolean = false) {
         viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(step2State = StepState.IN_PROGRESS, step2Error = null) }
-            when (val res = workbookResolver.resolveForYear(currentYear, forceValidateTabs = forceValidateTabs)) {
+            when (val res = workbookResolver.resolveForYear(currentYear, forceValidateTabs = forceValidateTabs, createBackup = false)) {
                 is Result.Success -> {
                     val id = res.data
+                    com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                        eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                        params = mapOf("step_id" to "workbook", "status" to "done")
+                    )
                     _uiState.update {
                         it.copy(
                             step2State = StepState.COMPLETED,
@@ -278,6 +423,10 @@ class OnboardingViewModel(
 
     fun updatePermissionsState(hasNotificationListener: Boolean) {
         if (hasNotificationListener) {
+            com.financeautomation.core.utils.AnalyticsManager.logEvent(
+                eventName = com.financeautomation.core.utils.UsageEvents.EVENT_ONBOARDING_STEP,
+                params = mapOf("step_id" to "permissions", "status" to "done")
+            )
             _uiState.update {
                 it.copy(
                     step3State = StepState.COMPLETED,
@@ -342,7 +491,8 @@ class OnboardingViewModel(
             preferencesRepository: PreferencesRepository,
             profileAvatarManager: ProfileAvatarManager? = null,
             ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-            accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null
+            accountSwitchGuard: com.financeautomation.data.account.AccountSwitchGuard? = null,
+            accountRepository: com.financeautomation.domain.repository.AccountRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -352,7 +502,8 @@ class OnboardingViewModel(
                     preferencesRepository = preferencesRepository,
                     profileAvatarManager = profileAvatarManager,
                     ioDispatcher = ioDispatcher,
-                    accountSwitchGuard = accountSwitchGuard
+                    accountSwitchGuard = accountSwitchGuard,
+                    accountRepository = accountRepository
                 ) as T
             }
         }

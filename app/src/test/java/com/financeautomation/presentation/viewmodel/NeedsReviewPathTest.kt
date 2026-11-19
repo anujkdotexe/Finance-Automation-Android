@@ -72,11 +72,12 @@ class NeedsReviewPathTest {
         override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
         override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
         override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
-        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+        override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long, category: String): Result<String> = Result.Success("id")
         override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
         override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
         override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
+        override suspend fun requeueYearForNewWorkbook(year: Int) {}
     }
 
     private class TestSyncQueueDao : SyncQueueDao {
@@ -123,6 +124,16 @@ class NeedsReviewPathTest {
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
         override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
         override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
+        override suspend fun getActiveTransactionIds(): List<String> = emptyList()
+        override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+            val idSet = transactionIds.toSet()
+            queue.values.filter {
+                it.transactionId in idSet &&
+                it.status == SyncQueueEntity.STATUS_PENDING &&
+                (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+            }.forEach { queue.remove(it.id) }
+            refreshFlow()
+        }
     }
 
     private class TestAccountRepo : AccountRepository {
@@ -344,7 +355,7 @@ class NeedsReviewPathTest {
     }
 
     @Test
-    fun dismissCaptureFromReviewInbox_marksStateDone() = runTest {
+    fun dismissCaptureFromReviewInbox_marksStateDismissed() = runTest {
         val captureDao = FakePendingCaptureDao()
         val now = System.currentTimeMillis()
 
@@ -357,7 +368,7 @@ class NeedsReviewPathTest {
                 inferredAccount = "GPay",
                 timestamp = now,
                 kind = PendingCaptureEntity.KIND_DEBIT,
-                state = PendingCaptureEntity.STATE_DISMISSED,
+                state = PendingCaptureEntity.STATE_NEEDS_REVIEW,
                 notificationKey = null,
                 contentHash = null,
                 updatedAt = now
@@ -378,8 +389,8 @@ class NeedsReviewPathTest {
         vm.dismissCapture("cap_to_dismiss")
         advanceUntilIdle()
 
-        // Capture state is now DONE, so it is removed from Needs Review
-        assertEquals(PendingCaptureEntity.STATE_DONE, captureDao.getById("cap_to_dismiss")?.state)
+        // Capture state is now DISMISSED (preserved for review/confirmation)
+        assertEquals(PendingCaptureEntity.STATE_DISMISSED, captureDao.getById("cap_to_dismiss")?.state)
     }
 
     @Test

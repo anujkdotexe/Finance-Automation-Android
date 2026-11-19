@@ -1,5 +1,7 @@
 package com.financeautomation.presentation.flows
 
+import androidx.annotation.StringRes
+import com.financeautomation.presentation.components.ClearFocusOnUserDrag
 import com.financeautomation.core.constants.CategoryConstants
 
 import androidx.compose.foundation.clickable
@@ -46,19 +48,27 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.financeautomation.R
-import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Companion
-import com.financeautomation.domain.usecase.ExpressionEvaluator
+import com.financeautomation.presentation.components.AmountEntry
+import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
+import com.financeautomation.presentation.components.NotesField
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 
 typealias OpenDebtItem = com.financeautomation.domain.model.OpenDebtItem
 
 
+
+enum class InflowOption(val key: String, @StringRes val labelRes: Int) {
+    INCOME("Income", R.string.inflow_type_income),
+    REFUND("Refund", R.string.inflow_type_return),
+    FRIEND_SETTLEMENT("Friend Settlement", R.string.inflow_type_friend),
+    TRANSFER("Transfer", R.string.inflow_type_transfer)
+}
 
 /**
  * Rebuilt Add Income flow sheet following the frozen design specification:
@@ -99,22 +109,15 @@ fun IncomeReturnFlowSheet(
         }
     }
 
-    val incomeType = stringResource(R.string.inflow_type_income)
-    val refundType = stringResource(R.string.inflow_type_return)
-    val friendSettlementType = stringResource(R.string.inflow_type_friend)
-    val transferType = stringResource(R.string.inflow_type_transfer)
-
-    val inflowTypes = remember(incomeType, refundType, friendSettlementType, transferType) {
-        listOf(incomeType, refundType, friendSettlementType, transferType)
-    }
-    var selectedInflowType by rememberSaveable { mutableStateOf(incomeType) }
+    val inflowOptions = remember { InflowOption.values().toList() }
+    var selectedOption by rememberSaveable { mutableStateOf(InflowOption.INCOME) }
 
     var settlerName by remember(preselectedFriend) { mutableStateOf(preselectedFriend ?: "") }
     var reasonText by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(preselectedFriend) {
         if (!preselectedFriend.isNullOrBlank()) {
-            selectedInflowType = friendSettlementType
+            selectedOption = InflowOption.FRIEND_SETTLEMENT
             onPersonChanged(preselectedFriend)
         }
     }
@@ -126,11 +129,7 @@ fun IncomeReturnFlowSheet(
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
 
-    LaunchedEffect(scrollState.isScrollInProgress) {
-        if (scrollState.isScrollInProgress) {
-            focusManager.clearFocus()
-        }
-    }
+    ClearFocusOnUserDrag(scrollState, focusManager)
 
     Column(
         modifier = modifier
@@ -162,64 +161,12 @@ fun IncomeReturnFlowSheet(
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "₹",
-                    style = FinanceTheme.typography.amountHero,
-                    color = FinanceTheme.colors.primary,
-                    modifier = Modifier.padding(end = FinanceTheme.spacing.xs)
-                )
-
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { input ->
-                        if (AmountInputSanitizer.isValidExpressionInput(input)) {
-                            amountText = input
-                        }
-                    },
-                    singleLine = true,
-                    textStyle = FinanceTheme.typography.amountHero.copy(
-                        color = FinanceTheme.colors.onSurface,
-                        textAlign = TextAlign.Center
-                    ),
-                    cursorBrush = SolidColor(FinanceTheme.colors.primary),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Next
-                    ),
-                    modifier = Modifier
-                        .width(IntrinsicSize.Min)
-                        .defaultMinSize(minWidth = FinanceTheme.sizes.emptyStateIllustration)
-                        .onFocusChanged { onKeyboardFocusChanged(it.isFocused) },
-                    decorationBox = { innerTextField ->
-                        Box(contentAlignment = Alignment.Center) {
-                            if (amountText.isEmpty()) {
-                                Text(
-                                    text = "0.00",
-                                    style = FinanceTheme.typography.amountHero,
-                                    color = FinanceTheme.colors.outlineVariant
-                                )
-                            }
-                            innerTextField()
-                        }
-                    }
-                )
-            }
-
-            val evaluated = remember(amountText) { ExpressionEvaluator().evaluate(amountText) }
-            if (amountText.any { it in "+-*/" } && evaluated != null && evaluated > 0.0) {
-                Text(
-                    text = "= ${formatRupeesAuto(evaluated)}",
-                    style = FinanceTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = FinanceTheme.spacing.xxs)
-                )
-            }
+            AmountField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                hero = true,
+                onFocusChanged = onKeyboardFocusChanged
+            )
         }
 
         // 2. Inflow Type Chips in wrapping FlowRow
@@ -237,14 +184,14 @@ fun IncomeReturnFlowSheet(
                 horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
             ) {
-                inflowTypes.forEach { type ->
-                    val isSelected = selectedInflowType == type
+                inflowOptions.forEach { option ->
+                    val isSelected = selectedOption == option
                     AppChip(
-                        text = type,
+                        text = stringResource(option.labelRes),
                         selected = isSelected,
                         onClick = {
                             focusManager.clearFocus()
-                            selectedInflowType = type
+                            selectedOption = option
                         }
                     )
                 }
@@ -283,7 +230,7 @@ fun IncomeReturnFlowSheet(
         // 4. Sender / Source Field
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = if (selectedInflowType == friendSettlementType) {
+                text = if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {
                     stringResource(R.string.prompt_who_settled)
                 } else {
                     stringResource(R.string.prompt_sender_source)
@@ -295,7 +242,7 @@ fun IncomeReturnFlowSheet(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
             // Friend Chips if Friend settlement is active in wrapping FlowRow
-            if (selectedInflowType == friendSettlementType && companions.isNotEmpty()) {
+            if (selectedOption == InflowOption.FRIEND_SETTLEMENT && companions.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
@@ -320,14 +267,16 @@ fun IncomeReturnFlowSheet(
             OutlinedTextField(
                 value = settlerName,
                 onValueChange = {
-                    settlerName = it
-                    if (selectedInflowType == friendSettlementType) {
-                        onPersonChanged(it)
+                    val clean = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                        .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                    settlerName = clean
+                    if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {
+                        onPersonChanged(clean)
                     }
                 },
                 placeholder = {
                     Text(
-                        text = if (selectedInflowType == friendSettlementType) {
+                        text = if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {
                             stringResource(R.string.hint_friends_name)
                         } else {
                             stringResource(R.string.prompt_who_sent_this)
@@ -348,7 +297,7 @@ fun IncomeReturnFlowSheet(
         }
 
         // 5. Bill Picker for Friend Settlement (if open debts exist for this person)
-        if (selectedInflowType == friendSettlementType && openDebts.isNotEmpty()) {
+        if (selectedOption == InflowOption.FRIEND_SETTLEMENT && openDebts.isNotEmpty()) {
             OpenDebtPickerSection(
                 openDebts = openDebts,
                 autoSettleAll = autoSettleAll,
@@ -361,43 +310,22 @@ fun IncomeReturnFlowSheet(
         }
 
         // 6. Notes / Reason Field (optional)
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = stringResource(R.string.prompt_reason_note),
-                style = FinanceTheme.typography.labelUppercase,
-                color = FinanceTheme.colors.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-
-            OutlinedTextField(
-                value = reasonText,
-                onValueChange = { reasonText = it },
-                placeholder = {
-                    Text(
-                        text = stringResource(R.string.hint_optional),
-                        style = FinanceTheme.typography.bodyMedium
-                    )
-                },
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                singleLine = true,
-                shape = FinanceShapes.card,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
-            )
-        }
+        NotesField(
+            value = reasonText,
+            onValueChange = { reasonText = it },
+            label = stringResource(R.string.prompt_reason_note),
+            placeholder = stringResource(R.string.hint_optional),
+            onFocusChanged = onKeyboardFocusChanged,
+            modifier = Modifier.fillMaxWidth()
+        )
         }
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
 
         // 7. Action Buttons: Pinned ButtonPair with OutlinedButton "Cancel" and FilledButton "Save income" outside scrollable area
-        val parsedAmount = ExpressionEvaluator().evaluate(amountText) ?: 0.0
-        val isValid = parsedAmount > 0.0 && (selectedInflowType != friendSettlementType || settlerName.isNotBlank())
+        val amountEntry = AmountEntry(amountText)
+        val parsedAmount = amountEntry.amountOrZero
+        val isValid = amountEntry.canSave && (selectedOption != InflowOption.FRIEND_SETTLEMENT || settlerName.isNotBlank())
 
         ButtonPair(
             outlinedText = stringResource(R.string.action_cancel),
@@ -406,12 +334,12 @@ fun IncomeReturnFlowSheet(
             onFilledClick = {
                 val refs = if (autoSettleAll) emptyList() else selectedDebtIds.toList()
                 val effectiveReason = reasonText.ifBlank {
-                    if (selectedInflowType == friendSettlementType) "Settlement from $settlerName" else selectedInflowType
+                    if (selectedOption == InflowOption.FRIEND_SETTLEMENT) "Settlement from $settlerName" else selectedOption.key
                 }
                 onConfirm(
                     parsedAmount,
                     selectedAccount,
-                    selectedInflowType,
+                    selectedOption.key,
                     settlerName.trim(),
                     effectiveReason,
                     refs

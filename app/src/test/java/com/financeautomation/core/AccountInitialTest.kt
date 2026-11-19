@@ -8,7 +8,7 @@ class AccountInitialTest {
 
     @Test
     fun testFirstLetterIsUppercased() {
-        assertEquals("A", accountInitial("anuj@example.com"))
+        assertEquals("A", accountInitial("alex@example.com"))
         assertEquals("Z", accountInitial("Zed@example.com"))
     }
 

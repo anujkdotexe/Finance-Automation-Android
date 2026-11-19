@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,22 +30,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -52,7 +59,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,13 +70,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.financeautomation.R
+import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.utils.InputPolicy
 import com.financeautomation.presentation.components.AttentionCard
 import com.financeautomation.presentation.components.FilledButton
 import com.financeautomation.presentation.health.AttentionIssue
@@ -158,6 +172,20 @@ fun OnboardingScreen(
         )
     }
 
+    if (state.showAccountSetupStep) {
+        OnboardingAccountsSetupScreen(
+            state = state,
+            onAddAccount = viewModel::addAccount,
+            onSetDefaultAccount = viewModel::setDefaultAccount,
+            onDeleteAccount = viewModel::deleteAccount,
+            onContinue = viewModel::completeAccountSetup,
+            onSkip = viewModel::skipAccountSetup,
+            onBack = viewModel::dismissAccountSetup,
+            modifier = modifier
+        )
+        return
+    }
+
     val isStep1Done = state.step1State == StepState.COMPLETED
     val isStep2Done = state.step2State == StepState.COMPLETED
     val isStep3Done = state.step3State == StepState.COMPLETED
@@ -201,7 +229,9 @@ fun OnboardingScreen(
                 FilledButton(
                     text = stringResource(R.string.onboarding_checklist_continue),
                     onClick = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        if (!state.isAccountsSeen) {
+                            viewModel.openAccountSetup()
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                             postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         } else {
@@ -337,9 +367,332 @@ fun OnboardingScreen(
 
                 // Step 3: accounts (a default account is created with the workbook)
                 AttentionCard(
-                    content = attentionContent(AttentionIssue.ACCOUNTS, AttentionState.OK),
-                    onAction = {}
+                    content = attentionContent(
+                        AttentionIssue.ACCOUNTS,
+                        if (state.isAccountsSeen) AttentionState.OK else AttentionState.NEEDS_ATTENTION
+                    ),
+                    detail = if (state.isAccountsSeen) state.defaultAccountName else null,
+                    onAction = { viewModel.openAccountSetup() }
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OnboardingAccountsSetupScreen(
+    state: OnboardingUiState,
+    onAddAccount: (name: String, last4: String?) -> Unit,
+    onSetDefaultAccount: (id: String, name: String) -> Unit,
+    onDeleteAccount: (id: String) -> Unit,
+    onContinue: () -> Unit,
+    onSkip: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var accountName by rememberSaveable { mutableStateOf("") }
+    var lastFourDigits by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.onboarding_accounts_title),
+                        style = FinanceTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        },
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+            ) {
+                FilledButton(
+                    text = stringResource(R.string.onboarding_checklist_continue),
+                    onClick = onContinue,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                LinkButton(
+                    text = stringResource(R.string.onboarding_accounts_skip),
+                    onClick = onSkip
+                )
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
+            verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xl)
+        ) {
+            // Header Section
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(FinanceTheme.sizes.buttonHeight)
+                        .clip(FinanceShapes.card)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AccountBalance,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(FinanceTheme.sizes.icon28)
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.onboarding_accounts_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Text(
+                    text = stringResource(R.string.onboarding_accounts_subtitle),
+                    style = FinanceTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Add Account Card
+            Surface(
+                shape = FinanceShapes.large,
+                color = FinanceTheme.colors.surfaceContainerLowest,
+                border = BorderStroke(FinanceTheme.sizes.strokeThin, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(FinanceTheme.spacing.l),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                ) {
+                    Text(
+                        text = stringResource(R.string.dialog_add_account_title),
+                        style = FinanceTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = stringResource(R.string.onboarding_accounts_name_label),
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = accountName,
+                            onValueChange = {
+                                accountName = InputPolicy.cleanName(it).take(InputPolicy.MAX_NAME_LENGTH)
+                            },
+                            placeholder = {
+                                Text(
+                                    text = stringResource(R.string.onboarding_accounts_name_placeholder),
+                                    style = FinanceTheme.typography.bodyMedium
+                                )
+                            },
+                            singleLine = true,
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)) {
+                        Text(
+                            text = stringResource(R.string.onboarding_accounts_last4_label),
+                            style = FinanceTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = lastFourDigits,
+                            onValueChange = {
+                                val clean = InputPolicy.cleanDigits4(it)
+                                if (clean.length <= 4) lastFourDigits = clean
+                            },
+                            placeholder = {
+                                Text(
+                                    text = stringResource(R.string.onboarding_accounts_last4_placeholder),
+                                    style = FinanceTheme.typography.bodyMedium
+                                )
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = FinanceShapes.card,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    state.accountSetupError?.let { err ->
+                        Text(
+                            text = err.asString(context),
+                            style = FinanceTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    FilledButton(
+                        text = stringResource(R.string.onboarding_accounts_add_button),
+                        onClick = {
+                            if (accountName.isNotBlank()) {
+                                onAddAccount(accountName.trim(), lastFourDigits.trim().ifEmpty { null })
+                                accountName = ""
+                                lastFourDigits = ""
+                            }
+                        },
+                        enabled = accountName.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // Current Accounts List
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
+            ) {
+                Text(
+                    text = stringResource(R.string.onboarding_accounts_your_accounts),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                state.accounts.forEach { account ->
+                    val isDefault = account.isDefault || account.name == state.defaultAccountName
+                    val isProtected = CategoryConstants.isProtectedAccount(account.name)
+
+                    Surface(
+                        shape = FinanceShapes.card,
+                        color = FinanceTheme.colors.surfaceContainerLowest,
+                        border = BorderStroke(FinanceTheme.sizes.strokeThin, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(FinanceTheme.sizes.buttonHeightMedium)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val icon = when {
+                                    account.name.equals(CategoryConstants.ACCOUNT_CASH, ignoreCase = true) -> Icons.Rounded.Payments
+                                    account.lastFourDigits != null -> Icons.Rounded.CreditCard
+                                    else -> Icons.Rounded.AccountBalance
+                                }
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = account.name,
+                                    style = FinanceTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                account.lastFourDigits?.let { digits ->
+                                    Text(
+                                        text = "•••• $digits",
+                                        style = FinanceTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (isDefault) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.onboarding_accounts_default_badge),
+                                        style = FinanceTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
+                                    )
+                                }
+                            } else {
+                                TextButton(
+                                    onClick = { onSetDefaultAccount(account.id, account.name) }
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.onboarding_accounts_make_default),
+                                        style = FinanceTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+
+                            if (isProtected) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainer
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.onboarding_accounts_builtin),
+                                        style = FinanceTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = { onDeleteAccount(account.id) },
+                                    modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

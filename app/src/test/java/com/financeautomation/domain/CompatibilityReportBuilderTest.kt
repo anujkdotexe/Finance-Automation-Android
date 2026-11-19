@@ -9,6 +9,7 @@ import com.financeautomation.domain.model.HealthRowReport
 import com.financeautomation.domain.model.OemCandidateReport
 import com.financeautomation.domain.model.OemRouteReport
 import com.financeautomation.domain.model.TrailEventReportItem
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -77,6 +78,15 @@ class CompatibilityReportBuilderTest {
         assertFalse(report.contains("₹"))
         assertFalse(report.contains("Rs."))
         assertFalse(report.contains("INR"))
+    }
+
+    @Test
+    fun userNoteIsCleanedAndCappedAtMaxNoteLength() {
+        val raw = "  Notice with control chars \u200E and excessive length " + "a".repeat(200)
+        val cleaned = com.financeautomation.core.utils.InputPolicy.cleanNote(raw)
+            .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
+        assertEquals(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH, cleaned.length)
+        assertFalse(cleaned.contains("\u200E"))
     }
 }
 

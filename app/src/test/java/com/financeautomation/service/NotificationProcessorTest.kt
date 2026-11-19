@@ -84,6 +84,8 @@ class NotificationProcessorTest {
         override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
         override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
         override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> = emptyList()
+        override suspend fun resetSyncStateForRequeue(id: String) {}
     }
 
     @Test
@@ -100,12 +102,24 @@ class NotificationProcessorTest {
     @Test
     fun process_blacklistedPackage_dropped() = runBlocking {
         val result = processor.process(
-            sourcePackage = "com.whatsapp",
+            sourcePackage = "org.telegram.messenger",
             title = "Friend",
             text = "Paid you 500"
         )
         assertTrue(result is NotificationProcessingOutcome.Ignored)
         assertTrue((result as NotificationProcessingOutcome.Ignored).reason.contains("Blacklisted privacy package"))
+    }
+
+    @Test
+    fun process_chatAppWithoutPaymentChannel_dropped() = runBlocking {
+        val result = processor.process(
+            sourcePackage = "com.whatsapp",
+            title = "Friend",
+            text = "Paid you 500",
+            channelId = "chat_message"
+        )
+        assertTrue(result is NotificationProcessingOutcome.Ignored)
+        assertTrue((result as NotificationProcessingOutcome.Ignored).reason.contains("Non-payment chat notification dropped"))
     }
 
     @Test

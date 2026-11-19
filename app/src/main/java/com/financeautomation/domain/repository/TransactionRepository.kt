@@ -122,13 +122,14 @@ interface TransactionRepository {
     ): Result<String>
 
     /**
-     * Enqueues a payable operation for cloud sync.
+     * Enqueues a payable operation for cloud sync and logs the user's share to Living Burn in the chosen category.
      */
     suspend fun logPayable(
         creditor: String,
         amount: Double,
         whatFor: String,
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
+        category: String = com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER
     ): Result<String>
 
     /**
@@ -139,7 +140,16 @@ interface TransactionRepository {
         amount: Double,
         explicitRef: String? = null,
         timestamp: Long = System.currentTimeMillis()
-    ): Result<String>
+    ): Result<String> = logRepayment(creditor, amount, explicitRef, timestamp, null, null)
+
+    suspend fun logRepayment(
+        creditor: String,
+        amount: Double,
+        explicitRef: String?,
+        timestamp: Long,
+        account: String?,
+        note: String?
+    ): Result<String> = logRepayment(creditor, amount, explicitRef, timestamp)
 
     /**
      * Enqueues monthly debt rollover from sourceTab into targetTab.
@@ -159,4 +169,10 @@ interface TransactionRepository {
      * subject to a 10-minute cooldown.
      */
     suspend fun reconcileAllMonths(): Result<Int>
+
+    /**
+     * Requeues all local non-void, non-review transactions, inflows, and payables for [year]
+     * so they are appended to a newly provisioned or replaced workbook.
+     */
+    suspend fun requeueYearForNewWorkbook(year: Int)
 }

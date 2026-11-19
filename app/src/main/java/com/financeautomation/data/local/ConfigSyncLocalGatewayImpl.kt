@@ -1,5 +1,6 @@
 package com.financeautomation.data.local
 
+import com.financeautomation.core.constants.CategoryConstants
 import com.financeautomation.core.constants.ConfigConstants
 import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.CategoryDao
@@ -285,6 +286,11 @@ class ConfigSyncLocalGatewayImpl(
     ): Unit = withContext(ioDispatcher) {
         val accountDao = resolveAccountDao()
         val existing = accountDao.getByName(name)
+        // Only one account may be the default. When the sheet marks two accounts default, the one with the newer
+        // stamp keeps it, whatever order the rows are read in.
+        val currentDefault = accountDao.getDefaultAccount()
+        val takesDefault = isDefault && !deleted &&
+            (currentDefault == null || currentDefault.id == existing?.id || currentDefault.updatedAt <= updatedAt)
         if (existing == null) {
             if (!deleted) {
                 val newId = "acc_${UUID.randomUUID().toString().take(8)}"
@@ -293,13 +299,14 @@ class ConfigSyncLocalGatewayImpl(
                         id = newId,
                         name = name,
                         lastFourDigits = lastFour,
-                        isDefault = isDefault,
+                        isDefault = takesDefault,
                         isArchived = isArchived,
                         displayOrder = displayOrder,
                         updatedAt = updatedAt,
                         dirty = 0
                     )
                 )
+                if (takesDefault) accountDao.makeOnlyDefault(newId)
             }
         } else {
             if (updatedAt > existing.updatedAt) {
@@ -312,18 +319,23 @@ class ConfigSyncLocalGatewayImpl(
                             dirty = 0
                         )
                     )
+                    // The default account was removed: Cash becomes the default so there is always one
+                    if (existing.isDefault) {
+                        accountDao.getByName(CategoryConstants.ACCOUNT_CASH)?.let { accountDao.makeOnlyDefault(it.id) }
+                    }
                 } else {
                     accountDao.update(
                         existing.copy(
                             name = name,
                             lastFourDigits = lastFour,
-                            isDefault = isDefault,
+                            isDefault = takesDefault,
                             isArchived = isArchived,
                             displayOrder = displayOrder,
                             updatedAt = updatedAt,
                             dirty = 0
                         )
                     )
+                    if (takesDefault) accountDao.makeOnlyDefault(existing.id)
                 }
             }
         }

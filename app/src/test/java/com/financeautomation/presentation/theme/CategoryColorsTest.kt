@@ -74,6 +74,24 @@ class CategoryColorsTest {
     }
 
     @Test
+    fun noColorCategoryReturnsTransparentDotAndNeutralGreyForCharts() {
+        val cat = com.financeautomation.domain.model.Category(
+            id = "c1",
+            name = "Groceries",
+            isDefault = false,
+            isExcludedFromLivingBurn = false,
+            isArchived = false,
+            displayOrder = 0,
+            iconName = CategoryColorTokens.NO_COLOR
+        )
+        assertTrue(isNoColor(cat))
+        assertEquals(androidx.compose.ui.graphics.Color.Transparent, categoryDotColor(cat, isDark = false))
+        assertEquals(androidx.compose.ui.graphics.Color.Transparent, categoryDotColor(cat, isDark = true))
+        assertEquals(CategoryColorTokens.None.light, categoryChartColor(cat, isDark = false))
+        assertEquals(CategoryColorTokens.None.dark, categoryChartColor(cat, isDark = true))
+    }
+
+    @Test
     fun noRawColorLiteralsForCategoryDotsOutsideThemeFolder() {
         val base = "src/main/java/com/financeautomation/presentation/"
         val categoriesScreen = File(base + "screens/drawer/CategoriesScreen.kt").readText()

@@ -19,11 +19,12 @@ import java.util.Locale
 class OverlayActionDispatcher(
     private val transactionRepository: TransactionRepository,
     private val tripTagRepository: TripTagRepository,
-    private val resultPill: ResultPillOverlay,
+    private val resultPill: ResultPill,
     private val onDismiss: () -> Unit,
     private val mainScope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
+    private val isSubmitting = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun confirmIncome(
         amount: Double,
@@ -31,8 +32,10 @@ class OverlayActionDispatcher(
         inflowType: String,
         settler: String,
         reason: String,
-        explicitRefs: List<String>
+        explicitRefs: List<String>,
+        onResult: ((Boolean) -> Unit)? = null
     ) {
+        if (!isSubmitting.compareAndSet(false, true)) return
         mainScope.launch(ioDispatcher) {
             try {
                 val res = transactionRepository.logCredit(
@@ -44,29 +47,38 @@ class OverlayActionDispatcher(
                     reason = reason
                 )
                 mainScope.launch {
-                    onDismiss()
-                    val formatted = String.format(Locale.US, "%.2f", amount)
-                    val message = if (res is Result.Success) {
-                        if (settler.isNotBlank()) "Recorded $formatted from $settler" else "Recorded $formatted"
-                    } else "Failed to record income"
-                    val txnId = (res as? Result.Success)?.data
-                    resultPill.show(
-                        message = message,
-                        transactionId = txnId,
-                        onUndo = if (txnId != null) {
-                            { id ->
-                                mainScope.launch(ioDispatcher) {
-                                    transactionRepository.undoRecentSave(id)
+                    when (res) {
+                        is Result.Success -> {
+                            isSubmitting.set(false)
+                            onDismiss()
+                            onResult?.invoke(true)
+                            val formatted = String.format(Locale.US, "%.2f", amount)
+                            val message = if (settler.isNotBlank()) "Recorded $formatted from $settler" else "Recorded $formatted"
+                            val txnId = res.data
+                            resultPill.show(
+                                message = message,
+                                transactionId = txnId,
+                                onUndo = { id ->
+                                    mainScope.launch(ioDispatcher) {
+                                        transactionRepository.undoRecentSave(id)
+                                    }
                                 }
-                            }
-                        } else null
-                    )
+                            )
+                        }
+                        is Result.Error -> {
+                            isSubmitting.set(false)
+                            onResult?.invoke(false)
+                            resultPill.show("Failed to record income")
+                        }
+                        is Result.Loading -> Unit
+                    }
                 }
             } catch (e: Exception) {
+                isSubmitting.set(false)
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayActionDispatcher", "${e.javaClass.simpleName}: confirmIncome failed")
                 mainScope.launch {
-                    onDismiss()
+                    onResult?.invoke(false)
                     resultPill.show("Failed to record income")
                 }
             }
@@ -80,60 +92,82 @@ class OverlayActionDispatcher(
         category: String = "",
         timestamp: Long = System.currentTimeMillis()
     ) {
+        if (!isSubmitting.compareAndSet(false, true)) return
         mainScope.launch(ioDispatcher) {
             try {
-                val effectiveWhatFor = com.financeautomation.core.utils.PayableFormatUtils.buildEffectiveWhatFor(whatFor, category)
                 val res = transactionRepository.logPayable(
                     creditor = creditor,
                     amount = amount,
-                    whatFor = effectiveWhatFor,
-                    timestamp = timestamp
+                    whatFor = whatFor,
+                    timestamp = timestamp,
+                    category = category
                 )
                 mainScope.launch {
-                    onDismiss()
-                    val formatted = String.format(Locale.US, "%.2f", amount)
-                    val message = if (res is Result.Success) {
-                        if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
-                    } else "Failed to record payable"
-                    val txnId = (res as? Result.Success)?.data
-                    // No undo: once delivered, a payable or repayment cannot be reversed from here
-                    resultPill.show(message = message)
+                    when (res) {
+                        is Result.Success -> {
+                            isSubmitting.set(false)
+                            onDismiss()
+                            val formatted = String.format(Locale.US, "%.2f", amount)
+                            val message = if (creditor.isNotBlank()) "Recorded payable $formatted to $creditor" else "Recorded payable $formatted"
+                            resultPill.show(message = message)
+                        }
+                        is Result.Error -> {
+                            isSubmitting.set(false)
+                            resultPill.show("Failed to record payable")
+                        }
+                        is Result.Loading -> Unit
+                    }
                 }
             } catch (e: Exception) {
+                isSubmitting.set(false)
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayActionDispatcher", "${e.javaClass.simpleName}: confirmPayable failed")
                 mainScope.launch {
-                    onDismiss()
                     resultPill.show("Failed to record payable")
                 }
             }
         }
     }
 
-    fun confirmRepaid(amount: Double, person: String, timestamp: Long) {
+    fun confirmRepaid(
+        amount: Double,
+        person: String,
+        timestamp: Long,
+        account: String? = null,
+        note: String? = null
+    ) {
+        if (!isSubmitting.compareAndSet(false, true)) return
         mainScope.launch(ioDispatcher) {
             try {
                 val res = transactionRepository.logRepayment(
                     creditor = person,
                     amount = amount,
                     explicitRef = null,
-                    timestamp = timestamp
+                    timestamp = timestamp,
+                    account = account,
+                    note = note
                 )
                 mainScope.launch {
-                    onDismiss()
-                    val formatted = String.format(Locale.US, "%.2f", amount)
-                    val message = if (res is Result.Success) {
-                        if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
-                    } else "Failed to record repayment"
-                    val txnId = (res as? Result.Success)?.data
-                    // No undo: once delivered, a payable or repayment cannot be reversed from here
-                    resultPill.show(message = message)
+                    when (res) {
+                        is Result.Success -> {
+                            isSubmitting.set(false)
+                            onDismiss()
+                            val formatted = String.format(Locale.US, "%.2f", amount)
+                            val message = if (person.isNotBlank()) "Recorded repayment $formatted to $person" else "Recorded repayment $formatted"
+                            resultPill.show(message = message)
+                        }
+                        is Result.Error -> {
+                            isSubmitting.set(false)
+                            resultPill.show("Failed to record repayment")
+                        }
+                        is Result.Loading -> Unit
+                    }
                 }
             } catch (e: Exception) {
+                isSubmitting.set(false)
                 if (e is CancellationException) throw e
                 Diagnostics.record("OverlayActionDispatcher", "${e.javaClass.simpleName}: confirmRepaid failed")
                 mainScope.launch {
-                    onDismiss()
                     resultPill.show("Failed to record repayment")
                 }
             }

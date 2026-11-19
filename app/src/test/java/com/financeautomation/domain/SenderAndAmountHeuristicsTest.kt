@@ -20,14 +20,14 @@ class SenderAndAmountHeuristicsTest {
 
     @Test
     fun realBankHeadersAndShortCodesAreAccepted() {
-        for (id in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "HDFCBK", "5676766", "56161")) {
+        for (id in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "HDFCBK", "5676766", "56161", "JioPay-S", "JIOPAY-S")) {
             assertTrue("$id should be a bank sender", RegexPatterns.isBankSenderId(id))
         }
     }
 
     @Test
     fun contactNamesAndPersonalNumbersAreRejected() {
-        for (id in listOf("Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", "98123 45678", "", "  ")) {
+        for (id in listOf("Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", "98123 45678", "", "  ", "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma", "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo")) {
             assertFalse("$id must not be read", RegexPatterns.isBankSenderId(id))
         }
     }
@@ -35,13 +35,13 @@ class SenderAndAmountHeuristicsTest {
     @Test
     fun theParserAndThePreFilterAgree() {
         val friendText = "paid to you Rs 500 for dinner, received?"
-        for (name in listOf("Rahul", "Mom", "Ravi Kumar")) {
+        for (name in listOf("Rahul", "Mom", "Ravi Kumar", "Rahul-K", "Dr-Rao")) {
             assertFalse(NotificationPreFilter.shouldReadFullText(sms, name, friendText))
             val r = parser(sourcePackage = sms, title = name, text = friendText)
             assertTrue("$name -> $r", r is NotificationParseResult.Dropped)
         }
         val bank = "Rs 649.00 debited from A/c XX1234 to VPA shop@okaxis"
-        for (header in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "5676766")) {
+        for (header in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "5676766", "JioPay-S")) {
             assertTrue("prefilter $header", NotificationPreFilter.shouldReadFullText(sms, header, bank))
             val pr = parser(sourcePackage = sms, title = header, text = bank)
             assertTrue("parse $header -> $pr", pr is NotificationParseResult.Success)

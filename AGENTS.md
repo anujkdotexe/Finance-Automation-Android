@@ -10,7 +10,7 @@ This project is the native Android companion and standalone client for the **Fin
 
 * **The Goal:** Eliminate manual expense logging friction on Android by combining real-time UPI/banking notification interception with a native, 1-tap categorization Bottom Sheet and automated Google Drive/Sheets provisioning.
 * **The Target Platform:** Android 9.0+ (minimum API 28, target and compile API 36), specifically optimized for Samsung Galaxy devices (One UI Side Key, Quick Settings Tiles, Edge Panels) while remaining universally compatible with all Android devices.
-* **Master Ledger Specification:** All transactions logged by this app must strictly comply with the proven master sheet schema (28 visible columns plus three hidden id columns, A to AE) and the net burn calculation rules established in the iOS predecessor.
+* **Master Ledger Specification:** All transactions logged by this app must strictly comply with the proven master sheet schema (29 visible columns plus three hidden id columns, A to AF) and the net burn calculation rules established in the iOS predecessor.
 
 ---
 
@@ -34,17 +34,18 @@ Agents developing on this codebase must adhere strictly to these engineering sta
   * Use Android Jetpack **`WorkManager`** for reliable offline synchronization with network constraints (`NetworkType.CONNECTED`).
 
 ### B. Notification Interception & Privacy Protection
-* **Target Package Filtering (Whitelist Only):**
-  * The `NotificationListenerService` must **strictly** filter incoming notifications by known financial package IDs:
-    * Google Pay (`com.google.android.apps.nbu.paisa.user`)
-    * BHIM (`in.org.npci.upiapp`)
-    * Supermoney (`com.supermoney.app`)
-    * PhonePe (`com.phonepe.app`)
-    * Paytm (`net.one97.paytm`)
-    * System SMS / Bank debit alerts, accepted only from bank-style sender ids; SMS from personal numbers and saved contact names is rejected on the sender alone before any of its text is read
-* **Real Notifications Only:** There is no notification simulator and no self-test or sample data generator in any build type. A capture may only come from a real notification of a whitelisted package or from manual entry. The whitelist is the same in every build type.
-* **Strict Privacy Rule:** Under no circumstances should the service read, log, cache, or inspect notifications from personal messaging apps (WhatsApp, Telegram, Signal) or OTP authentication messages.
-* **Data Transit:** Financial notification payloads must only be parsed locally on device and committed to the user's private Google Sheet. Never transmit parsed data to third-party servers. When the user has explicitly opted in, crash and freeze reports containing technical data only (app version, device model, Android OS level, error location) may be sent to Firebase Crashlytics; such reports must never include transaction amounts, payees, account names, or notification message text.
+* **Target Package Filtering (registry, default on, user can switch each app off in Settings):**
+  * The `NotificationListenerService` filters incoming notifications by a registry of known payment package ids. The registry lives in one place in code (`PackageWhitelist`) with the package id, display name, parser and a privacy class for each app, and the same list applies in every build type.
+  * Payment apps: Google Pay, BHIM, Supermoney, PhonePe, Paytm, and the other common Indian payment apps listed in the registry (each package id verified against its official store listing).
+  * System SMS and bank debit alerts, accepted only from bank-style sender ids; SMS from personal numbers and saved contact names is rejected on the sender alone before any of its text is read.
+* **Chat apps that carry payments (WhatsApp and WhatsApp Business only):**
+  * Only notifications that the app can identify as payment notifications from the notification's own channel or category are read. Any other WhatsApp notification is dropped at once: its text is not parsed, logged, stored, cached or counted by content; only a counter is allowed.
+  * If a payment cannot be told apart from a chat message without reading chat text, WhatsApp is not captured.
+  * Groups, contacts, calls and media notifications are always dropped.
+* **Strict Privacy Rule:** Under no circumstances should the service read, log, cache or inspect notifications from personal messaging apps other than the WhatsApp payment exception above (Telegram, Signal, Messenger, Instagram, Discord, and mail apps stay blocked), or OTP authentication messages.
+* **Real Notifications Only:** There is no notification simulator and no self-test or sample data generator in any build type. A capture may only come from a real notification of a registered package or from manual entry.
+* **Data Transit:** Financial notification payloads must only be parsed locally on device and committed to the user's private Google Sheet. Never transmit parsed data to third-party servers. When the user has explicitly opted in, two kinds of technical reports may be sent through Firebase, each with its own switch that is off by default: (1) crash and freeze reports (Crashlytics): app version, device model, Android OS level, error class and location; (2) anonymous usage counts (Analytics): events and values from a fixed allow-list in code, such as onboarding step, permission issue, sync error kind and feature used. These reports must never include transaction amounts, payees, account names, category, friend or trip names, spreadsheet ids, email addresses or message text, and Analytics must not collect an advertising id.
+  * (3) Owner-approved 2026-11-19: a user-initiated problem report written to Firestore. It is created only when the user taps Send after seeing exactly what will be sent, never in the background and never without that tap. Fields come from a fixed allow-list in code: app version, device model, Android OS level, a random install id, the screen, a reason code, counters and a short free-text description the user types and can edit. It has the same exclusions as above, plus no logs that contain message text, and the free-text box warns the user not to type private data. Firestore security rules allow create only, with size limits, and no read or update from the app; only the owner reads reports in the Firebase console.
 
 ### C. Split Logic & Accounting Mathematics
 The application must faithfully reproduce the proven iOS split calculations:
@@ -126,11 +127,27 @@ The application must faithfully reproduce the proven iOS split calculations:
    * Never add, change or void the owner's live data on a phone or in their sheet while testing. Use unit-test fixtures.
 13. **Licence And Credits:**
    * The project is open source under the MIT License (`LICENSE`). Developer credits and links live in `app/src/main/res/values/developer_info.xml`. Do not add a different licence or an "all rights reserved" notice.
+14. **No Terminal Polling (Daemon & Reactive Notification Only):**
+   * Never poll or repeatedly ping the terminal in loops to check task, build, test, or process completion.
+   * Use daemon processes, watcher scripts (e.g. inbox watcher), or background tasks with notifications.
+   * Yield control and let the environment notify you reactively when the task finishes.
+
+15. **Real Message Data:**
+   * Real SMS and notification text (the owner's or a friend's) stays on the local machine, git-ignored. Never copy message text, reference numbers, amounts, payees or account digits into source, tests, commits, reports, logs or chat; refer to messages by fixture id.
+   * Committed test text is invented, or a mechanically scrubbed copy of real wording that the owner has read and approved in writing.
+   * Mixed-case SMS sender headers are accepted only from a named registry of known billers; everything else must be uppercase DLT style, so saved contact names are rejected on the sender alone.
+   * Executed bill and recharge payments are captured as debits in Needs Review; reminders, offers, requests and mandate notices are dropped.
 
 ---
 
 ## 5. Change Log For This Manual
 
+- **2026-11-19 (later):** Section 2B Data Transit: a third opt-in report kind, a user-initiated problem report through Firestore, added at the owner's request. Reason: crash and usage reports are opt-in and will often be off, so testers need a way to send a problem with a visible, allow-listed payload.
+
+- **2026-11-19:** Master Ledger described as 29 visible columns plus three hidden id columns, A to AF. Reason: the owner approved a Note column right after Status (column L) for notes on every entry, and the sheet moved the inflow and payable tables one column to the right. Old 31-column workbooks are upgraded by the repair path.
+- **2026-11-18:** Added Rule 15 (Real Message Data) after the SMS parsing round: real message text stays local, committed test text is invented or approved scrubbed text, mixed-case sender headers only from a named registry, bill and recharge payments are captured. The status of the fix round is kept in docs/testing/ROUND_STATUS.md.
+- **2026-11-17:** Added Rule 14 (No Terminal Polling). Agents must never poll the terminal repeatedly in loops; use daemons, watchers, or reactive background notifications instead.
+- **2026-11-17:** Section 2B updated at the owner's request: a registry of payment apps (including Amazon Pay) with per-app switches; WhatsApp payment notifications allowed under a strict channel-only privacy rule; opt-in anonymous usage counts added next to opt-in crash reports. Reason: users pay through many apps and the owner wants broad capture and better field diagnostics without leaking financial data.
 - **2026-11-16:** Updated after the first full review and fix cycle. What changed and why:
   - Target platform set to API 28 to 36 and the ledger described as 28 visible plus three hidden columns, to match the build files and the sheet layout in the code.
   - Theme path corrected to `presentation/theme/`, where the theme actually lives.

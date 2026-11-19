@@ -421,14 +421,16 @@ fun SubscriptionsScreen(
             accounts = accounts,
             existing = sub,
             onDismiss = { editingSubscription = null },
-            onSave = { name, amount, frequency, account, remind ->
+            onSave = { name, amount, frequency, account, remind, note, anchorDay ->
                 viewModel.updateSubscription(
                     sub.copy(
                         name = name,
                         amount = amount,
                         frequency = frequency,
                         account = account,
-                        remind = remind
+                        remind = remind,
+                        note = note,
+                        anchorEpochDay = anchorDay ?: sub.anchorEpochDay
                     )
                 )
                 editingSubscription = null
@@ -441,15 +443,16 @@ fun SubscriptionsScreen(
             accounts = accounts,
             prefill = suggestion,
             onDismiss = { trackingSuggestion = null },
-            onSave = { name, amount, frequency, account, remind ->
+            onSave = { name, amount, frequency, account, remind, note, anchorDay ->
                 viewModel.addSubscription(
                     name = name,
                     amount = amount,
                     frequency = frequency,
                     account = account,
                     remind = remind,
-                    anchorEpochDay = suggestion.anchorEpochDay,
-                    category = suggestion.category
+                    anchorEpochDay = anchorDay ?: suggestion.anchorEpochDay,
+                    category = suggestion.category,
+                    note = note
                 )
                 viewModel.dismissSuggestion(suggestion)
                 trackingSuggestion = null
@@ -461,8 +464,16 @@ fun SubscriptionsScreen(
         AddSubscriptionSheet(
             accounts = accounts,
             onDismiss = { showAddSubscriptionSheet = false },
-            onSave = { name, amount, frequency, account, remind ->
-                viewModel.addSubscription(name, amount, frequency, account, remind)
+            onSave = { name, amount, frequency, account, remind, note, anchorDay ->
+                viewModel.addSubscription(
+                    name = name,
+                    amount = amount,
+                    frequency = frequency,
+                    account = account,
+                    remind = remind,
+                    anchorEpochDay = anchorDay,
+                    note = note
+                )
                 showAddSubscriptionSheet = false
             }
         )

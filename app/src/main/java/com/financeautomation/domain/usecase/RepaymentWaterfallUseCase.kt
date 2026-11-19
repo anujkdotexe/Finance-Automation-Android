@@ -1,6 +1,7 @@
 package com.financeautomation.domain.usecase
 
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.CellEdit
 import com.financeautomation.domain.model.LedgerPayable
@@ -31,7 +32,9 @@ class RepaymentWaterfallUseCase(
         timeSerial: Double,
         tabName: String,
         allPayables: List<LedgerPayable>,
-        resolveCarriedFn: ((LedgerPayable) -> LedgerPayable?)? = null
+        resolveCarriedFn: ((LedgerPayable) -> LedgerPayable?)? = null,
+        account: String? = null,
+        note: String? = null
     ): AccountingPlan {
         var remaining = AccountingUtils.round2(amount)
         var repaidCount = 0
@@ -57,12 +60,12 @@ class RepaymentWaterfallUseCase(
                     repaidCount++
                     remaining = AccountingUtils.round2(remaining - repRes.applied)
 
-                    allEdits.add(CellEdit(live.tab, live.row, "AA", dateSerial))
+                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial))
                     if (live.paidBy != repRes.newPaidBy) {
-                        allEdits.add(CellEdit(live.tab, live.row, "X", repRes.newPaidBy))
+                        allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy))
                     }
-                    allEdits.add(CellEdit(live.tab, live.row, "Z", repRes.newOwed))
-                    allEdits.add(CellEdit(live.tab, live.row, "AB", repRes.newStatus))
+                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed))
+                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus))
 
                     val idx = workingPayables.indexOfFirst { it.tab == live.tab && it.row == live.row }
                     if (idx >= 0) {
@@ -94,12 +97,12 @@ class RepaymentWaterfallUseCase(
                     repaidCount++
                     remaining = AccountingUtils.round2(remaining - repRes.applied)
 
-                    allEdits.add(CellEdit(payable.tab, payable.row, "AA", dateSerial))
+                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial))
                     if (payable.paidBy != repRes.newPaidBy) {
-                        allEdits.add(CellEdit(payable.tab, payable.row, "X", repRes.newPaidBy))
+                        allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy))
                     }
-                    allEdits.add(CellEdit(payable.tab, payable.row, "Z", repRes.newOwed))
-                    allEdits.add(CellEdit(payable.tab, payable.row, "AB", repRes.newStatus))
+                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed))
+                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus))
 
                     workingPayables[i] = payable.copy(
                         amountOwed = repRes.newOwed,
@@ -118,8 +121,8 @@ class RepaymentWaterfallUseCase(
             val debitCells = listOf(
                 dateSerial,
                 timeSerial,
-                "Cash",
-                "[Carried Over] Excess repayment balance",
+                account?.takeIf { it.isNotBlank() } ?: "Cash",
+                note?.takeIf { it.isNotBlank() } ?: "[Carried Over] Excess repayment balance",
                 "",
                 CategoryConstants.CATEGORY_OTHER,
                 AccountingUtils.round2(remaining),

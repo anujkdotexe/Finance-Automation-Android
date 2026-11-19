@@ -179,4 +179,66 @@ class CalculateSplitUseCaseTest {
     fun testSingularSavingNormalizesToPluralSavings() {
         assertEquals("Savings", useCase.normalizeCategory("Saving"))
     }
+
+    @Test
+    fun testCalculateRolloverUsesInjectedClock() {
+        val fixedMillis = 1773489600000L
+        val fixedClock = java.time.Clock.fixed(
+            java.time.Instant.ofEpochMilli(fixedMillis),
+            java.time.ZoneId.of("Asia/Kolkata")
+        )
+        val customUseCase = CalculateSplitUseCase(fixedClock)
+        val original = Transaction(
+            id = "txn_123",
+            timestamp = 1000L,
+            dateSerial = 46000,
+            timeSerial = 0.5,
+            account = "HDFC",
+            merchant = "Dinner",
+            category = "Food",
+            totalAmount = 1000.0,
+            companions = "Alice",
+            myShare = 500.0,
+            owedToMe = 500.0,
+            status = TransactionStatus.PENDING
+        )
+        val (_, carried) = customUseCase.calculateRollover(original, "Feb26", 46030, 0.5)
+        assertEquals(fixedMillis, carried.timestamp)
+    }
+
+    @Test
+    fun testFirstWriteDebitRowIncludesGuardedNoteInColumnL() {
+        val useCase = CalculateSplitUseCase()
+        val planNormal = useCase(
+            amount = 100.0,
+            merchant = "Coffee",
+            category = "Food & Drink",
+            account = "SBI",
+            splitMode = com.financeautomation.core.model.SplitMode.JUST_ME,
+            companions = emptyList(),
+            dateSerial = 46000,
+            timeSerial = 0.5,
+            tabName = "Nov26",
+            note = "Met Alice"
+        )
+        val cellsNormal = planNormal.appends.first().cells
+        assertEquals("Debit row must have exactly 12 cells (Columns A to L)", 12, cellsNormal.size)
+        assertEquals("Column L must contain plain text note", "Met Alice", cellsNormal[11])
+
+        val planFormula = useCase(
+            amount = 100.0,
+            merchant = "Coffee",
+            category = "Food & Drink",
+            account = "SBI",
+            splitMode = com.financeautomation.core.model.SplitMode.JUST_ME,
+            companions = emptyList(),
+            dateSerial = 46000,
+            timeSerial = 0.5,
+            tabName = "Nov26",
+            note = "=A1+B1"
+        )
+        val cellsFormula = planFormula.appends.first().cells
+        assertEquals("Debit row must have exactly 12 cells (Columns A to L)", 12, cellsFormula.size)
+        assertEquals("Column L note starting with '=' must be escaped with single quote", "'=A1+B1", cellsFormula[11])
+    }
 }

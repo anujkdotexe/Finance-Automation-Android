@@ -21,7 +21,7 @@ class SheetsReadBudgetTest {
     private fun SyncHarness.reads() = server.calls.count { it.method == "GET" }
     private fun SyncHarness.ledgerReads() = server.calls.count { it.method == "GET" && it.url.contains("values:batchGet") }
     private fun SyncHarness.valueLookups() =
-        server.calls.count { it.method == "GET" && it.url.contains("/values/") && !it.url.contains("values:batchGet") }
+        server.calls.count { it.method == "GET" && it.url.contains("/values/") && !it.url.contains("values:batchGet") && !it.url.contains("L3") }
 
     private suspend fun SyncHarness.save(id: String) = repo.insertTransaction(expense(id, merchant = id))
 
@@ -46,8 +46,8 @@ class SheetsReadBudgetTest {
         val h = SyncHarness(tabs = names)
         h.repo.syncPendingTransactions()
         val url = URLDecoder.decode(h.server.calls.single { it.url.contains("values:batchGet") }.url, "UTF-8")
-        assertTrue(url.contains("'${names[0]}'!A4:K"))
-        assertTrue(url.contains("'${names[1]}'!A4:K"))
+        assertTrue(url.contains("'${names[0]}'!A4:L"))
+        assertTrue(url.contains("'${names[1]}'!A4:L"))
         for (old in names.drop(2)) assertFalse("$old must not be read", url.contains("'$old'!"))
     }
 

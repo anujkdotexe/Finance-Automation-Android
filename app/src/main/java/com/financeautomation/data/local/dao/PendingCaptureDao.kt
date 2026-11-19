@@ -45,7 +45,7 @@ interface PendingCaptureDao {
     @Query("SELECT * FROM pending_captures WHERE state = 'WAITING' ORDER BY timestamp ASC")
     suspend fun getWaitingCaptures(): List<PendingCaptureEntity>
 
-    @Query("SELECT * FROM pending_captures WHERE state = 'WAITING' AND timestamp < :cutoffTime ORDER BY timestamp ASC")
+    @Query("SELECT * FROM pending_captures WHERE state IN ('WAITING', 'AWAITING_SUCCESS') AND timestamp < :cutoffTime ORDER BY timestamp ASC")
     suspend fun getExpiredWaitingCaptures(cutoffTime: Long): List<PendingCaptureEntity>
 
     @Query("SELECT * FROM pending_captures WHERE state = 'AWAITING_SUCCESS' ORDER BY timestamp ASC")
@@ -67,7 +67,7 @@ interface PendingCaptureDao {
     @Transaction
     suspend fun claimForLogging(id: String): Boolean {
         val capture = getById(id) ?: return false
-        if (capture.state != "WAITING" && capture.state != "SHOWN" && capture.state != "NEEDS_REVIEW" && capture.state != "AWAITING_SUCCESS") return false
+        if (capture.state != "WAITING" && capture.state != "SHOWN" && capture.state != "NEEDS_REVIEW" && capture.state != "AWAITING_SUCCESS" && capture.state != "DISMISSED") return false
         updateState(id, "CLAIMED")
         return true
     }

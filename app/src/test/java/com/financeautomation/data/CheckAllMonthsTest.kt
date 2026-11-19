@@ -38,35 +38,35 @@ class CheckAllMonthsTest {
                 """{
                     "valueRanges": [
                         {
-                            "range": "'Jan26'!A4:K",
+                            "range": "'Jan26'!A4:L",
                             "majorDimension": "ROWS",
                             "values": [
-                                [46025, 0.5, "SBI", "Old Coffee Jan", "", "Food & Drink", 150.0, "Personal", 150.0, 0.0, "Personal"]
+                                [46025, 0.5, "SBI", "Old Coffee Jan", "", "Food & Drink", 150.0, "Personal", 150.0, 0.0, "Personal", ""]
                             ]
                         },
                         {
-                            "range": "'Jan26'!AC4:AC",
+                            "range": "'Jan26'!AD4:AD",
                             "majorDimension": "ROWS",
                             "values": [
                                 ["txn_jan_old_123"]
                             ]
                         },
-                        {"range": "'Jan26'!M4:T", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Jan26'!AD4:AD", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Jan26'!V4:AB", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Jan26'!N4:U", "majorDimension": "ROWS", "values": []},
                         {"range": "'Jan26'!AE4:AE", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Oct26'!A4:K", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Oct26'!AC4:AC", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Oct26'!M4:T", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Jan26'!W4:AC", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Jan26'!AF4:AF", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Oct26'!A4:L", "majorDimension": "ROWS", "values": []},
                         {"range": "'Oct26'!AD4:AD", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Oct26'!V4:AB", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Oct26'!N4:U", "majorDimension": "ROWS", "values": []},
                         {"range": "'Oct26'!AE4:AE", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Nov26'!A4:K", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Nov26'!AC4:AC", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Nov26'!M4:T", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Oct26'!W4:AC", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Oct26'!AF4:AF", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Nov26'!A4:L", "majorDimension": "ROWS", "values": []},
                         {"range": "'Nov26'!AD4:AD", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Nov26'!V4:AB", "majorDimension": "ROWS", "values": []},
-                        {"range": "'Nov26'!AE4:AE", "majorDimension": "ROWS", "values": []}
+                        {"range": "'Nov26'!N4:U", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Nov26'!AE4:AE", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Nov26'!W4:AC", "majorDimension": "ROWS", "values": []},
+                        {"range": "'Nov26'!AF4:AF", "majorDimension": "ROWS", "values": []}
                     ]
                 }"""
             } else null
@@ -131,10 +131,11 @@ class CheckAllMonthsTest {
             override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<Transaction> = emptyList()
             override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
             override suspend fun logCredit(settler: String, amount: Double, explicitRefs: List<String>, account: String, inflowType: String, reason: String, timestamp: Long): Result<String> = Result.Success("id")
-            override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long): Result<String> = Result.Success("id")
+            override suspend fun logPayable(creditor: String, amount: Double, whatFor: String, timestamp: Long, category: String): Result<String> = Result.Success("id")
             override suspend fun logRepayment(creditor: String, amount: Double, explicitRef: String?, timestamp: Long): Result<String> = Result.Success("id")
             override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
             override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
+            override suspend fun requeueYearForNewWorkbook(year: Int) {}
         }
 
         val prefs = SyncHarness().prefs

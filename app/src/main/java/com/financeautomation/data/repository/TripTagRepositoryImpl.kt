@@ -125,6 +125,18 @@ class TripTagRepositoryImpl(
         configSyncCoordinator?.schedulePush()
     }
 
+    override suspend fun upsertTripTag(tripTag: TripTag): Unit = withContext(ioDispatcher) {
+        val dao = resolveDao()
+        val entity = TripTagEntity.fromDomain(tripTag).copy(dirty = 1, updatedAt = System.currentTimeMillis())
+        val existing = dao.getById(tripTag.id)
+        if (existing == null) {
+            dao.insert(entity)
+        } else {
+            dao.update(entity)
+        }
+        configSyncCoordinator?.schedulePush()
+    }
+
     override suspend fun setActiveTag(id: String?): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
         val tagName = dao.setActiveTagAtomic(id)

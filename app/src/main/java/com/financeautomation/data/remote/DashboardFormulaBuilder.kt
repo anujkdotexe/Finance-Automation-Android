@@ -1,6 +1,7 @@
 package com.financeautomation.data.remote
 
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 
@@ -15,6 +16,8 @@ import com.financeautomation.domain.model.Category
 object DashboardFormulaBuilder {
 
     private const val CATEGORY_TRANSFER = "Transfer"
+    private val YEAR_4_DIGIT_REGEX = Regex("""(20\d{2})""")
+    private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
 
     /**
      * Categories always left out of living burn, as in the iOS reference: Savings and Transfer (in that order),
@@ -38,13 +41,17 @@ object DashboardFormulaBuilder {
      * below zero. Voided income rows have amount 0, so they drop out on their own, and rows still in review are not
      * on the sheet at all. Matches [com.financeautomation.domain.usecase.LivingBurn].
      */
-    private fun burnFormula(tabName: String, excludedCategoryNames: List<String>): String {
+    fun burnFormula(tabName: String, excludedCategoryNames: List<String>): String {
         val exclusions = livingBurnExclusions(excludedCategoryNames).joinToString("") { name ->
-            ", ${tabRange(tabName, "F4:F")}, \"<>$name\""
+            val escapedCriterion = com.financeautomation.core.utils.SinkEscaper.sheetFormulaLiteral(
+                com.financeautomation.core.utils.SinkEscaper.sheetCriterion(name)
+            )
+            ", ${tabRange(tabName, "F4:F")}, \"<>$escapedCriterion\""
         }
-        val spent = "SUMIFS(${tabRange(tabName, "I4:I")}$exclusions)"
+        val spent = "SUMIFS(${tabRange(tabName, "I4:I")}, ${tabRange(tabName, "D4:D")}, \"<>[Void]*\"$exclusions)"
         val refunds = REFUND_TYPES.joinToString("") { type ->
-            " - SUMIFS(${tabRange(tabName, "S4:S")}, ${tabRange(tabName, "P4:P")}, \"$type\")"
+            val escapedType = com.financeautomation.core.utils.SinkEscaper.sheetFormulaLiteral(type)
+            " - SUMIFS(${tabRange(tabName, "T4:T")}, ${tabRange(tabName, "Q4:Q")}, \"$escapedType\")"
         }
         return "=IFERROR(MAX(0, $spent$refunds), 0)"
     }
@@ -83,6 +90,185 @@ object DashboardFormulaBuilder {
      */
     fun buildCategorySpendFormula(rowNumber: Int): String {
         return """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
+    }
+
+    /**
+     * Category spend formula for the Insights table (Column V row [rowNum], referencing category in Column U).
+     * Excludes [Void] rows and trip-tagged rows (Column E blank).
+     */
+    fun buildInsightCategorySpendFormula(rowNum: Int): String =
+        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*"), 0)"""
+
+    /**
+     * Trips slice spend formula for the Insights table.
+     * Sums across tagged trip rows (Column E non-empty) excluding Void, Savings, Transfer.
+     */
+    fun buildInsightTripSpendFormula(): String =
+        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+
+    /**
+     * Refunds slice formula for the Insights table.
+     * Subtracts refund inflows from Table 2 so total of all Insights slices matches the Living Burn KPI.
+     */
+    fun buildInsightRefundsFormula(): String =
+        """=-IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!T4:T"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Q4:Q"), "Refund*"), 0)"""
+
+    val MONTH_PREFIXES: List<String> = listOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    )
+
+    /** Returns the 12 month tab names for a given [year] (e.g. 2026 -> ["Jan26", "Feb26", ...]). */
+    fun monthTabsForYear(year: Int): List<String> {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return MONTH_PREFIXES.map { "$it$yy" }
+    }
+
+    /**
+     * Extracts the 4-digit fiscal year from workbook tab names or workbook title,
+     * falling back to the provided default year.
+     */
+    fun extractWorkbookYear(
+        tabNames: Collection<String>,
+        workbookTitle: String? = null,
+        fallbackYear: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): Int {
+        if (!workbookTitle.isNullOrBlank()) {
+            val match = YEAR_4_DIGIT_REGEX.find(workbookTitle)
+            if (match != null) return match.value.toInt()
+        }
+        for (tab in tabNames) {
+            val m = MONTH_TAB_REGEX.find(tab)
+            if (m != null) {
+                val yy = m.groupValues[2].toIntOrNull()
+                if (yy != null) return 2000 + yy
+            }
+        }
+        return fallbackYear
+    }
+
+    /**
+     * Builds the Paid This Year formula for row [row1BasedIndex] summing across the 12 month tabs of [year].
+     * Each month is evaluated as an independent IFERROR term returning 0 if the tab is missing or has no matches.
+     */
+    fun buildPaidThisYearFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /**
+     * Builds the Last Paid Date formula for row [row1BasedIndex] finding the latest date across the 12 month tabs of [year].
+     * Each month is evaluated as an independent IFERROR term inside MAX returning 0 if the tab is missing or has no matches.
+     * When all terms return 0, the outer IFERROR returns empty string or 0 formatted as date with blank on zero.
+     */
+    fun buildLastPaidDateFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val innerTerms = tabs.joinToString(", ") { tab ->
+            """IFERROR(MAXIFS(INDIRECT("'$tab'!A4:A"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+        }
+        return """=IFERROR(MAX($innerTerms), "")"""
+    }
+
+    /**
+     * Builds the helper formula for Subscriptions tab "Per Month (₹)" column.
+     * Evaluates weekly (* 52 / 12), yearly (/ 12), or monthly directly.
+     */
+    fun buildSubscriptionPerMonthFormula(row1BasedIndex: Int): String {
+        return """=IF(ISBLANK(B$row1BasedIndex), 0, IF(C$row1BasedIndex="Weekly", B$row1BasedIndex*52/12, IF(C$row1BasedIndex="Yearly", B$row1BasedIndex/12, B$row1BasedIndex)))"""
+    }
+
+    /**
+     * Builds the formula for Active Subscriptions count on the Dashboard.
+     */
+    fun buildSubscriptionsActiveCountFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        return """=COUNTIF($tab!${activeCol}4:$activeCol, TRUE)"""
+    }
+
+    /**
+     * Builds the formula for Monthly Equivalent Subscriptions outflow on the Dashboard.
+     */
+    fun buildSubscriptionsMonthlyEquivalentFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        val perMonthCol = SheetSchemaConstants.COL_LETTER_SUB_PER_MONTH
+        return """=SUMIF($tab!${activeCol}4:$activeCol, TRUE, $tab!${perMonthCol}4:$perMonthCol)"""
+    }
+
+    /**
+     * Builds the formula for Next Due Subscription on the Dashboard.
+     * Uses the due date column and filters for active renewals where due date >= TODAY(),
+     * returning "Name (dd mmm)" or "None upcoming".
+     */
+    fun buildNextDueSubscriptionFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val nameCol = SheetSchemaConstants.COL_LETTER_SUB_NAME
+        val dateCol = SheetSchemaConstants.COL_LETTER_SUB_DUE_DATE
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        val filterExpr = "FILTER({$tab!${nameCol}4:$nameCol, $tab!${dateCol}4:$dateCol}, $tab!${activeCol}4:$activeCol=TRUE, $tab!${dateCol}4:$dateCol>=TODAY())"
+        val sortExpr = "SORT($filterExpr, 2, TRUE)"
+        return """=IFERROR(INDEX($sortExpr, 1, 1) & " (" & TEXT(INDEX($sortExpr, 1, 2), "dd mmm") & ")", "None upcoming")"""
+    }
+
+    /**
+     * Builds the formula to query the 5 newest closed subscriptions for the Dashboard,
+     * selecting Name, Closed Date, and Paid in Total.
+     */
+    fun buildClosedSubscriptionsQueryFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val range = SheetSchemaConstants.SUBSCRIPTIONS_RANGE
+        val nameCol = SheetSchemaConstants.COL_LETTER_SUB_NAME
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        val closedDateCol = SheetSchemaConstants.COL_LETTER_SUB_CLOSED_DATE
+        val paidTotalCol = SheetSchemaConstants.COL_LETTER_SUB_PAID_IN_TOTAL
+        return """=IFERROR(QUERY($tab!$range, "SELECT $nameCol, $closedDateCol, $paidTotalCol WHERE $activeCol = FALSE AND $nameCol IS NOT NULL ORDER BY $closedDateCol DESC LIMIT 5", 0), "")"""
+    }
+
+    /**
+     * Builds the Days formula for row [row1BasedIndex] of the Trips tab.
+     */
+    fun buildTripDaysFormula(row1BasedIndex: Int): String {
+        return """=IF(ISBLANK(B$row1BasedIndex), "", IF(ISBLANK(C$row1BasedIndex), MAX(1, TODAY()-B$row1BasedIndex+1), MAX(1, C$row1BasedIndex-B$row1BasedIndex+1)))"""
+    }
+
+    /**
+     * Builds the Total Paid formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
+     * Excludes [Void] rows, Savings, and Transfer by category text.
+     */
+    fun buildTripTotalPaidFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /**
+     * Builds the My Share formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
+     * Excludes [Void] rows, Savings, and Transfer by category text.
+     */
+    fun buildTripMyShareFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!I4:I"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /**
+     * Builds the Owed To Me formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
+     * Excludes [Void] rows, Savings, and Transfer by category text.
+     */
+    fun buildTripOwedToMeFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!J4:J"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
     }
 
     /**
@@ -131,7 +317,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4,
                 colIndex = 9, // Col J
-                formula = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AB4:AB"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Z4:Z")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AB4:AB"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Z4:Z")), 0)"""
+                formula = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")), 0)"""
             )
         )
 
@@ -178,8 +364,34 @@ object DashboardFormulaBuilder {
             )
         }
 
-        // 8. Category Table Y5:Z15 (Row 5 header, Rows 6 to 15 for 10 categories including Savings and Other)
-        val activeCategories = categories.filter { !it.isArchived }
+        // 8. Category Table Y5:Z... (Row 5 header, Rows 6 to (5 + categoryCount))
+        // Preserves user displayOrder, guarantees Savings and Other are never dropped, and scales dynamically (min 10 rows)
+        val activeCategories = categories.filter { !it.isArchived }.sortedBy { it.displayOrder }.toMutableList()
+        if (!activeCategories.any { it.name.equals(CategoryConstants.CATEGORY_SAVINGS, ignoreCase = true) }) {
+            activeCategories.add(
+                Category(
+                    id = "savings",
+                    name = CategoryConstants.CATEGORY_SAVINGS,
+                    isDefault = false,
+                    isExcludedFromLivingBurn = true,
+                    isArchived = false,
+                    displayOrder = 998
+                )
+            )
+        }
+        if (!activeCategories.any { it.name.equals(CategoryConstants.CATEGORY_OTHER, ignoreCase = true) }) {
+            activeCategories.add(
+                Category(
+                    id = "other",
+                    name = CategoryConstants.CATEGORY_OTHER,
+                    isDefault = false,
+                    isExcludedFromLivingBurn = false,
+                    isArchived = false,
+                    displayOrder = 999
+                )
+            )
+        }
+        val categoryCount = maxOf(10, activeCategories.size)
         val categoryRows = mutableListOf<Map<String, Any?>>()
 
         // Row 5: Header
@@ -192,8 +404,7 @@ object DashboardFormulaBuilder {
             )
         )
 
-        // Rows 6 to 15: Exactly 10 categories
-        for (i in 0 until 10) {
+        for (i in 0 until categoryCount) {
             val rowNum = 6 + i
             if (i < activeCategories.size) {
                 val cat = activeCategories[i]
@@ -222,8 +433,8 @@ object DashboardFormulaBuilder {
                 "updateCells" to mapOf(
                     "range" to mapOf(
                         "sheetId" to dashboardSheetId,
-                        "startRowIndex" to 4, // Row 5
-                        "endRowIndex" to 15, // Row 15 + 1
+                        "startRowIndex" to 4, // Row 5 (header)
+                        "endRowIndex" to 5 + categoryCount, // Row 5 + categoryCount
                         "startColumnIndex" to 24, // Col Y
                         "endColumnIndex" to 26 // Col Z + 1
                     ),
@@ -239,7 +450,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 0,  // Col A
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:K"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
+                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
             )
         )
 
@@ -248,7 +459,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 7,  // Col H
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!V4:AB"), "SELECT X, Z, V WHERE (AB = 'Pending' OR AB = 'Partial') AND Z > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
             )
         )
 

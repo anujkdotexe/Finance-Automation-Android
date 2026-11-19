@@ -39,6 +39,10 @@ interface AccountDao {
     @Query("UPDATE accounts SET isDefault = 0")
     suspend fun clearDefaultFlag()
 
+    /** Makes [id] the only default account in one statement, so there is never a moment with two or none. */
+    @Query("UPDATE accounts SET isDefault = CASE WHEN id = :id THEN 1 ELSE 0 END")
+    suspend fun makeOnlyDefault(id: String)
+
     @Query("UPDATE accounts SET isDefault = 1 WHERE id = :id")
     suspend fun setDefaultFlag(id: String)
 

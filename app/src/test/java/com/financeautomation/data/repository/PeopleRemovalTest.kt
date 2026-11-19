@@ -61,7 +61,9 @@ class PeopleRemovalTest {
         override suspend fun getActiveTag() = rows.values.firstOrNull { it.isActive && !it.isArchived }
         override fun getActiveTagFlow(): Flow<TripTagEntity?> = flowOf(rows.values.firstOrNull { it.isActive && !it.isArchived })
         override suspend fun clearActiveFlags(updatedAt: Long) { rows.values.forEach { rows[it.id] = it.copy(isActive = false) } }
+        override suspend fun clearActiveFlagsWithDate(endDateEpochDay: Long, updatedAt: Long) { rows.values.forEach { rows[it.id] = it.copy(isActive = false, endDateEpochDay = endDateEpochDay) } }
         override suspend fun setActiveFlag(id: String, updatedAt: Long) { rows[id]?.let { rows[id] = it.copy(isActive = true) } }
+        override suspend fun setActiveFlagWithDate(id: String, startDateEpochDay: Long, updatedAt: Long) { rows[id]?.let { rows[it.id] = it.copy(isActive = true, startDateEpochDay = it.startDateEpochDay ?: startDateEpochDay, endDateEpochDay = null) } }
         override suspend fun count() = rows.size
         override suspend fun insert(tag: TripTagEntity) { rows[tag.id] = tag }
         override suspend fun insertAll(tags: List<TripTagEntity>) { tags.forEach { insert(it) } }
@@ -113,12 +115,12 @@ class PeopleRemovalTest {
         h.server.customRead = { call ->
             if (call.url.contains("values:batchGet")) {
                 """{"valueRanges":[
-                    {"range":"'$tab'!A4:K","majorDimension":"ROWS","values":[[46000,0.5,"SBI","Dinner","","Food & Drink",300.0,"Charlie, Dana",100.0,200.0,"Pending"]]},
-                    {"range":"'$tab'!AC4:AC","majorDimension":"ROWS","values":[["txn_x"]]},
-                    {"range":"'$tab'!M4:T","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!V4:AB","majorDimension":"ROWS","values":[]},
-                    {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]}
+                    {"range":"'$tab'!A4:L","majorDimension":"ROWS","values":[[46000,0.5,"SBI","Dinner","","Food & Drink",300.0,"Charlie, Dana",100.0,200.0,"Pending",""]]},
+                    {"range":"'$tab'!AD4:AD","majorDimension":"ROWS","values":[["txn_x"]]},
+                    {"range":"'$tab'!N4:U","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!AE4:AE","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!W4:AC","majorDimension":"ROWS","values":[]},
+                    {"range":"'$tab'!AF4:AF","majorDimension":"ROWS","values":[]}
                 ]}"""
             } else null
         }

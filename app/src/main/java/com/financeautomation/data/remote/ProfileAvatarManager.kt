@@ -170,12 +170,14 @@ class ProfileAvatarManager(
             return host == "googleusercontent.com" || host.endsWith(".googleusercontent.com")
         }
 
+        private val PHOTO_SIZE_REGEX = Regex("=s\\d+(-c)?.*$")
+
         /**
          * Formats URL to request exactly `=s128-c` size variant.
          */
         fun formatPhotoUrl(rawUrl: String): String {
             return if (rawUrl.contains("=")) {
-                rawUrl.replace(Regex("=s\\d+(-c)?.*$"), "=s128-c")
+                rawUrl.replace(PHOTO_SIZE_REGEX, "=s128-c")
             } else {
                 "$rawUrl=s128-c"
             }

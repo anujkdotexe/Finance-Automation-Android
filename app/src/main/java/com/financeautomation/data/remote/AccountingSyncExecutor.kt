@@ -1,13 +1,17 @@
 package com.financeautomation.data.remote
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.getByTabAndSheetRowIndex
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.LineageEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import java.time.Instant
 import com.financeautomation.domain.model.AccountingPlan
 import com.financeautomation.domain.model.CarryForwardRequest
 import com.financeautomation.domain.model.LedgerDebit
@@ -34,15 +38,19 @@ private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct
  * Friend settlements (OP_LOG_CREDIT), payables (OP_LOG_PAYABLE), repayments (OP_LOG_REPAYMENT),
  * monthly rollover (OP_CARRY_FORWARD), and annual closing (OP_YEAR_CLOSE).
  */
-class AccountingSyncExecutor(
+open class AccountingSyncExecutor(
     private val googleSheetsClient: GoogleSheetsClient,
     private val googleDriveClient: GoogleDriveClient,
     private val syncQueueDao: SyncQueueDao? = null,
     private val lineageDao: LineageDao? = null,
     private val transactionDao: TransactionDao? = null,
+    private val inflowDao: InflowDao? = null,
+    private val payableDao: PayableDao? = null,
     private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
     private val lineageDaoProvider: (suspend () -> LineageDao)? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
+    private val inflowDaoProvider: (suspend () -> InflowDao)? = null,
+    private val payableDaoProvider: (suspend () -> PayableDao)? = null,
     private val accountsProvider: (suspend () -> List<String>)? = null,
     private val categoriesProvider: (suspend () -> List<String>)? = null,
     private val settlementWaterfallUseCase: SettlementWaterfallUseCase = SettlementWaterfallUseCase(),
@@ -69,9 +77,13 @@ class AccountingSyncExecutor(
         syncQueueDao = syncQueueDao,
         lineageDao = lineageDao,
         transactionDao = null,
+        inflowDao = null,
+        payableDao = null,
         syncQueueDaoProvider = null,
         lineageDaoProvider = null,
         transactionDaoProvider = null,
+        inflowDaoProvider = null,
+        payableDaoProvider = null,
         accountsProvider = null,
         categoriesProvider = null,
         settlementWaterfallUseCase = settlementWaterfallUseCase,
@@ -91,6 +103,12 @@ class AccountingSyncExecutor(
 
     private suspend fun resolveTransactionDao(): TransactionDao? =
         transactionDao ?: transactionDaoProvider?.invoke()
+
+    private suspend fun resolveInflowDao(): InflowDao? =
+        inflowDao ?: inflowDaoProvider?.invoke()
+
+    private suspend fun resolvePayableDao(): PayableDao? =
+        payableDao ?: payableDaoProvider?.invoke()
 
     suspend fun executeLogCredit(
         item: SyncQueueEntity,
@@ -154,12 +172,12 @@ class AccountingSyncExecutor(
         tabName: String
     ): Result<Unit> {
         val req = AccountingRequestJsonAdapter.voidInflowRequestFromJson(item.payloadJson)
-        val rowRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, "AD", req.inflowId)
+        val rowRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID, req.inflowId)
         if (rowRes is Result.Error) return Result.Error(rowRes.exception)
         val row = (rowRes as Result.Success).data
             ?: return Result.Error(IllegalStateException("Income row not found in $tabName for ${req.inflowId}"))
 
-        val reasonRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "R$row")
+        val reasonRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_INFLOW_REASON}$row")
         if (reasonRes is Result.Error) return Result.Error(reasonRes.exception)
         val currentReason = (reasonRes as Result.Success).data.orEmpty()
 
@@ -200,17 +218,40 @@ class AccountingSyncExecutor(
 
             val newPayUuid = "pay_" + UUID.randomUUID().toString().replace("-", "").take(12)
             val isFullyRepaid = nettingRes.netAmount <= 0.0
+            val effectiveCategory = req.category.trim().ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER }
+            val effectiveWhatFor = com.financeautomation.core.utils.PayableFormatUtils.buildEffectiveWhatFor(req.whatFor, effectiveCategory)
             val payCells = listOf(
                 dateSerial,
                 timeSerial,
                 req.creditor,
-                req.whatFor,
+                effectiveWhatFor,
                 AccountingUtils.round2(nettingRes.netAmount),
                 if (isFullyRepaid) dateSerial else "",
                 if (isFullyRepaid) "Repaid" else "Pending"
             )
 
+            val newDebitUuid = req.transactionId ?: ("txn_" + UUID.randomUUID().toString().replace("-", "").take(12))
+            val debitCells = listOf(
+                dateSerial,
+                timeSerial,
+                "Other",
+                if (req.whatFor.isNotBlank()) req.whatFor else "Paid by ${req.creditor}",
+                "",
+                effectiveCategory,
+                AccountingUtils.round2(req.amount),
+                "Personal",
+                AccountingUtils.round2(req.amount),
+                0.0,
+                "Personal"
+            )
+
             val appends = listOf(
+                com.financeautomation.domain.model.NewRow(
+                    table = TableType.DEBIT,
+                    tab = tabName,
+                    uuid = newDebitUuid,
+                    cells = debitCells
+                ),
                 com.financeautomation.domain.model.NewRow(
                     table = TableType.PAYABLE,
                     tab = tabName,
@@ -266,7 +307,9 @@ class AccountingSyncExecutor(
                 timeSerial = timeSerial,
                 tabName = tabName,
                 allPayables = allPayables,
-                resolveCarriedFn = resolveCarriedFn
+                resolveCarriedFn = resolveCarriedFn,
+                account = req.account,
+                note = req.note
             )
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
@@ -300,32 +343,42 @@ class AccountingSyncExecutor(
         var sourceSnapshot: LedgerWorkbookSnapshot = snapshot
         var sourceSpreadsheetId: String = spreadsheetId
 
-        if (sourceTab == null) {
-            val targetKey = parseMonthKey(targetTab)
-            // Month 1 is January (e.g. Jan27 -> preceding is Dec26 in Finance2026)
-            if (targetKey != null && (targetKey % 12 == 1)) {
-                val targetYear = targetKey / 12
-                val prevYear = targetYear - 1
-                val prevSpreadsheetId = previousWorkbookIdProvider?.invoke(prevYear)
-                if (!prevSpreadsheetId.isNullOrBlank()) {
-                    val prevSnapRes = googleSheetsClient.readLedgerSnapshot(prevSpreadsheetId)
-                    if (prevSnapRes is Result.Success) {
-                        val prevSnap = prevSnapRes.data
-                        val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
-                        val foundDecTab = prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
-                            ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
-                        if (foundDecTab != null) {
-                            sourceTab = foundDecTab.tabName
-                            sourceSnapshot = prevSnap
-                            sourceSpreadsheetId = prevSpreadsheetId
-                        }
-                    }
-                }
+        val targetKey = parseMonthKey(targetTab)
+        val sourceKey = sourceTab?.let { parseMonthKey(it) }
+
+        // If source tab is in the previous year (e.g. Dec26 -> Jan27), source snapshot must come from previous year's workbook
+        val isTargetJan = targetKey != null && (targetKey % 12 == 0)
+        val isCrossYear = targetKey != null && (sourceTab == null || (sourceKey != null && sourceKey / 12 < targetKey / 12))
+        if (isTargetJan && isCrossYear) {
+            val targetYear = targetKey!! / 12
+            val prevYear = targetYear - 1
+            val prevSpreadsheetId = previousWorkbookIdProvider?.invoke(prevYear)
+            if (prevSpreadsheetId.isNullOrBlank()) {
+                return Result.Error(IllegalStateException("Previous year ($prevYear) workbook ID not found for carry forward to $targetTab"))
+            }
+            val prevSnapRes = googleSheetsClient.readLedgerSnapshot(prevSpreadsheetId)
+            if (prevSnapRes is Result.Error) {
+                return Result.Error(prevSnapRes.exception)
+            }
+            val prevSnap = (prevSnapRes as Result.Success).data
+            val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
+            val foundDecTab = if (sourceTab != null) {
+                prevSnap.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
+            } else {
+                prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
+                    ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
+            }
+            if (foundDecTab != null) {
+                sourceTab = foundDecTab.tabName
+                sourceSnapshot = prevSnap
+                sourceSpreadsheetId = prevSpreadsheetId
+            } else {
+                return Result.Error(IllegalStateException("No source month tab found in previous year ($prevYear) workbook for carry forward"))
             }
         }
 
         if (sourceTab == null) {
-            return Result.Success(Unit)
+            return Result.Error(IllegalStateException("Could not resolve source tab for carry forward into $targetTab"))
         }
 
         val targetMonth = snapshot.monthTabs.find { it.tabName.equals(targetTab, ignoreCase = true) }
@@ -422,9 +475,9 @@ class AccountingSyncExecutor(
         // Appends first
         for (append in plan.appends) {
             val colUuid = when (append.table) {
-                TableType.DEBIT -> "AC"
-                TableType.INFLOW -> "AD"
-                TableType.PAYABLE -> "AE"
+                TableType.DEBIT -> SheetSchemaConstants.COL_LETTER_DEBIT_UUID
+                TableType.INFLOW -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID
+                TableType.PAYABLE -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
             }
             val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, colUuid, append.uuid)
             if (existingCheck is Result.Success && existingCheck.data != null) {
@@ -453,9 +506,23 @@ class AccountingSyncExecutor(
                     spreadsheetId
                 }
             }
+
+            // Map settled UUIDs to re-check and adjust row indexes if sheet was reordered
+            val settledRowMap = mutableMapOf<Pair<String, Int>, Int>()
+            for (settled in plan.settled) {
+                if (!settled.uuid.isNullOrBlank()) {
+                    val targetId = if (sourceSpreadsheetId != null && sourceSpreadsheetId != spreadsheetId) sourceSpreadsheetId else spreadsheetId
+                    val foundRow = googleSheetsClient.findRowByUuid(targetId, settled.tab, SheetSchemaConstants.COL_LETTER_DEBIT_UUID, settled.uuid)
+                    if (foundRow is Result.Success && foundRow.data != null) {
+                        settledRowMap[Pair(settled.tab, settled.row)] = foundRow.data
+                    }
+                }
+            }
+
             for ((targetId, edits) in editsByTarget) {
                 val rangesWithValues = edits.associate { edit ->
-                    "'${edit.tab}'!${edit.column}${edit.row}" to listOf(listOf(edit.value))
+                    val actualRow = settledRowMap[Pair(edit.tab, edit.row)] ?: edit.row
+                    "'${edit.tab}'!${edit.column}$actualRow" to listOf(listOf(edit.value))
                 }
                 val editRes = googleSheetsClient.batchUpdateValues(targetId, rangesWithValues)
                 if (editRes is Result.Error) return Result.Error(editRes.exception)
@@ -468,7 +535,7 @@ class AccountingSyncExecutor(
         return Result.Success(Unit)
     }
 
-    suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
+    open suspend fun applyPlanToLocalDatabase(plan: AccountingPlan) {
         try {
             val tDao = resolveTransactionDao() ?: return
             val editsByTabAndRow = plan.edits.groupBy { Pair(it.tab, it.row) }
@@ -578,18 +645,18 @@ class AccountingSyncExecutor(
         val mmm = match.groupValues[1].lowercase(Locale.US)
         val yy = match.groupValues[2].toIntOrNull() ?: return null
         val monthIdx = when (mmm) {
-            "jan" -> 1
-            "feb" -> 2
-            "mar" -> 3
-            "apr" -> 4
-            "may" -> 5
-            "jun" -> 6
-            "jul" -> 7
-            "aug" -> 8
-            "sep" -> 9
-            "oct" -> 10
-            "nov" -> 11
-            "dec" -> 12
+            "jan" -> 0
+            "feb" -> 1
+            "mar" -> 2
+            "apr" -> 3
+            "may" -> 4
+            "jun" -> 5
+            "jul" -> 6
+            "aug" -> 7
+            "sep" -> 8
+            "oct" -> 9
+            "nov" -> 10
+            "dec" -> 11
             else -> return null
         }
         return (2000 + yy) * 12 + monthIdx
@@ -608,6 +675,101 @@ class AccountingSyncExecutor(
             availableTabs[targetIdx - 1]
         } else {
             availableTabs.firstOrNull { !it.equals(targetTab, ignoreCase = true) }
+        }
+    }
+
+    /**
+     * Restores an income / credit row to Table 2 (Cols M-T) without running the settlement waterfall.
+     * Preserves the stored hidden UUID in column AD. Idempotent: skips if row with UUID already exists.
+     */
+    suspend fun executeRestoreInflow(
+        item: SyncQueueEntity,
+        spreadsheetId: String,
+        tabName: String
+    ): Result<Unit> {
+        val inDao = resolveInflowDao()
+            ?: return Result.Error(IllegalStateException("InflowDao or provider must be supplied"))
+        val entity = inDao.getById(item.transactionId)
+            ?: return Result.Success(Unit)
+        if (entity.status.equals("VOID", ignoreCase = true)) {
+            return Result.Success(Unit)
+        }
+
+        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID, entity.id)
+            .let { res ->
+                if (res is Result.Success && res.data != null) res
+                else googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1, entity.id)
+            }
+        if (existingCheck is Result.Success && existingCheck.data != null) {
+            return Result.Success(Unit)
+        } else if (existingCheck is Result.Error) {
+            return Result.Error(existingCheck.exception)
+        }
+
+        val localDate = Instant.ofEpochMilli(entity.timestamp).atZone(DateSerialUtils.SHEET_ZONE).toLocalDate()
+        val localTime = Instant.ofEpochMilli(entity.timestamp).atZone(DateSerialUtils.SHEET_ZONE).toLocalTime()
+        val dateSerial = DateSerialUtils.toDateSerial(localDate)
+        val timeSerial = DateSerialUtils.toTimeSerial(localTime)
+        val cells = listOf(
+            dateSerial,
+            timeSerial,
+            entity.account,
+            entity.inflowType,
+            entity.source,
+            entity.note,
+            entity.amount,
+            ""
+        )
+        val appendRes = googleSheetsClient.appendInflow(spreadsheetId, tabName, cells, uuid = entity.id)
+        return when (appendRes) {
+            is Result.Success -> Result.Success(Unit)
+            is Result.Error -> Result.Error(appendRes.exception)
+            is Result.Loading -> Result.Loading
+        }
+    }
+
+    /**
+     * Restores a payable row to Table 3 (Cols V-AB) without modifying other rows.
+     * Preserves the stored hidden UUID in column AE. Idempotent: skips if row with UUID already exists.
+     */
+    suspend fun executeRestorePayable(
+        item: SyncQueueEntity,
+        spreadsheetId: String,
+        tabName: String
+    ): Result<Unit> {
+        val pDao = resolvePayableDao()
+            ?: return Result.Error(IllegalStateException("PayableDao or provider must be supplied"))
+        val entity = pDao.getByUuid(item.transactionId)
+            ?: return Result.Success(Unit)
+        if (entity.repaymentStatus.equals("VOID", ignoreCase = true)) {
+            return Result.Success(Unit)
+        }
+
+        val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID, entity.uuid)
+            .let { res ->
+                if (res is Result.Success && res.data != null) res
+                else googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1, entity.uuid)
+            }
+        if (existingCheck is Result.Success && existingCheck.data != null) {
+            return Result.Success(Unit)
+        } else if (existingCheck is Result.Error) {
+            return Result.Error(existingCheck.exception)
+        }
+
+        val cells = listOf(
+            entity.dateIncurredSerial ?: "",
+            entity.timeSerial ?: "",
+            entity.paidBy,
+            entity.whatFor,
+            entity.amountIOwe,
+            entity.dateRepaidSerial ?: "",
+            entity.repaymentStatus
+        )
+        val appendRes = googleSheetsClient.appendPayable(spreadsheetId, tabName, cells, uuid = entity.uuid)
+        return when (appendRes) {
+            is Result.Success -> Result.Success(Unit)
+            is Result.Error -> Result.Error(appendRes.exception)
+            is Result.Loading -> Result.Loading
         }
     }
 }

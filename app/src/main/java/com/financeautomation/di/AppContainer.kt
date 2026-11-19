@@ -69,6 +69,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -122,6 +124,8 @@ interface AppContainer {
     val rawHttpErrorStore: com.financeautomation.data.remote.RawHttpErrorStore
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
     val subscriptionRepository: SubscriptionRepository
+    val subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator
+    val tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator
     val budgetRepository: BudgetRepository
     val appLockManager: com.financeautomation.domain.security.AppLockManager
     val privacySettings: com.financeautomation.domain.security.PrivacySettings
@@ -132,6 +136,11 @@ interface AppContainer {
     val subscriptionScheduleUseCase: SubscriptionScheduleUseCase
     val subscriptionMatcher: SubscriptionMatcher
     val subscriptionActionUseCase: SubscriptionActionUseCase
+
+    /**
+     * Reusable single notification processing engine sharing a single processMutex.
+     */
+    suspend fun getNotificationProcessor(): com.financeautomation.service.NotificationProcessor
 }
 
 /**
@@ -172,6 +181,7 @@ class DefaultAppContainer(
         OkHttpClient.Builder()
             .addInterceptor(TokenRecoveryInterceptor(tokenProvider))
             .addInterceptor(com.financeautomation.data.remote.RateLimitInterceptor(sheetsReadGate))
+            .addInterceptor(com.financeautomation.data.remote.ResponseSizeLimitInterceptor())
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -323,17 +333,36 @@ class DefaultAppContainer(
         )
     }
 
-    override val workbookResolver: WorkbookResolver by lazy {
-        WorkbookResolver(
-            googleDriveClient = googleDriveClient,
-            googleSheetsClient = googleSheetsClient,
-            preferencesRepository = preferencesRepository,
-            accountRepository = accountRepository,
-            categoryRepository = categoryRepository,
-            syncConfigUseCase = syncConfigUseCase,
-            regenerateDashboardUseCase = regenerateDashboardUseCase,
-            ioDispatcher = ioDispatcher
+    internal fun buildWorkbookResolver(
+        drive: GoogleDriveClient = googleDriveClient,
+        sheets: GoogleSheetsClient = googleSheetsClient,
+        prefs: PreferencesRepository = preferencesRepository,
+        accounts: AccountRepository = accountRepository,
+        categories: CategoryRepository = categoryRepository,
+        syncConfig: SyncConfigUseCase = syncConfigUseCase,
+        regenDashboard: RegenerateDashboardUseCase = regenerateDashboardUseCase,
+        txnRepoProvider: () -> TransactionRepository = { transactionRepository },
+        dispatcher: CoroutineDispatcher = ioDispatcher
+    ): WorkbookResolver {
+        return WorkbookResolver(
+            googleDriveClient = drive,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountRepository = accounts,
+            categoryRepository = categories,
+            syncConfigUseCase = syncConfig,
+            regenerateDashboardUseCase = regenDashboard,
+            subscriptionsSheetSyncCoordinatorProvider = { subscriptionsSheetSyncCoordinator },
+            tripsSheetSyncCoordinatorProvider = { tripsSheetSyncCoordinator },
+            ioDispatcher = dispatcher,
+            onWorkbookReplaced = { year, _, _ ->
+                txnRepoProvider().requeueYearForNewWorkbook(year)
+            }
         )
+    }
+
+    override val workbookResolver: WorkbookResolver by lazy {
+        buildWorkbookResolver()
     }
 
     override val transactionRepository: TransactionRepository by lazy {
@@ -356,7 +385,9 @@ class DefaultAppContainer(
             accountingSyncExecutor = accountingSyncExecutor,
             ioDispatcher = ioDispatcher,
             readGate = sheetsReadGate,
-            modifiedTimeProvider = { id -> googleDriveClient.getModifiedTime(id) }
+            modifiedTimeProvider = { id -> googleDriveClient.getModifiedTime(id) },
+            subscriptionsSheetSyncCoordinatorProvider = { subscriptionsSheetSyncCoordinator },
+            tripsSheetSyncCoordinatorProvider = { tripsSheetSyncCoordinator }
         ).also { impl ->
             // WorkManager keeps the retry alive across process death, unlike a plain coroutine
             impl.onTriggerSync = {
@@ -391,6 +422,28 @@ class DefaultAppContainer(
             cycleDaoProvider = { awaitDatabase().subscriptionCycleDao() },
             configSyncCoordinatorProvider = { configSyncCoordinator },
             localGatewayProvider = { configSyncLocalGateway },
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator by lazy {
+        com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator(
+            googleSheetsClient = googleSheetsClient,
+            subscriptionRepository = subscriptionRepository,
+            preferencesRepository = preferencesRepository,
+            accountRepository = accountRepository,
+            syncConfigUseCase = syncConfigUseCase,
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator by lazy {
+        com.financeautomation.data.remote.TripsSheetSyncCoordinator(
+            googleSheetsClient = googleSheetsClient,
+            tripTagRepository = tripTagRepository,
+            preferencesRepository = preferencesRepository,
+            transactionRepository = transactionRepository,
+            syncConfigUseCase = syncConfigUseCase,
             ioDispatcher = ioDispatcher
         )
     }
@@ -453,7 +506,10 @@ class DefaultAppContainer(
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             localGateway = configSyncLocalGateway,
             applicationScope = CoroutineScope(SupervisorJob() + ioDispatcher),
-            ioDispatcher = ioDispatcher
+            ioDispatcher = ioDispatcher,
+            subscriptionsSheetSyncCoordinatorProvider = { subscriptionsSheetSyncCoordinator },
+            tripsSheetSyncCoordinatorProvider = { tripsSheetSyncCoordinator },
+            preferencesRepository = preferencesRepository
         ).also { coordinator ->
             coordinator.onTriggerQueueSync = {
                 com.financeautomation.service.worker.SyncTransactionsWorker.enqueueExpedited(applicationContext)
@@ -523,6 +579,8 @@ class DefaultAppContainer(
             syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
             lineageDaoProvider = { awaitDatabase().lineageDao() },
             transactionDaoProvider = { awaitDatabase().transactionDao() },
+            inflowDaoProvider = { awaitDatabase().inflowDao() },
+            payableDaoProvider = { awaitDatabase().payableDao() },
             accountsProvider = { accountRepository.getAllAccounts(includeArchived = false).map { it.name } },
             categoriesProvider = { categoryRepository.getAllCategories(includeArchived = false).map { it.name } },
             settlementWaterfallUseCase = settlementWaterfallUseCase,
@@ -555,7 +613,8 @@ class DefaultAppContainer(
                 appLockManager.isLockedNow()
             },
             hidePreview = { privacySettings.secure.value },
-            subscriptionRepository = subscriptionRepository
+            subscriptionRepository = subscriptionRepository,
+            themeMode = preferencesRepository.getThemeMode()
         )
     }
 
@@ -623,6 +682,33 @@ class DefaultAppContainer(
             ledgerSnapshotGateway = gateway,
             ioDispatcher = ioDispatcher
         )
+    }
+
+    @Volatile
+    private var _notificationProcessor: com.financeautomation.service.NotificationProcessor? = null
+    private val notificationProcessorMutex = Mutex()
+
+    override suspend fun getNotificationProcessor(): com.financeautomation.service.NotificationProcessor {
+        _notificationProcessor?.let { return it }
+        return notificationProcessorMutex.withLock {
+            _notificationProcessor ?: run {
+                val db = awaitDatabase()
+                val runner: suspend (suspend () -> Unit) -> Unit = { block ->
+                    db.withTransaction { block() }
+                }
+                com.financeautomation.service.NotificationProcessor(
+                    pendingCaptureDao = db.pendingCaptureDao(),
+                    handledNotificationDao = db.handledNotificationDao(),
+                    accountDao = db.accountDao(),
+                    preferenceDao = db.preferenceDao(),
+                    transactionDao = db.transactionDao(),
+                    subscriptionMatcher = subscriptionMatcher,
+                    parseUseCase = parseNotificationUseCase,
+                    runInTransaction = runner,
+                    ownPackageName = applicationContext.packageName
+                ).also { _notificationProcessor = it }
+            }
+        }
     }
 }
 

@@ -1,16 +1,18 @@
 package com.financeautomation.core.constants
 
 /**
- * 31-Column master spreadsheet constants strictly adhering to master ledger rules.
- * All transactions logged by the app conform to this 28-business-column + 3-hidden-UUID schema.
+ * 32-Column master spreadsheet constants adhering to master ledger rules with Expense Note at Col L.
+ * All transactions logged by the app conform to this 29-business-column + 3-hidden-UUID schema.
+ * Backward-compatible V1 constants (31 columns) are preserved for reading old workbooks.
  */
 object SheetSchemaConstants {
 
     // Total columns across all 3 tables + spacers + system UUIDs
-    const val TOTAL_COLUMN_COUNT: Int = 31
+    const val TOTAL_COLUMN_COUNT_V1: Int = 31
+    const val TOTAL_COLUMN_COUNT: Int = 32
 
-    // 31 column letters from A to AE
-    val SHEET_COLUMNS: List<String> = listOf(
+    // 31 column letters from A to AE (V1)
+    val SHEET_COLUMNS_V1: List<String> = listOf(
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
         "L",
         "M", "N", "O", "P", "Q", "R", "S", "T",
@@ -19,7 +21,17 @@ object SheetSchemaConstants {
         "AC", "AD", "AE"
     )
 
-    // Column headers mapping A to AE matching iOS master template
+    // 32 column letters from A to AF (V2 with Note at Col L)
+    val SHEET_COLUMNS: List<String> = listOf(
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L",
+        "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U",
+        "V",
+        "W", "X", "Y", "Z", "AA", "AB", "AC",
+        "AD", "AE", "AF"
+    )
+
+    // Column headers mapping A to AF (Table 1: A-L, Spacer 1: M, Table 2: N-U, Spacer 2: V, Table 3: W-AC, UUIDs: AD-AF)
     val SHEET_COLUMN_HEADERS: Map<String, String> = mapOf(
         "A" to "Date",
         "B" to "Time",
@@ -32,63 +44,115 @@ object SheetSchemaConstants {
         "I" to "My Share (₹)",
         "J" to "Owed To Me (₹)",
         "K" to "Status",
-        "L" to "Spacer 1",
-        "M" to "Date",
-        "N" to "Time",
-        "O" to "Account",
-        "P" to "Inflow Type",
-        "Q" to "Received From",
-        "R" to "Reason / Note",
-        "S" to "Amount Received (₹)",
-        "T" to "Linked Debit Row",
-        "U" to "Spacer 2",
-        "V" to "Date Incurred",
-        "W" to "Time",
-        "X" to "Paid By",
-        "Y" to "What For",
-        "Z" to "Amount I Owe (₹)",
-        "AA" to "Date Repaid",
-        "AB" to "Repayment Status",
-        "AC" to "Debit Txn UUID",
-        "AD" to "Inflow Txn UUID",
-        "AE" to "Payable Txn UUID"
+        "L" to "Note",
+        "M" to "Spacer 1",
+        "N" to "Date",
+        "O" to "Time",
+        "P" to "Account",
+        "Q" to "Inflow Type",
+        "R" to "Received From",
+        "S" to "Reason / Note",
+        "T" to "Amount Received (₹)",
+        "U" to "Linked Debit Row",
+        "V" to "Spacer 2",
+        "W" to "Date Incurred",
+        "X" to "Time",
+        "Y" to "Paid By",
+        "Z" to "What For",
+        "AA" to "Amount I Owe (₹)",
+        "AB" to "Date Repaid",
+        "AC" to "Repayment Status",
+        "AD" to "Debit Txn UUID",
+        "AE" to "Inflow Txn UUID",
+        "AF" to "Payable Txn UUID"
     )
 
-    // Table 1: Debits / Expenses (Cols A-K, indices 0-10)
-    const val TABLE_1_DEBITS_RANGE: String = "A3:K"
+    // Table 1: Debits / Expenses (Cols A-L, indices 0-11)
+    const val TABLE_1_DEBITS_RANGE: String = "A3:L"
     const val TABLE_1_START_COL_INDEX: Int = 0
-    const val TABLE_1_END_COL_INDEX: Int = 10
+    const val TABLE_1_END_COL_INDEX: Int = 11
 
-    // Spacer 1 (Col L, index 11)
-    const val SPACER_1_COL_INDEX: Int = 11
-    const val SPACER_1_COL_LETTER: String = "L"
+    const val COL_LETTER_DEBIT_DATE: String = "A"
+    const val COL_LETTER_DEBIT_TIME: String = "B"
+    const val COL_LETTER_DEBIT_ACCOUNT: String = "C"
+    const val COL_LETTER_DEBIT_DESCRIPTION: String = "D"
+    const val COL_LETTER_DEBIT_TRIP_TAG: String = "E"
+    const val COL_LETTER_DEBIT_CATEGORY: String = "F"
+    const val COL_LETTER_DEBIT_TOTAL_AMOUNT: String = "G"
+    const val COL_LETTER_DEBIT_COMPANIONS: String = "H"
+    const val COL_LETTER_DEBIT_MY_SHARE: String = "I"
+    const val COL_LETTER_DEBIT_OWED_TO_ME: String = "J"
+    const val COL_LETTER_DEBIT_STATUS: String = "K"
+    const val COL_INDEX_EXPENSE_NOTE: Int = 11
+    const val COL_LETTER_EXPENSE_NOTE: String = "L"
 
-    // Table 2: Credits / Inflows (Cols M-T, indices 12-19)
-    const val TABLE_2_INFLOWS_RANGE: String = "M3:T"
-    const val TABLE_2_START_COL_INDEX: Int = 12
-    const val TABLE_2_END_COL_INDEX: Int = 19
+    // Spacer 1 (Col M, index 12)
+    const val SPACER_1_COL_INDEX: Int = 12
+    const val SPACER_1_COL_LETTER: String = "M"
 
-    // Spacer 2 (Col U, index 20)
-    const val SPACER_2_COL_INDEX: Int = 20
-    const val SPACER_2_COL_LETTER: String = "U"
+    // Table 2: Credits / Inflows (Cols N-U, indices 13-20)
+    const val TABLE_2_INFLOWS_RANGE: String = "N3:U"
+    const val TABLE_2_START_COL_INDEX: Int = 13
+    const val TABLE_2_END_COL_INDEX: Int = 20
 
-    // Table 3: Payables / Liabilities (Cols V-AB, indices 21-27)
-    const val TABLE_3_PAYABLES_RANGE: String = "V3:AB"
-    const val TABLE_3_START_COL_INDEX: Int = 21
-    const val TABLE_3_END_COL_INDEX: Int = 27
+    const val COL_LETTER_INFLOW_DATE: String = "N"
+    const val COL_LETTER_INFLOW_TIME: String = "O"
+    const val COL_LETTER_INFLOW_ACCOUNT: String = "P"
+    const val COL_LETTER_INFLOW_TYPE: String = "Q"
+    const val COL_LETTER_INFLOW_RECEIVED_FROM: String = "R"
+    const val COL_LETTER_INFLOW_REASON: String = "S"
+    const val COL_LETTER_INFLOW_AMOUNT: String = "T"
+    const val COL_LETTER_INFLOW_LINKED_DEBIT: String = "U"
 
-    // Hidden System UUID Columns (Cols AC-AE, indices 28-30)
-    const val COL_INDEX_DEBIT_UUID: Int = 28
-    const val COL_LETTER_DEBIT_UUID: String = "AC"
+    // Spacer 2 (Col V, index 21)
+    const val SPACER_2_COL_INDEX: Int = 21
+    const val SPACER_2_COL_LETTER: String = "V"
+
+    // Table 3: Payables / Liabilities (Cols W-AC, indices 22-28)
+    const val TABLE_3_PAYABLES_RANGE: String = "W3:AC"
+    const val TABLE_3_START_COL_INDEX: Int = 22
+    const val TABLE_3_END_COL_INDEX: Int = 28
+
+    const val COL_LETTER_PAYABLE_DATE_INCURRED: String = "W"
+    const val COL_LETTER_PAYABLE_TIME: String = "X"
+    const val COL_LETTER_PAYABLE_PAID_BY: String = "Y"
+    const val COL_LETTER_PAYABLE_WHAT_FOR: String = "Z"
+    const val COL_LETTER_PAYABLE_AMOUNT_I_OWE: String = "AA"
+    const val COL_LETTER_PAYABLE_DATE_REPAID: String = "AB"
+    const val COL_LETTER_PAYABLE_STATUS: String = "AC"
+
+    // Hidden System UUID Columns (Cols AD-AF, indices 29-31)
+    const val COL_INDEX_DEBIT_UUID: Int = 29
+    const val COL_LETTER_DEBIT_UUID: String = "AD"
     const val COL_NAME_DEBIT_UUID: String = "Debit Txn UUID"
 
-    const val COL_INDEX_INFLOW_UUID: Int = 29
-    const val COL_LETTER_INFLOW_UUID: String = "AD"
+    const val COL_INDEX_INFLOW_UUID: Int = 30
+    const val COL_LETTER_INFLOW_UUID: String = "AE"
     const val COL_NAME_INFLOW_UUID: String = "Inflow Txn UUID"
 
-    const val COL_INDEX_PAYABLE_UUID: Int = 30
-    const val COL_LETTER_PAYABLE_UUID: String = "AE"
+    const val COL_INDEX_PAYABLE_UUID: Int = 31
+    const val COL_LETTER_PAYABLE_UUID: String = "AF"
     const val COL_NAME_PAYABLE_UUID: String = "Payable Txn UUID"
+
+    // V1 Backward Compatibility Constants (31 columns)
+    const val TABLE_1_DEBITS_RANGE_V1: String = "A3:K"
+    const val TABLE_1_END_COL_INDEX_V1: Int = 10
+    const val SPACER_1_COL_INDEX_V1: Int = 11
+    const val SPACER_1_COL_LETTER_V1: String = "L"
+    const val TABLE_2_INFLOWS_RANGE_V1: String = "M3:T"
+    const val TABLE_2_START_COL_INDEX_V1: Int = 12
+    const val TABLE_2_END_COL_INDEX_V1: Int = 19
+    const val SPACER_2_COL_INDEX_V1: Int = 20
+    const val SPACER_2_COL_LETTER_V1: String = "U"
+    const val TABLE_3_PAYABLES_RANGE_V1: String = "V3:AB"
+    const val TABLE_3_START_COL_INDEX_V1: Int = 21
+    const val TABLE_3_END_COL_INDEX_V1: Int = 27
+    const val COL_INDEX_DEBIT_UUID_V1: Int = 28
+    const val COL_LETTER_DEBIT_UUID_V1: String = "AC"
+    const val COL_INDEX_INFLOW_UUID_V1: Int = 29
+    const val COL_LETTER_INFLOW_UUID_V1: String = "AD"
+    const val COL_INDEX_PAYABLE_UUID_V1: Int = 30
+    const val COL_LETTER_PAYABLE_UUID_V1: String = "AE"
 
     // Brand and Section Colors
     const val COLOR_BANNER_NAVY: String = "#1A237E"
@@ -121,6 +185,65 @@ object SheetSchemaConstants {
     // Standard plural keyword rule
     const val SAVINGS_KEYWORD: String = "Savings"
     const val FORBIDDEN_SINGULAR_SAVING: String = "Saving"
+
+    // Subscriptions Tab Constants
+    const val SUBSCRIPTIONS_TAB_NAME: String = "Subscriptions"
+    const val SUBSCRIPTIONS_HEADER_ROW_INDEX: Int = 2 // Row 3
+    const val SUBSCRIPTIONS_DATA_START_ROW_INDEX: Int = 3 // Row 4
+    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 15
+    const val SUBSCRIPTIONS_RANGE: String = "A4:O"
+
+    const val COL_INDEX_SUB_NAME: Int = 0
+    const val COL_INDEX_SUB_AMOUNT: Int = 1
+    const val COL_INDEX_SUB_FREQUENCY: Int = 2
+    const val COL_INDEX_SUB_DUE_DATE: Int = 3
+    const val COL_INDEX_SUB_ACCOUNT: Int = 4
+    const val COL_INDEX_SUB_ACTIVE: Int = 5
+    const val COL_INDEX_SUB_NOTE: Int = 6
+    const val COL_INDEX_SUB_KEYWORDS: Int = 7
+    const val COL_INDEX_SUB_PER_MONTH: Int = 8
+    const val COL_INDEX_SUB_PAID_MONTH: Int = 9
+    const val COL_INDEX_SUB_PAID_YEAR: Int = 10
+    const val COL_INDEX_SUB_LAST_PAID_DATE: Int = 11
+    const val COL_INDEX_SUB_CLOSED_DATE: Int = 12
+    const val COL_INDEX_SUB_PAID_IN_TOTAL: Int = 13
+    const val COL_INDEX_SUB_ID: Int = 14
+
+    const val COL_LETTER_SUB_NAME: String = "A"
+    const val COL_LETTER_SUB_AMOUNT: String = "B"
+    const val COL_LETTER_SUB_FREQUENCY: String = "C"
+    const val COL_LETTER_SUB_DUE_DATE: String = "D"
+    const val COL_LETTER_SUB_ACCOUNT: String = "E"
+    const val COL_LETTER_SUB_ACTIVE: String = "F"
+    const val COL_LETTER_SUB_NOTE: String = "G"
+    const val COL_LETTER_SUB_KEYWORDS: String = "H"
+    const val COL_LETTER_SUB_PER_MONTH: String = "I"
+    const val COL_LETTER_SUB_PAID_MONTH: String = "J"
+    const val COL_LETTER_SUB_PAID_YEAR: String = "K"
+    const val COL_LETTER_SUB_LAST_PAID_DATE: String = "L"
+    const val COL_LETTER_SUB_CLOSED_DATE: String = "M"
+    const val COL_LETTER_SUB_PAID_IN_TOTAL: String = "N"
+    const val COL_LETTER_SUB_ID: String = "O"
+
+    // Trips Tab Constants
+    const val TRIPS_TAB_NAME: String = "Trips"
+    const val TRIPS_HEADER_ROW_INDEX: Int = 2 // Row 3
+    const val TRIPS_DATA_START_ROW_INDEX: Int = 3 // Row 4
+    const val TRIPS_COLUMN_COUNT: Int = 11
+    const val TRIPS_RANGE: String = "A4:K"
+
+    const val COL_INDEX_TRIP_NAME: Int = 0
+    const val COL_INDEX_TRIP_START_DATE: Int = 1
+    const val COL_INDEX_TRIP_END_DATE: Int = 2
+    const val COL_INDEX_TRIP_STATUS: Int = 3
+    const val COL_INDEX_TRIP_DAYS: Int = 4
+    const val COL_INDEX_TRIP_TOTAL_PAID: Int = 5
+    const val COL_INDEX_TRIP_MY_SHARE: Int = 6
+    const val COL_INDEX_TRIP_OWED_TO_ME: Int = 7
+    const val COL_INDEX_TRIP_REPAID: Int = 8
+    const val COL_INDEX_TRIP_TOP_CATEGORY: Int = 9
+    const val COL_INDEX_TRIP_ID: Int = 10
+    const val COL_LETTER_TRIP_ID: String = "K"
 
     fun columnLetter(index: Int): String {
         require(index in 0 until TOTAL_COLUMN_COUNT) {

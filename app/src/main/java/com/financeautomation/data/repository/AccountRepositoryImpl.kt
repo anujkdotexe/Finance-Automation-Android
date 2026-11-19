@@ -127,7 +127,21 @@ class AccountRepositoryImpl(
     }
 
     override suspend fun archiveAccount(id: String): Unit = withContext(ioDispatcher) {
-        resolveDao().archiveAccount(id)
+        val dao = resolveDao()
+        val account = dao.getById(id)
+        val wasDefault = account?.isDefault == true
+        dao.archiveAccount(id)
+        if (wasDefault) {
+            val other = dao.getByName(CategoryConstants.ACCOUNT_OTHER)
+            if (other != null && !other.isArchived) {
+                dao.setDefaultFlag(other.id)
+            } else {
+                val firstActive = dao.getActiveAccounts().firstOrNull()
+                if (firstActive != null) {
+                    dao.setDefaultFlag(firstActive.id)
+                }
+            }
+        }
         configSyncCoordinator?.schedulePush()
     }
 
@@ -143,6 +157,7 @@ class AccountRepositoryImpl(
                 account.name.equals(CategoryConstants.ACCOUNT_OTHER, ignoreCase = true))) {
             return@withContext
         }
+        val wasDefault = account?.isDefault == true
         val gateway = localGateway
         val now = System.currentTimeMillis()
         if (account != null) {
@@ -153,6 +168,17 @@ class AccountRepositoryImpl(
             }
         }
         dao.deleteById(id)
+        if (wasDefault) {
+            val other = dao.getByName(CategoryConstants.ACCOUNT_OTHER)
+            if (other != null && !other.isArchived) {
+                dao.setDefaultFlag(other.id)
+            } else {
+                val firstActive = dao.getActiveAccounts().firstOrNull()
+                if (firstActive != null) {
+                    dao.setDefaultFlag(firstActive.id)
+                }
+            }
+        }
         configSyncCoordinator?.schedulePush()
     }
 

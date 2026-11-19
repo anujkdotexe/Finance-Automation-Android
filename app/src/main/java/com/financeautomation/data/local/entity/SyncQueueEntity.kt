@@ -60,6 +60,8 @@ data class SyncQueueEntity(
         const val OP_LOG_REPAYMENT: String = "LOG_REPAYMENT"
         const val OP_CARRY_FORWARD: String = "CARRY_FORWARD"
         const val OP_YEAR_CLOSE: String = "YEAR_CLOSE"
+        const val OP_RESTORE_INFLOW: String = "RESTORE_INFLOW"
+        const val OP_RESTORE_PAYABLE: String = "RESTORE_PAYABLE"
 
         const val STATUS_PENDING: String = "PENDING"
         const val STATUS_IN_PROGRESS: String = "IN_PROGRESS"

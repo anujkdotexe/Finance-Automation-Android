@@ -68,7 +68,8 @@ class TransactionRepositorySyncTest {
             transactions.values.firstOrNull { it.sheetRowIndex == rowIndex }
         override suspend fun getAllBySheetRowIndex(rowIndex: Int): List<TransactionEntity> =
             transactions.values.filter { it.sheetRowIndex == rowIndex }
-        override suspend fun getRecentSimilar(minTimestamp: Long, maxTimestamp: Long, minAmount: Double, maxAmount: Double): List<TransactionEntity> = emptyList()
+        override suspend fun getRecentSimilar(minTimestamp: Long, maxTimestamp: Long, minAmount: Double, maxAmount: Double): List<TransactionEntity> =
+            transactions.values.filter { it.timestamp in minTimestamp..maxTimestamp && it.totalAmount in minAmount..maxAmount }.sortedByDescending { it.timestamp }
         override suspend fun insert(transaction: TransactionEntity) { transactions[transaction.id] = transaction }
         override suspend fun insertAll(transactions: List<TransactionEntity>) { transactions.forEach { insert(it) } }
         override suspend fun update(transaction: TransactionEntity) { transactions[transaction.id] = transaction }
@@ -82,6 +83,7 @@ class TransactionRepositorySyncTest {
                     owedToMe = 0.0,
                     status = "Void",
                     syncState = SyncState.VOID.name,
+                    reviewState = ReviewState.CONFIRMED.name,
                     merchant = voidTitle
                 )
             }
@@ -92,11 +94,43 @@ class TransactionRepositorySyncTest {
             }
         }
         override suspend fun updateReviewState(id: String, reviewState: String, category: String?) {
-            transactions[id]?.let { transactions[id] = it.copy(reviewState = reviewState) }
+            transactions[id]?.let { transactions[id] = it.copy(reviewState = reviewState, category = category ?: it.category) }
         }
-        override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
-        override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
-        override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
+        override suspend fun updateAccountName(oldName: String, newName: String): Int {
+            var count = 0
+            transactions.values.filter { it.account == oldName }.forEach {
+                transactions[it.id] = it.copy(account = newName)
+                count++
+            }
+            return count
+        }
+        override suspend fun updateCategoryName(oldName: String, newName: String): Int {
+            var count = 0
+            transactions.values.filter { it.category == oldName }.forEach {
+                transactions[it.id] = it.copy(category = newName)
+                count++
+            }
+            return count
+        }
+        override suspend fun updateCompanionName(oldName: String, newName: String): Int {
+            var count = 0
+            transactions.values.filter { it.companions.contains(oldName) }.forEach {
+                transactions[it.id] = it.copy(companions = it.companions.replace(oldName, newName))
+                count++
+            }
+            return count
+        }
+
+        override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> =
+            transactions.values.filter {
+                it.timestamp in startMillis until endMillis &&
+                    !it.status.equals("Void", ignoreCase = true) &&
+                    it.reviewState != "NEEDS_REVIEW"
+            }.sortedBy { it.timestamp }
+
+        override suspend fun resetSyncStateForRequeue(id: String) {
+            transactions[id]?.let { transactions[id] = it.copy(syncState = SyncState.PENDING.name, sheetRowIndex = null) }
+        }
     }
 
     private class FakeSyncQueueDao : SyncQueueDao {
@@ -120,11 +154,11 @@ class TransactionRepositorySyncTest {
             queue.values.filter { it.transactionId == transactionId }.forEach { queue.remove(it.id) }
         }
         override suspend fun getNextPending(maxRetries: Int): SyncQueueEntity? =
-            queue.values.firstOrNull { it.status == SyncQueueEntity.STATUS_PENDING }
+            queue.values.firstOrNull { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }
         override suspend fun getAllPending(maxRetries: Int): List<SyncQueueEntity> =
-            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING }
+            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }
         override suspend fun getPendingQueueFifo(maxRetries: Int): List<SyncQueueEntity> =
-            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING }.sortedBy { it.createdAt }
+            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || (it.status == SyncQueueEntity.STATUS_FAILED && it.retryCount < maxRetries) }.sortedBy { it.createdAt }
         override suspend fun updateStatus(id: Long, status: String, retryIncrement: Int) {
             queue[id]?.let { queue[id] = it.copy(status = status, retryCount = it.retryCount + retryIncrement) }
         }
@@ -161,6 +195,19 @@ class TransactionRepositorySyncTest {
                 queue[it.id] = it.copy(planJson = it.planJson!!.replace(oldId, newId))
             }
         }
+
+        override suspend fun getActiveTransactionIds(): List<String> =
+            queue.values.filter { it.status == SyncQueueEntity.STATUS_PENDING || it.status == SyncQueueEntity.STATUS_IN_PROGRESS }
+                .map { it.transactionId }
+
+        override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+            val idSet = transactionIds.toSet()
+            queue.values.filter {
+                it.transactionId in idSet &&
+                it.status == SyncQueueEntity.STATUS_PENDING &&
+                (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+            }.forEach { queue.remove(it.id) }
+        }
     }
 
     private class FakePayableDao : PayableDao {
@@ -181,6 +228,21 @@ class TransactionRepositorySyncTest {
         override suspend fun deleteByUuid(uuid: String) { payables.remove(uuid) }
         override suspend fun deleteAll() { payables.clear() }
         override suspend fun updatePaidByName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(
+            startSerial: Int,
+            endSerial: Int,
+            startMillis: Long,
+            endMillis: Long
+        ): List<PayableEntity> =
+            payables.values.filter {
+                val serial = it.dateIncurredSerial
+                val matchesYear = if (serial != null) {
+                    serial in startSerial until endSerial
+                } else {
+                    it.updatedAt in startMillis until endMillis
+                }
+                matchesYear && !it.repaymentStatus.equals("VOID", ignoreCase = true)
+            }.sortedWith(compareBy({ it.dateIncurredSerial }, { it.timeSerial }))
     }
 
     private class FakeLineageDao : LineageDao {
@@ -243,6 +305,7 @@ class TransactionRepositorySyncTest {
     private class CountingSheetsMock {
         val appendDebitCount = AtomicInteger(0)
         val writtenUuids = ConcurrentHashMap<String, String>() // cell -> uuid
+        val recordedBodies = java.util.concurrent.CopyOnWriteArrayList<String>()
         var customBatchGetResponse: String? = null
         var failBatchGetOnce: Boolean = false
         var customGetHandler: ((url: String) -> String?)? = null
@@ -257,6 +320,15 @@ class TransactionRepositorySyncTest {
                 val request = chain.request()
                 val url = request.url.toString()
                 val method = request.method
+
+                val bodyText = request.body?.let { b ->
+                    val buf = okio.Buffer()
+                    b.writeTo(buf)
+                    buf.readUtf8()
+                }.orEmpty()
+                if (bodyText.isNotEmpty()) {
+                    recordedBodies.add(bodyText)
+                }
 
                 if (method == "GET" && url.contains("values:batchGet") && failBatchGetOnce) {
                     failBatchGetOnce = false
@@ -276,43 +348,48 @@ class TransactionRepositorySyncTest {
                     // values:batchGet (readLedgerSnapshot)
                     method == "GET" && url.contains("values:batchGet") -> {
                         customBatchGetResponse ?: """{"valueRanges":[
-                            {"range":"'Nov26'!A4:K","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AC4:AC","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!L3:L3","majorDimension":"ROWS","values":[["Note"]]},
+                            {"range":"'Nov26'!A4:L","majorDimension":"ROWS","values":[]},
                             {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                            {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
+                            {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
                         ]}"""
                     }
-                    // findRowByUuid: AC3:AC
-                    method == "GET" && (url.contains("AC3") || url.contains("AC")) && url.contains("/values/") -> {
-                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") }
+                    // Header check for L3 Note
+                    method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3") || url.contains("!L3")) -> {
+                        """{"range":"'Sheet'!L3:L3","majorDimension":"ROWS","values":[["Note"]]}"""
+                    }
+                    // findRowByUuid: AD3:AD or legacy AC3:AC
+                    method == "GET" && (url.contains("AD3") || url.contains("AD") || url.contains("AC3") || url.contains("AC")) && url.contains("/values/") -> {
+                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AD") || it.key.startsWith("AC") }
                         if (matchingEntries.isEmpty()) {
-                            """{"range":"'Sheet'!AC3:AC","majorDimension":"ROWS","values":[]}"""
+                            """{"range":"'Sheet'!AD3:AD","majorDimension":"ROWS","values":[]}"""
                         } else {
                             val maxRow = writtenUuids.keys.mapNotNull { Regex("""\d+""").find(it)?.value?.toIntOrNull() }.maxOrNull() ?: 10
                             val rows = (4..maxRow).map { rowIdx ->
-                                val uuid = writtenUuids["AC$rowIdx"] ?: ""
+                                val uuid = writtenUuids["AD$rowIdx"] ?: writtenUuids["AC$rowIdx"] ?: ""
                                 if (uuid.isNotEmpty()) "[\"$uuid\"]" else "[\"\"]"
                             }
-                            """{"range":"'Sheet'!AC4:AC","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
+                            """{"range":"'Sheet'!AD4:AD","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
                         }
                     }
-                    // getCellString for AC column
-                    method == "GET" && url.contains("!AC") -> {
-                        val row = Regex("""AC(\d+)""").find(url)?.groupValues?.get(1) ?: "4"
-                        val uuid = writtenUuids["AC$row"] ?: "txn_test_void"
-                        """{"range":"'Sheet'!AC$row","majorDimension":"ROWS","values":[["$uuid"]]}"""
+                    // getCellString for AD or AC column
+                    method == "GET" && (url.contains("!AD") || url.contains("!AC")) -> {
+                        val row = Regex("""(AD|AC)(\d+)""").find(url)?.groupValues?.get(2) ?: "4"
+                        val uuid = writtenUuids["AD$row"] ?: writtenUuids["AC$row"] ?: "txn_test_void"
+                        """{"range":"'Sheet'!AD$row","majorDimension":"ROWS","values":[["$uuid"]]}"""
                     }
                     // findOrphanDebitRow or table range read
                     method == "GET" && url.contains("/values/") -> {
-                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") }
+                        val matchingEntries = writtenUuids.entries.filter { it.key.startsWith("AC") || it.key.startsWith("AD") }
                         if (matchingEntries.isEmpty()) {
-                            """{"range":"'Sheet'!A3:K","majorDimension":"ROWS","values":[]}"""
+                            """{"range":"'Sheet'!A3:L","majorDimension":"ROWS","values":[]}"""
                         } else {
                             val maxRow = writtenUuids.keys.mapNotNull { Regex("""\d+""").find(it)?.value?.toIntOrNull() }.maxOrNull() ?: 3
                             val rows = (4..maxRow).map { rowIdx ->
-                                val hasEntry = writtenUuids.containsKey("AC$rowIdx")
+                                val hasEntry = writtenUuids.containsKey("AC$rowIdx") || writtenUuids.containsKey("AD$rowIdx")
                                 if (hasEntry) "[\"46358\"]" else "[\"\"]"
                             }
                             """{"range":"'Sheet'!A4:A","majorDimension":"ROWS","values":[${rows.joinToString(",")}]}"""
@@ -323,15 +400,15 @@ class TransactionRepositorySyncTest {
                         """{"spreadsheetId":"test_sheet_id","sheets":[{"properties":{"sheetId":0,"title":"Nov26","gridProperties":{"rowCount":1000,"columnCount":35}}}]}"""
                     }
                     // appendTableScoped (values.update to row range or legacy append)
-                    (method == "POST" && url.contains(":append")) || (method == "PUT" && url.contains("/values/") && (url.contains(":K") || url.contains("%3AK"))) -> {
+                    (method == "POST" && url.contains(":append")) || (method == "PUT" && url.contains("/values/") && (url.contains(":K") || url.contains("%3AK") || url.contains(":L") || url.contains("%3AL"))) -> {
                         val count = appendDebitCount.incrementAndGet()
                         val rowMatch = Regex("""\d+""").find(url)?.value?.toIntOrNull() ?: (3 + count)
-                        """{"spreadsheetId":"test_sheet_id","updatedRange":"'Sheet'!A$rowMatch:K$rowMatch","updatedCells":11}"""
+                        """{"spreadsheetId":"test_sheet_id","updatedRange":"'Sheet'!A$rowMatch:L$rowMatch","updatedCells":12}"""
                     }
-                    // updateCell (AC rowIdx)
+                    // updateCell (AC or AD rowIdx)
                     method == "PUT" && url.contains("/values/") -> {
                         val cellMatch = Regex("""'[^']+'!([A-Z0-9]+)""").find(url)
-                        val cellRef = cellMatch?.groupValues?.get(1) ?: "AC4"
+                        val cellRef = cellMatch?.groupValues?.get(1) ?: "AD4"
                         val bodyText = request.body?.let { b ->
                             val buf = okio.Buffer()
                             b.writeTo(buf)
@@ -348,13 +425,13 @@ class TransactionRepositorySyncTest {
                             b.writeTo(buf)
                             buf.readUtf8()
                         }.orEmpty()
-                        if (bodyText.contains(":K") || bodyText.contains(":k") || bodyText.contains("%3AK")) {
+                        if (bodyText.contains(":K") || bodyText.contains(":k") || bodyText.contains("%3AK") || bodyText.contains(":L") || bodyText.contains(":l") || bodyText.contains("%3AL")) {
                             appendDebitCount.incrementAndGet()
                         }
-                        val acMatch = Regex("""'[^']+'!(AC\d+)""").find(bodyText)
+                        val acMatch = Regex("""'[^']+'!((?:AC|AD)\d+)""").find(bodyText)
                         val acRef = acMatch?.groupValues?.get(1)
                         if (acRef != null) {
-                            val uuidMatch = Regex("""'[^']+'!AC\d+.*?"values":\s*\[\s*\[\s*"([^"]+)"""").find(bodyText)
+                            val uuidMatch = Regex("""'[^']+'!(?:AC|AD)\d+.*?"values":\s*\[\s*\[\s*"([^"]+)"""").find(bodyText)
                                 ?: Regex(""""values":\s*\[\s*\[\s*"([^"]+)""").findAll(bodyText).lastOrNull()
                             val uuidVal = uuidMatch?.groupValues?.get(1).orEmpty()
                             writtenUuids[acRef] = uuidVal
@@ -777,15 +854,15 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 0.0, "Settled"],
-                        [46338, 0.5, "SBI", "Dinner", "", "Food & Drink", 200.0, "AliceBobk", 75.0, 62.5, "Pending"]
+                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 0.0, "Settled", ""],
+                        [46338, 0.5, "SBI", "Dinner", "", "Food & Drink", 200.0, "AliceBobk", 75.0, 62.5, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
                     "values": [
                         ["txn_lunch_uuid_456"],
@@ -793,17 +870,17 @@ class TransactionRepositorySyncTest {
                     ]
                 },
                 {
-                    "range": "'Nov26'!M4:T",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
-                    "range": "'Nov26'!AD4:AD",
+                    "range": "'Nov26'!AE4:AE",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!W4:AC",
                     "majorDimension": "ROWS",
                     "values": [
                         [46338, 0.5, "Charlie", "Excess settlement credit", 5061.5, "", "Pending"],
@@ -811,7 +888,7 @@ class TransactionRepositorySyncTest {
                     ]
                 },
                 {
-                    "range": "'Nov26'!AE4:AE",
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": [
                         ["pay_excess_uuid_789"],
@@ -891,15 +968,15 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.5, "SBI", "New Merchant", "", "Groceries", 250.0, "Personal", 250.0, 0.0, "Settled"],
-                        [46338, 0.6, "Cash", "Imported Missing", "", "Shopping", 400.0, "Alice", 200.0, 200.0, "Pending"]
+                        [46338, 0.5, "SBI", "New Merchant", "", "Groceries", 250.0, "Personal", 250.0, 0.0, "Settled", ""],
+                        [46338, 0.6, "Cash", "Imported Missing", "", "Shopping", 400.0, "Alice", 200.0, 200.0, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
                     "values": [
                         ["txn_to_correct_1"],
@@ -907,22 +984,22 @@ class TransactionRepositorySyncTest {
                     ]
                 },
                 {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!AD4:AD",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -992,40 +1069,40 @@ class TransactionRepositorySyncTest {
         )
         tDao.insert(localTxn)
 
-        // Remote sheet has row 4 carrying the exact same UUID in column AC
+        // Remote sheet has row 4 carrying the exact same UUID in column AD
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.5, "Cash", "Groceries", "Transit", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending"]
+                        [46338, 0.5, "Cash", "Groceries", "Transit", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
                     "values": [
                         ["txn_groceries_uuid_789"]
                     ]
                 },
                 {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!AD4:AD",
-                    "majorDimension": "ROWS",
-                    "values": []
-                },
-                {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1110,34 +1187,34 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 37.5, "Pending"]
+                        [46338, 0.4, "SBI", "Lunch", "", "Food & Drink", 75.0, "Charlie", 37.5, 37.5, "Pending", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_lunch_123"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["txn_lunch_123"]]
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1198,37 +1275,37 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46338, 0.4, "SBI", "Dinner", "", "Food & Drink", 100.0, "Charlie", 50.0, 50.0, "Pending"],
-                        [46338, 0.5, "SBI", "Lunch", "", "Food & Drink", 50.0, "Bob", 50.0, 0.0, "Settled"]
+                        [46338, 0.4, "SBI", "Dinner", "", "Food & Drink", 100.0, "Charlie", 50.0, 50.0, "Pending", ""],
+                        [46338, 0.5, "SBI", "Lunch", "", "Food & Drink", 50.0, "Bob", 50.0, 0.0, "Settled", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_dinner_123"], ["txn_lunch_456"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
+                    "values": [["txn_dinner_123"], ["txn_lunch_456"]]
+                },
+                {
+                    "range": "'Nov26'!N4:U",
+                    "majorDimension": "ROWS",
                     "values": []
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
                     "majorDimension": "ROWS",
                     "values": [
                         [46338, 0.6, "Bob", "Movie ticket", 200.0, "", "Pending"]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AE4:AE",
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": [["pay_movie_789"]]
                 }
@@ -1492,34 +1569,34 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Pending"]
+                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Pending", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_nov_charlie_1"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["txn_nov_charlie_1"]]
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Nov26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1567,29 +1644,19 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension": "ROWS",
                     "values": [
-                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Carried Fwd"]
+                        [46340, 0.5, "Cash", "Dinner", "", "Food & Drink", 200.0, "Charlie", 100.0, 100.0, "Carried Fwd", ""]
                     ]
-                },
-                {
-                    "range": "'Nov26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["txn_nov_charlie_1"]]
-                },
-                {
-                    "range": "'Nov26'!M4:T",
-                    "majorDimension": "ROWS",
-                    "values": []
                 },
                 {
                     "range": "'Nov26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["txn_nov_charlie_1"]]
                 },
                 {
-                    "range": "'Nov26'!V4:AB",
+                    "range": "'Nov26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
@@ -1599,34 +1666,44 @@ class TransactionRepositorySyncTest {
                     "values": []
                 },
                 {
-                    "range": "'Dec26'!A4:K",
-                    "majorDimension": "ROWS",
-                    "values": [
-                        [46358, 0.0, "Cash", "Carried Fwd: Dinner", "", "Food & Drink", 100.0, "Charlie", 0.0, 100.0, "Pending"]
-                    ]
-                },
-                {
-                    "range": "'Dec26'!AC4:AC",
-                    "majorDimension": "ROWS",
-                    "values": [["${lineage[0].uuid}"]]
-                },
-                {
-                    "range": "'Dec26'!M4:T",
+                    "range": "'Nov26'!W4:AC",
                     "majorDimension": "ROWS",
                     "values": []
+                },
+                {
+                    "range": "'Nov26'!AF4:AF",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!A4:L",
+                    "majorDimension": "ROWS",
+                    "values": [
+                        [46358, 0.0, "Cash", "Carried Fwd: Dinner", "", "Food & Drink", 100.0, "Charlie", 0.0, 100.0, "Pending", ""]
+                    ]
                 },
                 {
                     "range": "'Dec26'!AD4:AD",
                     "majorDimension": "ROWS",
-                    "values": []
+                    "values": [["${lineage[0].uuid}"]]
                 },
                 {
-                    "range": "'Dec26'!V4:AB",
+                    "range": "'Dec26'!N4:U",
                     "majorDimension": "ROWS",
                     "values": []
                 },
                 {
                     "range": "'Dec26'!AE4:AE",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!W4:AC",
+                    "majorDimension": "ROWS",
+                    "values": []
+                },
+                {
+                    "range": "'Dec26'!AF4:AF",
                     "majorDimension": "ROWS",
                     "values": []
                 }
@@ -1831,25 +1908,25 @@ class TransactionRepositorySyncTest {
         mock.customBatchGetResponse = """{
             "valueRanges": [
                 {
-                    "range": "'Nov26'!A4:K",
+                    "range": "'Nov26'!A4:L",
                     "majorDimension":"ROWS",
                     "values": [
                         [""], [""],
-                        [46338, 0.5, "Cash", "Groceries Split", "", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending"]
+                        [46338, 0.5, "Cash", "Groceries Split", "", "Food & Drink", 500.0, "AliceBobk", 120.0, 380.0, "Pending", ""]
                     ]
                 },
                 {
-                    "range": "'Nov26'!AC4:AC",
+                    "range": "'Nov26'!AD4:AD",
                     "majorDimension":"ROWS",
                     "values": [
                         [""], [""],
                         ["$txnId"]
                     ]
                 },
-                {"range":"'Nov26'!M4:T","majorDimension":"ROWS","values":[]},
-                {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                {"range":"'Nov26'!V4:AB","majorDimension":"ROWS","values":[]},
-                {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]}
+                {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
+                {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
             ]
         }"""
 
@@ -1862,6 +1939,242 @@ class TransactionRepositorySyncTest {
         assertNotNull(reconciledTxn)
         assertEquals(6, reconciledTxn!!.sheetRowIndex)
         assertEquals("Groceries Split", reconciledTxn.merchant)
+    }
+
+    @Test
+    fun testNewExpenseWithNoteWritesNoteToColumnLOnFirstWrite() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
+            ioDispatcher = Dispatchers.IO
+        )
+
+        // Expense with regular note
+        val regularNoteTxn = Transaction(
+            id = "txn_regular_note_1234567890abcdef",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.598,
+            account = "SBI",
+            merchant = "Office Lunch",
+            note = "Team celebration lunch",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.PENDING,
+            sheetRowIndex = null,
+            isPossibleDuplicate = false
+        )
+
+        repo.insertTransaction(regularNoteTxn)
+        val syncRes1 = repo.syncPendingTransactions()
+        assertTrue(syncRes1 is Result.Success)
+
+        // Verify column L contains plain text note
+        val body1 = mock.recordedBodies.find { it.contains("Team celebration lunch") }
+        assertNotNull("Request body must contain the note on first write", body1)
+        assertTrue(body1!!.contains("Team celebration lunch"))
+
+        // Expense with formula note starting with '='
+        val formulaNoteTxn = Transaction(
+            id = "txn_formula_note_1234567890abcdef",
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.599,
+            account = "SBI",
+            merchant = "Stationery",
+            note = "=SUM(100+50)",
+            tripTag = "",
+            category = "Shopping",
+            totalAmount = 150.0,
+            companions = "Personal",
+            myShare = 150.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.PENDING,
+            sheetRowIndex = null,
+            isPossibleDuplicate = false
+        )
+
+        repo.insertTransaction(formulaNoteTxn)
+        val syncRes2 = repo.syncPendingTransactions()
+        assertTrue(syncRes2 is Result.Success)
+
+        // Verify note starting with '=' is guarded with leading single quote
+        val body2 = mock.recordedBodies.find { it.contains("=SUM(100+50)") }
+        assertNotNull("Request body must contain the formula note", body2)
+        assertTrue("Formula note must be guarded with leading single quote as plain text", body2!!.contains("'=SUM(100+50)"))
+    }
+
+    @Test
+    fun testDeliveredRowUpdateSucceedsIn32ColumnLayout() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val txnId = "txn_delivered_32col_1234567890abcdef"
+        // Row 5 in 32-column tab: UUID is at AD5
+        mock.writtenUuids["AD5"] = txnId
+
+        val deliveredTxn = Transaction(
+            id = txnId,
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.598,
+            account = "SBI",
+            merchant = "Dinner Original",
+            note = "Original Note",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 500.0,
+            companions = "Personal",
+            myShare = 500.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.SYNCED,
+            sheetRowIndex = 5,
+            isPossibleDuplicate = false
+        )
+        tDao.insert(TransactionEntity.fromDomain(deliveredTxn))
+
+        // Edit transaction: change merchant and note
+        val updatedTxn = deliveredTxn.copy(
+            merchant = "Dinner Updated",
+            note = "Updated Note"
+        )
+        tDao.update(TransactionEntity.fromDomain(updatedTxn))
+
+        // Queue update operation
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = txnId,
+                operationType = SyncQueueEntity.OP_UPDATE,
+                payloadJson = txnId
+            )
+        )
+
+        // Execute sync
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue("Sync of OP_UPDATE in 32-column layout must succeed", syncRes is Result.Success)
+        assertEquals(1, (syncRes as Result.Success).data)
+
+        // Verify request body contains updated merchant and note
+        val updateBody = mock.recordedBodies.find { it.contains("Dinner Updated") }
+        assertNotNull("Request body must contain updated merchant", updateBody)
+        assertTrue(updateBody!!.contains("Updated Note"))
+    }
+
+    @Test
+    fun testDeliveredRowUpdateSucceedsIn31ColumnTab() = runBlocking {
+        val tDao = FakeTransactionDao()
+        val qDao = FakeSyncQueueDao()
+        val prefs = FakePreferencesRepository()
+        val mock = CountingSheetsMock()
+        val sheets = mock.createClient()
+
+        val repo = TransactionRepositoryImpl(
+            transactionDao = tDao,
+            syncQueueDao = qDao,
+            googleSheetsClient = sheets,
+            preferencesRepository = prefs,
+            accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(
+                sheetsClient = sheets,
+                syncQueueDao = qDao,
+                transactionDao = tDao
+            ),
+            ioDispatcher = Dispatchers.IO
+        )
+
+        val txnId = "txn_delivered_31col_1234567890abcdef"
+        // Row 5 in legacy 31-column tab: UUID is at AC5 (not AD5)
+        mock.writtenUuids["AC5"] = txnId
+
+        val deliveredTxn = Transaction(
+            id = txnId,
+            timestamp = 1794387699000L,
+            dateSerial = 46338,
+            timeSerial = 0.598,
+            account = "SBI",
+            merchant = "Coffee Original",
+            note = "Old Note",
+            tripTag = "",
+            category = "Food & Drink",
+            totalAmount = 100.0,
+            companions = "Personal",
+            myShare = 100.0,
+            owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL,
+            sourcePackage = "manual",
+            reviewState = ReviewState.CONFIRMED,
+            syncState = SyncState.SYNCED,
+            sheetRowIndex = 5,
+            isPossibleDuplicate = false
+        )
+        tDao.insert(TransactionEntity.fromDomain(deliveredTxn))
+
+        // Edit transaction: change merchant and note
+        val updatedTxn = deliveredTxn.copy(
+            merchant = "Coffee Updated",
+            note = "Legacy Note Updated"
+        )
+        tDao.update(TransactionEntity.fromDomain(updatedTxn))
+
+        // Queue update operation
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = txnId,
+                operationType = SyncQueueEntity.OP_UPDATE,
+                payloadJson = txnId
+            )
+        )
+
+        // Execute sync
+        val syncRes = repo.syncPendingTransactions()
+        assertTrue("Sync of OP_UPDATE in 31-column tab must succeed", syncRes is Result.Success)
+        assertEquals(1, (syncRes as Result.Success).data)
+
+        // Verify request body contains updated merchant and note
+        val updateBody = mock.recordedBodies.find { it.contains("Coffee Updated") }
+        assertNotNull("Request body must contain updated merchant", updateBody)
+        assertTrue(updateBody!!.contains("Legacy Note Updated"))
     }
 
     // The old "realign local id by row number" behaviour was removed (audit S-5); see ReconcileSafetyTest.

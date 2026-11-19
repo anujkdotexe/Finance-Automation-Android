@@ -1,5 +1,6 @@
 package com.financeautomation.domain.usecase
 
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.domain.model.CellEdit
 import com.financeautomation.domain.model.LedgerDebit
 import com.financeautomation.domain.model.LedgerPayable
@@ -78,13 +79,13 @@ class NettingUseCase {
                     paidBy = repRes.newPaidBy
                 )
 
-                // Record edits: AA = dateRepaidSerial, X = paidBy, Z = amountOwed, AB = status
-                edits.add(CellEdit(payable.tab, payable.row, "AA", dateSerial))
+                // Record edits: Date Repaid (AB), Paid By (Y), Amount I Owe (AA), Repayment Status (AC)
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial))
                 if (payable.paidBy != repRes.newPaidBy) {
-                    edits.add(CellEdit(payable.tab, payable.row, "X", repRes.newPaidBy))
+                    edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy))
                 }
-                edits.add(CellEdit(payable.tab, payable.row, "Z", repRes.newOwed))
-                edits.add(CellEdit(payable.tab, payable.row, "AB", repRes.newStatus))
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed))
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus))
             }
         }
 

@@ -45,7 +45,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.draw.clip
 import com.financeautomation.R
 import com.financeautomation.core.model.SplitMode
-import com.financeautomation.core.utils.AmountInputSanitizer
 import com.financeautomation.core.utils.formatRupees
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.presentation.theme.FinanceShapes
@@ -88,36 +87,12 @@ fun CompanionSplitSection(
                 color = FinanceTheme.colors.onSurfaceVariant
             )
 
-            OutlinedTextField(
+            AmountField(
                 value = state.customShareText,
-                onValueChange = { input ->
-                    if (AmountInputSanitizer.isValidExpressionInput(input)) {
-                        onCustomShareChanged(input)
-                    }
-                },
+                onValueChange = onCustomShareChanged,
                 enabled = !state.isFinancialLocked,
-                placeholder = { Text(text = "0.00", style = FinanceTheme.typography.bodyMedium) },
-                singleLine = true,
-                shape = FinanceShapes.card,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = { focusManager.clearFocus() }
-                ),
-                supportingText = if (state.customShareText.any { it in "+-*/" } && (state.customShare ?: 0.0) > 0.0) {
-                    {
-                        Text(
-                            text = "= ${formatRupeesAuto(state.customShare ?: 0.0)}",
-                            style = FinanceTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                } else null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+                zeroIsFine = true,
+                onFocusChanged = onKeyboardFocusChanged
             )
         }
 
@@ -256,7 +231,10 @@ fun CompanionSplitSection(
             ) {
                 OutlinedTextField(
                     value = newFriendName,
-                    onValueChange = { newFriendName = it },
+                    onValueChange = {
+                        newFriendName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                            .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                    },
                     placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
                     singleLine = true,
                     shape = FinanceShapes.card,

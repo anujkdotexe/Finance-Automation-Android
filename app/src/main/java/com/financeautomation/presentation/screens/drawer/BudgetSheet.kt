@@ -36,6 +36,7 @@ import com.financeautomation.domain.repository.BudgetRepository
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.OutlinedButton
 import com.financeautomation.presentation.theme.FinanceShapes
+import com.financeautomation.presentation.components.AmountField
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.BudgetSheetStateHolder
 
@@ -108,24 +109,24 @@ fun BudgetSheet(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
-            OutlinedTextField(
+            AmountField(
                 value = state.input,
-                onValueChange = holder::onInputChanged,
-                placeholder = { Text(stringResource(R.string.budget_sheet_amount_placeholder)) },
-                singleLine = true,
-                isError = state.showInvalid,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                shape = FinanceShapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-                supportingText = {
-                    val preview = state.preview
-                    when {
-                        state.showInvalid -> Text(stringResource(R.string.budget_sheet_invalid))
-                        preview != null -> Text(stringResource(R.string.budget_sheet_result, formatRupees(preview, includeDecimals = false)))
-                        else -> Text(stringResource(R.string.budget_sheet_hint))
-                    }
-                }
+                onValueChange = holder::onInputChanged
             )
+            val preview = state.preview
+            if (preview != null && state.input.none { it in "+-*/()" }) {
+                Text(
+                    text = stringResource(R.string.budget_sheet_result, formatRupees(preview, includeDecimals = false)),
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else if (state.input.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.budget_sheet_hint),
+                    style = FinanceTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (state.saveFailed) {
                 Text(
                     text = stringResource(R.string.budget_sheet_save_failed),

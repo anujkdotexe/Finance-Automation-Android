@@ -328,7 +328,7 @@ fun CategoryBreakdownSection(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = item.category,
+                                text = if (item.isArchived) stringResource(R.string.category_spend_archived_format, item.category) else item.category,
                                 style = FinanceTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.onSurface
                             )

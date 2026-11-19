@@ -89,12 +89,6 @@ fun ReviewInboxScreen(
 
     LaunchedEffect(state.openQuickLogCaptureId) {
         val capId = state.openQuickLogCaptureId ?: return@LaunchedEffect
-        val authIntent = android.app.PendingIntent.getActivity(
-            context,
-            0,
-            android.content.Intent(),
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-        )
         val cap = state.captures.firstOrNull { it.id == capId }
         val isCredit = cap?.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)
         context.startActivity(android.content.Intent(context, com.financeautomation.presentation.ui.ModalBottomSheetActivity::class.java).apply {
@@ -102,7 +96,6 @@ fun ReviewInboxScreen(
             if (isCredit) {
                 putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_FLOW, "INCOME_RETURN")
             }
-            putExtra(com.financeautomation.presentation.ui.ModalBottomSheetActivity.EXTRA_INTERNAL_AUTH, authIntent)
         })
         reviewInboxViewModel.clearOpenQuickLogCaptureId()
     }
@@ -258,6 +251,7 @@ fun ReviewInboxContent(
                         ) { queueItem ->
                             FailedQueueItemCard(
                                 item = queueItem,
+                                itemDetail = state.failedQueueDetails[queueItem.id],
                                 onRetry = { onRetryQueueItem(queueItem.id) },
                                 onDiscard = { onDiscardQueueItem(queueItem.id) }
                             )
@@ -316,6 +310,7 @@ fun ReviewInboxContent(
 @Composable
 fun FailedQueueItemCard(
     item: SyncQueueEntity,
+    itemDetail: String? = null,
     onRetry: () -> Unit,
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier
@@ -346,11 +341,29 @@ fun FailedQueueItemCard(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
             )
+            if (!itemDetail.isNullOrBlank()) {
+                Text(
+                    text = itemDetail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
             Text(
                 text = stringResource(R.string.review_failed_queue_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            val errorText = try {
+                item.lastErrorKind?.let { com.financeautomation.core.utils.SyncErrorKind.valueOf(it).plainMessage() }
+            } catch (_: Exception) { null } ?: item.lastErrorDetail ?: item.lastErrorKind
+            if (!errorText.isNullOrBlank()) {
+                Text(
+                    text = "Reason: $errorText",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             ButtonPair(
                 outlinedText = stringResource(R.string.action_discard),
                 onOutlinedClick = onDiscard,

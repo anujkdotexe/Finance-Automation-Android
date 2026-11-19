@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
  * Android NotificationListenerService intercepting financial notifications from whitelisted package IDs.
  * Implements self-healing listener rebinds, catch-up replay, and handoff to ForegroundWatcher.
  */
-class NotificationListenerServiceImpl : NotificationListenerService() {
+open class NotificationListenerServiceImpl : NotificationListenerService() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)
@@ -60,10 +60,28 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
             PipelineTrail.recordDroppedNotWhitelisted()
             return
         }
+
+        // Strict privacy check for chat apps that carry payments (WhatsApp, WhatsApp Business):
+        // Only inspect text if the notification is definitively on a payments channel or category.
+        if (PackageWhitelist.isChatApp(sourcePackage)) {
+            val channelId = sbn.notification?.channelId
+            val category = sbn.notification?.category
+            if (!PackageWhitelist.isPaymentNotification(channelId, category)) {
+                PipelineTrail.recordDroppedNotWhitelisted()
+                return
+            }
+        }
         PipelineTrail.record(PipelineStage.ALERT, PipelineCode.WHITELISTED_SEEN)
 
         val extras = sbn.notification.extras ?: Bundle.EMPTY
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+
+        // Reject non-bank SMS sender before reading any message text into memory (AGENTS Rule 15)
+        if (!NotificationPreFilter.isAllowedSender(sourcePackage, title)) {
+            PipelineTrail.recordDroppedNotWhitelisted()
+            return
+        }
+
         val extraText = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         // Sender and keyword filter on the title and a short prefix first; the long text is only read after it passes
         if (!NotificationPreFilter.shouldReadFullText(sourcePackage, title, extraText.take(NotificationPreFilter.PREFIX_LENGTH))) {
@@ -74,8 +92,10 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         val text = if (extraBigText.length > extraText.length) extraBigText else extraText
         val postTime = if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()
         val key = sbn.key ?: ""
+        val channelId = sbn.notification?.channelId
+        val category = sbn.notification?.category
 
-        handleNotification(sourcePackage, title, text, postTime, key)
+        handleNotification(sourcePackage, title, text, postTime, key, channelId, category)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
@@ -93,6 +113,12 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         } catch (_: Exception) {}
         val app = applicationContext as? FinanceApplication
         val watcher = app?.appContainer?.foregroundWatcher
+
+        app?.appContainer?.preferencesRepository?.let { prefs ->
+            serviceScope.launch {
+                PackageWhitelist.loadFromPreferences(prefs)
+            }
+        }
 
         // Resume watcher for any persisted WAITING captures
         watcher?.checkAndResume(serviceScope)
@@ -133,7 +159,9 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         title: String,
         text: String,
         postTime: Long,
-        sbnKey: String = ""
+        sbnKey: String = "",
+        channelId: String? = null,
+        category: String? = null
     ) {
         val app = applicationContext as? FinanceApplication
         val container = app?.appContainer
@@ -141,22 +169,9 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
 
         serviceScope.launch {
             try {
-                val processor = testProcessor ?: container?.let {
-                    val db = it.awaitDatabase()
-                    NotificationProcessor(
-                        pendingCaptureDao = db.pendingCaptureDao(),
-                        handledNotificationDao = db.handledNotificationDao(),
-                        accountDao = db.accountDao(),
-                        preferenceDao = db.preferenceDao(),
-                        transactionDao = db.transactionDao(),
-                        subscriptionMatcher = it.subscriptionMatcher,
-                        parseUseCase = it.parseNotificationUseCase,
-                        runInTransaction = { block -> db.withTransaction { block() } },
-                        ownPackageName = packageName
-                    )
-                } ?: return@launch
+                val processor = testProcessor ?: container?.getNotificationProcessor() ?: return@launch
 
-                val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey)
+                val outcome = processor.process(sourcePackage, title, text, postTime, sbnKey, channelId, category)
                 when (outcome) {
                     is NotificationProcessingOutcome.Captured -> {
                         if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
@@ -175,7 +190,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                         // Dismissed payment alert
                     }
                     is NotificationProcessingOutcome.Ignored -> {
-                        // Ignored by whitelist, blacklist, OTP suppression, or direction filter
+                        Diagnostics.recordDrop(outcome.reason)
                     }
                 }
             } catch (e: Exception) {

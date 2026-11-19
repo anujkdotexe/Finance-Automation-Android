@@ -33,7 +33,9 @@ data class LogPayableRequest(
     val creditor: String,
     val amount: Double,
     val whatFor: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val category: String = com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER,
+    val transactionId: String? = null
 )
 
 /**
@@ -45,7 +47,9 @@ data class LogRepaymentRequest(
     val creditor: String,
     val amount: Double,
     val explicitRef: String? = null,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val account: String? = null,
+    val note: String? = null
 )
 
 /**
@@ -68,4 +72,16 @@ data class YearCloseRequest(
     val year: Int,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+data class RestoreInflowRequest(
+    val inflowId: String,
+    val timestamp: Long
+)
+
+data class RestorePayableRequest(
+    val payableUuid: String,
+    val tabName: String,
+    val year: Int
+)
+
 

@@ -61,8 +61,11 @@ sqlcipher = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher
 sqlite = { module = "androidx.sqlite:sqlite", version.ref = "sqlite" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-firestore = { module = "com.google.firebase:firebase-firestore" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version = "3.47.1.0" }
 androidx-junit = { module = "androidx.test.ext:junit", version.ref = "junitExt" }
 espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 

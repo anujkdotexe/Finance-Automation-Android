@@ -88,6 +88,20 @@ class FakeSubscriptionRepository : SubscriptionRepository {
         cycles.value = cycles.value + (cycleId to c.copy(state = SubscriptionCycleState.PAID, transactionId = transactionId, updatedAt = clock))
     }
 
+    override suspend fun skipPausedCycles(subscriptionId: String, fromEpochDay: Long, toEpochDay: Long) {
+        val sub = subscriptions.value[subscriptionId] ?: return
+        val schedule = SubscriptionScheduleUseCase()
+        val dueDays = schedule.dueDates(sub.copy(active = true), fromEpochDay, toEpochDay, todayEpochDay = toEpochDay + 1)
+        for (day in dueDays) {
+            val existing = cycles.value.values.firstOrNull { it.subscriptionId == subscriptionId && it.dueEpochDay == day }
+            if (existing == null) {
+                addCycle(subscriptionId, day, state = SubscriptionCycleState.SKIPPED)
+            } else if (existing.state == SubscriptionCycleState.DUE) {
+                setCycleState(existing.id, SubscriptionCycleState.SKIPPED)
+            }
+        }
+    }
+
     fun cycle(id: String): SubscriptionCycle = cycles.value.getValue(id)
 }
 

@@ -109,7 +109,10 @@ fun AddCategorySheet(
                     )
                     OutlinedTextField(
                         value = categoryName,
-                        onValueChange = { categoryName = it },
+                        onValueChange = {
+                            categoryName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
+                        },
                         placeholder = { Text(stringResource(R.string.categories_add_sheet_name_placeholder)) },
                         singleLine = true,
                         shape = FinanceShapes.medium,

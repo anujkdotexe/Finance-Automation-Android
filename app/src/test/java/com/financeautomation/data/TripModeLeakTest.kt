@@ -53,10 +53,26 @@ class TripModeLeakTest {
             activeFlow.value = null
         }
 
+        override suspend fun clearActiveFlagsWithDate(endDateEpochDay: Long, updatedAt: Long) {
+            tags.values.filter { it.isActive }.forEach { tag ->
+                tags[tag.id] = tag.copy(isActive = false, endDateEpochDay = endDateEpochDay, updatedAt = updatedAt, dirty = 1)
+            }
+            activeFlow.value = null
+        }
+
         override suspend fun setActiveFlag(id: String, updatedAt: Long) {
             clearActiveFlags(updatedAt)
             tags[id]?.let { tag ->
                 val updated = tag.copy(isActive = true, updatedAt = updatedAt, dirty = 1)
+                tags[id] = updated
+                activeFlow.value = updated
+            }
+        }
+
+        override suspend fun setActiveFlagWithDate(id: String, startDateEpochDay: Long, updatedAt: Long) {
+            clearActiveFlagsWithDate(startDateEpochDay, updatedAt)
+            tags[id]?.let { tag ->
+                val updated = tag.copy(isActive = true, startDateEpochDay = tag.startDateEpochDay ?: startDateEpochDay, endDateEpochDay = null, updatedAt = updatedAt, dirty = 1)
                 tags[id] = updated
                 activeFlow.value = updated
             }
@@ -143,6 +159,8 @@ class TripModeLeakTest {
         override suspend fun updateAccountName(oldName: String, newName: String): Int = 0
         override suspend fun updateCategoryName(oldName: String, newName: String): Int = 0
         override suspend fun updateCompanionName(oldName: String, newName: String): Int = 0
+        override suspend fun getAllForYear(startMillis: Long, endMillis: Long): List<TransactionEntity> = emptyList()
+        override suspend fun resetSyncStateForRequeue(id: String) {}
     }
 
     private class SimpleSyncQueueDao : SyncQueueDao {
@@ -183,6 +201,15 @@ class TripModeLeakTest {
         override suspend fun updateTransactionId(oldTransactionId: String, newTransactionId: String) {}
         override suspend fun updatePayloadJsonId(oldId: String, newId: String) {}
         override suspend fun updatePlanJsonId(oldId: String, newId: String) {}
+        override suspend fun getActiveTransactionIds(): List<String> = emptyList()
+        override suspend fun deletePendingForTransactions(transactionIds: List<String>) {
+            val idSet = transactionIds.toSet()
+            items.values.filter {
+                it.transactionId in idSet &&
+                it.status == SyncQueueEntity.STATUS_PENDING &&
+                (it.operationType == SyncQueueEntity.OP_INSERT || it.operationType == SyncQueueEntity.OP_UPDATE || it.operationType == SyncQueueEntity.OP_VOID)
+            }.forEach { items.remove(it.id) }
+        }
     }
 
     @Test

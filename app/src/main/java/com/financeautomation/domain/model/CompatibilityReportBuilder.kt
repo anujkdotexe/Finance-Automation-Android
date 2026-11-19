@@ -65,14 +65,14 @@ data class FunnelStageCount(
 
 data class CompatibilityReportData(
     val header: DeviceHeaderInfo,
-    val healthRows: List<HealthRowReport>,
-    val oemRoute: OemRouteReport?,
-    val lastCrash: CrashReportItem?,
-    val exitHistory: List<ExitReportItem>,
-    val diagnostics: List<DiagnosticReportItem>,
-    val funnelCounts: List<FunnelStageCount>,
-    val recentTrail: List<TrailEventReportItem>,
-    val discoveryScan: List<String>,
+    val healthRows: List<HealthRowReport> = emptyList(),
+    val oemRoute: OemRouteReport? = null,
+    val lastCrash: CrashReportItem? = null,
+    val exitHistory: List<ExitReportItem> = emptyList(),
+    val diagnostics: List<DiagnosticReportItem> = emptyList(),
+    val funnelCounts: List<FunnelStageCount> = emptyList(),
+    val recentTrail: List<TrailEventReportItem> = emptyList(),
+    val discoveryScan: List<String> = emptyList(),
     val lastHeartbeatTime: Long = 0L,
     val todayDroppedNonWhitelistedCount: Long = 0L,
     val userNote: String? = null,
@@ -227,7 +227,7 @@ object CompatibilityReportBuilder {
             for (err in data.rawGoogleErrors) {
                 sb.appendLine("- [${err.timestamp}] ${err.endpointId} HTTP ${err.httpStatus}:")
                 sb.appendLine("```json")
-                sb.appendLine(err.responseBody)
+                sb.appendLine(com.financeautomation.core.utils.PrivacyScrubber.scrubWithoutLengthCap(err.responseBody))
                 sb.appendLine("```")
             }
             sb.appendLine()

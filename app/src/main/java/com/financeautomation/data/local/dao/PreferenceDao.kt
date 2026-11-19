@@ -28,6 +28,9 @@ interface PreferenceDao {
     @Query("DELETE FROM preferences_table WHERE `key` = :key")
     suspend fun deletePreference(key: String)
 
+    @Query("DELETE FROM preferences_table WHERE substr(`key`, 1, length(:prefix)) = :prefix")
+    suspend fun deletePreferencesWithPrefix(prefix: String)
+
     @Query("DELETE FROM preferences_table")
     suspend fun clearAll()
 

@@ -22,6 +22,7 @@ import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.PipelineCode
 import com.financeautomation.core.utils.PipelineStage
 import com.financeautomation.core.utils.PipelineTrail
+import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.TransactionDao
@@ -57,6 +58,7 @@ class ForegroundWatcher(
     private val directTransactionDao: TransactionDao? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
+    private val categoryDaoProvider: (suspend () -> CategoryDao)? = null,
     private val predictCategoryUseCase: PredictCategoryUseCase? = null,
     private val overlayControllerProvider: (() -> OverlayController)? = null,
     private val onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
@@ -379,7 +381,8 @@ class ForegroundWatcher(
             context = context,
             capture = capture,
             categoryStatDaoProvider = categoryStatDaoProvider,
-            predictCategoryUseCase = predictCategoryUseCase
+            predictCategoryUseCase = predictCategoryUseCase,
+            categoryDaoProvider = categoryDaoProvider
         )
     }
 
