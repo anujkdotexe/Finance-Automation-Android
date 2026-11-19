@@ -108,11 +108,11 @@ class SubscriptionsSheetSyncTest {
         }
         assertNotNull(headerReq)
 
-        // Hidden column L request (index 11 to 12)
+        // Hidden column O request (index 14 to 15)
         val hideReq = requests.firstOrNull {
             val dimProps = it["updateDimensionProperties"] as? Map<*, *>
             val range = dimProps?.get("range") as? Map<*, *>
-            range?.get("startIndex") == 11 && range.get("endIndex") == 12
+            range?.get("startIndex") == SheetSchemaConstants.COL_INDEX_SUB_ID && range.get("endIndex") == SheetSchemaConstants.COL_INDEX_SUB_ID + 1
         }
         assertNotNull(hideReq)
     }
@@ -212,7 +212,7 @@ class SubscriptionsSheetSyncTest {
             active = true
         )
         val row = SheetProvisioner.buildSubscriptionRowValues(sub, row1BasedIndex = 4, year = 2026)
-        assertEquals(13, row.size)
+        assertEquals(15, row.size)
         assertEquals("Spotify", row[0])
         assertEquals(119.0, row[1])
         assertEquals("Monthly", row[2])
@@ -225,7 +225,13 @@ class SubscriptionsSheetSyncTest {
         assertTrue((row[9] as String).contains("!G4:G")) // Paid this month formula
         assertTrue((row[10] as String).contains("'Jan26'!G4:G")) // Paid this year formula
         assertTrue((row[11] as String).contains("'Jan26'!A4:A")) // Last paid date formula
-        assertEquals("sub_spotify", row[12]) // ID at index 12 (Column M)
+        assertEquals("", row[12]) // Closed date blank while active (Col M)
+        assertTrue((row[13] as String).contains("'Jan26'!G4:G")) // Paid in total formula (Col N)
+        assertEquals("sub_spotify", row[14]) // ID at index 14 (Column O)
+
+        val closedSub = sub.copy(active = false, closedDateEpochDay = LocalDate.of(2026, 11, 19).toEpochDay())
+        val closedRow = SheetProvisioner.buildSubscriptionRowValues(closedSub, row1BasedIndex = 4, year = 2026)
+        assertEquals("2026-11-19", closedRow[12])
     }
 
     @Test
@@ -311,6 +317,48 @@ class SubscriptionsSheetSyncTest {
     }
 
     @Test
+    fun syncSubscriptionsTab_whenActiveSetToFalseOnSheet_setsClosedDateEpochDayInRoomAndDoesNotBreakOnManualClosedDateEdit() = runBlocking {
+        val existing = Subscription(
+            id = "sub_hulu",
+            name = "Hulu",
+            amount = 499.0,
+            frequency = SubscriptionFrequency.MONTHLY,
+            anchorEpochDay = LocalDate.of(2026, 11, 1).toEpochDay(),
+            account = "HDFC",
+            note = "Basic tier",
+            active = true,
+            closedDateEpochDay = null
+        )
+        fakeSubRepository.upsertSubscription(existing)
+
+        // Sheet row has active = false and user typed an arbitrary manual note/date into closed date
+        fakeSheetsClient.subscriptionsRows = listOf(
+            SheetSubscriptionRow(
+                rowNumber = 4,
+                name = "Hulu",
+                amount = 499.0,
+                frequency = "Monthly",
+                dueDateString = "2026-11-01",
+                account = "HDFC",
+                active = false,
+                note = "Cancelled plan",
+                keywords = "",
+                id = "sub_hulu",
+                closedDateString = "cancelled by user in nov"
+            )
+        )
+
+        val res = coordinator.syncSubscriptionsTab("sheet123")
+        assertTrue(res is Result.Success)
+
+        val inRoom = fakeSubRepository.getSubscription("sub_hulu")
+        assertNotNull(inRoom)
+        assertFalse("Must be inactive in Room", inRoom!!.active)
+        assertNotNull("closedDateEpochDay must be populated by the app", inRoom.closedDateEpochDay)
+        assertEquals("closedDateEpochDay must be today", LocalDate.now().toEpochDay(), inRoom.closedDateEpochDay)
+    }
+
+    @Test
     fun syncSubscriptionsTab_userAddedRowWithoutId_generatesUuidAndWritesBackToCellM() = runBlocking {
         fakeSheetsClient.subscriptionsRows = listOf(
             SheetSubscriptionRow(
@@ -338,8 +386,8 @@ class SubscriptionsSheetSyncTest {
         assertEquals(1500.0, gymSub.amount)
         assertEquals("Gold gym", gymSub.note)
 
-        // Cell M5 must have been written back with the generated ID
-        val writtenId = fakeSheetsClient.updatedCells["${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}!M5"]
+        // Cell O5 must have been written back with the generated ID
+        val writtenId = fakeSheetsClient.updatedCells["${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}!O5"]
         assertEquals(gymSub.id, writtenId)
     }
 

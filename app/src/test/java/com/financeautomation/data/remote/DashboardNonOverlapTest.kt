@@ -36,7 +36,7 @@ class DashboardNonOverlapTest {
             GridBox("Monthly Outflow Table", startRow = 4, endRow = 17, startCol = 20, endCol = 23),
             GridBox("Category Spend Table", startRow = 4, endRow = 20, startCol = 24, endCol = 26),
             GridBox("Active Settlements", startRow = 23, endRow = 38, startCol = 0, endCol = 12),
-            GridBox("Subscriptions Band", startRow = 42, endRow = 54, startCol = 0, endCol = 18),
+            GridBox("Subscriptions Band", startRow = 42, endRow = 55, startCol = 0, endCol = 18),
             GridBox("Trips Band", startRow = 55, endRow = 61, startCol = 0, endCol = 18),
             GridBox("Insights Chart A65", startRow = 64, endRow = 88, startCol = 0, endCol = 10),
             GridBox("Insights Spend Table", startRow = 63, endRow = 85, startCol = 20, endCol = 22)
@@ -99,7 +99,8 @@ class DashboardNonOverlapTest {
         // Subscriptions band formulas
         assertTrue(formulas.any { it.contains("COUNTIF(Subscriptions!F4:F, TRUE)") })
         assertTrue(formulas.any { it.contains("SUMIF(Subscriptions!F4:F, TRUE, Subscriptions!I4:I)") })
-        assertTrue(formulas.any { it.contains("SORT(FILTER(Subscriptions!E4:E") })
+        assertTrue(formulas.any { it.contains("SORT(FILTER({Subscriptions!A4:A, Subscriptions!D4:D}") })
+        assertTrue(formulas.any { it.contains("QUERY(Subscriptions!A4:O, \"SELECT A, M, N") })
 
         // Trips band formulas
         assertTrue(formulas.any { it.contains("FILTER(Trips!A4:A, Trips!D4:D=\"Active\")") })

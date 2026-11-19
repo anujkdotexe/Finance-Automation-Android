@@ -1,6 +1,7 @@
 package com.financeautomation.data.remote
 
 import com.financeautomation.core.constants.CategoryConstants
+import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.domain.model.Account
 import com.financeautomation.domain.model.Category
 
@@ -107,7 +108,7 @@ object DashboardFormulaBuilder {
     fun extractWorkbookYear(
         tabNames: Collection<String>,
         workbookTitle: String? = null,
-        fallbackYear: Int = 2026
+        fallbackYear: Int = java.time.LocalDate.now().year
     ): Int {
         if (!workbookTitle.isNullOrBlank()) {
             val match = Regex("""(20\d{2})""").find(workbookTitle)
@@ -155,6 +156,54 @@ object DashboardFormulaBuilder {
      */
     fun buildSubscriptionPerMonthFormula(row1BasedIndex: Int): String {
         return """=IF(ISBLANK(B$row1BasedIndex), 0, IF(C$row1BasedIndex="Weekly", B$row1BasedIndex*52/12, IF(C$row1BasedIndex="Yearly", B$row1BasedIndex/12, B$row1BasedIndex)))"""
+    }
+
+    /**
+     * Builds the formula for Active Subscriptions count on the Dashboard.
+     */
+    fun buildSubscriptionsActiveCountFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        return """=COUNTIF($tab!${activeCol}4:$activeCol, TRUE)"""
+    }
+
+    /**
+     * Builds the formula for Monthly Equivalent Subscriptions outflow on the Dashboard.
+     */
+    fun buildSubscriptionsMonthlyEquivalentFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        val perMonthCol = SheetSchemaConstants.COL_LETTER_SUB_PER_MONTH
+        return """=SUMIF($tab!${activeCol}4:$activeCol, TRUE, $tab!${perMonthCol}4:$perMonthCol)"""
+    }
+
+    /**
+     * Builds the formula for Next Due Subscription on the Dashboard.
+     * Uses the due date column and filters for active renewals where due date >= TODAY(),
+     * returning "Name (dd mmm)" or "None upcoming".
+     */
+    fun buildNextDueSubscriptionFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val nameCol = SheetSchemaConstants.COL_LETTER_SUB_NAME
+        val dateCol = SheetSchemaConstants.COL_LETTER_SUB_DUE_DATE
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        val filterExpr = "FILTER({$tab!${nameCol}4:$nameCol, $tab!${dateCol}4:$dateCol}, $tab!${activeCol}4:$activeCol=TRUE, $tab!${dateCol}4:$dateCol>=TODAY())"
+        val sortExpr = "SORT($filterExpr, 2, TRUE)"
+        return """=IFERROR(INDEX($sortExpr, 1, 1) & " (" & TEXT(INDEX($sortExpr, 1, 2), "dd mmm") & ")", "None upcoming")"""
+    }
+
+    /**
+     * Builds the formula to query the 5 newest closed subscriptions for the Dashboard,
+     * selecting Name, Closed Date, and Paid in Total.
+     */
+    fun buildClosedSubscriptionsQueryFormula(): String {
+        val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
+        val range = SheetSchemaConstants.SUBSCRIPTIONS_RANGE
+        val nameCol = SheetSchemaConstants.COL_LETTER_SUB_NAME
+        val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
+        val closedDateCol = SheetSchemaConstants.COL_LETTER_SUB_CLOSED_DATE
+        val paidTotalCol = SheetSchemaConstants.COL_LETTER_SUB_PAID_IN_TOTAL
+        return """=IFERROR(QUERY($tab!$range, "SELECT $nameCol, $closedDateCol, $paidTotalCol WHERE $activeCol = FALSE AND $nameCol IS NOT NULL ORDER BY $closedDateCol DESC LIMIT 5", 0), "")"""
     }
 
     /**

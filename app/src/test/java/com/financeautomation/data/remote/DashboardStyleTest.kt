@@ -9,7 +9,7 @@ import org.junit.Test
  */
 class DashboardStyleTest {
 
-    private val requests = SheetProvisioner.buildDashboardRequests(dashboardSheetId = 4)
+    private val requests = SheetProvisioner.buildDashboardRequests(dashboardSheetId = 4, year = 2026)
 
     @Suppress("UNCHECKED_CAST")
     private fun bandFormat(row: Int, startCol: Int): Map<String, Any?>? =

@@ -1419,11 +1419,13 @@ open class GoogleSheetsClient(
                 val dashTargetRows = maxOf(dashCurRows, 1000)
                 val dashTargetCols = maxOf(dashCurCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
 
+                val resolvedYear = DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
                 val dashboardRequests = SheetProvisioner.buildDashboardRequests(
                     dashboardSheetId = dashboardId,
                     categories = categories,
                     currentRowCount = dashTargetRows,
-                    currentColumnCount = dashTargetCols
+                    currentColumnCount = dashTargetCols,
+                    year = resolvedYear
                 )
                 val dashRes = batchUpdate(spreadsheetId, dashboardRequests)
                 if (dashRes is Result.Error) {
@@ -1684,7 +1686,7 @@ open class GoogleSheetsClient(
                 val row = rawRows[i]
                 if (row.isEmpty()) continue
                 val name = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NAME)?.toString()?.trim().orEmpty()
-                val id = (row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID) ?: row.getOrNull(11) ?: if (row.size == 10) row.getOrNull(9) else null)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                val id = (row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID) ?: row.getOrNull(13) ?: row.getOrNull(12) ?: row.getOrNull(11) ?: if (row.size == 10) row.getOrNull(9) else null)?.toString()?.trim()?.takeIf { it.isNotBlank() }
                 if (name.isBlank() && id == null) continue
 
                 val amount = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_AMOUNT)?.toString()?.replace(",", "")?.toDoubleOrNull()
@@ -1694,6 +1696,7 @@ open class GoogleSheetsClient(
                 val active = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ACTIVE)?.toString()?.trim().equals("TRUE", ignoreCase = true)
                 val note = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NOTE)?.toString()?.trim().orEmpty()
                 val keywords = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_KEYWORDS)?.toString()?.trim().orEmpty()
+                val closedDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_CLOSED_DATE)?.toString()?.trim().orEmpty()
 
                 result.add(
                     SheetSubscriptionRow(
@@ -1706,7 +1709,8 @@ open class GoogleSheetsClient(
                         active = active,
                         note = note,
                         keywords = keywords,
-                        id = id
+                        id = id,
+                        closedDateString = closedDate
                     )
                 )
             }

@@ -162,8 +162,8 @@ object SheetSchemaConstants {
     const val SUBSCRIPTIONS_TAB_NAME: String = "Subscriptions"
     const val SUBSCRIPTIONS_HEADER_ROW_INDEX: Int = 2 // Row 3
     const val SUBSCRIPTIONS_DATA_START_ROW_INDEX: Int = 3 // Row 4
-    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 13
-    const val SUBSCRIPTIONS_RANGE: String = "A4:M"
+    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 15
+    const val SUBSCRIPTIONS_RANGE: String = "A4:O"
 
     const val COL_INDEX_SUB_NAME: Int = 0
     const val COL_INDEX_SUB_AMOUNT: Int = 1
@@ -177,8 +177,25 @@ object SheetSchemaConstants {
     const val COL_INDEX_SUB_PAID_MONTH: Int = 9
     const val COL_INDEX_SUB_PAID_YEAR: Int = 10
     const val COL_INDEX_SUB_LAST_PAID_DATE: Int = 11
-    const val COL_INDEX_SUB_ID: Int = 12
-    const val COL_LETTER_SUB_ID: String = "M"
+    const val COL_INDEX_SUB_CLOSED_DATE: Int = 12
+    const val COL_INDEX_SUB_PAID_IN_TOTAL: Int = 13
+    const val COL_INDEX_SUB_ID: Int = 14
+
+    const val COL_LETTER_SUB_NAME: String = "A"
+    const val COL_LETTER_SUB_AMOUNT: String = "B"
+    const val COL_LETTER_SUB_FREQUENCY: String = "C"
+    const val COL_LETTER_SUB_DUE_DATE: String = "D"
+    const val COL_LETTER_SUB_ACCOUNT: String = "E"
+    const val COL_LETTER_SUB_ACTIVE: String = "F"
+    const val COL_LETTER_SUB_NOTE: String = "G"
+    const val COL_LETTER_SUB_KEYWORDS: String = "H"
+    const val COL_LETTER_SUB_PER_MONTH: String = "I"
+    const val COL_LETTER_SUB_PAID_MONTH: String = "J"
+    const val COL_LETTER_SUB_PAID_YEAR: String = "K"
+    const val COL_LETTER_SUB_LAST_PAID_DATE: String = "L"
+    const val COL_LETTER_SUB_CLOSED_DATE: String = "M"
+    const val COL_LETTER_SUB_PAID_IN_TOTAL: String = "N"
+    const val COL_LETTER_SUB_ID: String = "O"
 
     // Trips Tab Constants
     const val TRIPS_TAB_NAME: String = "Trips"

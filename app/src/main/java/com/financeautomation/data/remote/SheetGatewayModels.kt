@@ -68,7 +68,8 @@ data class SheetSubscriptionRow(
     val active: Boolean,
     val note: String,
     val keywords: String,
-    val id: String?
+    val id: String?,
+    val closedDateString: String = ""
 )
 
 /**

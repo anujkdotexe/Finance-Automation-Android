@@ -66,13 +66,14 @@ open class SubscriptionsSheetSyncCoordinator(
                         active = row.active,
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
-                        note = row.note
+                        note = row.note,
+                        closedDateEpochDay = if (!row.active) LocalDate.now().toEpochDay() else null
                     )
                     subscriptionRepository.upsertSubscription(newSub)
                     processedSubIds.add(newId)
                     roomModified = true
 
-                    // Write back new ID to cell L{row.rowNumber}
+                    // Write back new ID to cell in column O (COL_LETTER_SUB_ID)
                     googleSheetsClient.updateCell(
                         spreadsheetId = spreadsheetId,
                         tabName = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME,
@@ -96,7 +97,8 @@ open class SubscriptionsSheetSyncCoordinator(
                             active = row.active,
                             createdAt = System.currentTimeMillis(),
                             updatedAt = System.currentTimeMillis(),
-                            note = row.note
+                            note = row.note,
+                            closedDateEpochDay = if (!row.active) LocalDate.now().toEpochDay() else null
                         )
                         subscriptionRepository.upsertSubscription(newSub)
                         processedSubIds.add(row.id)
@@ -116,6 +118,11 @@ open class SubscriptionsSheetSyncCoordinator(
                         if (hasConflict) {
                             // Sheet wins!
                             Diagnostics.record("SubscriptionsSync", "CONFLICT_SHEET_WON")
+                            val closedEpoch = if (!row.active) {
+                                if (existing.active) LocalDate.now().toEpochDay() else (existing.closedDateEpochDay ?: LocalDate.now().toEpochDay())
+                            } else {
+                                null
+                            }
                             val updatedSub = existing.copy(
                                 name = row.name,
                                 amount = row.amount,
@@ -125,6 +132,7 @@ open class SubscriptionsSheetSyncCoordinator(
                                 active = row.active,
                                 note = row.note,
                                 keywords = row.keywords,
+                                closedDateEpochDay = closedEpoch,
                                 updatedAt = System.currentTimeMillis()
                             )
                             subscriptionRepository.upsertSubscription(updatedSub)

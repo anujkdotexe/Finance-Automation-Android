@@ -222,7 +222,8 @@ object SheetProvisioner {
         dashboardSheetId: Int,
         categories: List<String> = emptyList(),
         currentRowCount: Int = 1000,
-        currentColumnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT
+        currentColumnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT,
+        year: Int = java.time.LocalDate.now().year
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
         val targetRowCount = maxOf(currentRowCount, 1000)
@@ -289,8 +290,7 @@ object SheetProvisioner {
             listOf(44, 45, 6, 9),  // G45:I45 (Next Due Value)
             listOf(45, 46, 6, 9),  // G46:I46 (Next Due Subtitle)
             listOf(47, 48, 0, 9),  // A48:I48 (Closed Subs Header Banner)
-            listOf(48, 49, 0, 3),  // A49:C49 (Closed Name Header)
-            listOf(53, 54, 0, 18), // A54:R54 (Subscriptions Pointer Note)
+            listOf(54, 55, 0, 18), // A55:R55 (Subscriptions Pointer Note)
 
             // Trips Band
             listOf(55, 56, 0, 18), // A56:R56 Banner
@@ -357,7 +357,7 @@ object SheetProvisioner {
                 sheetId = dashboardSheetId,
                 rowIndex = 0,
                 colIndex = 0,
-                value = mapOf("stringValue" to "PERSONAL FINANCE DASHBOARD - 2026"),
+                value = mapOf("stringValue" to "PERSONAL FINANCE DASHBOARD - $year"),
                 format = mapOf(
                     "backgroundColor" to darkNavyBg,
                     "horizontalAlignment" to "CENTER",
@@ -1042,7 +1042,7 @@ object SheetProvisioner {
                 sheetId = dashboardSheetId,
                 rowIndex = 44,
                 colIndex = 0,
-                value = mapOf("formulaValue" to "=COUNTIF(Subscriptions!F4:F, TRUE)"),
+                value = mapOf("formulaValue" to DashboardFormulaBuilder.buildSubscriptionsActiveCountFormula()),
                 format = mapOf(
                     "backgroundColor" to whiteColor,
                     "horizontalAlignment" to "CENTER",
@@ -1065,7 +1065,7 @@ object SheetProvisioner {
                 sheetId = dashboardSheetId,
                 rowIndex = 44,
                 colIndex = 3,
-                value = mapOf("formulaValue" to "=IFERROR(SUMIF(Subscriptions!F4:F, TRUE, Subscriptions!I4:I), 0)"),
+                value = mapOf("formulaValue" to DashboardFormulaBuilder.buildSubscriptionsMonthlyEquivalentFormula()),
                 format = mapOf(
                     "backgroundColor" to whiteColor,
                     "horizontalAlignment" to "CENTER",
@@ -1088,7 +1088,7 @@ object SheetProvisioner {
                 sheetId = dashboardSheetId,
                 rowIndex = 44,
                 colIndex = 6,
-                value = mapOf("formulaValue" to """=IFERROR(INDEX(SORT(FILTER(Subscriptions!E4:E, Subscriptions!F4:F=TRUE, Subscriptions!E4:E>=TODAY()), 1, TRUE), 1), "")"""),
+                value = mapOf("formulaValue" to DashboardFormulaBuilder.buildNextDueSubscriptionFormula()),
                 format = mapOf(
                     "backgroundColor" to whiteColor,
                     "horizontalAlignment" to "CENTER",
@@ -1096,11 +1096,7 @@ object SheetProvisioner {
                     "textFormat" to mapOf(
                         "foregroundColor" to hexToColorMap("1465BF"),
                         "bold" to true,
-                        "fontSize" to 14
-                    ),
-                    "numberFormat" to mapOf(
-                        "type" to "DATE",
-                        "pattern" to "yyyy-mm-dd"
+                        "fontSize" to 12
                     )
                 )
             )
@@ -1156,9 +1152,8 @@ object SheetProvisioner {
         // Closed Subscriptions Table Headers (Row 49, index 48)
         val closedHeaders = listOf(
             0 to "Name",
-            3 to "Amount",
-            4 to "Cycle",
-            5 to "Due Date"
+            1 to "Closed Date",
+            2 to "Paid in Total (₹)"
         )
         closedHeaders.forEach { (col, title) ->
             requests.add(
@@ -1169,7 +1164,7 @@ object SheetProvisioner {
                     value = mapOf("stringValue" to title),
                     format = mapOf(
                         "backgroundColor" to lightSlateBg,
-                        "horizontalAlignment" to if (col == 3) "RIGHT" else if (col == 0) "LEFT" else "CENTER",
+                        "horizontalAlignment" to if (col == 2) "RIGHT" else if (col == 0) "LEFT" else "CENTER",
                         "verticalAlignment" to "MIDDLE",
                         "textFormat" to mapOf(
                             "foregroundColor" to darkTextColor,
@@ -1187,7 +1182,7 @@ object SheetProvisioner {
                 sheetId = dashboardSheetId,
                 rowIndex = 49,
                 colIndex = 0,
-                value = mapOf("formulaValue" to """=IFERROR(QUERY(Subscriptions!A4:M, "SELECT A, B, C, D WHERE F = FALSE AND A IS NOT NULL ORDER BY D DESC LIMIT 5", 0), "")"""),
+                value = mapOf("formulaValue" to DashboardFormulaBuilder.buildClosedSubscriptionsQueryFormula()),
                 format = mapOf(
                     "horizontalAlignment" to "LEFT",
                     "verticalAlignment" to "MIDDLE",
@@ -1196,11 +1191,11 @@ object SheetProvisioner {
             )
         )
 
-        // Subscriptions Pointer Note (Row 54, index 53, cell A54)
+        // Subscriptions Pointer Note (Row 55, index 54, cell A55)
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
-                rowIndex = 53,
+                rowIndex = 54,
                 colIndex = 0,
                 value = mapOf("stringValue" to "* Full list, payment history, and closed subscriptions on the Subscriptions tab"),
                 format = mapOf(
@@ -1466,8 +1461,12 @@ object SheetProvisioner {
             )
         )
 
-        // Non-trip categories for insights slices (exclude Trip / Travel category since trip is its own slice)
-        val insightsCategories = displayCategories.filter { !it.equals(CategoryConstants.CATEGORY_TRIP_TRAVEL, ignoreCase = true) }
+        // Non-trip living burn categories for insights slices (exclude Trip / Travel category since trip is its own slice, and exclude Savings and Transfer which are not living burn)
+        val insightsCategories = displayCategories.filter {
+            !it.equals(CategoryConstants.CATEGORY_TRIP_TRAVEL, ignoreCase = true) &&
+            !it.equals(SheetSchemaConstants.SAVINGS_KEYWORD, ignoreCase = true) &&
+            !it.equals("Transfer", ignoreCase = true)
+        }
         val insightsCount = insightsCategories.size + 1 // categories + 1 trip slice
 
         insightsCategories.forEachIndexed { idx, catName ->
@@ -2272,7 +2271,7 @@ object SheetProvisioner {
     fun buildSubscriptionRowValues(
         sub: Subscription,
         row1BasedIndex: Int,
-        year: Int = 2026
+        year: Int
     ): List<Any?> {
         val anchorDate = try {
             java.time.LocalDate.ofEpochDay(sub.anchorEpochDay).toString()
@@ -2285,6 +2284,16 @@ object SheetProvisioner {
         val paidMonthFormula = buildPaidThisMonthFormula(row1BasedIndex)
         val paidYearFormula = buildPaidThisYearFormula(year, row1BasedIndex)
         val lastPaidDateFormula = buildLastPaidDateFormula(year, row1BasedIndex)
+        val closedDate = if (sub.active || sub.closedDateEpochDay == null) {
+            ""
+        } else {
+            try {
+                java.time.LocalDate.ofEpochDay(sub.closedDateEpochDay).toString()
+            } catch (_: Exception) {
+                ""
+            }
+        }
+        val paidInTotalFormula = DashboardFormulaBuilder.buildPaidThisYearFormula(year, row1BasedIndex)
 
         return listOf(
             sub.name,
@@ -2299,6 +2308,8 @@ object SheetProvisioner {
             paidMonthFormula,
             paidYearFormula,
             lastPaidDateFormula,
+            closedDate,
+            paidInTotalFormula,
             sub.id
         )
     }
@@ -2308,7 +2319,7 @@ object SheetProvisioner {
         accounts: List<String> = emptyList(),
         rowCount: Int = 500,
         columnCount: Int = SheetSchemaConstants.SUBSCRIPTIONS_COLUMN_COUNT,
-        year: Int = 2026
+        year: Int
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
         val targetRows = maxOf(rowCount, 500)
@@ -2331,13 +2342,13 @@ object SheetProvisioner {
             )
         )
 
-        // Banner merge A1:L1 (Columns 0 to 12, excluding hidden Col M)
+        // Banner merge A1:N1 (Columns 0 to 14, excluding hidden Col O)
         val bannerRange = mapOf(
             "sheetId" to sheetId,
             "startRowIndex" to 0,
             "endRowIndex" to 1,
             "startColumnIndex" to 0,
-            "endColumnIndex" to 12
+            "endColumnIndex" to 14
         )
         requests.add(mapOf("unmergeCells" to mapOf("range" to bannerRange)))
         requests.add(mapOf("mergeCells" to mapOf("range" to bannerRange, "mergeType" to "MERGE_ALL")))
@@ -2385,11 +2396,45 @@ object SheetProvisioner {
             )
         )
 
+        // Row 2 Subtitle Note Banner A2:N2
+        val subBannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 14
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to subBannerRange)))
+        requests.add(mapOf("mergeCells" to mapOf("range" to subBannerRange, "mergeType" to "MERGE_ALL")))
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf("sheetId" to sheetId, "rowIndex" to 1, "columnIndex" to 0),
+                    "rows" to listOf(
+                        mapOf(
+                            "values" to listOf(
+                                mapOf(
+                                    "userEnteredValue" to mapOf("stringValue" to "* Paid in total covers this workbook's year only. Recurring charges are recorded per month tab."),
+                                    "userEnteredFormat" to mapOf(
+                                        "textFormat" to mapOf("fontSize" to 9, "italic" to true, "foregroundColor" to grayTextColor),
+                                        "horizontalAlignment" to "CENTER",
+                                        "verticalAlignment" to "MIDDLE"
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
+
         // Column headers Row 3 (index 2)
         val headers = listOf(
             "Name", "Expected Amount (₹)", "Frequency", "Due Date",
             "Default Account", "Active", "Note", "Keywords",
-            "Per Month (₹)", "Paid This Month (₹)", "Paid This Year (₹)", "Last Paid Date", "Subscription ID"
+            "Per Month (₹)", "Paid This Month (₹)", "Paid This Year (₹)", "Last Paid Date",
+            "Closed Date", "Paid in Total (₹)", "Subscription ID"
         )
         val row3Values = headers.map { header ->
             mapOf(
@@ -2454,7 +2499,8 @@ object SheetProvisioner {
         // Column widths
         val widths = listOf(
             0 to 160, 1 to 130, 2 to 100, 3 to 110, 4 to 120,
-            5 to 80, 6 to 150, 7 to 150, 8 to 120, 9 to 140, 10 to 140, 11 to 120, 12 to 130
+            5 to 80, 6 to 150, 7 to 150, 8 to 120, 9 to 140, 10 to 140, 11 to 120,
+            12 to 110, 13 to 140, 14 to 130
         )
         widths.forEach { (colIdx, px) ->
             requests.add(
@@ -2483,8 +2529,12 @@ object SheetProvisioner {
         requests.add(createNumberFormatRequest(sheetId, 10, 11, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
         // Last Paid Date: Col L (11) -> DATE with blank on zero
         requests.add(createNumberFormatRequest(sheetId, 11, 12, "DATE", "yyyy-mm-dd;;", "CENTER", targetRows))
+        // Closed Date: Col M (12) -> DATE with blank on zero
+        requests.add(createNumberFormatRequest(sheetId, 12, 13, "DATE", "yyyy-mm-dd;;", "CENTER", targetRows))
+        // Paid in Total: Col N (13) -> CURRENCY
+        requests.add(createNumberFormatRequest(sheetId, 13, 14, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
 
-        // Hide Subscription ID (Col M, index 12)
+        // Hide Subscription ID (Col O, index 14)
         requests.add(
             mapOf(
                 "updateDimensionProperties" to mapOf(
@@ -2508,7 +2558,7 @@ object SheetProvisioner {
         repaidAmount: Double = 0.0,
         topCategory: String = "",
         row1BasedIndex: Int,
-        year: Int = 2026
+        year: Int
     ): List<Any?> {
         val startDateStr = trip.startDateEpochDay?.let {
             try { java.time.LocalDate.ofEpochDay(it).toString() } catch (_: Exception) { "" }
@@ -2541,7 +2591,7 @@ object SheetProvisioner {
         sheetId: Int,
         rowCount: Int = 200,
         columnCount: Int = SheetSchemaConstants.TRIPS_COLUMN_COUNT,
-        year: Int = 2026
+        year: Int
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
         val targetRows = maxOf(rowCount, 200)
@@ -2606,6 +2656,39 @@ object SheetProvisioner {
                                             "bold" to true,
                                             "foregroundColor" to whiteColor
                                         ),
+                                        "horizontalAlignment" to "CENTER",
+                                        "verticalAlignment" to "MIDDLE"
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
+
+        // Row 2 Subtitle Note Banner A2:J2
+        val tripSubBannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 1,
+            "endRowIndex" to 2,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 10
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to tripSubBannerRange)))
+        requests.add(mapOf("mergeCells" to mapOf("range" to tripSubBannerRange, "mergeType" to "MERGE_ALL")))
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf("sheetId" to sheetId, "rowIndex" to 1, "columnIndex" to 0),
+                    "rows" to listOf(
+                        mapOf(
+                            "values" to listOf(
+                                mapOf(
+                                    "userEnteredValue" to mapOf("stringValue" to "* Trip sums exclude Void, Savings, Transfer. The sheet formulas cannot apply dynamic category exclusions from Settings or rows still in review (Needs Review)."),
+                                    "userEnteredFormat" to mapOf(
+                                        "textFormat" to mapOf("fontSize" to 9, "italic" to true, "foregroundColor" to grayTextColor),
                                         "horizontalAlignment" to "CENTER",
                                         "verticalAlignment" to "MIDDLE"
                                     )
