@@ -53,10 +53,26 @@ class TripModeLeakTest {
             activeFlow.value = null
         }
 
+        override suspend fun clearActiveFlagsWithDate(endDateEpochDay: Long, updatedAt: Long) {
+            tags.values.filter { it.isActive }.forEach { tag ->
+                tags[tag.id] = tag.copy(isActive = false, endDateEpochDay = endDateEpochDay, updatedAt = updatedAt, dirty = 1)
+            }
+            activeFlow.value = null
+        }
+
         override suspend fun setActiveFlag(id: String, updatedAt: Long) {
             clearActiveFlags(updatedAt)
             tags[id]?.let { tag ->
                 val updated = tag.copy(isActive = true, updatedAt = updatedAt, dirty = 1)
+                tags[id] = updated
+                activeFlow.value = updated
+            }
+        }
+
+        override suspend fun setActiveFlagWithDate(id: String, startDateEpochDay: Long, updatedAt: Long) {
+            clearActiveFlagsWithDate(startDateEpochDay, updatedAt)
+            tags[id]?.let { tag ->
+                val updated = tag.copy(isActive = true, startDateEpochDay = tag.startDateEpochDay ?: startDateEpochDay, endDateEpochDay = null, updatedAt = updatedAt, dirty = 1)
                 tags[id] = updated
                 activeFlow.value = updated
             }

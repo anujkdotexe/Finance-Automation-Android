@@ -23,6 +23,7 @@ object ChartManager {
 
     const val COLUMN_CHART_TITLE = "Full Year Spending by Month (Personal Burn vs Total Outflow)"
     const val DOUGHNUT_CHART_TITLE = "Current Month Spend by Category"
+    const val INSIGHTS_CHART_TITLE = "Current Month Spend (Categories & Trips)"
 
     /**
      * Builds updateSpreadsheetProperties request to enforce en_GB locale and Asia/Kolkata timezone.
@@ -115,16 +116,19 @@ object ChartManager {
     }
 
     /**
-     * Builds addChart batchUpdate requests for the Clustered Column Chart and Doughnut Chart.
+     * Builds addChart batchUpdate requests for the Clustered Column Chart, Doughnut Chart, and Insights Chart.
      * The Doughnut Chart dynamically scales its row range to match [categoryCount] (minimum 10 rows).
+     * The Insights Chart shows Categories & Trips breakdown anchored at A65.
      */
     fun buildChartRequests(
         dashboardSheetId: Int,
         columnChartColorPrimary: Map<String, Float>,
         columnChartColorSecondary: Map<String, Float>,
-        categoryCount: Int = 10
+        categoryCount: Int = 10,
+        insightsItemCount: Int = 11
     ): List<Map<String, Any?>> {
         val categoryEndRow = 5 + maxOf(10, categoryCount)
+        val insightsEndRow = 64 + maxOf(10, insightsItemCount)
         return listOf(
             // 1. Clustered Column Chart (A7, 520x266)
             mapOf(
@@ -250,6 +254,57 @@ object ChartManager {
                                     "columnIndex" to 10
                                 ),
                                 "widthPixels" to 491,
+                                "heightPixels" to 266
+                            )
+                        )
+                    )
+                )
+            ),
+            // 3. Insights Doughnut Chart (A65, 520x266) - Categories & Trips Single-Slice Rule
+            mapOf(
+                "addChart" to mapOf(
+                    "chart" to mapOf(
+                        "spec" to mapOf(
+                            "title" to INSIGHTS_CHART_TITLE,
+                            "pieChart" to mapOf(
+                                "legendPosition" to "RIGHT_LEGEND",
+                                "pieHole" to 0.5,
+                                "domain" to mapOf(
+                                    "sourceRange" to mapOf(
+                                        "sources" to listOf(
+                                            mapOf(
+                                                "sheetId" to dashboardSheetId,
+                                                "startRowIndex" to 64,
+                                                "endRowIndex" to insightsEndRow,
+                                                "startColumnIndex" to 20,
+                                                "endColumnIndex" to 21
+                                            )
+                                        )
+                                    )
+                                ),
+                                "series" to mapOf(
+                                    "sourceRange" to mapOf(
+                                        "sources" to listOf(
+                                            mapOf(
+                                                "sheetId" to dashboardSheetId,
+                                                "startRowIndex" to 64,
+                                                "endRowIndex" to insightsEndRow,
+                                                "startColumnIndex" to 21,
+                                                "endColumnIndex" to 22
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+                        "position" to mapOf(
+                            "overlayPosition" to mapOf(
+                                "anchorCell" to mapOf(
+                                    "sheetId" to dashboardSheetId,
+                                    "rowIndex" to 64,
+                                    "columnIndex" to 0
+                                ),
+                                "widthPixels" to 520,
                                 "heightPixels" to 266
                             )
                         )

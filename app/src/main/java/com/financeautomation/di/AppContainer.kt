@@ -123,6 +123,7 @@ interface AppContainer {
     val connectivityObserver: com.financeautomation.core.utils.ConnectivityObserver
     val subscriptionRepository: SubscriptionRepository
     val subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator
+    val tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator
     val budgetRepository: BudgetRepository
     val appLockManager: com.financeautomation.domain.security.AppLockManager
     val privacySettings: com.financeautomation.domain.security.PrivacySettings
@@ -420,6 +421,17 @@ class DefaultAppContainer(
             subscriptionRepository = subscriptionRepository,
             preferencesRepository = preferencesRepository,
             accountRepository = accountRepository,
+            syncConfigUseCase = syncConfigUseCase,
+            ioDispatcher = ioDispatcher
+        )
+    }
+
+    override val tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator by lazy {
+        com.financeautomation.data.remote.TripsSheetSyncCoordinator(
+            googleSheetsClient = googleSheetsClient,
+            tripTagRepository = tripTagRepository,
+            preferencesRepository = preferencesRepository,
+            transactionRepository = transactionRepository,
             syncConfigUseCase = syncConfigUseCase,
             ioDispatcher = ioDispatcher
         )

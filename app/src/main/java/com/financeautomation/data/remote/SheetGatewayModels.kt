@@ -72,6 +72,24 @@ data class SheetSubscriptionRow(
 )
 
 /**
+ * A row from the Trips tab (Cols A to K).
+ */
+data class SheetTripRow(
+    val rowNumber: Int,
+    val name: String,
+    val startDateString: String = "",
+    val endDateString: String = "",
+    val status: String = "Active",
+    val days: Int? = null,
+    val totalPaid: Double? = null,
+    val myShare: Double? = null,
+    val owedToMe: Double? = null,
+    val repaid: Double? = null,
+    val topCategory: String = "",
+    val id: String? = null
+)
+
+/**
  * A row from Table 2 (Cols N to U plus AE hidden UUID) carrying its 1-based sheet row coordinate.
  */
 data class LedgerInflowRow(

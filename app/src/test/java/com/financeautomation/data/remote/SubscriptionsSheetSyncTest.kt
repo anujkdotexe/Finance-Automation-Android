@@ -212,7 +212,7 @@ class SubscriptionsSheetSyncTest {
             active = true
         )
         val row = SheetProvisioner.buildSubscriptionRowValues(sub, row1BasedIndex = 4, year = 2026)
-        assertEquals(12, row.size)
+        assertEquals(13, row.size)
         assertEquals("Spotify", row[0])
         assertEquals(119.0, row[1])
         assertEquals("Monthly", row[2])
@@ -221,10 +221,11 @@ class SubscriptionsSheetSyncTest {
         assertEquals("TRUE", row[5])
         assertEquals("Premium individual", row[6])
         assertEquals("spotify,music", row[7])
-        assertTrue((row[8] as String).contains("!G4:G")) // Paid this month formula
-        assertTrue((row[9] as String).contains("'Jan26'!G4:G")) // Paid this year formula
-        assertTrue((row[10] as String).contains("'Jan26'!A4:A")) // Last paid date formula
-        assertEquals("sub_spotify", row[11]) // ID at index 11 (Column L)
+        assertTrue((row[8] as String).contains("B4")) // Per month helper formula
+        assertTrue((row[9] as String).contains("!G4:G")) // Paid this month formula
+        assertTrue((row[10] as String).contains("'Jan26'!G4:G")) // Paid this year formula
+        assertTrue((row[11] as String).contains("'Jan26'!A4:A")) // Last paid date formula
+        assertEquals("sub_spotify", row[12]) // ID at index 12 (Column M)
     }
 
     @Test
@@ -310,7 +311,7 @@ class SubscriptionsSheetSyncTest {
     }
 
     @Test
-    fun syncSubscriptionsTab_userAddedRowWithoutId_generatesUuidAndWritesBackToCellL() = runBlocking {
+    fun syncSubscriptionsTab_userAddedRowWithoutId_generatesUuidAndWritesBackToCellM() = runBlocking {
         fakeSheetsClient.subscriptionsRows = listOf(
             SheetSubscriptionRow(
                 rowNumber = 5,
@@ -337,8 +338,8 @@ class SubscriptionsSheetSyncTest {
         assertEquals(1500.0, gymSub.amount)
         assertEquals("Gold gym", gymSub.note)
 
-        // Cell L5 must have been written back with the generated ID
-        val writtenId = fakeSheetsClient.updatedCells["${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}!L5"]
+        // Cell M5 must have been written back with the generated ID
+        val writtenId = fakeSheetsClient.updatedCells["${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}!M5"]
         assertEquals(gymSub.id, writtenId)
     }
 

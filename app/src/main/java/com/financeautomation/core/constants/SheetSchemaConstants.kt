@@ -162,8 +162,8 @@ object SheetSchemaConstants {
     const val SUBSCRIPTIONS_TAB_NAME: String = "Subscriptions"
     const val SUBSCRIPTIONS_HEADER_ROW_INDEX: Int = 2 // Row 3
     const val SUBSCRIPTIONS_DATA_START_ROW_INDEX: Int = 3 // Row 4
-    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 12
-    const val SUBSCRIPTIONS_RANGE: String = "A4:L"
+    const val SUBSCRIPTIONS_COLUMN_COUNT: Int = 13
+    const val SUBSCRIPTIONS_RANGE: String = "A4:M"
 
     const val COL_INDEX_SUB_NAME: Int = 0
     const val COL_INDEX_SUB_AMOUNT: Int = 1
@@ -173,11 +173,32 @@ object SheetSchemaConstants {
     const val COL_INDEX_SUB_ACTIVE: Int = 5
     const val COL_INDEX_SUB_NOTE: Int = 6
     const val COL_INDEX_SUB_KEYWORDS: Int = 7
-    const val COL_INDEX_SUB_PAID_MONTH: Int = 8
-    const val COL_INDEX_SUB_PAID_YEAR: Int = 9
-    const val COL_INDEX_SUB_LAST_PAID_DATE: Int = 10
-    const val COL_INDEX_SUB_ID: Int = 11
-    const val COL_LETTER_SUB_ID: String = "L"
+    const val COL_INDEX_SUB_PER_MONTH: Int = 8
+    const val COL_INDEX_SUB_PAID_MONTH: Int = 9
+    const val COL_INDEX_SUB_PAID_YEAR: Int = 10
+    const val COL_INDEX_SUB_LAST_PAID_DATE: Int = 11
+    const val COL_INDEX_SUB_ID: Int = 12
+    const val COL_LETTER_SUB_ID: String = "M"
+
+    // Trips Tab Constants
+    const val TRIPS_TAB_NAME: String = "Trips"
+    const val TRIPS_HEADER_ROW_INDEX: Int = 2 // Row 3
+    const val TRIPS_DATA_START_ROW_INDEX: Int = 3 // Row 4
+    const val TRIPS_COLUMN_COUNT: Int = 11
+    const val TRIPS_RANGE: String = "A4:K"
+
+    const val COL_INDEX_TRIP_NAME: Int = 0
+    const val COL_INDEX_TRIP_START_DATE: Int = 1
+    const val COL_INDEX_TRIP_END_DATE: Int = 2
+    const val COL_INDEX_TRIP_STATUS: Int = 3
+    const val COL_INDEX_TRIP_DAYS: Int = 4
+    const val COL_INDEX_TRIP_TOTAL_PAID: Int = 5
+    const val COL_INDEX_TRIP_MY_SHARE: Int = 6
+    const val COL_INDEX_TRIP_OWED_TO_ME: Int = 7
+    const val COL_INDEX_TRIP_REPAID: Int = 8
+    const val COL_INDEX_TRIP_TOP_CATEGORY: Int = 9
+    const val COL_INDEX_TRIP_ID: Int = 10
+    const val COL_LETTER_TRIP_ID: String = "K"
 
     fun columnLetter(index: Int): String {
         require(index in 0 until TOTAL_COLUMN_COUNT) {

@@ -85,7 +85,7 @@ import java.io.File
         InflowEntity::class,
         BudgetEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class FinanceDatabase : RoomDatabase() {
@@ -132,6 +132,8 @@ abstract class FinanceDatabase : RoomDatabase() {
         val MIGRATION_11_12 = DatabaseMigrations.MIGRATION_11_12
         val MIGRATION_12_13 = DatabaseMigrations.MIGRATION_12_13
         val MIGRATION_13_14 = DatabaseMigrations.MIGRATION_13_14
+        val MIGRATION_14_15 = DatabaseMigrations.MIGRATION_14_15
+        val MIGRATION_15_16 = DatabaseMigrations.MIGRATION_15_16
 
         fun getInstance(context: Context): FinanceDatabase {
             return INSTANCE ?: synchronized(this) {

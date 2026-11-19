@@ -218,6 +218,38 @@ object DatabaseMigrations {
         }
     }
 
+    val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `trip_tags` ADD COLUMN `startDateEpochDay` INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE `trip_tags` ADD COLUMN `endDateEpochDay` INTEGER DEFAULT NULL")
+            db.execSQL("ALTER TABLE `subscriptions` ADD COLUMN `closedDateEpochDay` INTEGER DEFAULT NULL")
+
+            db.execSQL("""
+                UPDATE trip_tags
+                SET startDateEpochDay = COALESCE(
+                    (SELECT MIN(dateSerial) - 25569 FROM transactions WHERE transactions.tag = trip_tags.name),
+                    createdAt / 86400000
+                )
+                WHERE startDateEpochDay IS NULL
+            """.trimIndent())
+
+            db.execSQL("""
+                UPDATE trip_tags
+                SET endDateEpochDay = COALESCE(
+                    (SELECT MAX(dateSerial) - 25569 FROM transactions WHERE transactions.tag = trip_tags.name),
+                    CASE WHEN updatedAt > 0 THEN updatedAt / 86400000 ELSE createdAt / 86400000 END
+                )
+                WHERE isActive = 0 AND endDateEpochDay IS NULL
+            """.trimIndent())
+
+            db.execSQL("""
+                UPDATE subscriptions
+                SET closedDateEpochDay = CASE WHEN updatedAt > 0 THEN updatedAt / 86400000 ELSE createdAt / 86400000 END
+                WHERE active = 0 AND closedDateEpochDay IS NULL
+            """.trimIndent())
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_2_3,
         MIGRATION_3_4,
@@ -231,7 +263,8 @@ object DatabaseMigrations {
         MIGRATION_11_12,
         MIGRATION_12_13,
         MIGRATION_13_14,
-        MIGRATION_14_15
+        MIGRATION_14_15,
+        MIGRATION_15_16
     )
 }
 

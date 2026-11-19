@@ -275,7 +275,41 @@ object SheetProvisioner {
             // Active Settlements
             listOf(23, 24, 0, 12), // A24:L24 (Active Settlements Banner)
             listOf(24, 25, 0, 6),  // A25:F25 (They Owe Me)
-            listOf(24, 25, 7, 12)  // H25:L25 (I Owe People)
+            listOf(24, 25, 7, 12), // H25:L25 (I Owe People)
+
+            // Subscriptions Band
+            listOf(42, 43, 0, 18), // A43:R43 Banner
+            listOf(43, 44, 0, 3),  // A44:C44 (Active Subs Header)
+            listOf(44, 45, 0, 3),  // A45:C45 (Active Subs Value)
+            listOf(45, 46, 0, 3),  // A46:C46 (Active Subs Subtitle)
+            listOf(43, 44, 3, 6),  // D44:F44 (Monthly Eq Header)
+            listOf(44, 45, 3, 6),  // D45:F45 (Monthly Eq Value)
+            listOf(45, 46, 3, 6),  // D46:F46 (Monthly Eq Subtitle)
+            listOf(43, 44, 6, 9),  // G44:I44 (Next Due Header)
+            listOf(44, 45, 6, 9),  // G45:I45 (Next Due Value)
+            listOf(45, 46, 6, 9),  // G46:I46 (Next Due Subtitle)
+            listOf(47, 48, 0, 9),  // A48:I48 (Closed Subs Header Banner)
+            listOf(48, 49, 0, 3),  // A49:C49 (Closed Name Header)
+            listOf(53, 54, 0, 18), // A54:R54 (Subscriptions Pointer Note)
+
+            // Trips Band
+            listOf(55, 56, 0, 18), // A56:R56 Banner
+            listOf(56, 57, 0, 3),  // A57:C57 (Active Trip Header)
+            listOf(57, 58, 0, 3),  // A58:C58 (Active Trip Value)
+            listOf(58, 59, 0, 3),  // A59:C59 (Active Trip Subtitle)
+            listOf(56, 57, 3, 6),  // D57:F57 (Active Spend Header)
+            listOf(57, 58, 3, 6),  // D58:F58 (Active Spend Value)
+            listOf(58, 59, 3, 6),  // D59:F59 (Active Spend Subtitle)
+            listOf(56, 57, 6, 9),  // G57:I57 (Trip Spend Month Header)
+            listOf(57, 58, 6, 9),  // G58:I58 (Trip Spend Month Value)
+            listOf(58, 59, 6, 9),  // G59:I59 (Trip Spend Month Subtitle)
+            listOf(56, 57, 9, 12), // J57:L57 (Trips Year Header)
+            listOf(57, 58, 9, 12), // J58:L58 (Trips Year Value)
+            listOf(58, 59, 9, 12), // J59:L59 (Trips Year Subtitle)
+            listOf(60, 61, 0, 18), // A61:R61 (Trips Pointer Note)
+
+            // Insights Band
+            listOf(63, 64, 0, 18)  // A64:R64 Banner
         )
 
         mergeRanges.forEach { r ->
@@ -948,13 +982,578 @@ object SheetProvisioner {
             )
         )
 
-        // 11. Charts: Clustered Column Chart (A7, 520x266) & Doughnut Chart (K7, 491x266)
+        // 11. Subscriptions Band (Rows 43 to 54)
+        // Row 43 Banner (0-based 42)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 42,
+                colIndex = 0,
+                value = mapOf("stringValue" to "SUBSCRIPTIONS & RECURRING EXPENSES"),
+                format = mapOf(
+                    "backgroundColor" to settlementsBannerBg,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to whiteColor,
+                        "bold" to true,
+                        "fontSize" to 11
+                    )
+                )
+            )
+        )
+
+        // KPI Card Boxes (Rows 44 to 46)
+        listOf(0, 3, 6).forEach { startCol ->
+            requests.add(outerBordersRequest(dashboardSheetId, startRow = 43, endRow = 46, startCol = startCol, endCol = startCol + 3))
+        }
+
+        // Subscriptions KPI Headers (Row 44, index 43)
+        val subHeaders = listOf(
+            0 to "ACTIVE SUBSCRIPTIONS",
+            3 to "MONTHLY EQUIVALENT",
+            6 to "NEXT DUE"
+        )
+        subHeaders.forEach { (col, title) ->
+            requests.add(
+                createCellRequest(
+                    sheetId = dashboardSheetId,
+                    rowIndex = 43,
+                    colIndex = col,
+                    value = mapOf("stringValue" to title),
+                    format = mapOf(
+                        "backgroundColor" to lightSlateBg,
+                        "horizontalAlignment" to "CENTER",
+                        "verticalAlignment" to "MIDDLE",
+                        "textFormat" to mapOf(
+                            "foregroundColor" to darkTextColor,
+                            "bold" to true,
+                            "fontSize" to 8
+                        )
+                    )
+                )
+            )
+        }
+
+        // Subscriptions KPI Values (Row 45, index 44)
+        // 1. Active Subscriptions Count (A45)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 44,
+                colIndex = 0,
+                value = mapOf("formulaValue" to "=COUNTIF(Subscriptions!F4:F, TRUE)"),
+                format = mapOf(
+                    "backgroundColor" to whiteColor,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to purpleColor,
+                        "bold" to true,
+                        "fontSize" to 16
+                    ),
+                    "numberFormat" to mapOf(
+                        "type" to "NUMBER",
+                        "pattern" to "#,##0"
+                    )
+                )
+            )
+        )
+        // 2. Monthly Equivalent (D45)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 44,
+                colIndex = 3,
+                value = mapOf("formulaValue" to "=IFERROR(SUMIF(Subscriptions!F4:F, TRUE, Subscriptions!I4:I), 0)"),
+                format = mapOf(
+                    "backgroundColor" to whiteColor,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to darkTextColor,
+                        "bold" to true,
+                        "fontSize" to 16
+                    ),
+                    "numberFormat" to mapOf(
+                        "type" to "CURRENCY",
+                        "pattern" to CURRENCY_PATTERN
+                    )
+                )
+            )
+        )
+        // 3. Next Due Date (G45)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 44,
+                colIndex = 6,
+                value = mapOf("formulaValue" to """=IFERROR(INDEX(SORT(FILTER(Subscriptions!E4:E, Subscriptions!F4:F=TRUE, Subscriptions!E4:E>=TODAY()), 1, TRUE), 1), "")"""),
+                format = mapOf(
+                    "backgroundColor" to whiteColor,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to hexToColorMap("1465BF"),
+                        "bold" to true,
+                        "fontSize" to 14
+                    ),
+                    "numberFormat" to mapOf(
+                        "type" to "DATE",
+                        "pattern" to "yyyy-mm-dd"
+                    )
+                )
+            )
+        )
+
+        // Subscriptions KPI Subtitles (Row 46, index 45)
+        val subSubtitles = listOf(
+            0 to "Currently Active",
+            3 to "₹ / month (normalized)",
+            6 to "Upcoming Renewal"
+        )
+        subSubtitles.forEach { (col, sub) ->
+            requests.add(
+                createCellRequest(
+                    sheetId = dashboardSheetId,
+                    rowIndex = 45,
+                    colIndex = col,
+                    value = mapOf("stringValue" to sub),
+                    format = mapOf(
+                        "backgroundColor" to whiteColor,
+                        "horizontalAlignment" to "CENTER",
+                        "verticalAlignment" to "MIDDLE",
+                        "textFormat" to mapOf(
+                            "foregroundColor" to grayTextColor,
+                            "bold" to false,
+                            "fontSize" to 8
+                        )
+                    )
+                )
+            )
+        }
+
+        // Closed Subscriptions Header Banner (Row 48, index 47)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 47,
+                colIndex = 0,
+                value = mapOf("stringValue" to "RECENTLY CLOSED (MAX 5)"),
+                format = mapOf(
+                    "backgroundColor" to monthlyHeaderBlueBg,
+                    "horizontalAlignment" to "LEFT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to whiteColor,
+                        "bold" to true,
+                        "fontSize" to 9
+                    )
+                )
+            )
+        )
+
+        // Closed Subscriptions Table Headers (Row 49, index 48)
+        val closedHeaders = listOf(
+            0 to "Name",
+            3 to "Amount",
+            4 to "Cycle",
+            5 to "Due Date"
+        )
+        closedHeaders.forEach { (col, title) ->
+            requests.add(
+                createCellRequest(
+                    sheetId = dashboardSheetId,
+                    rowIndex = 48,
+                    colIndex = col,
+                    value = mapOf("stringValue" to title),
+                    format = mapOf(
+                        "backgroundColor" to lightSlateBg,
+                        "horizontalAlignment" to if (col == 3) "RIGHT" else if (col == 0) "LEFT" else "CENTER",
+                        "verticalAlignment" to "MIDDLE",
+                        "textFormat" to mapOf(
+                            "foregroundColor" to darkTextColor,
+                            "bold" to true,
+                            "fontSize" to 8
+                        )
+                    )
+                )
+            )
+        }
+
+        // Closed Subscriptions Query Formula (Row 50, index 49, cell A50)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 49,
+                colIndex = 0,
+                value = mapOf("formulaValue" to """=IFERROR(QUERY(Subscriptions!A4:M, "SELECT A, B, C, D WHERE F = FALSE AND A IS NOT NULL ORDER BY D DESC LIMIT 5", 0), "")"""),
+                format = mapOf(
+                    "horizontalAlignment" to "LEFT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf("fontSize" to 10)
+                )
+            )
+        )
+
+        // Subscriptions Pointer Note (Row 54, index 53, cell A54)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 53,
+                colIndex = 0,
+                value = mapOf("stringValue" to "* Full list, payment history, and closed subscriptions on the Subscriptions tab"),
+                format = mapOf(
+                    "horizontalAlignment" to "LEFT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to grayTextColor,
+                        "italic" to true,
+                        "fontSize" to 8
+                    )
+                )
+            )
+        )
+
+        // 12. Trips Band (Rows 56 to 61)
+        // Row 56 Banner (0-based 55)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 55,
+                colIndex = 0,
+                value = mapOf("stringValue" to "TRIPS & EXPEDITIONS SUMMARY"),
+                format = mapOf(
+                    "backgroundColor" to settlementsBannerBg,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to whiteColor,
+                        "bold" to true,
+                        "fontSize" to 11
+                    )
+                )
+            )
+        )
+
+        // KPI Card Boxes (Rows 57 to 59)
+        listOf(0, 3, 6, 9).forEach { startCol ->
+            requests.add(outerBordersRequest(dashboardSheetId, startRow = 56, endRow = 59, startCol = startCol, endCol = startCol + 3))
+        }
+
+        // Trips KPI Headers (Row 57, index 56)
+        val tripHeaders = listOf(
+            0 to "ACTIVE TRIP",
+            3 to "ACTIVE TRIP SPEND",
+            6 to "TRIP SPEND THIS MONTH",
+            9 to "TRIPS THIS YEAR"
+        )
+        tripHeaders.forEach { (col, title) ->
+            requests.add(
+                createCellRequest(
+                    sheetId = dashboardSheetId,
+                    rowIndex = 56,
+                    colIndex = col,
+                    value = mapOf("stringValue" to title),
+                    format = mapOf(
+                        "backgroundColor" to lightSlateBg,
+                        "horizontalAlignment" to "CENTER",
+                        "verticalAlignment" to "MIDDLE",
+                        "textFormat" to mapOf(
+                            "foregroundColor" to darkTextColor,
+                            "bold" to true,
+                            "fontSize" to 8
+                        )
+                    )
+                )
+            )
+        }
+
+        // Trips KPI Values (Row 58, index 57)
+        // 1. Active Trip Name (A58)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 57,
+                colIndex = 0,
+                value = mapOf("formulaValue" to """=IFERROR(INDEX(FILTER(Trips!A4:A, Trips!D4:D="Active"), 1), "None")"""),
+                format = mapOf(
+                    "backgroundColor" to whiteColor,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to hexToColorMap("1465BF"),
+                        "bold" to true,
+                        "fontSize" to 14
+                    )
+                )
+            )
+        )
+        // 2. Active Trip Spend (D58)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 57,
+                colIndex = 3,
+                value = mapOf("formulaValue" to """=IFERROR(INDEX(FILTER(Trips!F4:F, Trips!D4:D="Active"), 1), 0)"""),
+                format = mapOf(
+                    "backgroundColor" to whiteColor,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to darkTextColor,
+                        "bold" to true,
+                        "fontSize" to 16
+                    ),
+                    "numberFormat" to mapOf(
+                        "type" to "CURRENCY",
+                        "pattern" to CURRENCY_PATTERN
+                    )
+                )
+            )
+        )
+        // 3. Trip Spend This Month (G58) - excludes Void, Savings, Transfer
+        val tripSpendMonthFormula = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 57,
+                colIndex = 6,
+                value = mapOf("formulaValue" to tripSpendMonthFormula),
+                format = mapOf(
+                    "backgroundColor" to whiteColor,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to burnRedColor,
+                        "bold" to true,
+                        "fontSize" to 16
+                    ),
+                    "numberFormat" to mapOf(
+                        "type" to "CURRENCY",
+                        "pattern" to CURRENCY_PATTERN
+                    )
+                )
+            )
+        )
+        // 4. Trips This Year (J58)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 57,
+                colIndex = 9,
+                value = mapOf("formulaValue" to """=IFERROR(COUNTA(FILTER(Trips!A4:A, Trips!A4:A<>"")), 0)"""),
+                format = mapOf(
+                    "backgroundColor" to whiteColor,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to darkTextColor,
+                        "bold" to true,
+                        "fontSize" to 16
+                    ),
+                    "numberFormat" to mapOf(
+                        "type" to "NUMBER",
+                        "pattern" to "#,##0"
+                    )
+                )
+            )
+        )
+
+        // Trips KPI Subtitles (Row 59, index 58)
+        val tripSubtitles = listOf(
+            0 to "Current Expedition",
+            3 to "Total Paid",
+            6 to "My Share (excl. Void/Savings)",
+            9 to "Total Tracked"
+        )
+        tripSubtitles.forEach { (col, sub) ->
+            requests.add(
+                createCellRequest(
+                    sheetId = dashboardSheetId,
+                    rowIndex = 58,
+                    colIndex = col,
+                    value = mapOf("stringValue" to sub),
+                    format = mapOf(
+                        "backgroundColor" to whiteColor,
+                        "horizontalAlignment" to "CENTER",
+                        "verticalAlignment" to "MIDDLE",
+                        "textFormat" to mapOf(
+                            "foregroundColor" to grayTextColor,
+                            "bold" to false,
+                            "fontSize" to 8
+                        )
+                    )
+                )
+            )
+        }
+
+        // Trips Pointer Note (Row 61, index 60, cell A61)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 60,
+                colIndex = 0,
+                value = mapOf("stringValue" to "* Full breakdown, days, companion settlements, and top categories on the Trips tab"),
+                format = mapOf(
+                    "horizontalAlignment" to "LEFT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to grayTextColor,
+                        "italic" to true,
+                        "fontSize" to 8
+                    )
+                )
+            )
+        )
+
+        // 13. Insights Band (Rows 64 to 90) - Single-Slice Trip Rule
+        // Row 64 Banner (0-based 63)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 63,
+                colIndex = 0,
+                value = mapOf("stringValue" to "MONTHLY SPEND BREAKDOWN (CATEGORIES & TRIPS)"),
+                format = mapOf(
+                    "backgroundColor" to settlementsBannerBg,
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to whiteColor,
+                        "bold" to true,
+                        "fontSize" to 11
+                    )
+                )
+            )
+        )
+
+        // Insights Table Header (Row 64, index 63, Cols U-V)
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 63,
+                colIndex = 20,
+                value = mapOf("stringValue" to "Item / Slice"),
+                format = mapOf(
+                    "backgroundColor" to lightSlateBg,
+                    "horizontalAlignment" to "LEFT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to darkTextColor,
+                        "bold" to true,
+                        "fontSize" to 9
+                    )
+                )
+            )
+        )
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 63,
+                colIndex = 21,
+                value = mapOf("stringValue" to "Spend"),
+                format = mapOf(
+                    "backgroundColor" to monthlyHeaderBlueBg,
+                    "horizontalAlignment" to "RIGHT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf(
+                        "foregroundColor" to whiteColor,
+                        "bold" to true,
+                        "fontSize" to 9
+                    )
+                )
+            )
+        )
+
+        // Non-trip categories for insights slices (exclude Trip / Travel category since trip is its own slice)
+        val insightsCategories = displayCategories.filter { !it.equals(CategoryConstants.CATEGORY_TRIP_TRAVEL, ignoreCase = true) }
+        val insightsCount = insightsCategories.size + 1 // categories + 1 trip slice
+
+        insightsCategories.forEachIndexed { idx, catName ->
+            val rowNum = 65 + idx
+            // Item Name (Col U)
+            requests.add(
+                createCellRequest(
+                    sheetId = dashboardSheetId,
+                    rowIndex = rowNum - 1,
+                    colIndex = 20,
+                    value = mapOf("stringValue" to catName),
+                    format = mapOf(
+                        "backgroundColor" to bodyAltRowBg,
+                        "horizontalAlignment" to "LEFT",
+                        "verticalAlignment" to "MIDDLE",
+                        "textFormat" to mapOf("fontSize" to 10)
+                    )
+                )
+            )
+            // Item Spend (Col V): Category spend where Column E is blank (non-trip) and not Void
+            val catNonTripFormula = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*"), 0)"""
+            requests.add(
+                createCellRequest(
+                    sheetId = dashboardSheetId,
+                    rowIndex = rowNum - 1,
+                    colIndex = 21,
+                    value = mapOf("formulaValue" to catNonTripFormula),
+                    format = mapOf(
+                        "backgroundColor" to bodyAltRowBg,
+                        "horizontalAlignment" to "RIGHT",
+                        "verticalAlignment" to "MIDDLE",
+                        "numberFormat" to mapOf(
+                            "type" to "CURRENCY",
+                            "pattern" to CURRENCY_PATTERN
+                        ),
+                        "textFormat" to mapOf("fontSize" to 10)
+                    )
+                )
+            )
+        }
+
+        // Trips Slice row (after categories)
+        val tripSliceRowNum = 65 + insightsCategories.size
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = tripSliceRowNum - 1,
+                colIndex = 20,
+                value = mapOf("stringValue" to "Trips"),
+                format = mapOf(
+                    "backgroundColor" to bodyAltRowBg,
+                    "horizontalAlignment" to "LEFT",
+                    "verticalAlignment" to "MIDDLE",
+                    "textFormat" to mapOf("fontSize" to 10, "bold" to true)
+                )
+            )
+        )
+        // Trip Slice Spend: sum across tagged trip rows excluding Void, Savings, Transfer
+        val tripSliceFormula = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = tripSliceRowNum - 1,
+                colIndex = 21,
+                value = mapOf("formulaValue" to tripSliceFormula),
+                format = mapOf(
+                    "backgroundColor" to bodyAltRowBg,
+                    "horizontalAlignment" to "RIGHT",
+                    "verticalAlignment" to "MIDDLE",
+                    "numberFormat" to mapOf(
+                        "type" to "CURRENCY",
+                        "pattern" to CURRENCY_PATTERN
+                    ),
+                    "textFormat" to mapOf("fontSize" to 10, "bold" to true)
+                )
+            )
+        )
+
+        // 14. Charts: Clustered Column Chart (A7, 520x266), Doughnut Chart (K7, 491x266), Insights Chart (A65, 520x266)
         requests.addAll(
             ChartManager.buildChartRequests(
                 dashboardSheetId = dashboardSheetId,
                 columnChartColorPrimary = hexToColorMap("1465BF"),
                 columnChartColorSecondary = hexToColorMap("90CAF8"),
-                categoryCount = categoryCount
+                categoryCount = categoryCount,
+                insightsItemCount = insightsCount
             )
         )
 
@@ -1682,6 +2281,7 @@ object SheetProvisioner {
         }
         val freqText = sub.frequency.name.lowercase().replaceFirstChar { it.uppercase() }
         val activeText = if (sub.active) "TRUE" else "FALSE"
+        val perMonthFormula = DashboardFormulaBuilder.buildSubscriptionPerMonthFormula(row1BasedIndex)
         val paidMonthFormula = buildPaidThisMonthFormula(row1BasedIndex)
         val paidYearFormula = buildPaidThisYearFormula(year, row1BasedIndex)
         val lastPaidDateFormula = buildLastPaidDateFormula(year, row1BasedIndex)
@@ -1695,6 +2295,7 @@ object SheetProvisioner {
             activeText,
             sub.note,
             sub.keywords,
+            perMonthFormula,
             paidMonthFormula,
             paidYearFormula,
             lastPaidDateFormula,
@@ -1721,21 +2322,22 @@ object SheetProvisioner {
                         "sheetId" to sheetId,
                         "gridProperties" to mapOf(
                             "rowCount" to targetRows,
-                            "columnCount" to targetCols
+                            "columnCount" to targetCols,
+                            "frozenRowCount" to 3
                         )
                     ),
-                    "fields" to "gridProperties(rowCount,columnCount)"
+                    "fields" to "gridProperties(rowCount,columnCount,frozenRowCount)"
                 )
             )
         )
 
-        // Banner merge A1:K1 (Columns 0 to 11, excluding hidden Col L)
+        // Banner merge A1:L1 (Columns 0 to 12, excluding hidden Col M)
         val bannerRange = mapOf(
             "sheetId" to sheetId,
             "startRowIndex" to 0,
             "endRowIndex" to 1,
             "startColumnIndex" to 0,
-            "endColumnIndex" to 11
+            "endColumnIndex" to 12
         )
         requests.add(mapOf("unmergeCells" to mapOf("range" to bannerRange)))
         requests.add(mapOf("mergeCells" to mapOf("range" to bannerRange, "mergeType" to "MERGE_ALL")))
@@ -1787,7 +2389,7 @@ object SheetProvisioner {
         val headers = listOf(
             "Name", "Expected Amount (₹)", "Frequency", "Due Date",
             "Default Account", "Active", "Note", "Keywords",
-            "Paid This Month (₹)", "Paid This Year (₹)", "Last Paid Date", "Subscription ID"
+            "Per Month (₹)", "Paid This Month (₹)", "Paid This Year (₹)", "Last Paid Date", "Subscription ID"
         )
         val row3Values = headers.map { header ->
             mapOf(
@@ -1852,7 +2454,7 @@ object SheetProvisioner {
         // Column widths
         val widths = listOf(
             0 to 160, 1 to 130, 2 to 100, 3 to 110, 4 to 120,
-            5 to 80, 6 to 150, 7 to 150, 8 to 140, 9 to 140, 10 to 120, 11 to 130
+            5 to 80, 6 to 150, 7 to 150, 8 to 120, 9 to 140, 10 to 140, 11 to 120, 12 to 130
         )
         widths.forEach { (colIdx, px) ->
             requests.add(
@@ -1873,22 +2475,228 @@ object SheetProvisioner {
         requests.add(createNumberFormatRequest(sheetId, 3, 4, "DATE", "yyyy-mm-dd", "CENTER", targetRows))
         // Plain text on Note and Keywords: Col G, H (6 to 8)
         requests.add(createNumberFormatRequest(sheetId, 6, 8, "TEXT", "@", "LEFT", targetRows))
-        // Paid This Month: Col I (8) -> CURRENCY
+        // Per Month: Col I (8) -> CURRENCY
         requests.add(createNumberFormatRequest(sheetId, 8, 9, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
-        // Paid This Year: Col J (9) -> CURRENCY
+        // Paid This Month: Col J (9) -> CURRENCY
         requests.add(createNumberFormatRequest(sheetId, 9, 10, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
-        // Last Paid Date: Col K (10) -> DATE with blank on zero
-        requests.add(createNumberFormatRequest(sheetId, 10, 11, "DATE", "yyyy-mm-dd;;", "CENTER", targetRows))
+        // Paid This Year: Col K (10) -> CURRENCY
+        requests.add(createNumberFormatRequest(sheetId, 10, 11, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
+        // Last Paid Date: Col L (11) -> DATE with blank on zero
+        requests.add(createNumberFormatRequest(sheetId, 11, 12, "DATE", "yyyy-mm-dd;;", "CENTER", targetRows))
 
-        // Hide Subscription ID (Col L, index 11)
+        // Hide Subscription ID (Col M, index 12)
         requests.add(
             mapOf(
                 "updateDimensionProperties" to mapOf(
                     "range" to mapOf(
                         "sheetId" to sheetId,
                         "dimension" to "COLUMNS",
-                        "startIndex" to 11,
-                        "endIndex" to 12
+                        "startIndex" to SheetSchemaConstants.COL_INDEX_SUB_ID,
+                        "endIndex" to SheetSchemaConstants.COL_INDEX_SUB_ID + 1
+                    ),
+                    "properties" to mapOf("hiddenByUser" to true),
+                    "fields" to "hiddenByUser"
+                )
+            )
+        )
+
+        return requests
+    }
+
+    fun buildTripRowValues(
+        trip: com.financeautomation.domain.model.TripTag,
+        repaidAmount: Double = 0.0,
+        topCategory: String = "",
+        row1BasedIndex: Int,
+        year: Int = 2026
+    ): List<Any?> {
+        val startDateStr = trip.startDateEpochDay?.let {
+            try { java.time.LocalDate.ofEpochDay(it).toString() } catch (_: Exception) { "" }
+        }.orEmpty()
+        val endDateStr = trip.endDateEpochDay?.let {
+            try { java.time.LocalDate.ofEpochDay(it).toString() } catch (_: Exception) { "" }
+        }.orEmpty()
+        val statusText = if (trip.isActive) "Active" else "Ended"
+        val daysFormula = DashboardFormulaBuilder.buildTripDaysFormula(row1BasedIndex)
+        val totalPaidFormula = DashboardFormulaBuilder.buildTripTotalPaidFormula(year, row1BasedIndex)
+        val myShareFormula = DashboardFormulaBuilder.buildTripMyShareFormula(year, row1BasedIndex)
+        val owedToMeFormula = DashboardFormulaBuilder.buildTripOwedToMeFormula(year, row1BasedIndex)
+
+        return listOf(
+            trip.name,
+            startDateStr,
+            endDateStr,
+            statusText,
+            daysFormula,
+            totalPaidFormula,
+            myShareFormula,
+            owedToMeFormula,
+            repaidAmount,
+            topCategory,
+            trip.id
+        )
+    }
+
+    fun buildTripsRequests(
+        sheetId: Int,
+        rowCount: Int = 200,
+        columnCount: Int = SheetSchemaConstants.TRIPS_COLUMN_COUNT,
+        year: Int = 2026
+    ): List<Map<String, Any?>> {
+        val requests = mutableListOf<Map<String, Any?>>()
+        val targetRows = maxOf(rowCount, 200)
+        val targetCols = maxOf(columnCount, SheetSchemaConstants.TRIPS_COLUMN_COUNT)
+
+        // Ensure grid size
+        requests.add(
+            mapOf(
+                "updateSheetProperties" to mapOf(
+                    "properties" to mapOf(
+                        "sheetId" to sheetId,
+                        "gridProperties" to mapOf(
+                            "rowCount" to targetRows,
+                            "columnCount" to targetCols,
+                            "frozenRowCount" to 3
+                        )
+                    ),
+                    "fields" to "gridProperties(rowCount,columnCount,frozenRowCount)"
+                )
+            )
+        )
+
+        // Banner merge A1:J1 (Columns 0 to 10, excluding hidden Col K)
+        val bannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 0,
+            "endRowIndex" to 1,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 10
+        )
+        requests.add(mapOf("unmergeCells" to mapOf("range" to bannerRange)))
+        requests.add(mapOf("mergeCells" to mapOf("range" to bannerRange, "mergeType" to "MERGE_ALL")))
+        requests.add(
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to bannerRange,
+                    "cell" to mapOf(
+                        "userEnteredFormat" to mapOf(
+                            "backgroundColor" to darkNavyBg
+                        )
+                    ),
+                    "fields" to "userEnteredFormat.backgroundColor"
+                )
+            )
+        )
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf(
+                        "sheetId" to sheetId,
+                        "rowIndex" to 0,
+                        "columnIndex" to 0
+                    ),
+                    "rows" to listOf(
+                        mapOf(
+                            "values" to listOf(
+                                mapOf(
+                                    "userEnteredValue" to mapOf("stringValue" to "TRIPS & EXPEDITIONS SUMMARY"),
+                                    "userEnteredFormat" to mapOf(
+                                        "textFormat" to mapOf(
+                                            "fontSize" to 14,
+                                            "bold" to true,
+                                            "foregroundColor" to whiteColor
+                                        ),
+                                        "horizontalAlignment" to "CENTER",
+                                        "verticalAlignment" to "MIDDLE"
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
+
+        // Column headers Row 3 (index 2)
+        val headers = listOf(
+            "Trip Name", "Start Date", "End Date", "Status", "Days",
+            "Total Paid (₹)", "My Share (₹)", "Owed To Me (₹)", "Repaid (₹)",
+            "Top Category", "Trip ID"
+        )
+        val row3Values = headers.map { header ->
+            mapOf(
+                "userEnteredValue" to mapOf("stringValue" to header),
+                "userEnteredFormat" to mapOf(
+                    "backgroundColor" to headerSlateBg,
+                    "textFormat" to mapOf("fontSize" to 9, "bold" to true, "foregroundColor" to whiteColor),
+                    "horizontalAlignment" to "CENTER",
+                    "verticalAlignment" to "MIDDLE",
+                    "wrapStrategy" to "WRAP",
+                    "borders" to thinBorders()
+                )
+            )
+        }
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf("sheetId" to sheetId, "rowIndex" to 2, "columnIndex" to 0),
+                    "rows" to listOf(mapOf("values" to row3Values)),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
+
+        // Data Validation for Status: Col D (index 3)
+        requests.add(
+            createDataValidationRequest(
+                sheetId = sheetId,
+                startRow = 3,
+                endRow = targetRows,
+                startCol = 3,
+                endCol = 4,
+                values = listOf("Active", "Ended")
+            )
+        )
+
+        // Column widths
+        val widths = listOf(
+            0 to 180, 1 to 100, 2 to 100, 3 to 90, 4 to 70,
+            5 to 110, 6 to 110, 7 to 110, 8 to 110, 9 to 120, 10 to 100
+        )
+        widths.forEach { (colIdx, px) ->
+            requests.add(
+                createUpdateDimensionPropertiesRequest(
+                    sheetId = sheetId,
+                    dimension = "COLUMNS",
+                    startIndex = colIdx,
+                    endIndex = colIdx + 1,
+                    pixelSize = px
+                )
+            )
+        }
+
+        // Number Formats
+        // Start Date: Col B (1) -> DATE
+        requests.add(createNumberFormatRequest(sheetId, 1, 2, "DATE", "yyyy-mm-dd", "CENTER", targetRows))
+        // End Date: Col C (2) -> DATE with blank on empty
+        requests.add(createNumberFormatRequest(sheetId, 2, 3, "DATE", "yyyy-mm-dd;;", "CENTER", targetRows))
+        // Days: Col E (4) -> NUMBER
+        requests.add(createNumberFormatRequest(sheetId, 4, 5, "NUMBER", "0", "CENTER", targetRows))
+        // Total Paid, My Share, Owed To Me, Repaid: Cols F..I (5..9) -> CURRENCY
+        requests.add(createNumberFormatRequest(sheetId, 5, 9, "CURRENCY", "₹#,##0", "RIGHT", targetRows))
+        // Top Category: Col J (9) -> TEXT
+        requests.add(createNumberFormatRequest(sheetId, 9, 10, "TEXT", "@", "LEFT", targetRows))
+
+        // Hide Trip ID (Col K, index 10)
+        requests.add(
+            mapOf(
+                "updateDimensionProperties" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to sheetId,
+                        "dimension" to "COLUMNS",
+                        "startIndex" to SheetSchemaConstants.COL_INDEX_TRIP_ID,
+                        "endIndex" to SheetSchemaConstants.COL_INDEX_TRIP_ID + 1
                     ),
                     "properties" to mapOf("hiddenByUser" to true),
                     "fields" to "hiddenByUser"

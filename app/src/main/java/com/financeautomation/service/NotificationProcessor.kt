@@ -81,6 +81,11 @@ class NotificationProcessor(
 
     private val processMutex = Mutex()
 
+    private fun ignored(reason: String): NotificationProcessingOutcome.Ignored {
+        com.financeautomation.core.utils.Diagnostics.recordDrop(reason)
+        return NotificationProcessingOutcome.Ignored(reason)
+    }
+
     suspend fun process(
         sourcePackage: String,
         title: String,
@@ -92,39 +97,39 @@ class NotificationProcessor(
     ): NotificationProcessingOutcome = processMutex.withLock {
         // 1. Self-notification check
         if (sourcePackage.trim() == ownPackageName) {
-            return NotificationProcessingOutcome.Ignored("Self notification dropped")
+            return ignored("Self notification dropped")
         }
 
         // 2. Blacklist check (privacy-sensitive messaging apps)
         if (PackageWhitelist.isBlacklisted(sourcePackage)) {
             PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
-            return NotificationProcessingOutcome.Ignored("Blacklisted privacy package: $sourcePackage")
+            return ignored("Blacklisted privacy package: $sourcePackage")
         }
 
         // 2b. Chat apps that carry payments (WhatsApp, WhatsApp Business):
         // Only payment notifications on a payments channel or category are allowed. Any chat or general notification is dropped immediately.
         if (PackageWhitelist.isChatApp(sourcePackage) && !PackageWhitelist.isPaymentNotification(channelId, category)) {
             PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_BLACKLIST)
-            return NotificationProcessingOutcome.Ignored("Non-payment chat notification dropped: $sourcePackage")
+            return ignored("Non-payment chat notification dropped: $sourcePackage")
         }
 
         // 3. Whitelist check (financial applications and SMS alerts only, includes BuildConfig.DEBUG guard)
         if (!PackageWhitelist.isWhitelisted(sourcePackage)) {
             PipelineTrail.recordDroppedNotWhitelisted()
-            return NotificationProcessingOutcome.Ignored("Non-whitelisted package: $sourcePackage")
+            return ignored("Non-whitelisted package: $sourcePackage")
         }
 
         // 3b. SMS from a personal number is rejected on the sender alone, before any text is examined
         if (PackageWhitelist.isSmsPackage(sourcePackage) && !com.financeautomation.core.utils.RegexPatterns.isBankSenderId(title)) {
             PipelineTrail.recordDroppedNotWhitelisted()
-            return NotificationProcessingOutcome.Ignored("Personal sender SMS dropped")
+            return ignored("Personal sender SMS dropped")
         }
 
         // 4. OTP and verification suppression check
         val fullContent = if (title.isNotBlank()) "$title. $text".trim() else text.trim()
         if (PackageWhitelist.isOtpOrAuth(fullContent)) {
             PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_OTP)
-            return NotificationProcessingOutcome.Ignored("OTP or auth alert suppressed")
+            return ignored("OTP or auth alert suppressed")
         }
 
         // Memory-only content hash (SHA-256 of lowercase title + text, 16 hex characters)
@@ -140,7 +145,7 @@ class NotificationProcessor(
             if (existingHandled != null) {
                 // Reconnect replay or duplicate posted alert
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
-                return NotificationProcessingOutcome.Ignored("Duplicate or reconnect replay notification dropped")
+                return ignored("Duplicate or reconnect replay notification dropped")
             }
 
             // Prune rows older than 24 hours
@@ -154,7 +159,7 @@ class NotificationProcessor(
                 existingCapture.state == PendingCaptureEntity.STATE_DONE ||
                 existingCapture.state == PendingCaptureEntity.STATE_NEEDS_REVIEW)) {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
-                return NotificationProcessingOutcome.Ignored("Duplicate or reconnect replay notification dropped")
+                return ignored("Duplicate or reconnect replay notification dropped")
             }
         }
 
@@ -205,7 +210,7 @@ class NotificationProcessor(
             is NotificationParseResult.Dropped -> {
                 // Counted by reason only; the notification text is never recorded
                 PipelineTrail.record(PipelineStage.ALERT, pipelineCodeFor(parseResult.reason))
-                NotificationProcessingOutcome.Ignored("ParseUseCase dropped: ${parseResult.reason}")
+                ignored("ParseUseCase dropped: ${parseResult.reason}")
             }
             is NotificationParseResult.FailureAlert -> {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.FAILURE_WORDING)
@@ -218,7 +223,7 @@ class NotificationProcessor(
                         return NotificationProcessingOutcome.Dismissed(existing.id)
                     }
                 }
-                NotificationProcessingOutcome.Ignored("Payment failed, declined or reversed")
+                ignored("Payment failed, declined or reversed")
             }
             is NotificationParseResult.FallbackPrompt -> {
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.PARSE_UNREADABLE)

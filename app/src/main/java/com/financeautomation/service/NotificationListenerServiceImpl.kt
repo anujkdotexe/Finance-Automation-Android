@@ -190,7 +190,7 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
                         // Dismissed payment alert
                     }
                     is NotificationProcessingOutcome.Ignored -> {
-                        // Ignored by whitelist, blacklist, OTP suppression, or direction filter
+                        Diagnostics.recordDrop(outcome.reason)
                     }
                 }
             } catch (e: Exception) {

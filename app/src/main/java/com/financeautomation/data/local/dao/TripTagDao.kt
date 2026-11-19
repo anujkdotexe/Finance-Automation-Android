@@ -39,17 +39,24 @@ interface TripTagDao {
     @Query("SELECT * FROM trip_tags WHERE isActive = 1 AND isArchived = 0 LIMIT 1")
     fun getActiveTagFlow(): Flow<TripTagEntity?>
 
+    @Query("UPDATE trip_tags SET isActive = 0, endDateEpochDay = :endDateEpochDay, updatedAt = :updatedAt, dirty = 1 WHERE isActive = 1")
+    suspend fun clearActiveFlagsWithDate(endDateEpochDay: Long, updatedAt: Long = System.currentTimeMillis())
+
     @Query("UPDATE trip_tags SET isActive = 0, updatedAt = :updatedAt, dirty = 1 WHERE isActive = 1")
     suspend fun clearActiveFlags(updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE trip_tags SET isActive = 1, startDateEpochDay = COALESCE(startDateEpochDay, :startDateEpochDay), endDateEpochDay = NULL, updatedAt = :updatedAt, dirty = 1 WHERE id = :id")
+    suspend fun setActiveFlagWithDate(id: String, startDateEpochDay: Long, updatedAt: Long = System.currentTimeMillis())
 
     @Query("UPDATE trip_tags SET isActive = 1, updatedAt = :updatedAt, dirty = 1 WHERE id = :id")
     suspend fun setActiveFlag(id: String, updatedAt: Long = System.currentTimeMillis())
 
     @androidx.room.Transaction
     suspend fun setActiveTagAtomic(id: String?, updatedAt: Long = System.currentTimeMillis()): String? {
-        clearActiveFlags(updatedAt)
+        val todayEpochDay = updatedAt / 86400000L
+        clearActiveFlagsWithDate(todayEpochDay, updatedAt)
         return if (id != null) {
-            setActiveFlag(id, updatedAt)
+            setActiveFlagWithDate(id, todayEpochDay, updatedAt)
             getById(id)?.name
         } else {
             null

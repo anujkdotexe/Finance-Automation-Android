@@ -1098,7 +1098,7 @@ open class GoogleSheetsClient(
     /**
      * Executes a batchUpdate request against [spreadsheetId] and returns raw JSON response body.
      */
-    private suspend fun executeBatchUpdate(
+    protected open suspend fun executeBatchUpdate(
         spreadsheetId: String,
         requests: List<Map<String, Any?>>
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -1132,7 +1132,7 @@ open class GoogleSheetsClient(
     /**
      * Executes a batchUpdate request against [spreadsheetId] for formatting, styling, and schema provisioning.
      */
-    suspend fun batchUpdate(
+    open suspend fun batchUpdate(
         spreadsheetId: String,
         requests: List<Map<String, Any?>>
     ): Result<Unit> = when (val res = executeBatchUpdate(spreadsheetId, requests)) {
@@ -1398,7 +1398,8 @@ open class GoogleSheetsClient(
                         existingCharts = existingChartsResult.data,
                         titlesToDelete = setOf(
                             ChartManager.COLUMN_CHART_TITLE,
-                            ChartManager.DOUGHNUT_CHART_TITLE
+                            ChartManager.DOUGHNUT_CHART_TITLE,
+                            ChartManager.INSIGHTS_CHART_TITLE
                         )
                     )
                 } else {
@@ -1480,6 +1481,36 @@ open class GoogleSheetsClient(
                 com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Subscriptions tab error: ${e.javaClass.simpleName}")
             }
 
+            // 6. Ensure Trips tab exists
+            try {
+                val tripsRes = ensureTripsTabExists(spreadsheetId)
+                if (tripsRes is Result.Error) {
+                    com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Trips tab skipped: ${tripsRes.exception.message}")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Trips tab error: ${e.javaClass.simpleName}")
+            }
+
+            // 7. Hide Template tab if it exists (idempotent, never delete user data)
+            try {
+                hideTemplateTabIfExists(spreadsheetId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Hide template error: ${e.javaClass.simpleName}")
+            }
+
+            // 8. Ensure standard tab order: Dashboard, 12 month tabs, Subscriptions, Trips, Config (last), Template (hidden & last)
+            try {
+                ensureStandardTabOrder(spreadsheetId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Standard tab order error: ${e.javaClass.simpleName}")
+            }
+
             Result.Success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -1496,7 +1527,9 @@ open class GoogleSheetsClient(
         val title: String,
         val rowCount: Int = 1000,
         val columnCount: Int = SheetSchemaConstants.TOTAL_COLUMN_COUNT,
-        val existingRuleFormulas: Set<String> = emptySet()
+        val existingRuleFormulas: Set<String> = emptySet(),
+        val index: Int = 0,
+        val isHidden: Boolean = false
     )
 
     /**
@@ -1505,7 +1538,7 @@ open class GoogleSheetsClient(
      */
     open suspend fun getSheetTabsDetailed(spreadsheetId: String): Result<Map<String, SheetTabInfo>> = withContext(Dispatchers.IO) {
         try {
-            val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2CgridProperties(rowCount%2CcolumnCount))%2CconditionalFormats(booleanRule(condition(values(userEnteredValue)))))"
+            val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2Cindex%2Chidden%2CgridProperties(rowCount%2CcolumnCount))%2CconditionalFormats(booleanRule(condition(values(userEnteredValue)))))"
             val request = newRequestBuilder(url).get().build()
 
             okHttpClient.newCall(request).execute().use { response ->
@@ -1532,6 +1565,8 @@ open class GoogleSheetsClient(
                         val gridProps = props["gridProperties"]?.jsonObject
                         val rowCount = gridProps?.get("rowCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 1000
                         val colCount = gridProps?.get("columnCount")?.jsonPrimitive?.content?.toIntOrNull() ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                        val tabIndex = props["index"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                        val isHidden = props["hidden"]?.jsonPrimitive?.content?.toBoolean() ?: false
 
                         val formulas = mutableSetOf<String>()
                         val cFormats = sheetObj["conditionalFormats"]?.jsonArray.orEmpty()
@@ -1550,7 +1585,9 @@ open class GoogleSheetsClient(
                             title = title,
                             rowCount = rowCount,
                             columnCount = colCount,
-                            existingRuleFormulas = formulas
+                            existingRuleFormulas = formulas,
+                            index = tabIndex,
+                            isHidden = isHidden
                         )
                     }
                 }
@@ -1647,7 +1684,7 @@ open class GoogleSheetsClient(
                 val row = rawRows[i]
                 if (row.isEmpty()) continue
                 val name = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NAME)?.toString()?.trim().orEmpty()
-                val id = (row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID) ?: if (row.size == 10) row.getOrNull(9) else null)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                val id = (row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID) ?: row.getOrNull(11) ?: if (row.size == 10) row.getOrNull(9) else null)?.toString()?.trim()?.takeIf { it.isNotBlank() }
                 if (name.isBlank() && id == null) continue
 
                 val amount = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_AMOUNT)?.toString()?.replace(",", "")?.toDoubleOrNull()
@@ -1746,6 +1783,270 @@ open class GoogleSheetsClient(
             )
 
             batchUpdate(spreadsheetId, listOf(req))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Ensures the visible Trips tab exists in [spreadsheetId]; if missing, provisions it.
+     */
+    open suspend fun ensureTripsTabExists(
+        spreadsheetId: String,
+        year: Int? = null
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val tabsResult = getSheetTabsWithIds(spreadsheetId)
+        if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
+        val tabsMap = (tabsResult as Result.Success).data
+        if (tabsMap.containsKey(SheetSchemaConstants.TRIPS_TAB_NAME)) {
+            return@withContext Result.Success(false)
+        }
+
+        val resolvedYear = year ?: DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
+
+        val addReq = mapOf(
+            "addSheet" to mapOf(
+                "properties" to mapOf(
+                    "title" to SheetSchemaConstants.TRIPS_TAB_NAME,
+                    "gridProperties" to mapOf("rowCount" to 200, "columnCount" to SheetSchemaConstants.TRIPS_COLUMN_COUNT)
+                )
+            )
+        )
+        val addRes = executeBatchUpdate(spreadsheetId, listOf(addReq))
+        if (addRes is Result.Error) return@withContext Result.Error(addRes.exception)
+
+        val recheck = getSheetTabsWithIds(spreadsheetId)
+        val newSheetId = if (recheck is Result.Success) {
+            recheck.data[SheetSchemaConstants.TRIPS_TAB_NAME]
+        } else null
+        val targetSheetId = newSheetId ?: 0
+
+        val provRequests = SheetProvisioner.buildTripsRequests(targetSheetId, year = resolvedYear)
+        val provRes = executeBatchUpdate(spreadsheetId, provRequests)
+        if (provRes is Result.Error) return@withContext Result.Error(provRes.exception)
+
+        Result.Success(true)
+    }
+
+    /**
+     * Reads all rows from the Trips tab ('Trips'!A4:K).
+     */
+    open suspend fun readTripsTab(
+        spreadsheetId: String
+    ): Result<List<SheetTripRow>> = withContext(Dispatchers.IO) {
+        try {
+            val range = "'${SheetSchemaConstants.TRIPS_TAB_NAME}'!${SheetSchemaConstants.TRIPS_RANGE}"
+            val res = getRangeValuesRaw(spreadsheetId, range)
+            if (res is Result.Error) return@withContext Result.Error(res.exception)
+
+            val rawRows = (res as Result.Success).data
+            val result = mutableListOf<SheetTripRow>()
+            for (i in rawRows.indices) {
+                val row = rawRows[i]
+                if (row.isEmpty()) continue
+                val name = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_NAME)?.toString()?.trim().orEmpty()
+                val id = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_ID)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                if (name.isBlank() && id == null) continue
+
+                val startDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_START_DATE)?.toString()?.trim().orEmpty()
+                val endDate = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_END_DATE)?.toString()?.trim().orEmpty()
+                val status = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_STATUS)?.toString()?.trim().orEmpty().ifBlank { "Active" }
+                val days = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_DAYS)?.toString()?.trim()?.toIntOrNull()
+                val totalPaid = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_TOTAL_PAID)?.toString()?.replace(",", "")?.toDoubleOrNull()
+                val myShare = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_MY_SHARE)?.toString()?.replace(",", "")?.toDoubleOrNull()
+                val owedToMe = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_OWED_TO_ME)?.toString()?.replace(",", "")?.toDoubleOrNull()
+                val repaid = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_REPAID)?.toString()?.replace(",", "")?.toDoubleOrNull()
+                val topCategory = row.getOrNull(SheetSchemaConstants.COL_INDEX_TRIP_TOP_CATEGORY)?.toString()?.trim().orEmpty()
+
+                result.add(
+                    SheetTripRow(
+                        rowNumber = i + SheetSchemaConstants.TRIPS_DATA_START_ROW_INDEX + 1,
+                        name = name,
+                        startDateString = startDate,
+                        endDateString = endDate,
+                        status = status,
+                        days = days,
+                        totalPaid = totalPaid,
+                        myShare = myShare,
+                        owedToMe = owedToMe,
+                        repaid = repaid,
+                        topCategory = topCategory,
+                        id = id
+                    )
+                )
+            }
+            Result.Success(result)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Writes all trips into the Trips tab ('Trips'!A4:K).
+     */
+    open suspend fun writeTripsTab(
+        spreadsheetId: String,
+        trips: List<com.financeautomation.domain.model.TripTag>,
+        repaidMap: Map<String, Double> = emptyMap(),
+        topCategoryMap: Map<String, String> = emptyMap(),
+        year: Int? = null
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val tabsResult = getSheetTabsWithIds(spreadsheetId)
+            if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
+            val tabsMap = (tabsResult as Result.Success).data
+
+            val resolvedYear = year ?: DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
+            ensureTripsTabExists(spreadsheetId, resolvedYear)
+
+            val sheetId = tabsMap[SheetSchemaConstants.TRIPS_TAB_NAME]
+                ?: return@withContext Result.Error(SheetNotFoundException(spreadsheetId, "Trips sheetId missing"))
+
+            val rows = trips.mapIndexed { idx, trip ->
+                SheetProvisioner.buildTripRowValues(
+                    trip = trip,
+                    repaidAmount = repaidMap[trip.id] ?: 0.0,
+                    topCategory = topCategoryMap[trip.id].orEmpty(),
+                    row1BasedIndex = idx + SheetSchemaConstants.TRIPS_DATA_START_ROW_INDEX + 1,
+                    year = resolvedYear
+                )
+            }
+
+            if (rows.isEmpty()) {
+                return@withContext Result.Success(Unit)
+            }
+
+            val rowValues = rows.map { rowCells ->
+                mapOf(
+                    "values" to rowCells.map { cell ->
+                        when (cell) {
+                            null -> mapOf("userEnteredValue" to mapOf("stringValue" to ""))
+                            is Number -> mapOf("userEnteredValue" to mapOf("numberValue" to cell.toDouble()))
+                            is Boolean -> mapOf("userEnteredValue" to mapOf("boolValue" to cell))
+                            is String -> {
+                                if (cell.startsWith("=")) {
+                                    mapOf("userEnteredValue" to mapOf("formulaValue" to cell))
+                                } else {
+                                    mapOf("userEnteredValue" to mapOf("stringValue" to cell))
+                                }
+                            }
+                            else -> mapOf("userEnteredValue" to mapOf("stringValue" to cell.toString()))
+                        }
+                    }
+                )
+            }
+
+            val req = mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf(
+                        "sheetId" to sheetId,
+                        "rowIndex" to SheetSchemaConstants.TRIPS_DATA_START_ROW_INDEX,
+                        "columnIndex" to 0
+                    ),
+                    "rows" to rowValues,
+                    "fields" to "userEnteredValue"
+                )
+            )
+
+            batchUpdate(spreadsheetId, listOf(req))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Hides the 'Template' tab if it exists in [spreadsheetId].
+     * Idempotent: safe to run multiple times, never deletes user data.
+     */
+    open suspend fun hideTemplateTabIfExists(spreadsheetId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val tabsResult = getSheetTabsDetailed(spreadsheetId)
+            if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
+            val tabs = (tabsResult as Result.Success).data
+            val templateTab = tabs.values.firstOrNull { it.title.equals("Template", ignoreCase = true) }
+            if (templateTab != null && !templateTab.isHidden) {
+                val hideReq = mapOf(
+                    "updateSheetProperties" to mapOf(
+                        "properties" to mapOf(
+                            "sheetId" to templateTab.sheetId,
+                            "hidden" to true
+                        ),
+                        "fields" to "hidden"
+                    )
+                )
+                batchUpdate(spreadsheetId, listOf(hideReq))
+            } else {
+                Result.Success(Unit)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Enforces the standard tab ordering:
+     * Dashboard, 12 month tabs (JanYY..DecYY), Subscriptions, Trips, custom tabs, Config, Template (hidden & last).
+     */
+    open suspend fun ensureStandardTabOrder(spreadsheetId: String, year: Int? = null): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val tabsResult = getSheetTabsDetailed(spreadsheetId)
+            if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
+            val tabs = (tabsResult as Result.Success).data.values.toList()
+
+            val resolvedYear = year ?: DashboardFormulaBuilder.extractWorkbookYear(tabs.map { it.title })
+            val monthTabs = DashboardFormulaBuilder.monthTabsForYear(resolvedYear)
+
+            val orderedNames = mutableListOf<String>()
+            orderedNames.add("Dashboard")
+            orderedNames.addAll(monthTabs)
+            orderedNames.add(SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME)
+            orderedNames.add(SheetSchemaConstants.TRIPS_TAB_NAME)
+
+            // Any remaining user custom tabs except Config and Template
+            val remaining = tabs.map { it.title }.filter { t ->
+                orderedNames.none { it.equals(t, ignoreCase = true) } &&
+                    !t.equals("Config", ignoreCase = true) &&
+                    !t.equals("Template", ignoreCase = true)
+            }
+            orderedNames.addAll(remaining)
+            orderedNames.add("Config")
+            orderedNames.add("Template")
+
+            val requests = mutableListOf<Map<String, Any?>>()
+            var curIndex = 0
+            for (targetName in orderedNames) {
+                val tab = tabs.firstOrNull { it.title.equals(targetName, ignoreCase = true) }
+                if (tab != null) {
+                    if (tab.index != curIndex) {
+                        requests.add(
+                            mapOf(
+                                "updateSheetProperties" to mapOf(
+                                    "properties" to mapOf(
+                                        "sheetId" to tab.sheetId,
+                                        "index" to curIndex
+                                    ),
+                                    "fields" to "index"
+                                )
+                            )
+                        )
+                    }
+                    curIndex++
+                }
+            }
+
+            if (requests.isNotEmpty()) {
+                batchUpdate(spreadsheetId, requests)
+            } else {
+                Result.Success(Unit)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

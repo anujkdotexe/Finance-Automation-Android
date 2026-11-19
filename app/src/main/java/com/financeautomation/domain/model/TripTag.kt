@@ -11,5 +11,7 @@ data class TripTag(
     val isArchived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = 0L,
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    val startDateEpochDay: Long? = null,
+    val endDateEpochDay: Long? = null
 )

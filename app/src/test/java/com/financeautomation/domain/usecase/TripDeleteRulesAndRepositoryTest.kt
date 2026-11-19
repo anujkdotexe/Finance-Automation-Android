@@ -36,7 +36,9 @@ class TripDeleteRulesAndRepositoryTest {
         override suspend fun getActiveTag() = rows.values.firstOrNull { it.isActive && !it.isArchived }
         override fun getActiveTagFlow(): Flow<TripTagEntity?> = flowOf(rows.values.firstOrNull { it.isActive && !it.isArchived })
         override suspend fun clearActiveFlags(updatedAt: Long) { rows.values.forEach { rows[it.id] = it.copy(isActive = false) } }
+        override suspend fun clearActiveFlagsWithDate(endDateEpochDay: Long, updatedAt: Long) { rows.values.forEach { rows[it.id] = it.copy(isActive = false, endDateEpochDay = endDateEpochDay) } }
         override suspend fun setActiveFlag(id: String, updatedAt: Long) { rows[id]?.let { rows[id] = it.copy(isActive = true) } }
+        override suspend fun setActiveFlagWithDate(id: String, startDateEpochDay: Long, updatedAt: Long) { rows[id]?.let { rows[it.id] = it.copy(isActive = true, startDateEpochDay = it.startDateEpochDay ?: startDateEpochDay, endDateEpochDay = null) } }
         override suspend fun count() = rows.size
         override suspend fun insert(tag: TripTagEntity) { rows[tag.id] = tag }
         override suspend fun insertAll(tags: List<TripTagEntity>) { tags.forEach { insert(it) } }

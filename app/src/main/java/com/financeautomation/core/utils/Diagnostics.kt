@@ -32,6 +32,7 @@ object Diagnostics {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val records = ConcurrentLinkedDeque<Record>()
+    private val dropCounters = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
     private val diskExecutor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "DiagnosticsWriter").apply { isDaemon = true }
     }
@@ -89,7 +90,39 @@ object Diagnostics {
 
     fun clear() {
         records.clear()
+        clearDropCounts()
         persistAsync()
+    }
+
+    /**
+     * Records a drop event by reason code (counts only, never message text or secrets).
+     */
+    fun recordDrop(reason: String) {
+        val scrubbedReason = PrivacyScrubber.scrub(reason)
+        dropCounters.computeIfAbsent(scrubbedReason) { java.util.concurrent.atomic.AtomicInteger(0) }.incrementAndGet()
+        record("DropCounter", scrubbedReason)
+    }
+
+    /**
+     * Returns the number of times [reason] was dropped.
+     */
+    fun getDropCount(reason: String): Int {
+        val scrubbedReason = PrivacyScrubber.scrub(reason)
+        return dropCounters[scrubbedReason]?.get() ?: 0
+    }
+
+    /**
+     * Returns all drop reason counts as a snapshot map.
+     */
+    fun getAllDropCounts(): Map<String, Int> {
+        return dropCounters.mapValues { it.value.get() }
+    }
+
+    /**
+     * Clears all drop counters.
+     */
+    fun clearDropCounts() {
+        dropCounters.clear()
     }
 
     /**

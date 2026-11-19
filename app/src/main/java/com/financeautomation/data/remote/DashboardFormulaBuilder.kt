@@ -150,6 +150,57 @@ object DashboardFormulaBuilder {
     }
 
     /**
+     * Builds the helper formula for Subscriptions tab "Per Month (₹)" column.
+     * Evaluates weekly (* 52 / 12), yearly (/ 12), or monthly directly.
+     */
+    fun buildSubscriptionPerMonthFormula(row1BasedIndex: Int): String {
+        return """=IF(ISBLANK(B$row1BasedIndex), 0, IF(C$row1BasedIndex="Weekly", B$row1BasedIndex*52/12, IF(C$row1BasedIndex="Yearly", B$row1BasedIndex/12, B$row1BasedIndex)))"""
+    }
+
+    /**
+     * Builds the Days formula for row [row1BasedIndex] of the Trips tab.
+     */
+    fun buildTripDaysFormula(row1BasedIndex: Int): String {
+        return """=IF(ISBLANK(B$row1BasedIndex), "", IF(ISBLANK(C$row1BasedIndex), MAX(1, TODAY()-B$row1BasedIndex+1), MAX(1, C$row1BasedIndex-B$row1BasedIndex+1)))"""
+    }
+
+    /**
+     * Builds the Total Paid formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
+     * Excludes [Void] rows, Savings, and Transfer by category text.
+     */
+    fun buildTripTotalPaidFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /**
+     * Builds the My Share formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
+     * Excludes [Void] rows, Savings, and Transfer by category text.
+     */
+    fun buildTripMyShareFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!I4:I"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /**
+     * Builds the Owed To Me formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
+     * Excludes [Void] rows, Savings, and Transfer by category text.
+     */
+    fun buildTripOwedToMeFormula(year: Int, row1BasedIndex: Int): String {
+        val tabs = monthTabsForYear(year)
+        val terms = tabs.map { tab ->
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!J4:J"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /**
      * Builds batchUpdate requests to update Dashboard formulas and Category table (Y5:Z15).
      */
     fun buildDashboardFormulaRequests(
