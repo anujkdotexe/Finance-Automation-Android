@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This file assumes one collection written by the Android app and read only
+// by the developer in the Firebase console (the console is not subject to
+// these rules).
+//
+// Collection: problem_reports
+// Document ID: auto id
+// Fields (all immutable, the app can only create):
+//   - schemaVersion: int (required, must be 1)
+//   - createdAt:     timestamp (required, must be the server time)
+//   - appVersion:    string (required, 1 to 32 chars) - version name
+//   - versionCode:   int (required, 1 to 999999)
+//   - deviceModel:   string (required, 1 to 64 chars)
+//   - androidSdk:    int (required, 28 to 99)
+//   - installId:     string (required, exactly 36 chars) - random id kept on
+//                    the phone, not tied to the Google account
+//   - screen:        string (required, 1 to 64 chars)
+//   - reasonCode:    string (required, 1 to 64 chars)
+//   - counters:      string (optional, up to 1500 chars) - reason=count pairs
+//   - text:          string (required, 0 to 2000 chars) - what the user typed
+//                    after seeing exactly what would be sent
+//
+// The app does not use Firebase Authentication, so creates are allowed
+// without sign-in. Everything else is denied. Reading, updating and deleting
+// from the app is never allowed.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isValidReport(d) {
+      return d.keys().hasOnly([
+               'schemaVersion', 'createdAt', 'appVersion', 'versionCode',
+               'deviceModel', 'androidSdk', 'installId', 'screen',
+               'reasonCode', 'counters', 'text'
+             ])
+        && d.keys().hasAll([
+               'schemaVersion', 'createdAt', 'appVersion', 'versionCode',
+               'deviceModel', 'androidSdk', 'installId', 'screen',
+               'reasonCode', 'text'
+             ])
+        && d.schemaVersion is int && d.schemaVersion == 1
+        && d.createdAt is timestamp && d.createdAt == request.time
+        && d.appVersion is string && d.appVersion.size() >= 1 && d.appVersion.size() <= 32
+        && d.versionCode is int && d.versionCode >= 1 && d.versionCode < 1000000
+        && d.deviceModel is string && d.deviceModel.size() >= 1 && d.deviceModel.size() <= 64
+        && d.androidSdk is int && d.androidSdk >= 28 && d.androidSdk <= 99
+        && d.installId is string && d.installId.size() == 36
+        && d.screen is string && d.screen.size() >= 1 && d.screen.size() <= 64
+        && d.reasonCode is string && d.reasonCode.size() >= 1 && d.reasonCode.size() <= 64
+        && d.text is string && d.text.size() <= 2000
+        && (!d.keys().hasAny(['counters'])
+            || (d.counters is string && d.counters.size() <= 1500));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /problem_reports/{reportId} {
+      allow create: if isValidReport(request.resource.data);
+      allow read, update, delete: if false;
+    }
+
+    // Default deny for everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
