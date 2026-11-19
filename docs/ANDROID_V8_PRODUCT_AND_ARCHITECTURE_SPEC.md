@@ -110,14 +110,24 @@ Debit alerts only, from these notification sources:
 | PhonePe | `com.phonepe.app` |
 | Paytm | `net.one97.paytm` |
 | Supermoney | `com.supermoney.app` |
+| Amazon Pay | `in.amazon.mShop.android.shopping` |
+| CRED | `com.dreamplug.androidapp` |
+| MobiKwik | `com.mobikwik_new` |
+| Freecharge | `com.freecharge.android` |
+| Navi | `com.naviapp` |
+| Samsung Wallet | `com.samsung.android.spay` |
+| WhatsApp and WhatsApp Business (payment notifications only, see below) | `com.whatsapp`, `com.whatsapp.w4b` |
 | Bank debit SMS | the device's system messaging app (package set is OEM-dependent, see the engineering plan) |
 
 Credit alerts (inflows) use the same pipeline and the same privacy rules and map to Income / Return.
 
-Strict privacy: anything else is dropped before inspection. Personal messaging apps (WhatsApp, Telegram, Signal)
-and OTP or verification messages are never read, logged or cached. From a messaging app, a notification is parsed
-only if its package is on the SMS list and it matches a bank debit pattern; everything else is discarded
-immediately and unlogged. Raw title and body are processed in memory and discarded. Only amount, payee, source
+Strict privacy: anything else is dropped before inspection. Personal messaging apps (Telegram, Signal, Messenger,
+Instagram, Discord) and mail apps, and OTP or verification messages, are never read, logged or cached. Each payment
+app has its own switch in Settings. WhatsApp and WhatsApp Business are read only when the notification's own channel
+or category marks it as a payment; any other WhatsApp notification is dropped at once, its text is not parsed,
+logged, stored or cached, and only a counter is kept. SMS is accepted only from bank-style sender ids; SMS from
+personal numbers and saved contact names is rejected on the sender alone before any of its text is read. Everything
+else is discarded immediately and unlogged. Raw title and body are processed in memory and discarded. Only amount, payee, source
 package, timestamp and inferred account are kept.
 
 ### 4.2 The trigger rule (no timeout)
@@ -515,7 +525,7 @@ This section is that contract. Anything not listed here is client-specific.
 
 ### 13.1 What every client must obey
 
-1. **Layout:** the 31-column ledger (spec 8), spacer columns, hidden `AC` to `AE`, data from row 4, nothing below a
+1. **Layout:** the 32-column ledger (A to AF: 29 visible columns, Note at L, and three hidden id columns AD to AF; older 31-column tabs are repaired in place, see AGENTS.md section 1 and `SheetSchemaConstants`), spacer columns, data from row 4, nothing below a
    table, tab names `MmmYY`, workbook name `FinanceYYYY` with `appProperties` `app=FinanceAutomation` and
    `fiscalYear=YYYY`.
 2. **Writes:** `RAW` only, numbers and date or time serials as numbers, append to `A3:K`, `M3:T`, `V3:AB`, then write the
