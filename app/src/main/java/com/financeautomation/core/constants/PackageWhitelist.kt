@@ -1,5 +1,12 @@
 package com.financeautomation.core.constants
 
+import com.financeautomation.domain.repository.PreferencesRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
+
 /**
  * Privacy class designating how incoming notifications are gated and processed.
  */
@@ -103,8 +110,62 @@ object PackageWhitelist {
         PACKAGE_SAMSUNG_MESSAGES
     )
 
-    private val disabledPackages = mutableSetOf<String>()
-    private val userWatchedPackages = mutableSetOf<String>()
+    private val disabledPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val userWatchedPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    @Volatile
+    private var preferencesRepository: PreferencesRepository? = null
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    fun init(prefs: PreferencesRepository) {
+        preferencesRepository = prefs
+        coroutineScope.launch {
+            loadFromPreferences(prefs)
+        }
+    }
+
+    suspend fun loadFromPreferences(prefs: PreferencesRepository) {
+        preferencesRepository = prefs
+        val disabled = prefs.getDisabledPackages()
+        disabledPackages.clear()
+        disabledPackages.addAll(disabled)
+
+        val watched = prefs.getUserWatchedPackages()
+        userWatchedPackages.clear()
+        userWatchedPackages.addAll(watched)
+    }
+
+    private fun persistDisabled() {
+        val prefs = preferencesRepository ?: return
+        coroutineScope.launch {
+            try {
+                prefs.setDisabledPackages(disabledPackages.toSet())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
+    }
+
+    private fun persistWatched() {
+        val prefs = preferencesRepository ?: return
+        coroutineScope.launch {
+            try {
+                prefs.setUserWatchedPackages(userWatchedPackages.toSet())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
+    }
+
+    suspend fun saveToPreferences(prefs: PreferencesRepository) {
+        prefs.setDisabledPackages(disabledPackages.toSet())
+        prefs.setUserWatchedPackages(userWatchedPackages.toSet())
+    }
+
+    fun resetForTesting() {
+        disabledPackages.clear()
+        userWatchedPackages.clear()
+        preferencesRepository = null
+    }
 
     fun setPackageEnabled(packageId: String, enabled: Boolean) {
         val trimmed = packageId.trim()
@@ -113,35 +174,78 @@ object PackageWhitelist {
         } else {
             disabledPackages.add(trimmed)
         }
+        persistDisabled()
     }
 
     fun isPackageEnabled(packageId: String): Boolean {
         return !disabledPackages.contains(packageId.trim())
     }
 
-    fun addWatchedApp(packageId: String) {
+    /**
+     * Checks if a package is eligible for the "Watch another app" allowlist.
+     * Enforces strict allow-style rule:
+     * - Must not be a personal chat, email, or social media application.
+     * - Must match known financial / payment identifiers or categories.
+     */
+    fun isEligibleForWatch(packageId: String, displayName: String? = null): Boolean {
         val trimmed = packageId.trim()
-        if (trimmed.isNotBlank() && !isBlacklisted(trimmed)) {
+        if (trimmed.isBlank()) return false
+        val pkg = trimmed.lowercase()
+        val name = displayName?.trim()?.lowercase().orEmpty()
+
+        if (WHITELISTED_FINANCIAL_PACKAGES.contains(trimmed)) return false
+        if (userWatchedPackages.contains(trimmed)) return false
+
+        if (isChatMailOrSocial(pkg, name)) return false
+
+        return isFinancialAppIdentifier(pkg, name)
+    }
+
+    fun isChatMailOrSocial(pkg: String, name: String = ""): Boolean {
+        val target = "$pkg $name".lowercase()
+        val blockedKeywords = listOf(
+            "mail", "email", "chat", "messag", "talk", "social", "call", "sms",
+            "browser", "slack", "teams", "viber", "wechat", "discord", "telegram",
+            "signal", "instagram", "facebook", "twitter", "reddit", "tiktok",
+            "snapchat", "whatsapp", "meet", "zoom", "skype", "line"
+        )
+        return isBlacklisted(pkg) || blockedKeywords.any { target.contains(it) }
+    }
+
+    fun isFinancialAppIdentifier(pkg: String, name: String = ""): Boolean {
+        val target = "$pkg $name".lowercase()
+        val allowedKeywords = listOf(
+            "pay", "bank", "wallet", "finance", "fintech", "money", "upi", "credit", "card",
+            "invest", "wealth", "lending", "cash", "sbi", "hdfc", "icici", "axis", "canara",
+            "pnb", "bob", "kotak", "indusind", "yesbank", "rbl", "idfc", "federal", "unionbank",
+            "baroda", "yono", "custom"
+        )
+        return allowedKeywords.any { target.contains(it) }
+    }
+
+    fun addWatchedApp(packageId: String, displayName: String? = null) {
+        val trimmed = packageId.trim()
+        if (trimmed.isNotBlank() && isEligibleForWatch(trimmed, displayName)) {
             userWatchedPackages.add(trimmed)
+            persistWatched()
         }
     }
 
     fun removeWatchedApp(packageId: String) {
         userWatchedPackages.remove(packageId.trim())
+        persistWatched()
     }
 
     fun getWatchedApps(): Set<String> = userWatchedPackages.toSet()
 
     /**
      * Filters a list of installed package (packageId to displayName) pairs for the "Watch another app" picker.
-     * Excludes packages already in the verified registry, already watched, or strictly blacklisted (chat, mail, social).
+     * Enforces allow-style rule: only packages whose category or name matches financial, bank, or payment
+     * are listed, and never chat, mail, or social apps.
      */
     fun getAvailableAppsToWatch(installedPackages: List<Pair<String, String>>): List<Pair<String, String>> {
-        return installedPackages.filter { (pkg, _) ->
-            val trimmed = pkg.trim()
-            !WHITELISTED_FINANCIAL_PACKAGES.contains(trimmed) &&
-            !userWatchedPackages.contains(trimmed) &&
-            !isBlacklisted(trimmed)
+        return installedPackages.filter { (pkg, name) ->
+            isEligibleForWatch(pkg, name)
         }
     }
 

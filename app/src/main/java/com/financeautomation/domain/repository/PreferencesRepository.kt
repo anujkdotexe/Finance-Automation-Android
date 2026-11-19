@@ -268,9 +268,27 @@ interface PreferencesRepository {
      */
     fun getWorkbookReplacedNoticePending(): Flow<Boolean> = kotlinx.coroutines.flow.flowOf(false)
 
+    /** Set of package IDs that have been explicitly disabled by the user in capture settings. */
+    suspend fun getDisabledPackages(): Set<String> =
+        getPreference(KEY_DISABLED_PACKAGES)?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+
+    suspend fun setDisabledPackages(packages: Set<String>) {
+        setPreference(KEY_DISABLED_PACKAGES, packages.joinToString(","), isDirty = false)
+    }
+
+    /** Set of custom package IDs that the user explicitly added to watch. */
+    suspend fun getUserWatchedPackages(): Set<String> =
+        getPreference(KEY_USER_WATCHED_PACKAGES)?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+
+    suspend fun setUserWatchedPackages(packages: Set<String>) {
+        setPreference(KEY_USER_WATCHED_PACKAGES, packages.joinToString(","), isDirty = false)
+    }
+
     suspend fun clearKeysWithPrefix(prefix: String) {}
 
     companion object {
+        const val KEY_DISABLED_PACKAGES: String = "disabled_packages"
+        const val KEY_USER_WATCHED_PACKAGES: String = "user_watched_packages"
         const val KEY_WORKBOOK_REPLACED_NOTICE_PENDING: String = "key_workbook_replaced_notice_pending"
         const val KEY_WORKBOOK_REQUEUE_PENDING_YEAR: String = "key_workbook_requeue_pending_year"
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"

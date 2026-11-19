@@ -107,6 +107,12 @@ class NotificationListenerServiceImpl : NotificationListenerService() {
         val app = applicationContext as? FinanceApplication
         val watcher = app?.appContainer?.foregroundWatcher
 
+        app?.appContainer?.preferencesRepository?.let { prefs ->
+            serviceScope.launch {
+                PackageWhitelist.loadFromPreferences(prefs)
+            }
+        }
+
         // Resume watcher for any persisted WAITING captures
         watcher?.checkAndResume(serviceScope)
 

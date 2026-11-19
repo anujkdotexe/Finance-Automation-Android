@@ -39,6 +39,7 @@ class FinanceApplication : Application() {
         com.financeautomation.core.utils.AnalyticsManager.initAtAppStart(this)
         lastNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         appContainer = AppContainer(applicationContext)
+        com.financeautomation.core.constants.PackageWhitelist.init(appContainer.preferencesRepository)
         // Periodic sync must not depend on a reboot or an app update; KEEP makes this a no-op when already scheduled
         try {
             com.financeautomation.service.worker.SyncTransactionsWorker.enqueuePeriodic(applicationContext)
