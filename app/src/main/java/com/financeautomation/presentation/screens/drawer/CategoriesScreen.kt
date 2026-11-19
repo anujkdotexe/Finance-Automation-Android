@@ -612,7 +612,7 @@ private fun CategoryItemCard(
                 ) {
                     if (isLocked) {
                         DropdownMenuItem(
-                            text = { Text("System category (locked)") },
+                            text = { Text(stringResource(R.string.categories_system_locked)) },
                             onClick = { menuExpanded = false },
                             enabled = false
                         )

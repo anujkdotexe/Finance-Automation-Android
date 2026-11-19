@@ -33,7 +33,7 @@ class PrivacyScrubberScrubbingTest {
         val secretEmail = "secret.user@bank.com"
         val secretToken = "ya29.a0AfH6SMBF9812739812738912hsdjkfhsdfkjhsdkfj"
         val secretAmount = "Rs. 15,000.00"
-        val secretSpreadsheetId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+        val secretSpreadsheetId = "1SampleTestSpreadsheetId01234567890123456789"
 
         val rawErrorJson = """
             {

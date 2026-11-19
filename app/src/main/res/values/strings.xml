@@ -615,12 +615,15 @@
     <string name="accounts_field_last4">Last 4 digits</string>
     <string name="accounts_set_default">Set as default account</string>
     <string name="accounts_archive">Archive account</string>
+    <string name="accounts_menu_rename">Rename</string>
+    <string name="accounts_system_locked">System account (locked)</string>
     <string name="accounts_name_placeholder">e.g. HDFC Salary</string>
     <string name="accounts_last4_placeholder">e.g. 1234</string>
     <string name="categories_edit_title">Edit category</string>
     <string name="categories_field_name">Category name</string>
     <string name="categories_hide">Hide category</string>
     <string name="categories_menu_rename">Rename</string>
+    <string name="categories_system_locked">System category (locked)</string>
     <string name="categories_menu_color">Change colour</string>
     <string name="categories_color_dialog_title">Choose category colour</string>
     <string name="category_color_none">No colour</string>

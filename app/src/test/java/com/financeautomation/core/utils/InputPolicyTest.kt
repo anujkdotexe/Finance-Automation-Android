@@ -136,13 +136,13 @@ class InputPolicyTest {
 
     @Test
     fun extractSpreadsheetIdFromBareIdAndFullUrl() {
-        val bareId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+        val bareId = "1SampleTestSpreadsheetId01234567890123456789"
         assertEquals(bareId, InputPolicy.extractSpreadsheetId(bareId))
 
-        val fullUrl = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0"
+        val fullUrl = "https://docs.google.com/spreadsheets/d/1SampleTestSpreadsheetId01234567890123456789/edit#gid=0"
         assertEquals(bareId, InputPolicy.extractSpreadsheetId(fullUrl))
 
-        val sharingUrl = "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?usp=sharing"
+        val sharingUrl = "https://docs.google.com/spreadsheets/d/1SampleTestSpreadsheetId01234567890123456789/edit?usp=sharing"
         assertEquals(bareId, InputPolicy.extractSpreadsheetId(sharingUrl))
 
         assertNull(InputPolicy.extractSpreadsheetId("abc"))
@@ -152,7 +152,7 @@ class InputPolicyTest {
 
     @Test
     fun validateSpreadsheetIdReturnsExpectedResults() {
-        val valid = InputPolicy.validateSpreadsheetId("1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms")
+        val valid = InputPolicy.validateSpreadsheetId("1SampleTestSpreadsheetId01234567890123456789")
         assertTrue(valid.isValid)
 
         val invalid = InputPolicy.validateSpreadsheetId("invalid@sheet#id")

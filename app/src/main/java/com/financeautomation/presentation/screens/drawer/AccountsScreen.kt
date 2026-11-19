@@ -596,7 +596,7 @@ private fun AccountListItem(
             ) {
                 if (isLocked) {
                     DropdownMenuItem(
-                        text = { Text("System account (locked)") },
+                        text = { Text(stringResource(R.string.accounts_system_locked)) },
                         onClick = { menuExpanded = false },
                         enabled = false
                     )
@@ -611,7 +611,7 @@ private fun AccountListItem(
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("Rename") },
+                        text = { Text(stringResource(R.string.accounts_menu_rename)) },
                         onClick = {
                             menuExpanded = false
                             onEdit()
