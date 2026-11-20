@@ -106,7 +106,7 @@ fun PrivacyPolicyScreen(
             )
 
             OutlinedButton(
-                onClick = { openExternalLink(context, "https://financeautomation.app/privacy") },
+                onClick = { openExternalLink(context, "https://anujkdotexe.github.io/Finance-Automation-Android/privacy/") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)

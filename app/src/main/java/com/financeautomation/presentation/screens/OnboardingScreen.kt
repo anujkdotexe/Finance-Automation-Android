@@ -247,7 +247,7 @@ fun OnboardingScreen(
                     onClick = {
                         val intent = Intent(
                             Intent.ACTION_VIEW,
-                            Uri.parse("https://financeautomation.app/help")
+                            Uri.parse("https://github.com/anujkdotexe/Finance-Automation-Android#readme")
                         ).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
