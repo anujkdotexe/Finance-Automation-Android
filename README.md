@@ -1,17 +1,17 @@
 # Finance Automation Android
 
-Finance Automation Android is the native Android companion and standalone client for the Finance Automation ecosystem. It eliminates manual expense logging friction on Android by combining real-time UPI and banking notification interception with an interactive, 1-tap categorization Bottom Sheet and automated Google Drive and Google Sheets synchronization. All transactions logged strictly adhere to the 28-column master sheet schema and net burn accounting rules established in the ecosystem specification.
+Finance Automation Android is the native Android companion and standalone client for the Finance Automation ecosystem. It eliminates manual expense logging friction on Android by combining real-time UPI and banking notification interception with an interactive, 1-tap categorization Bottom Sheet and automated Google Drive and Google Sheets synchronization. All transactions logged follow the master sheet schema (29 visible columns plus three hidden id columns, A to AF) and the net burn accounting rules established in the ecosystem specification.
 
 ---
 
 ## Current Status
 
-The app is feature complete for its first release and is in hardening and on-device verification. It is not distributed yet.
+The app is feature complete for its first release and is in closed beta with a small group of testers.
 
-- **Implemented:** Google sign in with the minimal `drive.file` scope, one workbook per calendar year (`Finance2026`, `Finance2027`, and so on) with carry-forward between years, an encrypted local database (SQLCipher, Room schema version 14), the notification and SMS capture pipeline with a floating add sheet and quick settings tile, the full accounting engine (equal, custom and just-me splits, netting, settlement and repayment waterfalls, non-destructive voiding, carry-forward), income tracking, trips, subscriptions with reminders, budgets, Insights, CSV export, app lock, a Dashboard with Living burn that nets refunds, and two home screen widgets (quick add and month burn).
+- **Implemented:** Google sign in with the minimal `drive.file` scope, one workbook per calendar year (`Finance2026`, `Finance2027`, and so on) with carry-forward between years, an encrypted local database (SQLCipher, Room schema version 16), the notification and SMS capture pipeline with a floating add sheet and quick settings tile, the full accounting engine (equal, custom and just-me splits, netting, settlement and repayment waterfalls, non-destructive voiding, carry-forward), income tracking, trips, subscriptions with reminders, budgets, Insights, CSV export, app lock, a Dashboard with Living burn that nets refunds, and two home screen widgets (quick add and month burn).
 - **Source of truth:** the Google Sheet. The app is offline first: every change is saved locally and queued, then synced with retries and a read quota guard.
-- **Verification state:** the unit test suite runs on the JVM (about a thousand tests). Room migrations, Google account flows and real notification capture are verified by hand on a physical phone, because there is no instrumented test source set yet.
-- **Known open items:** see the independent review in `docs/reviews/` and the audit notes next to it for the full list of findings and their status.
+- **Verification state:** the unit test suite runs on the JVM (about 1,500 tests) and runs in GitHub Actions on demand. Room migrations, Google account flows and real notification capture are verified by hand on a physical phone.
+- **Feedback:** testers can send a short problem report from the Diagnostics screen. The report is created only when the user taps Send after seeing exactly what will be sent. See the [privacy policy](docs/privacy-policy.md).
 
 ---
 
@@ -31,7 +31,7 @@ The application operates offline-first: transactions and configuration changes a
 ## Key Features
 
 - **Automated Financial Notification Interception:** Background listener filters incoming debit and credit alerts from whitelisted UPI apps and bank SMS.
-- **28-Column Master Ledger Compliance:** Transactions map directly to the proven master spreadsheet schema with hidden UUID columns (`AC`, `AD`, `AE`) for idempotent syncing.
+- **Master Ledger Compliance:** Transactions map directly to the proven master spreadsheet schema (columns A to AF) with hidden UUID columns (`AD`, `AE`, `AF`) for idempotent syncing.
 - **Interactive Split Math:** Supports Just Me, Split Equally across companions, and Custom Split shares with strict rupee rounding (`round2`).
 - **Accounting Engine:** Reconciles debts and credits using FIFO settlement waterfalls, repayment offsets, cross-month debt rollover with lineage tracking, and in-place voiding.
 - **Durable Two-Way Settings Sync:** Synchronizes accounts, categories, companions, trip tags, and preferences with the workbook `Config` tab.
@@ -61,6 +61,7 @@ The application operates offline-first: transactions and configuration changes a
 - **Zero Raw Alert Text Stored:** Alerts are parsed in memory. Raw title and body text are never stored in the database, logged, or transmitted off-device. SMS from personal numbers and contact names is rejected on the sender alone.
 - **Minimal Google access:** Drive and Sheets access uses only `https://www.googleapis.com/auth/drive.file`, restricting the app to workbooks and files it created itself. Sign in also reads the account email, name and photo to show which account is connected.
 - **Encrypted Local Storage:** Database is protected by SQLCipher AES-256 encryption. The database key is generated on the device and wrapped by an Android Keystore AES-GCM key.
+- **Opt-in reports only:** Crash reports and anonymous usage counts (Firebase) are off by default and each has its own switch. They never include amounts, payees, account names, categories, names of friends or trips, spreadsheet ids, email addresses or message text. A user-initiated problem report is the third kind, described in the privacy policy.
 - **Zero Secret Commits:** No API keys, client secrets, tokens, or keystores are stored in source code.
 
 ---
@@ -80,9 +81,8 @@ The app reads no environment variables at build or run time. The files below are
 - `local.properties`: the Android SDK location (`sdk.dir=...`), created by Android Studio.
 - `keystore.properties`: release and beta signing (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`). A release build refuses to run without it. A beta build without it is signed with the debug key and must never be distributed.
 - `app/google-services.json`: optional Firebase configuration for crash reports.
+- `firebase/firestore.rules`: the create-only rules for problem reports, published by the project owner in the Firebase console.
 - Google Cloud Console: an Android OAuth client for package `com.financeautomation` with the SHA-1 of each signing key, the Drive and Sheets APIs enabled, and every tester added as a test user while the consent screen is in testing.
-
-The `.env.example` file is a leftover from an earlier design. The app does not read it.
 
 ### Build Commands
 
@@ -138,7 +138,7 @@ Finance Automation Android/
 
 ## Development Workflow
 
-Development of this project is conducted through a pair-agent workflow involving two specialized AI agents:
+Development of this project is conducted through a pair-agent workflow (the handoff and review notes are kept locally and are not part of the repository) involving two specialized AI agents:
 
 1. **Build Agent (Antigravity IDE):** Responsible for executing code changes, database migrations, Gradle builds, and static analysis within the native development environment.
 2. **Reviewer Agent (Claude Code):** Responsible for verifying code against specifications, reviewing architectural compliance, identifying edge cases, and prescribing incremental phases.
