@@ -113,12 +113,16 @@ abstract class FinanceDatabase : RoomDatabase() {
         const val RESET_NOTICE_FILE: String = "storage_reset_notice"
         private const val TAG = "FinanceDatabase"
 
-        init {
-            try {
-                System.loadLibrary("sqlcipher")
-            } catch (e: UnsatisfiedLinkError) {
-                // In JVM unit tests, sqlcipher native library is not present
-            }
+        /**
+         * Set when the native sqlcipher library could not be loaded. JVM unit tests have no native
+         * library and never open a real database, so the class itself must still load. Opening the
+         * real database in the app fails loudly below instead of hiding the problem.
+         */
+        private val sqlcipherLoadError: UnsatisfiedLinkError? = try {
+            System.loadLibrary("sqlcipher")
+            null
+        } catch (e: UnsatisfiedLinkError) {
+            e
         }
 
         @Volatile
@@ -161,6 +165,10 @@ abstract class FinanceDatabase : RoomDatabase() {
         }
 
         private fun buildDatabase(context: Context): FinanceDatabase {
+            sqlcipherLoadError?.let { error ->
+                Log.e(TAG, "Native sqlcipher library failed to load: ${error.javaClass.simpleName}")
+                throw error
+            }
             val appContext = context.applicationContext
             val keyProvider = DatabaseKeyProvider(appContext)
 
