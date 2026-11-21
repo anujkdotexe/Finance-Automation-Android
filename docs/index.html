@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finance Automation | Expense logging that stays on your phone</title>
+<meta name="description" content="A native Android app that turns UPI and bank notifications into a categorized ledger in your own Google Sheet. Offline first, private by design, open source.">
+<meta name="theme-color" content="#0f1416">
+<meta property="og:title" content="Finance Automation">
+<meta property="og:description" content="Turn payment notifications into a clean ledger in your own Google Sheet. Private by design and open source.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">F</span> Finance Automation</a>
+    <nav class="nav" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#offline">Offline queue</a>
+      <a href="#privacy">Privacy</a>
+      <a href="privacy/">Privacy policy</a>
+      <a href="https://github.com/anujkdotexe/Finance-Automation-Android">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Closed beta for Android</span>
+      <h1>Log every payment without typing a thing.</h1>
+      <p class="lead">Finance Automation reads your UPI and bank payment alerts on your phone, asks you to pick a category in one tap, and writes the entry to a Google Sheet that only you own.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/anujkdotexe/Finance-Automation-Android">View the source on GitHub</a>
+        <a class="btn btn-outline" href="privacy/">Read the privacy policy</a>
+      </div>
+      <p class="hero-note">Open source under the MIT License. The beta is by invitation. Open an issue on GitHub to ask for access.</p>
+    </div>
+    <div class="phones" aria-label="The app on a phone">
+      <figure class="phone first">
+        <img src="assets/app-dashboard.png" width="1080" height="2270" alt="The app dashboard showing living burn, savings, income and what is owed, in the dark theme.">
+      </figure>
+      <figure class="phone second">
+        <img src="assets/app-needs-review.png" width="1080" height="2270" alt="The Needs Review screen showing a calm all caught up message.">
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="band">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Everything you need, nothing you do not</h2>
+      <p>The first version covers the daily loop of a personal ledger, from the moment a payment happens to the moment it sits in your sheet.</p>
+    </div>
+    <div class="grid">
+      <article class="card">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+        <h3>Automatic capture</h3>
+        <p>Payment alerts from the common Indian payment apps and bank debit alerts are picked up as they arrive. Each app has its own switch.</p>
+      </article>
+      <article class="card">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        <h3>One tap categories</h3>
+        <p>A small sheet pops up over whatever you are doing. Pick the category and you are done. The app learns the ones you use most.</p>
+      </article>
+      <article class="card">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><circle cx="18" cy="9" r="2.5"/><path d="M17 14.2A5.5 5.5 0 0 1 22 19.5"/></svg></span>
+        <h3>Equal and custom splits</h3>
+        <p>Split a bill equally with friends or type your own share. The app tracks who owes you until they settle, and what you owe others.</p>
+      </article>
+      <article class="card">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg></span>
+        <h3>Your own Google Sheet</h3>
+        <p>One workbook per year in your Drive, with a layout you can read, filter and chart. The app can only open files it created.</p>
+      </article>
+      <article class="card">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg></span>
+        <h3>Needs Review</h3>
+        <p>When an alert is unclear, the entry waits in Needs Review instead of guessing. Unconfirmed entries are never counted as spending.</p>
+      </article>
+      <article class="card">
+        <span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span>
+        <h3>Budgets, trips and subscriptions</h3>
+        <p>Track a monthly budget, tag a trip, remember recurring bills, and see where the money went on the dashboard and in Insights.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <h2>How it works</h2>
+      <p>Three steps, and only the first one is yours.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><h3>You pay</h3><p>Use any payment app as you normally do. A notification arrives on your phone.</p></div>
+      <div class="step"><h3>You tap once</h3><p>The app reads the alert on the device, fills in the amount and payee, and asks only for the category.</p></div>
+      <div class="step"><h3>It lands in your sheet</h3><p>The entry is saved on the phone first, then synced to your Google Sheet as soon as it can.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="offline" class="band">
+  <div class="wrap split">
+    <div>
+      <h2>An offline queue, so nothing is lost</h2>
+      <p class="section-head" style="margin:0;max-width:none"><span style="color:var(--text-muted);font-size:17px">Every change is written to the database on your phone first and placed in a sync queue. If you are on a train with no signal, you lose nothing.</span></p>
+      <ul>
+        <li>Changes sync in order when the network is back.</li>
+        <li>Brief problems such as no network or a busy server are retried automatically, up to a limit.</li>
+        <li>If an item still fails, it appears in Needs Review with the reason, and you choose Retry or Discard.</li>
+        <li>Each row carries a hidden id, so a retry never creates a duplicate in your sheet.</li>
+      </ul>
+    </div>
+    <div class="queue" role="img" aria-label="An illustration of the sync queue with three items in different states.">
+      <div class="queue-row"><span>Lunch, saved on the phone</span><span class="pill ok">Synced</span></div>
+      <div class="queue-row"><span>Auto fare, waiting for network</span><span class="pill wait">Queued</span></div>
+      <div class="queue-row"><span>Groceries, unclear alert</span><span class="pill review">Needs Review</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Privacy was the first requirement, not the last</h2>
+      <p>Your financial data is yours. The design makes it hard for anyone else to see it, including the developer.</p>
+    </div>
+    <div class="privacy-grid">
+      <div class="check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><p><strong>Parsed on your phone only</strong><span>Alerts are read in memory on the device. The raw message text is never stored, logged or sent anywhere.</span></p></div>
+      <div class="check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><p><strong>Stored on the phone and in your Drive</strong><span>Entries live in an encrypted database on the phone and in your own Google Sheet. No other user and not the developer can see them.</span></p></div>
+      <div class="check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><p><strong>No server in the middle</strong><span>There is no backend that receives your transactions. Your settings, such as accounts, categories and friends, are saved on the phone and in a Config tab of your own sheet.</span></p></div>
+      <div class="check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><p><strong>The narrowest Google access</strong><span>The app asks only for the drive.file permission, which limits it to files it created itself.</span></p></div>
+      <div class="check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><p><strong>Chat apps stay blocked</strong><span>Personal messaging apps are never read. WhatsApp is read only when its own notification channel marks a message as a payment.</span></p></div>
+      <div class="check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg><p><strong>Reports are opt in and anonymous</strong><span>Crash reports and usage counts are off until you turn them on. A problem report is sent only when you tap Send after seeing exactly what it contains.</span></p></div>
+    </div>
+    <p style="margin-top:24px"><a class="btn btn-outline" href="privacy/">Read the full privacy policy</a></p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Built in the open</h2>
+      <p>The app is written in Kotlin with Jetpack Compose, an encrypted local database and an offline first sync engine, and it is covered by about 1,500 unit tests. The code, the sheet layout and the privacy rules are all public under the MIT License.</p>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="https://github.com/anujkdotexe/Finance-Automation-Android">Open the repository</a>
+      <a class="btn btn-outline" href="https://github.com/anujkdotexe/Finance-Automation-Android/issues">Ask for beta access</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>Finance Automation. Open source under the MIT License.</span>
+    <nav aria-label="Footer">
+      <a href="privacy/">Privacy policy</a>
+      <a href="https://github.com/anujkdotexe/Finance-Automation-Android">GitHub</a>
+      <a href="https://www.linkedin.com/in/anujkondawar/">Built by Anuj Kondawar</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

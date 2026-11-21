@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy | Finance Automation</title>
+<meta name="description" content="How Finance Automation handles your data. Notifications are parsed on your phone, entries go only to your own Google Sheet, and there is no server in between.">
+<meta name="theme-color" content="#0f1416">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../"><span class="brand-mark" aria-hidden="true">F</span> Finance Automation</a>
+    <nav class="nav" aria-label="Main">
+      <a href="../">Home</a>
+      <a href="https://github.com/anujkdotexe/Finance-Automation-Android">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="doc">
+  <div class="wrap">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: November 2026. Applies to the Finance Automation Android app.</p>
+    <p>Finance Automation is built local first. Your financial data belongs to you. This page explains what the app reads, where your data goes, and what is optional.</p>
+
+    <div class="glance" aria-label="Summary">
+      <div class="card"><strong>Parsed on your phone</strong><span>Payment alerts are read in memory on the device and the raw text is never stored.</span></div>
+      <div class="card"><strong>Saved in your Google Sheet</strong><span>Entries go to a sheet in your own Drive. No other user and not the developer can see them.</span></div>
+      <div class="card"><strong>No server in between</strong><span>Your transactions never pass through a server run by the developer or a third party.</span></div>
+      <div class="card"><strong>Everything extra is opt in</strong><span>Crash reports, usage counts and problem reports are off until you choose to send them.</span></div>
+    </div>
+
+    <nav class="toc" aria-label="Contents">
+      <strong>Contents</strong>
+      <ol>
+        <li><a href="#local">Local first processing</a></li>
+        <li><a href="#notifications">Notifications and messages</a></li>
+        <li><a href="#google">Google access</a></li>
+        <li><a href="#diagnostics">Optional diagnostics</a></li>
+        <li><a href="#reports">Problem reports</a></li>
+        <li><a href="#table">What goes where</a></li>
+        <li><a href="#choices">Your choices</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="local">1. Local first processing</h2>
+    <p>All financial notifications and messages are processed on your Android device.</p>
+    <ul>
+      <li>Details such as the amount and payee are parsed in the device memory.</li>
+      <li>Entries are written directly to your own Google Sheet through the Google Drive and Google Sheets APIs, using the minimal <code>drive.file</code> permission.</li>
+      <li>Transactions, payees, amounts, account numbers and categories never pass through any server run by the developer or a third party.</li>
+      <li>The app also keeps an encrypted database on your phone so it works offline and can retry when the network returns. Your settings, such as accounts, categories and friends, are saved there and in a Config tab of your own sheet.</li>
+    </ul>
+
+    <h2 id="notifications">2. Notifications and messages</h2>
+    <p>The app listens for notifications with strict filtering.</p>
+    <ul>
+      <li>Only alerts from a fixed list of known Indian payment apps, such as Google Pay, PhonePe, Paytm, BHIM, Supermoney, Amazon Pay, CRED and Navi, and from system SMS apps are evaluated. You can turn each app off in Settings.</li>
+      <li>Bank debit SMS is accepted only from recognized bank and biller sender names. A message from a personal number or a saved contact is dropped on the sender alone, and its text is never read.</li>
+      <li>WhatsApp and WhatsApp Business are the only chat apps considered, and only when the notification itself is marked by Android as a payment. Personal chats, groups, calls, media and one time passwords are rejected without reading or logging their contents.</li>
+      <li>Other messaging apps, such as Signal, Telegram, Discord and Instagram, are never read.</li>
+    </ul>
+
+    <h2 id="google">3. Google access</h2>
+    <p>The app asks for one permission only: <code>https://www.googleapis.com/auth/drive.file</code>.</p>
+    <ul>
+      <li>It lets the app create and edit only the files the app itself created.</li>
+      <li>The app cannot see, open or change your other spreadsheets, documents or files.</li>
+      <li>Google account details such as your name, email and photo are used inside the app to show which account is connected.</li>
+      <li>Google user data is not shared with any other server or third party.</li>
+    </ul>
+
+    <h2 id="diagnostics">4. Optional diagnostics</h2>
+    <p>Technical reports are optional and off by default. Each has its own switch.</p>
+    <ul>
+      <li><strong>Crash reports</strong> (Firebase Crashlytics): when on, they include crash traces, the Android version, the device model and the error type.</li>
+      <li><strong>Usage counts</strong> (Firebase Analytics): when on, they record simple event counts from a fixed list, such as finishing onboarding, a kind of sync error or which feature was used.</li>
+      <li>No advertising identifier is collected.</li>
+      <li>These reports never contain amounts, payees, account names, categories, names of friends or trips, spreadsheet ids, email addresses or message text.</li>
+    </ul>
+
+    <h2 id="reports">5. Problem reports you send</h2>
+    <p>You can choose to send a problem report from the Diagnostics screen to help fix a bug.</p>
+    <ul>
+      <li>A report is created only when you tap Send, after seeing exactly what will be sent. It is never sent in the background or automatically.</li>
+      <li>It contains the app version, the device maker and model, the Android version, a random identifier stored on the phone and not tied to your Google account, the screen name, a reason code, simple counters, and an optional note you type. The note field reminds you not to write private data.</li>
+      <li>It never contains amounts, merchants, account digits, spreadsheet ids or message text.</li>
+      <li>Reports are stored in Google Cloud Firestore. The app can only create reports, not read, change or delete them. Only the developer can read them, to fix problems.</li>
+    </ul>
+
+    <h2 id="table">6. What goes where</h2>
+    <table>
+      <thead><tr><th>Data</th><th>Where it lives</th><th>Who can see it</th></tr></thead>
+      <tbody>
+        <tr><td>Payment alert text</td><td>Read in memory, never stored</td><td>Nobody</td></tr>
+        <tr><td>Your entries and settings</td><td>Encrypted database on your phone and your own Google Sheet</td><td>You</td></tr>
+        <tr><td>Crash reports and usage counts</td><td>Firebase, only if you turn them on</td><td>The developer, without any financial details</td></tr>
+        <tr><td>A problem report</td><td>Firestore, only if you tap Send</td><td>The developer</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="choices">7. Your choices</h2>
+    <ul>
+      <li>Turn off any payment app, or crash reports and usage counts, at any time in Settings.</li>
+      <li>Remove the app's access to your Drive in your Google Account permissions. Your sheet stays in your Drive and you can delete it yourself.</li>
+      <li>Uninstalling the app removes its data from your phone.</li>
+      <li>To have a problem report you sent removed, open an issue on the project page and include the identifier shown in the report preview.</li>
+    </ul>
+
+    <h2 id="contact">8. Contact</h2>
+    <p>For privacy questions, open an issue on the <a href="https://github.com/anujkdotexe/Finance-Automation-Android/issues">project page</a>. The source code is public, so you can check every statement on this page.</p>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>Finance Automation. Open source under the MIT License.</span>
+    <nav aria-label="Footer"><a href="../">Home</a><a href="https://github.com/anujkdotexe/Finance-Automation-Android">GitHub</a></nav>
+  </div>
+</footer>
+
+</body>
+</html>
