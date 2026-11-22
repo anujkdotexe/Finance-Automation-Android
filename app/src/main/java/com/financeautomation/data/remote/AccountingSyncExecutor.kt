@@ -33,6 +33,12 @@ import java.util.UUID
 
 private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
 
+data class PayableOutcome(
+    val netAmount: Double,
+    val fullyRepaid: Boolean,
+    val dateSerial: Int?
+)
+
 /**
  * Handles two-phase durable execution of complex accounting operations in the sync queue:
  * Friend settlements (OP_LOG_CREDIT), payables (OP_LOG_PAYABLE), repayments (OP_LOG_REPAYMENT),
@@ -192,10 +198,16 @@ open class AccountingSyncExecutor(
         item: SyncQueueEntity,
         spreadsheetId: String,
         tabName: String
-    ): Result<Unit> {
+    ): Result<PayableOutcome> {
         val plan: AccountingPlan
+        val outcome: PayableOutcome
         if (item.planJson != null) {
             plan = AccountingPlanJsonAdapter.fromJson(item.planJson)
+            val payAppend = plan.appends.find { it.table == TableType.PAYABLE }
+            val netAmount = (payAppend?.cells?.getOrNull(4) as? Number)?.toDouble() ?: 0.0
+            val fullyRepaid = (payAppend?.cells?.getOrNull(6) as? String)?.equals("Repaid", ignoreCase = true) == true
+            val dateSerial = (payAppend?.cells?.getOrNull(0) as? Number)?.toInt()
+            outcome = PayableOutcome(netAmount, fullyRepaid, dateSerial)
         } else {
             val req = AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson)
             val dateSerial = DateSerialUtils.toDateSerial(req.timestamp)
@@ -216,7 +228,7 @@ open class AccountingSyncExecutor(
                 }
             )
 
-            val newPayUuid = "pay_" + UUID.randomUUID().toString().replace("-", "").take(12)
+            val newPayUuid = req.requestId
             val isFullyRepaid = nettingRes.netAmount <= 0.0
             val effectiveCategory = req.category.trim().ifBlank { com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER }
             val effectiveWhatFor = com.financeautomation.core.utils.PayableFormatUtils.buildEffectiveWhatFor(req.whatFor, effectiveCategory)
@@ -270,9 +282,19 @@ open class AccountingSyncExecutor(
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
             resolveSyncQueueDao().updatePlanJson(item.id, planJson)
+            outcome = PayableOutcome(
+                netAmount = AccountingUtils.round2(nettingRes.netAmount),
+                fullyRepaid = isFullyRepaid,
+                dateSerial = if (isFullyRepaid) dateSerial else null
+            )
         }
 
-        return applyAccountingPlan(spreadsheetId, plan)
+        val applyResult = applyAccountingPlan(spreadsheetId, plan)
+        return when (applyResult) {
+            is Result.Success -> Result.Success(outcome)
+            is Result.Error -> Result.Error(applyResult.exception)
+            is Result.Loading -> Result.Loading
+        }
     }
 
     suspend fun executeLogRepayment(

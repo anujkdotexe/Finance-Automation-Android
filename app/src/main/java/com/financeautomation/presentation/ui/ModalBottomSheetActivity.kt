@@ -323,7 +323,7 @@ class ModalBottomSheetActivity : ComponentActivity() {
                                             is Result.Error -> {
                                                 isSubmitting.set(false)
                                                 Diagnostics.record("ModalBottomSheetActivity", "logRepayment: ${SyncErrorKind.safeCode("repayment", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
-                                                val errMsg = SyncErrorKind.formatUserMessage("repayment", res.throwable)
+                                                val errMsg = res.exception?.message ?: SyncErrorKind.formatUserMessage("repayment", res.throwable)
                                                 Toast.makeText(this@ModalBottomSheetActivity, errMsg, Toast.LENGTH_SHORT).show()
                                             }
                                             is Result.Loading -> Unit

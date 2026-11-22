@@ -53,6 +53,9 @@ interface PayableDao {
     @Query("UPDATE payables SET paidBy = :newName WHERE paidBy = :oldName")
     suspend fun updatePaidByName(oldName: String, newName: String): Int
 
+    @Query("UPDATE payables SET amountIOwe = :amountIOwe, repaymentStatus = :status, dateRepaidSerial = :dateRepaidSerial WHERE uuid = :uuid")
+    suspend fun updateAfterNetting(uuid: String, amountIOwe: Double, status: String, dateRepaidSerial: Int?): Int = 0
+
     @Query("DELETE FROM payables")
     suspend fun deleteAll()
 }

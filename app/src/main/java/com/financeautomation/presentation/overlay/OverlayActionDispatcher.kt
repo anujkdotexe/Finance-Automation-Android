@@ -158,7 +158,7 @@ class OverlayActionDispatcher(
                         }
                         is Result.Error -> {
                             isSubmitting.set(false)
-                            resultPill.show("Failed to record repayment")
+                            resultPill.show(res.exception?.message ?: "Failed to record repayment")
                         }
                         is Result.Loading -> Unit
                     }

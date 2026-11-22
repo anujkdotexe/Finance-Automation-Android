@@ -544,6 +544,14 @@ class TransactionRepositoryImpl(
         }
     }
 
+    override suspend fun logFriendPaid(
+        creditor: String,
+        amount: Double,
+        whatFor: String,
+        timestamp: Long,
+        category: String
+    ): Result<String> = logPayable(creditor, amount, whatFor, timestamp, category)
+
     override suspend fun logRepayment(
         creditor: String,
         amount: Double,
@@ -562,6 +570,55 @@ class TransactionRepositoryImpl(
         try {
             if (!amount.isFinite() || amount <= 0.0) return@withContext Result.Error(IllegalArgumentException(AMOUNT_MESSAGE))
             if (isFuture(timestamp, nowMillis = clock())) return@withContext Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
+
+            val pDao = resolvePayableDao()
+            val allPayables = pDao?.getAll().orEmpty()
+            val openPayables = allPayables.filter {
+                (it.repaymentStatus.equals("Pending", ignoreCase = true) || it.repaymentStatus.equals("Partial", ignoreCase = true)) &&
+                    com.financeautomation.domain.utils.AccountingUtils.tokens(it.paidBy).any { token ->
+                        com.financeautomation.domain.utils.AccountingUtils.eq(token, creditor)
+                    } &&
+                    it.amountIOwe > 0.0
+            }
+
+            if (openPayables.isEmpty()) {
+                return@withContext Result.Error(
+                    IllegalStateException("Nothing is owed to $creditor")
+                )
+            }
+
+            var remainingRepayment = amount
+            val dateSerial = DateSerialUtils.toDateSerial(timestamp)
+            for (openPayable in openPayables) {
+                if (remainingRepayment <= com.financeautomation.domain.utils.Tolerances.MONEY_LEFT) break
+                val repRes = nettingUseCase.applyRepaymentToPayable(
+                    com.financeautomation.domain.model.LedgerPayable(
+                        tab = openPayable.tabName,
+                        row = openPayable.sheetRowIndex ?: 0,
+                        uuid = openPayable.uuid,
+                        dateIncurredSerial = openPayable.dateIncurredSerial,
+                        timeSerial = openPayable.timeSerial,
+                        paidBy = openPayable.paidBy,
+                        whatFor = openPayable.whatFor,
+                        amountOwed = openPayable.amountIOwe,
+                        dateRepaidSerial = openPayable.dateRepaidSerial,
+                        status = openPayable.repaymentStatus
+                    ),
+                    creditor,
+                    remainingRepayment,
+                    dateSerial
+                ) ?: continue
+
+                remainingRepayment = com.financeautomation.domain.utils.AccountingUtils.round2(remainingRepayment - repRes.applied)
+                val updatedPayable = openPayable.copy(
+                    amountIOwe = repRes.newOwed,
+                    repaymentStatus = repRes.newStatus,
+                    paidBy = repRes.newPaidBy,
+                    dateRepaidSerial = dateSerial
+                )
+                pDao?.upsert(updatedPayable)
+            }
+
             val reqId = "rep_${UUID.randomUUID().toString().replace("-", "").take(12)}"
             val req = LogRepaymentRequest(
                 requestId = reqId,
@@ -1246,10 +1303,20 @@ class TransactionRepositoryImpl(
                     }
 
                     val executor = accountingSyncExecutor
+                    var payableOutcome: com.financeautomation.data.remote.PayableOutcome? = null
                     val opResult = when (item.operationType) {
                         SyncQueueEntity.OP_LOG_CREDIT -> executor.executeLogCredit(item, spreadsheetId, opTabName)
                         SyncQueueEntity.OP_VOID_INFLOW -> executor.executeVoidInflow(item, spreadsheetId, opTabName)
-                        SyncQueueEntity.OP_LOG_PAYABLE -> executor.executeLogPayable(item, spreadsheetId, opTabName)
+                        SyncQueueEntity.OP_LOG_PAYABLE -> {
+                            when (val pRes = executor.executeLogPayable(item, spreadsheetId, opTabName)) {
+                                is Result.Success -> {
+                                    payableOutcome = pRes.data
+                                    Result.Success(Unit)
+                                }
+                                is Result.Error -> Result.Error(pRes.exception)
+                                is Result.Loading -> Result.Loading
+                            }
+                        }
                         SyncQueueEntity.OP_LOG_REPAYMENT -> executor.executeLogRepayment(item, spreadsheetId, opTabName)
                         SyncQueueEntity.OP_CARRY_FORWARD -> executor.executeCarryForward(item, spreadsheetId)
                         SyncQueueEntity.OP_YEAR_CLOSE -> executor.executeYearClose(item, spreadsheetId)
@@ -1268,6 +1335,14 @@ class TransactionRepositoryImpl(
                             deliveredMonths.add(java.time.YearMonth.from(Instant.ofEpochMilli(ts).atZone(sheetTimeZone)))
                             payReq.transactionId?.let { tid ->
                                 transactionDao.updateSyncState(tid, SyncState.SYNCED.name)
+                            }
+                            payableOutcome?.let { outcome ->
+                                resolvePayableDao()?.updateAfterNetting(
+                                    uuid = payReq.requestId,
+                                    amountIOwe = outcome.netAmount,
+                                    status = if (outcome.fullyRepaid) "Repaid" else "Pending",
+                                    dateRepaidSerial = if (outcome.fullyRepaid) outcome.dateSerial else null
+                                )
                             }
                         }
                         syncQueueDao.deleteById(item.id)
