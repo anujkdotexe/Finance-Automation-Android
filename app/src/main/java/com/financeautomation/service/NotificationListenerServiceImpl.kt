@@ -184,7 +184,10 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
                         }
                     }
                     is NotificationProcessingOutcome.Merged -> {
-                        // Merged dual alert without posting duplicate notification
+                        // Merged dual alert without posting duplicate notification; wake the prompt when it became WAITING
+                        if (outcome.becameWaiting) {
+                            watcher?.notifyCaptureWaiting(serviceScope)
+                        }
                     }
                     is NotificationProcessingOutcome.Dismissed -> {
                         // Dismissed payment alert

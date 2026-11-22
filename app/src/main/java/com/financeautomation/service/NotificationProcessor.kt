@@ -51,7 +51,9 @@ sealed interface NotificationProcessingOutcome {
 
     data class Merged(
         val existingTransactionId: String,
-        val enriched: Boolean = false
+        val enriched: Boolean = false,
+        /** True when the merge moved an AWAITING_SUCCESS capture to WAITING, so the prompt watcher must be woken. */
+        val becameWaiting: Boolean = false
     ) : NotificationProcessingOutcome
 
     data class Dismissed(
@@ -463,7 +465,12 @@ class NotificationProcessor(
                         handledNotificationDao?.insert(handledEntity)
                         pendingCaptureDao.update(merged)
                         PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.MERGED)
-                        executionOutcome = NotificationProcessingOutcome.Merged(merged.id, enriched = true)
+                        executionOutcome = NotificationProcessingOutcome.Merged(
+                            merged.id,
+                            enriched = true,
+                            becameWaiting = openMergeTarget.state == PendingCaptureEntity.STATE_AWAITING_SUCCESS &&
+                                merged.state == PendingCaptureEntity.STATE_WAITING
+                        )
                         return@dbAction
                     }
 
