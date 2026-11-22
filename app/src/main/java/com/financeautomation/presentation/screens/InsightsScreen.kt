@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -175,7 +176,7 @@ private fun DonutChart(
     onSliceClick: (InsightsSlice) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val summary = stringResource(R.string.insights_donut_cd, formatRupees(total), slices.size)
+    val summary = pluralStringResource(R.plurals.insights_donut_cd, slices.size, formatRupees(total), slices.size)
     val track = FinanceTheme.colors.surfaceContainerHigh
     val isDark = isAppInDarkTheme()
     val colors = slices.mapIndexed { i, s -> sliceColor(palette, i, s, categories, isDark) }

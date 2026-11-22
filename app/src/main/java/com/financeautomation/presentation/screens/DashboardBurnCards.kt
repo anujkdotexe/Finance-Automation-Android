@@ -45,6 +45,7 @@ import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Stacked KPI layout (Y1 final):
@@ -76,8 +77,10 @@ fun KpiRow(
     ) {
         // Row 1: Full-width Living burn card
         val paceText = paceDeltaPercent?.let { delta ->
-            val absDelta = abs(delta).toInt()
-            if (delta <= 0.0) {
+            val absDelta = abs(delta).roundToInt()
+            if (absDelta == 0) {
+                stringResource(R.string.kpi_pace_same)
+            } else if (delta <= 0.0) {
                 stringResource(R.string.kpi_pace_down, absDelta)
             } else {
                 stringResource(R.string.kpi_pace_up, absDelta)
@@ -101,7 +104,7 @@ fun KpiRow(
 
         // Row 2: Two equal-width cards: Savings and Income
         val savingsPercentText = if (income > 0.0) {
-            val pct = ((savings / income) * 100).toInt()
+            val pct = ((savings / income) * 100).roundToInt()
             stringResource(R.string.kpi_savings_pct_income, pct)
         } else null
 

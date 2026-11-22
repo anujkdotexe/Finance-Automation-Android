@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -415,11 +416,7 @@ private fun DashboardPreviewDark() {
 /** Small caption under the Living burn card: how many rows are not counted yet and how much they are worth. */
 @Composable
 private fun UnconfirmedCaption(count: Int, amount: Double, onClick: () -> Unit) {
-    val text = if (count == 1) {
-        stringResource(R.string.dashboard_unconfirmed_one, formatRupees(amount))
-    } else {
-        stringResource(R.string.dashboard_unconfirmed_many, count, formatRupees(amount))
-    }
+    val text = pluralStringResource(R.plurals.dashboard_unconfirmed_rows, count, count, formatRupees(amount))
     Text(
         text = text,
         style = FinanceTheme.typography.bodySmall,

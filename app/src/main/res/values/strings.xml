@@ -41,7 +41,10 @@
     <string name="action_clear">Clear</string>
     <string name="action_refresh">Refresh</string>
     <string name="diagnostics_empty">No diagnostic events recorded. System running nominally.</string>
-    <string name="diagnostics_events_count">%d event(s) recorded</string>
+    <plurals name="diagnostics_events_count">
+        <item quantity="one">%d event recorded</item>
+        <item quantity="other">%d events recorded</item>
+    </plurals>
     <string name="health_oem_configured">Configured on this device</string>
     <string name="health_oem_open_settings">Open OEM settings</string>
     <string name="health_status_format">Status: %s</string>
@@ -175,7 +178,10 @@
     <string name="nav_subscriptions_placeholder">No subscriptions available</string>
     <string name="sub_add_pick_start_date">Pick a start date</string>
     <string name="sub_add_due_today">Due today</string>
-    <string name="sub_add_due_in_days">Due in %d days</string>
+    <plurals name="sub_add_due_in_days">
+        <item quantity="one">Due in %d day</item>
+        <item quantity="other">Due in %d days</item>
+    </plurals>
 
     <!-- Sheet Flow Prompts and Labels -->
     <string name="inflow_type_income">Income / Salary</string>
@@ -602,7 +608,10 @@
     <string name="insights_other">Other</string>
     <string name="insights_percent">%1$d%%</string>
     <string name="insights_donut_center_label">Total</string>
-    <string name="insights_donut_cd">Spending by category, %1$s in total across %2$d groups</string>
+    <plurals name="insights_donut_cd">
+        <item quantity="one">Spending by category, %1$s in total across %2$d group</item>
+        <item quantity="other">Spending by category, %1$s in total across %2$d groups</item>
+    </plurals>
     <string name="insights_legend_row_cd">%1$s, %2$s, %3$d percent. Opens the transactions.</string>
     <string name="insights_legend_other_cd">Other categories, %1$s, %2$d percent</string>
     <string name="insights_bars_cd">Living burn by month: %1$s</string>
@@ -723,6 +732,7 @@
     <!-- KPI card & Dashboard burn cards -->
     <string name="dashboard_key_figures_cd">Key figures</string>
     <string name="kpi_pace_down">Down %1$d%% vs last month</string>
+    <string name="kpi_pace_same">Same as last month</string>
     <string name="kpi_pace_up">Up %1$d%% vs last month</string>
     <string name="kpi_daily_average">%1$s / day</string>
     <string name="kpi_savings_pct_income">%1$d%% of income</string>
@@ -888,8 +898,10 @@
     <!-- Setup page: the step that needs the user -->
 
     <!-- Rows waiting in review, not counted in the burn -->
-    <string name="dashboard_unconfirmed_one">1 unconfirmed row, %1$s not counted</string>
-    <string name="dashboard_unconfirmed_many">%1$d unconfirmed rows, %2$s not counted</string>
+    <plurals name="dashboard_unconfirmed_rows">
+        <item quantity="one">%1$d unconfirmed row, %2$s not counted</item>
+        <item quantity="other">%1$d unconfirmed rows, %2$s not counted</item>
+    </plurals>
 
     <!-- Attention cards: what is wrong, why, and the one fix -->
     <string name="attn_needs_attention">Needs attention</string>

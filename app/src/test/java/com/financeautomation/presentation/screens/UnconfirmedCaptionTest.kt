@@ -14,12 +14,13 @@ class UnconfirmedCaptionTest {
     fun shownOnlyWhenTheCountIsAboveZeroAndOpensReview() {
         assertTrue(screen.contains("if (state.unconfirmedCount > 0)"))
         assertTrue(screen.contains("onClick = onNavigateToReview"))
-        assertTrue(screen.contains("R.string.dashboard_unconfirmed_many"))
+        assertTrue(screen.contains("R.plurals.dashboard_unconfirmed_rows"))
     }
 
     @Test
     fun textsHaveFormatArgumentsInStrings() {
-        assertTrue(strings.contains("name=\"dashboard_unconfirmed_many\">%1\$d unconfirmed rows, %2\$s not counted"))
-        assertTrue(strings.contains("name=\"dashboard_unconfirmed_one\""))
+        assertTrue(strings.contains("<plurals name=\"dashboard_unconfirmed_rows\">"))
+        assertTrue(strings.contains("%1\$d unconfirmed rows, %2\$s not counted"))
+        assertTrue(strings.contains("%1\$d unconfirmed row, %2\$s not counted"))
     }
 }

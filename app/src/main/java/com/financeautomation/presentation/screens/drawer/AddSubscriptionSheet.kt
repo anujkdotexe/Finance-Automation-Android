@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -414,7 +415,7 @@ fun AddSubscriptionSheet(
                                 ) {
                                     val pillText = when {
                                         daysUntil == 0L -> stringResource(R.string.sub_add_due_today)
-                                        daysUntil > 0L -> stringResource(R.string.sub_add_due_in_days, daysUntil.toInt())
+                                        daysUntil > 0L -> pluralStringResource(R.plurals.sub_add_due_in_days, daysUntil.toInt(), daysUntil.toInt())
                                         else -> ""
                                     }
                                     if (pillText.isNotEmpty()) {
