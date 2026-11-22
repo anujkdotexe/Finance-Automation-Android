@@ -275,7 +275,7 @@ fun AboutScreen(
             }
         }
 
-        // Navigational Links Card with LinkButtons
+        // Navigational Links Card rendered from shared getAboutNavigationItems()
         Surface(
             color = FinanceTheme.colors.surfaceContainerLowest,
             shape = FinanceShapes.large,
@@ -283,152 +283,64 @@ fun AboutScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Link 1: Privacy policy
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                        .clip(FinanceShapes.medium)
-                        .clickable(onClick = onNavigateToPrivacy)
-                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(FinanceTheme.sizes.icon32)
-                                .clip(CircleShape)
-                                .background(FinanceTheme.colors.surfaceContainerLow),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Policy,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(FinanceTheme.sizes.icon18)
-                            )
-                        }
-                        Text(
-                            text = stringResource(R.string.about_link_privacy),
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
+                val items = getAboutNavigationItems().filter { !it.requiresDeveloperMode || state.developerMode }
+                val reportProblemAction = onReportProblem ?: { showProblemReportDialog = true }
+
+                items.forEachIndexed { index, item ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            color = FinanceTheme.colors.surfaceContainerLow,
+                            modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
                         )
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                    val onClick = resolveAboutItemAction(
+                        itemId = item.id,
+                        onNavigateToPrivacy = onNavigateToPrivacy,
+                        onNavigateToLicences = onNavigateToLicences,
+                        onReportProblem = reportProblemAction
                     )
-                }
-
-                HorizontalDivider(
-                    color = FinanceTheme.colors.surfaceContainerLow,
-                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
-                )
-
-                // Link 2: Open source licences
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                        .clip(FinanceShapes.medium)
-                        .clickable(onClick = onNavigateToLicences)
-                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                            .clip(FinanceShapes.medium)
+                            .clickable(onClick = onClick)
+                            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(FinanceTheme.sizes.icon32)
-                                .clip(CircleShape)
-                                .background(FinanceTheme.colors.surfaceContainerLow),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Code,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(FinanceTheme.sizes.icon18)
-                            )
-                        }
-                        Text(
-                            text = stringResource(R.string.about_link_licences),
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-                    )
-                }
-
-                HorizontalDivider(
-                    color = FinanceTheme.colors.surfaceContainerLow,
-                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
-                )
-
-                // Link 3: Report a problem
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                        .clip(FinanceShapes.medium)
-                        .clickable(onClick = {
-                            if (onReportProblem != null) {
-                                onReportProblem()
-                            } else {
-                                showProblemReportDialog = true
+                            Box(
+                                modifier = Modifier
+                                    .size(FinanceTheme.sizes.icon32)
+                                    .clip(CircleShape)
+                                    .background(FinanceTheme.colors.surfaceContainerLow),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(FinanceTheme.sizes.icon18)
+                                )
                             }
-                        })
-                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(FinanceTheme.sizes.icon32)
-                                .clip(CircleShape)
-                                .background(FinanceTheme.colors.surfaceContainerLow),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.BugReport,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(FinanceTheme.sizes.icon18)
+                            Text(
+                                text = stringResource(item.titleRes),
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                        Text(
-                            text = stringResource(R.string.diag_report_problem),
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                         )
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
-                    )
                 }
             }
         }
@@ -459,11 +371,24 @@ fun AboutScreen(
 data class AboutNavigationItem(
     val id: String,
     val titleRes: Int,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val requiresDeveloperMode: Boolean = false
 )
 
 fun getAboutNavigationItems(): List<AboutNavigationItem> = listOf(
-    AboutNavigationItem("privacy", R.string.about_link_privacy, requiresDeveloperMode = false),
-    AboutNavigationItem("licences", R.string.about_link_licences, requiresDeveloperMode = false),
-    AboutNavigationItem("report_problem", R.string.diag_report_problem, requiresDeveloperMode = false)
+    AboutNavigationItem("privacy", R.string.about_link_privacy, Icons.Rounded.Policy, requiresDeveloperMode = false),
+    AboutNavigationItem("licences", R.string.about_link_licences, Icons.Rounded.Code, requiresDeveloperMode = false),
+    AboutNavigationItem("report_problem", R.string.diag_report_problem, Icons.Rounded.BugReport, requiresDeveloperMode = false)
 )
+
+fun resolveAboutItemAction(
+    itemId: String,
+    onNavigateToPrivacy: () -> Unit,
+    onNavigateToLicences: () -> Unit,
+    onReportProblem: () -> Unit
+): () -> Unit = when (itemId) {
+    "privacy" -> onNavigateToPrivacy
+    "licences" -> onNavigateToLicences
+    "report_problem" -> onReportProblem
+    else -> ({})
+}

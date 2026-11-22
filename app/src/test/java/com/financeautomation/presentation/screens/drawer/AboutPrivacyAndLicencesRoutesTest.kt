@@ -72,5 +72,40 @@ class AboutPrivacyAndLicencesRoutesTest {
             reportItem!!.requiresDeveloperMode
         )
         org.junit.Assert.assertEquals(com.financeautomation.R.string.diag_report_problem, reportItem.titleRes)
+
+        // Verify visible rows when developer mode is false include report_problem
+        val visibleItems = items.filter { !it.requiresDeveloperMode }
+        assertTrue(visibleItems.any { it.id == "report_problem" })
+    }
+
+    @Test
+    fun testResolveAboutItemAction_dispatchesCorrectCallbacks() {
+        var privacyClicked = false
+        var licencesClicked = false
+        var reportClicked = false
+
+        resolveAboutItemAction(
+            itemId = "privacy",
+            onNavigateToPrivacy = { privacyClicked = true },
+            onNavigateToLicences = { licencesClicked = true },
+            onReportProblem = { reportClicked = true }
+        ).invoke()
+        assertTrue("privacy action must be triggered", privacyClicked)
+
+        resolveAboutItemAction(
+            itemId = "licences",
+            onNavigateToPrivacy = { privacyClicked = true },
+            onNavigateToLicences = { licencesClicked = true },
+            onReportProblem = { reportClicked = true }
+        ).invoke()
+        assertTrue("licences action must be triggered", licencesClicked)
+
+        resolveAboutItemAction(
+            itemId = "report_problem",
+            onNavigateToPrivacy = { privacyClicked = true },
+            onNavigateToLicences = { licencesClicked = true },
+            onReportProblem = { reportClicked = true }
+        ).invoke()
+        assertTrue("report problem action must be triggered", reportClicked)
     }
 }
