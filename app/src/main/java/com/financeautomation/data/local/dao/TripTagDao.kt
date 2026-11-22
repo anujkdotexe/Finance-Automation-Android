@@ -52,8 +52,11 @@ interface TripTagDao {
     suspend fun setActiveFlag(id: String, updatedAt: Long = System.currentTimeMillis())
 
     @androidx.room.Transaction
-    suspend fun setActiveTagAtomic(id: String?, updatedAt: Long = System.currentTimeMillis()): String? {
-        val todayEpochDay = updatedAt / 86400000L
+    suspend fun setActiveTagAtomic(
+        id: String?,
+        todayEpochDay: Long,
+        updatedAt: Long = System.currentTimeMillis()
+    ): String? {
         clearActiveFlagsWithDate(todayEpochDay, updatedAt)
         return if (id != null) {
             setActiveFlagWithDate(id, todayEpochDay, updatedAt)

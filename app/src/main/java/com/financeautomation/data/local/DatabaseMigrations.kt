@@ -228,7 +228,7 @@ object DatabaseMigrations {
                 UPDATE trip_tags
                 SET startDateEpochDay = COALESCE(
                     (SELECT MIN(dateSerial) - 25569 FROM transactions WHERE transactions.tripTag = trip_tags.name),
-                    createdAt / 86400000
+                    (createdAt + 19800000) / 86400000
                 )
                 WHERE startDateEpochDay IS NULL
             """.trimIndent())
@@ -237,14 +237,14 @@ object DatabaseMigrations {
                 UPDATE trip_tags
                 SET endDateEpochDay = COALESCE(
                     (SELECT MAX(dateSerial) - 25569 FROM transactions WHERE transactions.tripTag = trip_tags.name),
-                    CASE WHEN updatedAt > 0 THEN updatedAt / 86400000 ELSE createdAt / 86400000 END
+                    CASE WHEN updatedAt > 0 THEN (updatedAt + 19800000) / 86400000 ELSE (createdAt + 19800000) / 86400000 END
                 )
                 WHERE isActive = 0 AND endDateEpochDay IS NULL
             """.trimIndent())
 
             db.execSQL("""
                 UPDATE subscriptions
-                SET closedDateEpochDay = CASE WHEN updatedAt > 0 THEN updatedAt / 86400000 ELSE createdAt / 86400000 END
+                SET closedDateEpochDay = CASE WHEN updatedAt > 0 THEN (updatedAt + 19800000) / 86400000 ELSE (createdAt + 19800000) / 86400000 END
                 WHERE active = 0 AND closedDateEpochDay IS NULL
             """.trimIndent())
         }

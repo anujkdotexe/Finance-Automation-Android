@@ -28,7 +28,8 @@ class TripTagRepositoryImpl(
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val localGatewayProvider: (() -> ConfigSyncLocalGateway)? = null,
     private val preferencesRepositoryProvider: (() -> PreferencesRepository)? = null,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: java.time.Clock = java.time.Clock.systemUTC()
 ) : TripTagRepository {
 
     constructor(
@@ -36,14 +37,16 @@ class TripTagRepositoryImpl(
         configSyncCoordinator: ConfigSyncCoordinator? = null,
         localGateway: ConfigSyncLocalGateway? = null,
         preferencesRepository: PreferencesRepository? = null,
-        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        clock: java.time.Clock = java.time.Clock.systemUTC()
     ) : this(
         tripTagDao = tripTagDao,
         tripTagDaoProvider = null,
         configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
         localGatewayProvider = localGateway?.let { { it } },
         preferencesRepositoryProvider = preferencesRepository?.let { { it } },
-        ioDispatcher = ioDispatcher
+        ioDispatcher = ioDispatcher,
+        clock = clock
     )
 
     private val configSyncCoordinator: ConfigSyncCoordinator?
@@ -139,7 +142,9 @@ class TripTagRepositoryImpl(
 
     override suspend fun setActiveTag(id: String?): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
-        val tagName = dao.setActiveTagAtomic(id)
+        val now = clock.millis()
+        val todayEpochDay = java.time.LocalDate.now(clock.withZone(com.financeautomation.core.utils.DateSerialUtils.SHEET_ZONE)).toEpochDay()
+        val tagName = dao.setActiveTagAtomic(id, todayEpochDay, now)
         preferencesRepositoryProvider?.invoke()?.setActiveTrip(tagName)
         configSyncCoordinator?.schedulePush()
     }

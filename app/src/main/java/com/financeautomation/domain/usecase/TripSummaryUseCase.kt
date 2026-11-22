@@ -103,8 +103,9 @@ class TripSummaryUseCase {
         } else {
             val minTs = spendRows.minOf { it.timestamp }
             val maxTs = spendRows.maxOf { it.timestamp }
-            val diff = maxOf(0L, maxTs - minTs)
-            (diff / (24 * 60 * 60 * 1000L)).toInt() + 1
+            val startDay = java.time.Instant.ofEpochMilli(minTs).atZone(com.financeautomation.core.utils.DateSerialUtils.SHEET_ZONE).toLocalDate().toEpochDay()
+            val endDay = java.time.Instant.ofEpochMilli(maxTs).atZone(com.financeautomation.core.utils.DateSerialUtils.SHEET_ZONE).toLocalDate().toEpochDay()
+            (endDay - startDay + 1).toInt()
         }
 
         // Shared LivingBurn definition: My share minus refunds
