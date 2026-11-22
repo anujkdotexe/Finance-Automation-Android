@@ -704,7 +704,7 @@
     <string name="txn_chip_needs_review">Needs review</string>
     <string name="txn_chip_income">Income</string>
     <string name="inflow_type_settlement">Settlement</string>
-    <string name="inflow_type_transfer">Transfer</string>
+    <string name="inflow_type_transfer_short">Transfer</string>
     <string name="inflow_type_refund">Refund</string>
     <string name="txn_detail_account">Account</string>
     <string name="txn_detail_datetime">Date &amp; time</string>

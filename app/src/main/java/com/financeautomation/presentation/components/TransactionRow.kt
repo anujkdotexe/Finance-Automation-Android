@@ -201,7 +201,7 @@ fun TransactionAccountChip(
 fun inflowTypeLabel(inflowType: String): String = stringResource(
     when (inflowType.uppercase()) {
         "FRIEND_SETTLEMENT" -> R.string.inflow_type_settlement
-        "SELF_TRANSFER" -> R.string.inflow_type_transfer
+        "SELF_TRANSFER" -> R.string.inflow_type_transfer_short
         "REFUND" -> R.string.inflow_type_refund
         else -> R.string.txn_chip_income
     }
