@@ -6,8 +6,10 @@ import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.core.utils.formatRupeesCompact
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import javax.xml.parsers.DocumentBuilderFactory
 
 class FormatRupeesTest {
 
@@ -115,10 +117,32 @@ class FormatRupeesTest {
 
     @Test
     fun testDashboardExactAmountFormat_hasSingleRupeeSymbol() {
+        val stringsFile = listOf(
+            java.io.File("app/src/main/res/values/strings.xml"),
+            java.io.File("src/main/res/values/strings.xml")
+        ).first { it.exists() }
+
+        val dbFactory = DocumentBuilderFactory.newInstance()
+        val dBuilder = dbFactory.newDocumentBuilder()
+        val doc = dBuilder.parse(stringsFile)
+        val stringNodes = doc.getElementsByTagName("string")
+
+        var template: String? = null
+        for (i in 0 until stringNodes.length) {
+            val node = stringNodes.item(i)
+            if (node.attributes.getNamedItem("name")?.nodeValue == "dashboard_exact_amount") {
+                template = node.textContent
+                break
+            }
+        }
+
+        assertNotNull("dashboard_exact_amount resource string must exist in strings.xml", template)
+        assertFalse("Template itself must not hardcode rupee symbol (U1)", template!!.contains("₹"))
+
         val label = "Exact"
         val formattedAmount = formatRupees(1234.56, includeDecimals = true)
         assertTrue("formatRupees must include currency symbol", formattedAmount.startsWith("₹"))
-        val formatted = "%1\$s: %2\$s".format(label, formattedAmount)
+        val formatted = template.format(label, formattedAmount)
         assertEquals("Exact: ₹1,234.56", formatted)
         assertEquals("Must have exactly one rupee symbol (U1)", 1, formatted.count { it == '₹' })
     }

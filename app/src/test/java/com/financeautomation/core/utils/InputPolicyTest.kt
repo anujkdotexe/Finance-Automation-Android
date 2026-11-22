@@ -194,40 +194,31 @@ class InputPolicyTest {
     }
 
     @Test
-    fun testTypingValuesLeavingFieldsAreTrimmedForLookupsAndStorage() {
-        // 1. IncomeReturnFlowSheet debt lookup and reason string
-        val typedSettler = InputPolicy.cleanNameWhileTyping("Kabir ")
-        assertEquals("Kabir ", typedSettler)
-        val lookupName = typedSettler.trim()
-        assertEquals("Kabir", lookupName)
-        val reasonText = "Settlement from $lookupName"
-        assertEquals("Settlement from Kabir", reasonText)
-        assertFalse(reasonText.contains("Kabir "))
+    fun testNormalizedPersonForLookup_trimsWhitespaceAndBidi() {
+        assertEquals("Kabir", InputPolicy.normalizedPersonForLookup("Kabir "))
+        assertEquals("Kabir", InputPolicy.normalizedPersonForLookup("   Kabir   "))
+        assertEquals("Kabir Singh", InputPolicy.normalizedPersonForLookup("Kabir    Singh "))
+    }
 
-        // 2. TripModeFlowSheet effective tag
-        val typedTripTag = InputPolicy.cleanNameWhileTyping("Goa ")
-        val typedPlace = InputPolicy.cleanNameWhileTyping("Anjuna ")
-        val effectiveTripTag = "${typedTripTag.trim()} - ${typedPlace.trim()}"
-        assertEquals("Goa - Anjuna", effectiveTripTag)
+    @Test
+    fun testBuildSettlementReason_trimsAndFormatsProperly() {
+        // Untyped note uses settler name without trailing spaces
+        assertEquals("Settlement from Kabir", InputPolicy.buildSettlementReason("Kabir "))
+        assertEquals("Settlement from Kabir", InputPolicy.buildSettlementReason("Kabir ", ""))
+        assertEquals("Settlement from Kabir", InputPolicy.buildSettlementReason("Kabir ", "   "))
 
-        // 3. FriendPaidFlowSheet creditor and description
-        val typedCreditor = InputPolicy.cleanNameWhileTyping("Aman ")
-        val typedWhatFor = InputPolicy.cleanNoteWhileTyping("Dinner ")
-        assertEquals("Aman", typedCreditor.trim())
-        assertEquals("Dinner", typedWhatFor.trim())
+        // When a note is provided, note takes precedence and is trimmed
+        assertEquals("Dinner payback", InputPolicy.buildSettlementReason("Kabir ", "Dinner payback "))
 
-        // 4. RepaidFriendFlowSheet person name and note
-        val typedRepaidPerson = InputPolicy.cleanNameWhileTyping("Rohan ")
-        val typedRepaidNote = InputPolicy.cleanNoteWhileTyping("UPI repayment ")
-        assertEquals("Rohan", typedRepaidPerson.trim())
-        assertEquals("UPI repayment", typedRepaidNote.trim())
+        // Blank name falls back to optionKey
+        assertEquals("Friend Settlement", InputPolicy.buildSettlementReason("", optionKey = "Friend Settlement"))
+    }
 
-        // 5. AccountsScreen rename and add account
-        val typedAccName = InputPolicy.cleanNameWhileTyping("HDFC Bank ")
-        assertEquals("HDFC Bank", typedAccName.trim())
-
-        // 6. CompanionSplitSection new friend
-        val typedFriendName = InputPolicy.cleanNameWhileTyping("Priya ")
-        assertEquals("Priya", typedFriendName.trim())
+    @Test
+    fun testBuildTripTag_combinesCleanTagAndPlace() {
+        assertEquals("Goa - Anjuna", InputPolicy.buildTripTag("Goa ", "Anjuna "))
+        assertEquals("Goa", InputPolicy.buildTripTag("Goa ", ""))
+        assertEquals("Goa", InputPolicy.buildTripTag("Goa ", "   "))
+        assertEquals("North Goa - Beach", InputPolicy.buildTripTag("North   Goa ", "Beach "))
     }
 }

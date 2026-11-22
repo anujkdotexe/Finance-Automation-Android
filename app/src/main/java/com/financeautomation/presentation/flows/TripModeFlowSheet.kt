@@ -314,11 +314,10 @@ fun TripModeFlowSheet(
                 filledText = stringResource(R.string.btn_start_new_trip),
                 onFilledClick = {
                     if (tagNameText.isNotBlank()) {
-                        val effectiveTag = if (placeText.isNotBlank()) {
-                            "${tagNameText.trim()} - ${placeText.trim()}"
-                        } else {
-                            tagNameText.trim()
-                        }
+                        val effectiveTag = com.financeautomation.core.utils.InputPolicy.buildTripTag(
+                            tagName = tagNameText,
+                            place = placeText
+                        )
                         onStartTrip(effectiveTag)
                     }
                 },

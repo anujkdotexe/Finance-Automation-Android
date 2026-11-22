@@ -266,4 +266,30 @@ object InputPolicy {
             ValidationResult.Error(InputError.INVALID_SPREADSHEET_ID)
         }
     }
+
+    /**
+     * Normalizes a person name for lookups (e.g. open debts) ensuring trailing/leading spaces are trimmed.
+     */
+    fun normalizedPersonForLookup(name: String): String {
+        return cleanName(name)
+    }
+
+    /**
+     * Builds the settlement reason string ensuring clean, trimmed values without trailing spaces.
+     */
+    fun buildSettlementReason(name: String, note: String = "", optionKey: String = "Friend Settlement"): String {
+        val cleanNoteText = cleanNote(note)
+        if (cleanNoteText.isNotBlank()) return cleanNoteText
+        val cleanNameText = cleanName(name)
+        return if (cleanNameText.isNotBlank()) "Settlement from $cleanNameText" else optionKey
+    }
+
+    /**
+     * Builds an effective trip tag combining tag name and optional place.
+     */
+    fun buildTripTag(tagName: String, place: String = ""): String {
+        val cleanTag = cleanName(tagName)
+        val cleanPlace = cleanName(place)
+        return if (cleanPlace.isNotBlank()) "$cleanTag - $cleanPlace" else cleanTag
+    }
 }
