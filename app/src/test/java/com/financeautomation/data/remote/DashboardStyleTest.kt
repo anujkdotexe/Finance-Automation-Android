@@ -97,10 +97,13 @@ class DashboardStyleTest {
     }
 
     @Test
-    fun testOwePeopleHeaderHasNoFontSizeOverride() {
-        val text = cellFormat(3, 9)["textFormat"] as Map<*, *>
-        assertEquals(false, text.containsKey("fontSize"))
-        assertEquals(8, (cellFormat(3, 0)["textFormat"] as Map<*, *>)["fontSize"])
+    fun testOwePeopleHeaderUsesTheSameLabelFormatAsTheOtherKpiLabels() {
+        val owe = cellFormat(3, 9)
+        val first = cellFormat(3, 0)
+        assertEquals(8, (owe["textFormat"] as Map<*, *>)["fontSize"])
+        assertEquals(8, (first["textFormat"] as Map<*, *>)["fontSize"])
+        assertEquals(first["backgroundColor"], owe["backgroundColor"])
+        assertEquals(first["textFormat"], owe["textFormat"])
     }
 
     @Test
@@ -139,8 +142,9 @@ class DashboardStyleTest {
 
     @Test
     fun testSettlementHeaderRowUsesTheLiveFillWrapAndBorders() {
-        assertEquals("1A237E", hex(cellFormat(25, 11)["backgroundColor"]))
-        assertEquals("WRAP", cellFormat(25, 11)["wrapStrategy"])
+        // The I OWE PEOPLE header has four columns (H to K); column L has no header cell any more
+        assertEquals("1A237E", hex(cellFormat(25, 10)["backgroundColor"]))
+        assertEquals("WRAP", cellFormat(25, 10)["wrapStrategy"])
         @Suppress("UNCHECKED_CAST")
         val header = requests.mapNotNull { it["updateBorders"] as? Map<String, Any?> }
             .first { (it["range"] as Map<*, *>).let { r -> r["startRowIndex"] == 25 && r["endColumnIndex"] == 12 } }

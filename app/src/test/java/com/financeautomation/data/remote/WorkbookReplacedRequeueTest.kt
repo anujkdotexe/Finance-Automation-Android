@@ -77,6 +77,22 @@ class WorkbookReplacedRequeueTest {
     private fun response(request: okhttp3.Request, code: Int, body: String) = Response.Builder()
         .request(request).protocol(Protocol.HTTP_1_1).code(code).message("x").body(body.toResponseBody(json)).build()
 
+    /**
+     * Answers the two reads that make a month tab count as a current 32 column tab: the tab list (Nov26 exists) and the
+     * L3 header ("Note"). Since a failed tab repair is returned instead of ignored, a scripted server that leaves L3
+     * empty would model an old tab whose repair never takes effect.
+     */
+    private fun tabReadyResponse(request: okhttp3.Request): Response? {
+        if (request.method != "GET") return null
+        val url = request.url.toString()
+        return when {
+            url.contains("L3%3AL3") || url.contains("L3:L3") -> response(request, 200, """{"values":[["Note"]]}""")
+            url.contains("fields=sheets(properties(sheetId") && !url.contains("gridProperties") ->
+                response(request, 200, """{"sheets":[{"properties":{"sheetId":0,"title":"Nov26"}}]}""")
+            else -> null
+        }
+    }
+
     private fun sampleTransaction(
         id: String,
         timestamp: Long,
@@ -456,6 +472,7 @@ class WorkbookReplacedRequeueTest {
             OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
                 val r = chain.request()
                 val url = r.url.toString()
+                tabReadyResponse(r)?.let { return@Interceptor it }
                 recordedCalls += "${r.method} $url"
                 when {
                     url.contains("!AD4:AD") || url.contains("!AE4:AE") -> response(r, 200, """{"values":[]}""")
@@ -554,6 +571,7 @@ class WorkbookReplacedRequeueTest {
             OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
                 val r = chain.request()
                 val url = r.url.toString()
+                tabReadyResponse(r)?.let { return@Interceptor it }
                 when {
                     url.contains("!AD4:AD") -> response(r, 200, """{"values":[["other_id"],["cred_exist_1"]]}""")
                     url.contains("!AE4:AE") -> response(r, 200, """{"values":[["pay_exist_1"]]}""")
@@ -628,6 +646,7 @@ class WorkbookReplacedRequeueTest {
             OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
                 val r = chain.request()
                 val url = r.url.toString()
+                tabReadyResponse(r)?.let { return@Interceptor it }
                 when {
                     url.contains("!AE4:AE") || url.contains("!AF4:AF") -> response(r, 200, """{"values":[]}""")
                     r.method == "POST" && (url.contains(":append") || url.contains("values:batchUpdate")) -> {
@@ -757,6 +776,7 @@ class WorkbookReplacedRequeueTest {
             OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
                 val r = chain.request()
                 val url = r.url.toString()
+                tabReadyResponse(r)?.let { return@Interceptor it }
                 when {
                     url.contains("!AC4:AC") || url.contains("!AD4:AD") || url.contains("!AE4:AE") || url.contains("!AF4:AF") ->
                         response(r, 200, """{"values":[]}""")
@@ -845,6 +865,7 @@ class WorkbookReplacedRequeueTest {
             OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
                 val r = chain.request()
                 val url = r.url.toString()
+                tabReadyResponse(r)?.let { return@Interceptor it }
                 when {
                     url.contains("!AE4:AE") || url.contains("!AF4:AF") -> response(r, 200, """{"values":[]}""")
                     r.method == "POST" && (url.contains(":append") || url.contains("values:batchUpdate")) -> {
