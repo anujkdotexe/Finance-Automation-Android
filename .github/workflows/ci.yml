@@ -1,16 +1,14 @@
 name: CI
 
-# Runs the JVM unit tests and a beta build (manual start only while disabled, see below).
+# Runs the JVM unit tests and a beta build on push to main and fix/**, on pull requests and by hand.
 # It uses no secrets and publishes nothing. Without keystore.properties and
 # google-services.json the build is debug-signed and Crashlytics stays inert,
 # so the resulting APK is never uploaded or released.
 
 on:
-  # Disabled for now: it runs only when started by hand from the Actions tab.
-  # To turn it back on, restore the push and pull_request triggers:
-  #   push:
-  #     branches: [main, "feat/**", "fix/**"]
-  #   pull_request:
+  push:
+    branches: [main, "fix/**"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -67,4 +65,14 @@ jobs:
         with:
           name: test-reports
           path: app/build/reports/tests
+          if-no-files-found: ignore
+
+      - name: Keep lint reports and the R8 mapping file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-and-mapping
+          path: |
+            app/build/reports/lint-results-*.html
+            app/build/outputs/mapping/**/mapping.txt
           if-no-files-found: ignore

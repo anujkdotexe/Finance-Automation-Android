@@ -227,3 +227,22 @@ gradle.taskGraph.whenReady {
         }
     }
 }
+
+// Firebase safety. Without app/google-services.json the Firebase plugins are not applied (see above), so
+// Crashlytics, Analytics and Firestore problem reports are inert in the resulting APK.
+gradle.taskGraph.whenReady {
+    if (!file("google-services.json").exists()) {
+        val appTasks = allTasks.filter { it.project == project }
+        val buildsApk = { t: org.gradle.api.Task ->
+            t.name.startsWith("assemble") || t.name.startsWith("bundle") || t.name.startsWith("package")
+        }
+        if (appTasks.any { buildsApk(it) && (it.name.contains("Beta") || it.name.contains("Release")) }) {
+            logger.warn("")
+            logger.warn("==================================================================")
+            logger.warn("WARNING: app/google-services.json is missing.")
+            logger.warn("Crashlytics, Analytics and problem reports are inert in this build.")
+            logger.warn("==================================================================")
+            logger.warn("")
+        }
+    }
+}

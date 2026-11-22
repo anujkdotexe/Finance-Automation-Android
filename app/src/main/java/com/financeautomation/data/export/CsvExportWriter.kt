@@ -47,13 +47,17 @@ class CsvExportWriter(private val context: Context) {
 
     fun write(year: Int, month: Int, csv: String): Uri {
         val store = ExportFileStore(File(context.cacheDir, EXPORT_DIR))
-        val name = "finance_%04d_%02d.csv".format(year, month)
-        val file = store.write(name, csv)
+        // The time stamp keeps a file that a share target may still be reading from being overwritten
+        val stamp = java.text.SimpleDateFormat("HHmmss", java.util.Locale.US).format(java.util.Date())
+        val name = "finance_%04d_%02d_%s.csv".format(year, month, stamp)
+        // A UTF-8 byte order mark (EF BB BF) first, so Excel reads non ASCII names correctly
+        val file = store.write(name, BYTE_ORDER_MARK + csv)
         return FileProvider.getUriForFile(context, authority(context), file)
     }
 
     companion object {
         const val EXPORT_DIR = "exports"
+        private const val BYTE_ORDER_MARK = "\uFEFF"
 
         /** Deletes export files older than the retention time. Call at app start. Returns how many were deleted. */
         fun purgeStaleExports(cacheDir: File, clock: () -> Long = System::currentTimeMillis): Int {
