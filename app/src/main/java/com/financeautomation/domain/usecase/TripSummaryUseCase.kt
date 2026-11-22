@@ -77,7 +77,7 @@ class TripSummaryUseCase {
         fun stillOwed(row: Transaction): Double = when (row.status) {
             TransactionStatus.PENDING -> row.owedToMe
             TransactionStatus.CARRIED_FWD ->
-                copies.firstOrNull { copyTextOf(it).equals(row.merchant.trim(), ignoreCase = true) }?.owedToMe ?: row.owedToMe
+                copies.firstOrNull { copyTextOf(it).equals(CarriedCopies.stripPrefixes(row.merchant), ignoreCase = true) }?.owedToMe ?: row.owedToMe
             else -> 0.0
         }
 
@@ -186,7 +186,7 @@ class TripSummaryUseCase {
 
     private fun isCarriedCopy(t: Transaction): Boolean = CarriedCopies.isCopy(t)
 
-    private fun copyTextOf(t: Transaction): String = t.merchant.trim().substringAfter("]", t.merchant).trim()
+    private fun copyTextOf(t: Transaction): String = CarriedCopies.stripPrefixes(t.merchant)
 
     /** One summary per distinct trip name found on the rows, keyed by the lower case name. */
     fun byTrip(
