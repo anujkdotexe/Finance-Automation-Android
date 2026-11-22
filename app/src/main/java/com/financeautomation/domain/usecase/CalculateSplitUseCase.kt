@@ -167,6 +167,7 @@ class CalculateSplitUseCase(
 
         val roundedAmount = AccountingUtils.round2(amount)
         val cleanCompanions = companions.flatMap { AccountingUtils.tokens(it) }
+            .distinctBy { it.trim().lowercase() }
         val companionsText = if (cleanCompanions.isEmpty()) "Personal" else cleanCompanions.joinToString(", ")
 
         val splitResult = when (splitMode) {
