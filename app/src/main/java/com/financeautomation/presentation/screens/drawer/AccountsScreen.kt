@@ -139,7 +139,7 @@ fun AccountsScreen(
                 ) {
                     localAccounts.forEachIndexed { index, account ->
                         key(account.id) {
-                            val isDefault = account.isDefault || account.name == state.defaultAccount
+                            val isDefault = account.name == state.defaultAccount
                             val txCount = state.accountTransactionCounts[account.name] ?: 0
                             val isLocked = CategoryConstants.isProtectedAccount(account.name)
                             val isDragging = account.id == draggingAccountId
@@ -232,7 +232,7 @@ fun AccountsScreen(
     }
 
     selectedAccountForEdit?.let { account ->
-        val isDefault = account.isDefault || account.name == state.defaultAccount
+        val isDefault = account.name == state.defaultAccount
         var editName by rememberSaveable { mutableStateOf(account.name) }
         var editDigits by rememberSaveable { mutableStateOf(account.lastFourDigits.orEmpty()) }
 

@@ -266,4 +266,32 @@ class OnboardingAccountsSetupTest {
         assertEquals(1, res.args.size)
         assertEquals(40, res.args[0])
     }
+
+    @Test
+    fun settingDefaultLeavesExactlyOneDefault() = runTest(dispatcher) {
+        val h = SyncHarness()
+        h.googleEmail = null
+        val dao = InMemoryAccountDao()
+        dao.insert(AccountEntity("acc_cash", CategoryConstants.ACCOUNT_CASH, null, isDefault = false, isArchived = false, displayOrder = 0))
+        dao.insert(AccountEntity("acc_other", CategoryConstants.ACCOUNT_OTHER, null, isDefault = true, isArchived = false, displayOrder = 1))
+        dao.insert(AccountEntity("acc_sbi", "SBI Bank", "1234", isDefault = false, isArchived = false, displayOrder = 2))
+        dao.insert(AccountEntity("acc_hdfc", "HDFC Bank", "5678", isDefault = false, isArchived = false, displayOrder = 3))
+        val repo = AccountRepositoryImpl(accountDao = dao, ioDispatcher = dispatcher)
+
+        // Set default to SBI
+        repo.setDefaultAccount("acc_sbi")
+        val accountsAfterSbi = dao.getAllAccounts()
+        val defaultsAfterSbi = accountsAfterSbi.filter { it.isDefault }
+        assertEquals("Setting default must leave exactly one default in database", 1, defaultsAfterSbi.size)
+        assertEquals("acc_sbi", defaultsAfterSbi.first().id)
+        assertEquals(1, defaultsAfterSbi.first().dirty)
+
+        // Set default to HDFC
+        repo.setDefaultAccount("acc_hdfc")
+        val accountsAfterHdfc = dao.getAllAccounts()
+        val defaultsAfterHdfc = accountsAfterHdfc.filter { it.isDefault }
+        assertEquals("Setting default must leave exactly one default in database", 1, defaultsAfterHdfc.size)
+        assertEquals("acc_hdfc", defaultsAfterHdfc.first().id)
+        assertEquals(1, defaultsAfterHdfc.first().dirty)
+    }
 }

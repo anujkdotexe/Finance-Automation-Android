@@ -121,8 +121,8 @@ class AccountRepositoryImpl(
 
     override suspend fun setDefaultAccount(id: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
-        dao.clearDefaultFlag()
-        dao.setDefaultFlag(id)
+        val now = System.currentTimeMillis()
+        dao.makeOnlyDefault(id, now)
         configSyncCoordinator?.schedulePush()
     }
 
@@ -132,14 +132,15 @@ class AccountRepositoryImpl(
         val wasDefault = account?.isDefault == true
         dao.archiveAccount(id)
         if (wasDefault) {
+            val now = System.currentTimeMillis()
             val other = dao.getByName(CategoryConstants.ACCOUNT_OTHER)
-            if (other != null && !other.isArchived) {
-                dao.setDefaultFlag(other.id)
+            val fallbackId = if (other != null && !other.isArchived) {
+                other.id
             } else {
-                val firstActive = dao.getActiveAccounts().firstOrNull()
-                if (firstActive != null) {
-                    dao.setDefaultFlag(firstActive.id)
-                }
+                dao.getActiveAccounts().firstOrNull()?.id
+            }
+            if (fallbackId != null) {
+                dao.makeOnlyDefault(fallbackId, now)
             }
         }
         configSyncCoordinator?.schedulePush()
@@ -170,13 +171,13 @@ class AccountRepositoryImpl(
         dao.deleteById(id)
         if (wasDefault) {
             val other = dao.getByName(CategoryConstants.ACCOUNT_OTHER)
-            if (other != null && !other.isArchived) {
-                dao.setDefaultFlag(other.id)
+            val fallbackId = if (other != null && !other.isArchived) {
+                other.id
             } else {
-                val firstActive = dao.getActiveAccounts().firstOrNull()
-                if (firstActive != null) {
-                    dao.setDefaultFlag(firstActive.id)
-                }
+                dao.getActiveAccounts().firstOrNull()?.id
+            }
+            if (fallbackId != null) {
+                dao.makeOnlyDefault(fallbackId, now)
             }
         }
         configSyncCoordinator?.schedulePush()

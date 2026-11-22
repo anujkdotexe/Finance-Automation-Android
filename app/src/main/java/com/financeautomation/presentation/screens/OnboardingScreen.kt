@@ -590,7 +590,7 @@ private fun OnboardingAccountsSetupScreen(
                 )
 
                 state.accounts.forEach { account ->
-                    val isDefault = account.isDefault || account.name == state.defaultAccountName
+                    val isDefault = account.name == state.defaultAccountName
                     val isProtected = CategoryConstants.isProtectedAccount(account.name)
 
                     Surface(

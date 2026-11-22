@@ -124,6 +124,7 @@ class UserDefinedCategoriesAndAccountsTest {
         }
         override suspend fun getDirtyAccounts(): List<AccountEntity> = emptyList()
         override suspend fun markClean(ids: List<String>) {}
+        override suspend fun makeOnlyDefault(id: String, updatedAt: Long) { clearDefaultFlag(); setDefaultFlag(id) }
         override suspend fun makeOnlyDefault(id: String) { clearDefaultFlag(); setDefaultFlag(id) }
     }
 
