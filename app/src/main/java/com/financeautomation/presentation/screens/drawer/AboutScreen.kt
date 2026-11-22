@@ -34,10 +34,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +70,21 @@ fun AboutScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showProblemReportDialog by remember { mutableStateOf(false) }
+
+    // Notification access decides whether capture can run; checked again whenever the screen resumes.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var captureOn by remember {
+        mutableStateOf(NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName))
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                captureOn = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(
         modifier = modifier
@@ -117,7 +137,7 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
             Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = if (captureOn) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
                 shape = FinanceShapes.pill
             ) {
                 Row(
@@ -129,13 +149,13 @@ fun AboutScreen(
                         modifier = Modifier
                             .size(FinanceTheme.spacing.compact)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(if (captureOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                     )
                     Text(
-                        text = stringResource(R.string.about_engine_active),
+                        text = stringResource(if (captureOn) R.string.about_engine_active else R.string.about_capture_off),
                         style = FinanceTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                        color = if (captureOn) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
                     )
                 }
             }
