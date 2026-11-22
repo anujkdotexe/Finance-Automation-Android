@@ -28,7 +28,7 @@ data class SettlementStepResult(
  */
 class SettlementWaterfallUseCase {
 
-    private val ROW_REF_PATTERN = Pattern.compile("(?:'([^']+)'|([A-Za-z0-9_]+))!(?:Row)?(\\d+)", Pattern.CASE_INSENSITIVE)
+    private val ROW_REF_PATTERN = Pattern.compile("^(?:'([^']+)'|([^'!]+))!(?:Row)?(\\d+)$", Pattern.CASE_INSENSITIVE)
 
     /**
      * Executes the settlement waterfall against available debits.
@@ -71,6 +71,9 @@ class SettlementWaterfallUseCase {
             } else {
                 targetDebit
             }
+
+            // A reference only settles a debit the settler is a companion of; otherwise skip it and carry on
+            if (settler.isNotBlank() && AccountingUtils.tokens(liveDebit.companions).none { AccountingUtils.eq(it, settler) }) continue
 
             val key = RowKey(liveDebit.tab, liveDebit.row)
             if (handledKeys.contains(key)) continue
@@ -250,8 +253,8 @@ class SettlementWaterfallUseCase {
 
         // 2. Tab!RowN or 'Tab'!RowN format
         val matcher = ROW_REF_PATTERN.matcher(trimmed)
-        if (matcher.find()) {
-            val tabName = matcher.group(1) ?: matcher.group(2) ?: ""
+        if (matcher.matches()) {
+            val tabName = (matcher.group(1) ?: matcher.group(2) ?: "").trim()
             val rowNum = matcher.group(3)?.toIntOrNull() ?: 0
             return debits.find { AccountingUtils.eq(it.tab, tabName) && it.row == rowNum }
         }
