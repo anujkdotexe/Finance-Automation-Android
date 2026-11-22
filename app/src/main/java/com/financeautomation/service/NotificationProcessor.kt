@@ -144,14 +144,29 @@ class NotificationProcessor(
         // 5. Handled-notification and reconnect replay check
         val replayCutoff = postTime - 24L * 60L * 60L * 1000L
         val duplicateAlertCutoff = postTime - WINDOW_DUPLICATE_ALERT_MS
+        // Identical text without a reference id from a different notification key is a second real payment, not a replay
+        val hasNoReferenceId = RegexPatterns.extractReferenceId(text) == null
+        var keepAsPossibleDuplicate = false
         if (handledNotificationDao != null) {
-            val existingHandled = handledNotificationDao.get(key = key, postTime = postTime)
+            val sameNotification = handledNotificationDao.get(key = key, postTime = postTime)
                 ?: handledNotificationDao.getLatestByKey(key)?.takeIf { it.contentHash == contentHash }
-                ?: handledNotificationDao.getByContentHash(contentHash, duplicateAlertCutoff)
-            if (existingHandled != null) {
-                // Reconnect replay or duplicate posted alert
+            val sameContent = if (sameNotification == null) {
+                handledNotificationDao.getByContentHash(contentHash, duplicateAlertCutoff)
+            } else {
+                null
+            }
+            if (sameNotification != null) {
+                // Reconnect replay of the same posted alert
                 PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
                 return ignored("Duplicate or reconnect replay notification dropped")
+            }
+            if (sameContent != null) {
+                if (sameContent.key != key && hasNoReferenceId) {
+                    keepAsPossibleDuplicate = true
+                } else {
+                    PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
+                    return ignored("Duplicate or reconnect replay notification dropped")
+                }
             }
 
             // Prune rows older than 24 hours
@@ -164,8 +179,19 @@ class NotificationProcessor(
                 existingCapture.state == PendingCaptureEntity.STATE_SHOWN ||
                 existingCapture.state == PendingCaptureEntity.STATE_DONE ||
                 existingCapture.state == PendingCaptureEntity.STATE_NEEDS_REVIEW)) {
-                PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
-                return ignored("Duplicate or reconnect replay notification dropped")
+                val existingKey = existingCapture.notificationKey
+                val incomingKey = sbnKey.takeIf { it.isNotBlank() }
+                val differentNotification = if (existingKey == null && incomingKey == null) {
+                    existingCapture.timestamp != postTime
+                } else {
+                    existingKey != incomingKey
+                }
+                if (differentNotification && hasNoReferenceId) {
+                    keepAsPossibleDuplicate = true
+                } else {
+                    PipelineTrail.record(PipelineStage.ALERT, PipelineCode.DROPPED_DUPLICATE)
+                    return ignored("Duplicate or reconnect replay notification dropped")
+                }
             }
         }
 
@@ -246,7 +272,8 @@ class NotificationProcessor(
                     contentHash = contentHash,
                     handledEntity = handledEntity,
                     detectedAccountHint = parseResult.detectedAccountHint,
-                    text = text
+                    text = text,
+                    keepAsPossibleDuplicate = keepAsPossibleDuplicate
                 )
                 outcome
             }
@@ -284,7 +311,8 @@ class NotificationProcessor(
                     contentHash = contentHash,
                     handledEntity = handledEntity,
                     detectedAccountHint = parseResult.detectedAccountHint,
-                    text = text
+                    text = text,
+                    keepAsPossibleDuplicate = keepAsPossibleDuplicate
                 )
                 outcome
             }
@@ -332,7 +360,8 @@ class NotificationProcessor(
         contentHash: String,
         handledEntity: HandledNotificationEntity,
         detectedAccountHint: String? = null,
-        text: String = ""
+        text: String = "",
+        keepAsPossibleDuplicate: Boolean = false
     ): NotificationProcessingOutcome {
         val cleanPayee = com.financeautomation.core.utils.InputPolicy.cleanName(payee)
             .take(com.financeautomation.core.utils.InputPolicy.MAX_MERCHANT_NAME_LENGTH)
@@ -373,6 +402,10 @@ class NotificationProcessor(
             flags
         }
 
+        if (keepAsPossibleDuplicate && !activeFlags.split(",").contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)) {
+            activeFlags = appendFlag(activeFlags, PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+        }
+
         val captureId = "cap_${UUID.randomUUID().toString().replace("-", "")}"
         var executionOutcome: NotificationProcessingOutcome? = null
 
@@ -398,6 +431,20 @@ class NotificationProcessor(
 
                         // Payees must be compatible, so two real payments of the same amount to different payees stay separate
                         if (!com.financeautomation.core.utils.MerchantSimilarity.compatible(candidate.payee, cleanPayee)) {
+                            return@filter false
+                        }
+
+                        // Two final success debits from the same app with different notification keys and no
+                        // reference id are two real payments; they stay separate and the user decides in review
+                        if (candidate.sourcePackage == sourcePackage && wording == WordingClass.SUCCESS &&
+                            candidate.state != PendingCaptureEntity.STATE_AWAITING_SUCCESS &&
+                            sbnKey.isNotBlank() && !candidate.notificationKey.isNullOrBlank() &&
+                            candidate.notificationKey != sbnKey &&
+                            incomingRefId == null && extractRefFromFlags(candidate.flags) == null
+                        ) {
+                            if (!activeFlags.split(",").contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)) {
+                                activeFlags = appendFlag(activeFlags, PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+                            }
                             return@filter false
                         }
 
@@ -531,8 +578,10 @@ class NotificationProcessor(
             )
 
             val cutoffTime = postTime - WINDOW_DUPLICATE_ALERT_MS
-            val isDuplicate = handledNotificationDao?.getByContentHash(contentHash, cutoffTime) != null ||
-                pendingCaptureDao?.getByContentHash(contentHash, cutoffTime) != null
+            val isDuplicate = !keepAsPossibleDuplicate && (
+                handledNotificationDao?.getByContentHash(contentHash, cutoffTime) != null ||
+                    pendingCaptureDao?.getByContentHash(contentHash, cutoffTime) != null
+                )
             if (!isDuplicate) {
                 handledNotificationDao?.insert(handledEntity)
                 pendingCaptureDao?.insert(capture)
