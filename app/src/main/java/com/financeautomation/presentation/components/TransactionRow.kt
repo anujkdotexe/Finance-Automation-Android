@@ -196,6 +196,17 @@ fun TransactionAccountChip(
  * - Left: Inflow icon (CallReceived in positive color), source as title, type chip, account chip, time
  * - Right: Positive mono amount (+₹Amount), optional VOID status chip
  */
+/** Short label for an inflow type, shared by the list row and the income detail sheet. */
+@Composable
+fun inflowTypeLabel(inflowType: String): String = stringResource(
+    when (inflowType.uppercase()) {
+        "FRIEND_SETTLEMENT" -> R.string.inflow_type_settlement
+        "SELF_TRANSFER" -> R.string.inflow_type_transfer
+        "REFUND" -> R.string.inflow_type_refund
+        else -> R.string.txn_chip_income
+    }
+)
+
 @Composable
 fun InflowRow(
     source: String,
@@ -217,12 +228,7 @@ fun InflowRow(
         }
     }
     val cleanTitle = stripVoidPrefix(rawDisplayTitle)
-    val typeLabel = when (inflowType.uppercase()) {
-        "FRIEND_SETTLEMENT" -> "Settlement"
-        "SELF_TRANSFER" -> "Transfer"
-        "REFUND" -> "Refund"
-        else -> "Income"
-    }
+    val typeLabel = inflowTypeLabel(inflowType)
 
     Row(
         modifier = modifier

@@ -44,6 +44,10 @@ fun StatusChip(
     StatusChip(status = status.value, modifier = modifier)
 }
 
+/** Status text for the screen: underscores become spaces and the first letter is a capital, so NEEDS_REVIEW reads Needs review. */
+private fun readableStatus(raw: String): String =
+    raw.replace('_', ' ').trim().lowercase().replaceFirstChar { it.uppercase() }
+
 @Composable
 fun StatusChip(
     status: String,
@@ -111,7 +115,7 @@ fun StatusChip(
             )
         }
         Text(
-            text = if (upper == "VOID" || upper == "VOIDED") stringResource(R.string.status_voided) else normalized,
+            text = if (upper == "VOID" || upper == "VOIDED") stringResource(R.string.status_voided) else readableStatus(normalized),
             style = FinanceTheme.typography.numericMicro,
             color = textColor,
             maxLines = 1,
