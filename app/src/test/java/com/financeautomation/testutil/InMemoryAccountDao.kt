@@ -66,7 +66,13 @@ class InMemoryAccountDao : AccountDao {
     override suspend fun getDirtyAccounts(): List<AccountEntity> = emptyList()
     override suspend fun markClean(ids: List<String>) {}
     override suspend fun makeOnlyDefault(id: String, updatedAt: Long) {
-        accounts.replaceAll { key, a -> a.copy(isDefault = key == id, dirty = 1, updatedAt = updatedAt) }
+        accounts.replaceAll { key, a ->
+            if ((key == id && !a.isDefault) || (key != id && a.isDefault)) {
+                a.copy(isDefault = key == id, dirty = 1, updatedAt = updatedAt)
+            } else {
+                a
+            }
+        }
         sync()
     }
     override suspend fun makeOnlyDefault(id: String) {

@@ -306,7 +306,7 @@ class ConfigSyncLocalGatewayImpl(
                         dirty = 0
                     )
                 )
-                if (takesDefault) accountDao.makeOnlyDefault(newId)
+                if (takesDefault) accountDao.makeOnlyDefault(newId, updatedAt)
             }
         } else {
             if (updatedAt > existing.updatedAt) {
@@ -321,7 +321,7 @@ class ConfigSyncLocalGatewayImpl(
                     )
                     // The default account was removed: Cash becomes the default so there is always one
                     if (existing.isDefault) {
-                        accountDao.getByName(CategoryConstants.ACCOUNT_CASH)?.let { accountDao.makeOnlyDefault(it.id) }
+                        accountDao.getByName(CategoryConstants.ACCOUNT_CASH)?.let { accountDao.makeOnlyDefault(it.id, updatedAt) }
                     }
                 } else {
                     accountDao.update(
@@ -335,7 +335,7 @@ class ConfigSyncLocalGatewayImpl(
                             dirty = 0
                         )
                     )
-                    if (takesDefault) accountDao.makeOnlyDefault(existing.id)
+                    if (takesDefault) accountDao.makeOnlyDefault(existing.id, updatedAt)
                 }
             }
         }
