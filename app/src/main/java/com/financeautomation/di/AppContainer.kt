@@ -300,7 +300,8 @@ class DefaultAppContainer(
     }
 
     override val appLockManager: com.financeautomation.domain.security.AppLockManager by lazy {
-        com.financeautomation.domain.security.AppLockManager()
+        // Elapsed time since boot, so a changed device clock cannot shorten the lock timeout
+        com.financeautomation.domain.security.AppLockManager(clock = android.os.SystemClock::elapsedRealtime)
     }
 
     override val privacySettings: com.financeautomation.domain.security.PrivacySettings by lazy {
