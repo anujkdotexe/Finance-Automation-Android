@@ -61,4 +61,16 @@ class AboutPrivacyAndLicencesRoutesTest {
         )
         assertTrue("startActivity must be invoked for valid email intent", launched)
     }
+
+    @Test
+    fun testReportProblemIsExposedInAboutWithoutDeveloperMode() {
+        val items = getAboutNavigationItems()
+        val reportItem = items.firstOrNull { it.id == "report_problem" }
+        org.junit.Assert.assertNotNull("Report a problem action must be present in About navigation", reportItem)
+        org.junit.Assert.assertFalse(
+            "Report a problem action in About must be visible without developer mode",
+            reportItem!!.requiresDeveloperMode
+        )
+        org.junit.Assert.assertEquals(com.financeautomation.R.string.diag_report_problem, reportItem.titleRes)
+    }
 }

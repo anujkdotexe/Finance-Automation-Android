@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.CurrencyRupee
@@ -33,6 +34,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,10 +59,12 @@ fun AboutScreen(
     state: SettingsUiState,
     onNavigateToPrivacy: () -> Unit = {},
     onNavigateToLicences: () -> Unit = {},
+    onReportProblem: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    var showProblemReportDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -368,6 +375,61 @@ fun AboutScreen(
                         modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                     )
                 }
+
+                HorizontalDivider(
+                    color = FinanceTheme.colors.surfaceContainerLow,
+                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
+                )
+
+                // Link 3: Report a problem
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
+                        .clip(FinanceShapes.medium)
+                        .clickable(onClick = {
+                            if (onReportProblem != null) {
+                                onReportProblem()
+                            } else {
+                                showProblemReportDialog = true
+                            }
+                        })
+                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.s),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(FinanceTheme.sizes.icon32)
+                                .clip(CircleShape)
+                                .background(FinanceTheme.colors.surfaceContainerLow),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.BugReport,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(FinanceTheme.sizes.icon18)
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.diag_report_problem),
+                            style = FinanceTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
+                    )
+                }
             }
         }
 
@@ -385,4 +447,23 @@ fun AboutScreen(
         // Developer attribution, MIT license, and verified contacts
         com.financeautomation.presentation.components.DeveloperFooter()
     }
+
+    if (showProblemReportDialog) {
+        ProblemReportDialog(
+            onDismiss = { showProblemReportDialog = false },
+            initialScreen = "About"
+        )
+    }
 }
+
+data class AboutNavigationItem(
+    val id: String,
+    val titleRes: Int,
+    val requiresDeveloperMode: Boolean = false
+)
+
+fun getAboutNavigationItems(): List<AboutNavigationItem> = listOf(
+    AboutNavigationItem("privacy", R.string.about_link_privacy, requiresDeveloperMode = false),
+    AboutNavigationItem("licences", R.string.about_link_licences, requiresDeveloperMode = false),
+    AboutNavigationItem("report_problem", R.string.diag_report_problem, requiresDeveloperMode = false)
+)
