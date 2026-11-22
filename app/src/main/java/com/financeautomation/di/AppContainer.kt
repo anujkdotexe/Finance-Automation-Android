@@ -658,6 +658,7 @@ class DefaultAppContainer(
             },
             afterSwitch = {
                 // The widget and any posted notification still show the previous account's figures
+                com.financeautomation.service.MonthBurnWidgetProvider.clearLastGood(applicationContext)
                 com.financeautomation.service.MonthBurnWidgetProvider.requestUpdate(applicationContext)
                 // Cancel only the app's finance notifications; the persistent capture-off alert stays
                 val manager = androidx.core.app.NotificationManagerCompat.from(applicationContext)

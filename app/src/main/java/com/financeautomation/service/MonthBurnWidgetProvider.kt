@@ -131,6 +131,8 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
                 unavailable = if (summary == null) WidgetUnavailable.NOT_SIGNED_IN else WidgetUnavailable.NONE
             )
             draw(context, manager, ids, content)
+            // Remember a good figure so a later failed refresh can keep showing it; never keep one the user must not see
+            if (!appLockOn && summary != null) saveLastGood(context, content) else clearLastGood(context)
         }
 
         /**
@@ -167,13 +169,63 @@ class MonthBurnWidgetProvider : AppWidgetProvider() {
             )
         }
 
-        /** Redraws every placed widget with the "open the app" text. Used when the refresh failed or timed out. */
-        private fun drawCannotRead(context: Context) {
+        /**
+         * Used when the refresh failed or timed out. Keeps the last good figures when there are some and the app lock is
+         * off; the "open the app" text is shown only when there is no earlier content.
+         */
+        private suspend fun drawCannotRead(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, MonthBurnWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            val content = MonthBurnWidgetFormatter.format(emptySummary(), labels(context), unavailable = WidgetUnavailable.CANNOT_READ)
+            val container = (context.applicationContext as FinanceApplication).appContainer
+            container.ensureAppLockStarted()
+            val lastGood = if (container.appLockManager.isEnabled) null else loadLastGood(context)
+            val content = lastGood
+                ?: MonthBurnWidgetFormatter.format(emptySummary(), labels(context), unavailable = WidgetUnavailable.CANNOT_READ)
             draw(context, manager, ids, content)
+        }
+
+        private const val LAST_GOOD_PREFS = "month_burn_widget_last_good"
+
+        private fun saveLastGood(context: Context, content: MonthBurnWidgetContent) {
+            try {
+                context.getSharedPreferences(LAST_GOOD_PREFS, Context.MODE_PRIVATE).edit()
+                    .putString("monthName", content.monthName)
+                    .putString("title", content.title)
+                    .putString("amount", content.amount)
+                    .putString("perDay", content.perDay)
+                    .putString("syncState", content.syncState)
+                    .putString("description", content.description)
+                    .apply()
+            } catch (e: Exception) {
+                Diagnostics.record("MonthBurnWidgetProvider", "${e.javaClass.simpleName}: saveLastGood")
+            }
+        }
+
+        /** Forgets the stored figures, for example when the app lock is turned on or the account changes. */
+        fun clearLastGood(context: Context) {
+            try {
+                context.getSharedPreferences(LAST_GOOD_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+            } catch (e: Exception) {
+                Diagnostics.record("MonthBurnWidgetProvider", "${e.javaClass.simpleName}: clearLastGood")
+            }
+        }
+
+        private fun loadLastGood(context: Context): MonthBurnWidgetContent? {
+            return try {
+                val p = context.getSharedPreferences(LAST_GOOD_PREFS, Context.MODE_PRIVATE)
+                MonthBurnWidgetContent(
+                    monthName = p.getString("monthName", null) ?: return null,
+                    title = p.getString("title", null) ?: return null,
+                    amount = p.getString("amount", null) ?: return null,
+                    perDay = p.getString("perDay", null) ?: return null,
+                    syncState = p.getString("syncState", null) ?: return null,
+                    description = p.getString("description", null) ?: return null
+                )
+            } catch (e: Exception) {
+                Diagnostics.record("MonthBurnWidgetProvider", "${e.javaClass.simpleName}: loadLastGood")
+                null
+            }
         }
 
         private fun draw(context: Context, manager: AppWidgetManager, ids: IntArray, content: MonthBurnWidgetContent) {
