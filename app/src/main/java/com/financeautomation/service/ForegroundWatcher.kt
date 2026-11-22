@@ -145,14 +145,14 @@ class ForegroundWatcher(
 
     /**
      * Inspects UsageEvents to determine if the target application is currently in the foreground.
-     * Restricts queries strictly to whitelisted payment packages and a tight 5-minute window.
+     * Restricts queries strictly to whitelisted payment packages and a 60-minute window, so an app that has stayed in the foreground for a while still has its last resume event in range.
      */
     fun isInForeground(targetPackage: String): Boolean {
         if (!PackageWhitelist.isWhitelisted(targetPackage)) return false
 
         val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return false
         val now = System.currentTimeMillis()
-        val events = usageStats.queryEvents(now - 10 * 60_000L, now) ?: return false
+        val events = usageStats.queryEvents(now - FOREGROUND_QUERY_WINDOW_MS, now) ?: return false
 
         var lastResumeTime = 0L
         var lastPauseTime = 0L
@@ -185,7 +185,8 @@ class ForegroundWatcher(
         if (lastResumeTime == 0L && lastPauseTime == 0L) {
             return false
         }
-        return lastResumeTime > lastPauseTime
+        // Equal timestamps count as resumed: pause and resume can carry the same millisecond
+        return lastResumeTime >= lastPauseTime
     }
 
     /**
@@ -460,6 +461,7 @@ class ForegroundWatcher(
         const val POLL_INTERVAL_MS: Long = 700L
         const val REQUIRED_CONSECUTIVE_POLLS: Int = 2
         const val FAILURE_BACKOFF_MS: Long = 5000L
+        private const val FOREGROUND_QUERY_WINDOW_MS: Long = 60L * 60_000L
         private const val STALE_SHOWN_MS: Long = 120_000L
         private const val MAX_LOOP_RETRIES: Int = 3
         private const val LOOP_RETRY_BASE_MS: Long = 2000L
