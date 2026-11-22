@@ -20,6 +20,48 @@ class ParseNotificationUseCaseTest {
     }
 
     @Test
+    fun parsesPaidYouAsCredit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Rahul paid you",
+            text = "Rahul paid you Rs 500"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(500.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isCredit)
+        assertFalse(success.isDebit)
+    }
+
+    @Test
+    fun parsesSentYouAsCredit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Payment received",
+            text = "Sample Friend sent you Rs 350"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(350.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isCredit)
+        assertFalse(success.isDebit)
+    }
+
+    @Test
+    fun parsesNormalPaidToMerchantAsDebit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Paid Rs 120 to Sample Store",
+            text = "Paid Rs 120 to Sample Store using Bank A/c ending 1234"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(120.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isDebit)
+        assertFalse(success.isCredit)
+    }
+
+    @Test
     fun testParseWhitelistedGooglePayTransaction() {
         val result = useCase(
             sourcePackage = PackageWhitelist.PACKAGE_GPAY,
