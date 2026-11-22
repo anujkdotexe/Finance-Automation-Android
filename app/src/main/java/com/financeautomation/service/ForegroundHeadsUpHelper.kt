@@ -61,8 +61,8 @@ object ForegroundHeadsUpHelper {
         categoryStatDaoProvider: (suspend () -> CategoryStatDao)?,
         predictCategoryUseCase: PredictCategoryUseCase?,
         categoryDaoProvider: (suspend () -> CategoryDao)? = null
-    ) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+    ): Boolean {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 NotificationListenerServiceImpl.CHANNEL_FINANCIAL_ALERTS,
@@ -182,11 +182,13 @@ object ForegroundHeadsUpHelper {
 
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
             PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.HEADS_UP_BLOCKED_NOTIFICATIONS_OFF)
-        } else {
-            PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.HEADS_UP_POSTED)
+            // Nothing can be shown; the caller backs off and the capture reaches Needs Review through normal expiry
+            return false
         }
+        PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.HEADS_UP_POSTED)
 
         notificationManager.notify(notificationId, builder.build())
+        return true
     }
 }
 

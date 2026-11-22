@@ -390,8 +390,11 @@ class ForegroundWatcher(
                     return true
                 } else {
                     // Spec 5.5 point 2: Heads-up notification fallback when overlay permission or controller is absent
-                    postHeadsUpFallback(capture)
-                    return true
+                    val posted = postHeadsUpFallback(capture)
+                    if (!posted) {
+                        dao.updateState(capture.id, PendingCaptureEntity.STATE_WAITING)
+                    }
+                    return posted
                 }
             }
         } catch (e: Exception) {
@@ -416,8 +419,8 @@ class ForegroundWatcher(
         )
     }
 
-    private suspend fun postHeadsUpFallback(capture: PendingCaptureEntity) {
-        ForegroundHeadsUpHelper.postHeadsUpNotification(
+    private suspend fun postHeadsUpFallback(capture: PendingCaptureEntity): Boolean {
+        return ForegroundHeadsUpHelper.postHeadsUpNotification(
             context = context,
             capture = capture,
             categoryStatDaoProvider = categoryStatDaoProvider,
