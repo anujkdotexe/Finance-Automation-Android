@@ -189,12 +189,26 @@ class MainActivity : FragmentActivity() {
             if (gAccount != null) {
                 val app = application as FinanceApplication
                 lifecycleScope.launch(Dispatchers.IO) {
-                    gAccount.email?.let { app.appContainer.preferencesRepository.setGoogleAccountEmail(it) }
-                    gAccount.displayName?.let { app.appContainer.preferencesRepository.setGoogleAccountDisplayName(it) }
-                    val photoUrl = gAccount.photoUrl?.toString()
-                    if (!photoUrl.isNullOrBlank()) {
-                        app.appContainer.preferencesRepository.setGoogleAccountPhotoUrl(photoUrl)
-                        app.appContainer.profileAvatarManager.downloadAndSaveAvatar(photoUrl)
+                    val lastEmail = gAccount.email
+                    val guard = app.appContainer.accountSwitchGuard
+                    val prefs = app.appContainer.preferencesRepository
+                    // A different account than the ledger owner is never adopted here; the sign in flow asks first
+                    val adopt = if (lastEmail.isNullOrBlank()) {
+                        false
+                    } else if (prefs.getPreference(com.financeautomation.data.account.AccountSwitchGuard.KEY_LEDGER_OWNER).isNullOrBlank()) {
+                        true
+                    } else {
+                        guard.evaluate(lastEmail).decision == com.financeautomation.data.account.SwitchDecision.PROCEED
+                    }
+                    if (adopt && lastEmail != null) {
+                        prefs.setGoogleAccountEmail(lastEmail)
+                        guard.recordOwner(lastEmail)
+                        gAccount.displayName?.let { prefs.setGoogleAccountDisplayName(it) }
+                        val photoUrl = gAccount.photoUrl?.toString()
+                        if (!photoUrl.isNullOrBlank()) {
+                            prefs.setGoogleAccountPhotoUrl(photoUrl)
+                            app.appContainer.profileAvatarManager.downloadAndSaveAvatar(photoUrl)
+                        }
                     }
                 }
             }
