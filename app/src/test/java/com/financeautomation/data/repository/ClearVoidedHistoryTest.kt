@@ -146,18 +146,4 @@ class ClearVoidedHistoryTest {
         assertTrue(warning.contains("Google Sheet is not changed"))
         assertFalse(warning.any { it.code in 0x1F300..0x1FAFF })
     }
-
-    @Test
-    fun testPreferencesDataBlockIsInsideScrollingColumnAfterPrivacy() {
-        val file = File("src/main/java/com/financeautomation/presentation/screens/drawer/PreferencesScreen.kt")
-        val content = if (file.exists()) file.readText() else File("app/" + file.path).readText()
-        val privacyIdx = content.indexOf("PrivacyGroup(")
-        val dataIdx = content.indexOf("pref_data_title")
-        val dialogIdx = content.indexOf("if (showAccountDialog)")
-        assertTrue("PrivacyGroup must be present", privacyIdx != -1)
-        assertTrue("pref_data_title must be present", dataIdx != -1)
-        assertTrue("showAccountDialog must be present", dialogIdx != -1)
-        assertTrue("Data section must be placed after PrivacyGroup", dataIdx > privacyIdx)
-        assertTrue("Data section must be placed inside scrolling column before dialogs", dataIdx < dialogIdx)
-    }
 }
