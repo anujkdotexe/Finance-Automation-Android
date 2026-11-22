@@ -890,14 +890,56 @@ class QuickLogViewModelTest {
         vm.onAmountChanged("100")
         advanceUntilIdle()
 
-        var savedTxnId: String? = null
         vm.onConfirmAndSave(
-            onSaved = { _, id -> savedTxnId = id },
+            onSaved = { _, _ -> },
             onError = {}
         )
         advanceUntilIdle()
 
         assertEquals("Team", vm.uiState.value.payee)
         assertEquals("Lunch with team", vm.uiState.value.note)
+
+        // Verify stored transaction in repository is trimmed
+        val saved = fakeRepo.inserted.single()
+        assertEquals("Team", saved.merchant)
+        assertEquals("Lunch with team", saved.note)
+    }
+
+    @Test
+    fun testUpdateExisting_trimsMerchantAndNoteWhenEditing() = runTest {
+        val fakeRepo = FakeTransactionRepo()
+        val original = Transaction(
+            id = "tx-1",
+            dateSerial = 45000,
+            timeSerial = 0.5,
+            timestamp = 1000L,
+            merchant = "Old Merchant",
+            totalAmount = 150.0,
+            myShare = 150.0,
+            owedToMe = 0.0,
+            companions = "Personal",
+            status = TransactionStatus.PERSONAL,
+            category = "Food",
+            account = "SBI",
+            note = "Old note"
+        )
+        fakeRepo.inserted.add(original)
+
+        val editState = QuickLogUiState(
+            payee = "Edited Team ",
+            note = "Edited note with space ",
+            amount = 200.0,
+            myShare = 200.0,
+            owedToMe = 0.0,
+            selectedCategory = "Food",
+            selectedAccount = "SBI"
+        )
+
+        val result = QuickLogTransactionHelper.updateExisting("tx-1", editState, fakeRepo)
+        assertTrue(result is com.financeautomation.core.model.Result.Success)
+
+        val updated = fakeRepo.inserted.single()
+        assertEquals("Edited Team", updated.merchant)
+        assertEquals("Edited note with space", updated.note)
     }
 }

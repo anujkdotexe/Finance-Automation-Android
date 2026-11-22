@@ -192,4 +192,42 @@ class InputPolicyTest {
         assertFalse(invalid.isValid)
         assertEquals(InputPolicy.InputError.INVALID_SPREADSHEET_ID, (invalid as InputPolicy.ValidationResult.Error).reason)
     }
+
+    @Test
+    fun testTypingValuesLeavingFieldsAreTrimmedForLookupsAndStorage() {
+        // 1. IncomeReturnFlowSheet debt lookup and reason string
+        val typedSettler = InputPolicy.cleanNameWhileTyping("Kabir ")
+        assertEquals("Kabir ", typedSettler)
+        val lookupName = typedSettler.trim()
+        assertEquals("Kabir", lookupName)
+        val reasonText = "Settlement from $lookupName"
+        assertEquals("Settlement from Kabir", reasonText)
+        assertFalse(reasonText.contains("Kabir "))
+
+        // 2. TripModeFlowSheet effective tag
+        val typedTripTag = InputPolicy.cleanNameWhileTyping("Goa ")
+        val typedPlace = InputPolicy.cleanNameWhileTyping("Anjuna ")
+        val effectiveTripTag = "${typedTripTag.trim()} - ${typedPlace.trim()}"
+        assertEquals("Goa - Anjuna", effectiveTripTag)
+
+        // 3. FriendPaidFlowSheet creditor and description
+        val typedCreditor = InputPolicy.cleanNameWhileTyping("Aman ")
+        val typedWhatFor = InputPolicy.cleanNoteWhileTyping("Dinner ")
+        assertEquals("Aman", typedCreditor.trim())
+        assertEquals("Dinner", typedWhatFor.trim())
+
+        // 4. RepaidFriendFlowSheet person name and note
+        val typedRepaidPerson = InputPolicy.cleanNameWhileTyping("Rohan ")
+        val typedRepaidNote = InputPolicy.cleanNoteWhileTyping("UPI repayment ")
+        assertEquals("Rohan", typedRepaidPerson.trim())
+        assertEquals("UPI repayment", typedRepaidNote.trim())
+
+        // 5. AccountsScreen rename and add account
+        val typedAccName = InputPolicy.cleanNameWhileTyping("HDFC Bank ")
+        assertEquals("HDFC Bank", typedAccName.trim())
+
+        // 6. CompanionSplitSection new friend
+        val typedFriendName = InputPolicy.cleanNameWhileTyping("Priya ")
+        assertEquals("Priya", typedFriendName.trim())
+    }
 }

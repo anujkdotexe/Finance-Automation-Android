@@ -285,7 +285,7 @@ fun FriendPaidFlowSheet(
             OutlinedTextField(
                 value = whatForText,
                 onValueChange = {
-                    whatForText = com.financeautomation.core.utils.InputPolicy.cleanNote(it)
+                    whatForText = com.financeautomation.core.utils.InputPolicy.cleanNoteWhileTyping(it)
                         .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
                 },
                 placeholder = { Text(stringResource(R.string.hint_add_description), style = FinanceTheme.typography.bodyMedium) },

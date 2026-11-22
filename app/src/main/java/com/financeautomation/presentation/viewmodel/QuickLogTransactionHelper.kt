@@ -148,6 +148,7 @@ object QuickLogTransactionHelper {
             existing.status.value.equals("Carried Fwd", ignoreCase = true) ||
             (existing.owedToMe > 0.0 && existing.owedToMe < (existing.totalAmount - existing.myShare - 0.01))
 
+        val cleanMerchant = com.financeautomation.core.utils.InputPolicy.cleanName(state.payee)
         val cleanNote = com.financeautomation.core.utils.InputPolicy.cleanNote(state.note)
         val newTimestamp = state.captureTimestamp ?: existing.timestamp
         val newDateSerial = if (state.captureTimestamp != null) com.financeautomation.core.utils.DateSerialUtils.toDateSerial(newTimestamp) else existing.dateSerial
@@ -159,7 +160,7 @@ object QuickLogTransactionHelper {
                 timestamp = newTimestamp,
                 dateSerial = newDateSerial,
                 timeSerial = newTimeSerial,
-                merchant = state.payee.ifBlank { existing.merchant },
+                merchant = cleanMerchant.ifBlank { existing.merchant },
                 note = cleanNote,
                 category = state.selectedCategory,
                 account = state.selectedAccount,
@@ -182,7 +183,7 @@ object QuickLogTransactionHelper {
                 timestamp = newTimestamp,
                 dateSerial = newDateSerial,
                 timeSerial = newTimeSerial,
-                merchant = state.payee.ifBlank { "Expense" },
+                merchant = cleanMerchant.ifBlank { "Expense" },
                 note = cleanNote,
                 category = state.selectedCategory,
                 totalAmount = state.amount,

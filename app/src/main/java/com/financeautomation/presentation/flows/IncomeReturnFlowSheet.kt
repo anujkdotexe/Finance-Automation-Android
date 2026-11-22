@@ -271,7 +271,7 @@ fun IncomeReturnFlowSheet(
                         .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                     settlerName = clean
                     if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {
-                        onPersonChanged(clean)
+                        onPersonChanged(clean.trim())
                     }
                 },
                 placeholder = {
@@ -333,14 +333,15 @@ fun IncomeReturnFlowSheet(
             filledText = stringResource(R.string.btn_save_income),
             onFilledClick = {
                 val refs = if (autoSettleAll) emptyList() else selectedDebtIds.toList()
-                val effectiveReason = reasonText.ifBlank {
-                    if (selectedOption == InflowOption.FRIEND_SETTLEMENT) "Settlement from $settlerName" else selectedOption.key
+                val trimmedSettler = settlerName.trim()
+                val effectiveReason = reasonText.trim().ifBlank {
+                    if (selectedOption == InflowOption.FRIEND_SETTLEMENT) "Settlement from $trimmedSettler" else selectedOption.key
                 }
                 onConfirm(
                     parsedAmount,
                     selectedAccount,
                     selectedOption.key,
-                    settlerName.trim(),
+                    trimmedSettler,
                     effectiveReason,
                     refs
                 )

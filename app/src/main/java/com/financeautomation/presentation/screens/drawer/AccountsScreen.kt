@@ -315,7 +315,7 @@ fun AccountsScreen(
                     filledText = stringResource(R.string.action_save),
                     onFilledClick = {
                         if (editName.isNotBlank()) {
-                            viewModel.onRenameAccount(account.id, editName, editDigits)
+                            viewModel.onRenameAccount(account.id, editName.trim(), editDigits.trim().ifEmpty { null })
                             selectedAccountForEdit = null
                         }
                     },
