@@ -122,8 +122,8 @@ class DashboardStyleTest {
     }
 
     @Test
-    fun testIOwePeopleHeaderRowHasPersonCountAmountOldestAndStatus() {
-        val headers = (7..11).map { col ->
+    fun testIOwePeopleHeaderRowHasPersonCountAmountAndOldest() {
+        val headers = (7..10).map { col ->
             @Suppress("UNCHECKED_CAST")
             val cell = requests.mapNotNull { it["updateCells"] as? Map<String, Any?> }
                 .first {
@@ -134,7 +134,7 @@ class DashboardStyleTest {
             val value = ((cell["rows"] as List<Map<String, Any?>>).first()["values"] as List<Map<String, Any?>>).first()
             (value["userEnteredValue"] as Map<*, *>)["stringValue"]
         }
-        assertEquals(listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date", "Status"), headers)
+        assertEquals(listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date"), headers)
     }
 
     @Test

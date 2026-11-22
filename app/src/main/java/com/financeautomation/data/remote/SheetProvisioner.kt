@@ -200,7 +200,6 @@ object SheetProvisioner {
     private val lightSlateBg = hexToColorMap("EBEEF1")
     private val darkNavyBg = hexToColorMap("19227E")
     private val ledgerBannerBg = hexToColorMap("1A237E")
-    private val accentNavyBg = hexToColorMap("273492")
     private val buttonNavyBg = hexToColorMap("283593")
     private val headerSlateBg = hexToColorMap("37474F")
     private val settlementsBannerBg = hexToColorMap("37464E")
@@ -412,7 +411,7 @@ object SheetProvisioner {
             )
         )
 
-        // 4. Row 3: Section Header
+        // 4. Row 3: helper data columns U3:AC3 must have no fill (clears the old dark stripe on existing workbooks)
         requests.add(
             mapOf(
                 "repeatCell" to mapOf(
@@ -424,9 +423,7 @@ object SheetProvisioner {
                         "endColumnIndex" to 29
                     ),
                     "cell" to mapOf(
-                        "userEnteredFormat" to mapOf(
-                            "backgroundColor" to accentNavyBg
-                        )
+                        "userEnteredFormat" to emptyMap<String, Any?>()
                     ),
                     "fields" to "userEnteredFormat.backgroundColor"
                 )
@@ -484,7 +481,7 @@ object SheetProvisioner {
             Triple(0, "CURRENT BURN", false),
             Triple(3, "PREV MONTH", false),
             Triple(6, "OWED TO ME", false),
-            Triple(9, "I OWE PEOPLE", true),
+            Triple(9, "I OWE PEOPLE", false),
             Triple(12, "SUBSCRIPTIONS", false),
             Triple(15, "DAILY AVERAGE", false)
         )
@@ -904,7 +901,8 @@ object SheetProvisioner {
             )
         }
 
-        val iOwePeopleHeaders = listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date", "Status")
+        // The I OWE PEOPLE query returns four columns (person, count, amount, oldest date); there is no Status column
+        val iOwePeopleHeaders = listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date")
         iOwePeopleHeaders.forEachIndexed { cIdx, h ->
             requests.add(
                 createCellRequest(
@@ -981,6 +979,32 @@ object SheetProvisioner {
                 )
             )
         )
+
+        // Oldest Date columns of both settlement tables hold dates; show them as yyyy-mm-dd instead of serial numbers
+        listOf(4, 10).forEach { dateCol ->
+            requests.add(
+                mapOf(
+                    "repeatCell" to mapOf(
+                        "range" to mapOf(
+                            "sheetId" to dashboardSheetId,
+                            "startRowIndex" to 26,
+                            "endRowIndex" to 40,
+                            "startColumnIndex" to dateCol,
+                            "endColumnIndex" to dateCol + 1
+                        ),
+                        "cell" to mapOf(
+                            "userEnteredFormat" to mapOf(
+                                "numberFormat" to mapOf(
+                                    "type" to "DATE",
+                                    "pattern" to "yyyy-mm-dd"
+                                )
+                            )
+                        ),
+                        "fields" to "userEnteredFormat.numberFormat"
+                    )
+                )
+            )
+        }
 
         // 11. Subscriptions Band (Rows 43 to 54)
         // Row 43 Banner (0-based 42)
