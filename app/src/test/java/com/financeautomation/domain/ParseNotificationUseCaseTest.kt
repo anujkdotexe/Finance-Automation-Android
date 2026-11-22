@@ -20,6 +20,102 @@ class ParseNotificationUseCaseTest {
     }
 
     @Test
+    fun dropsNonSmsWithUnknownDirection() {
+        PackageWhitelist.addWatchedApp("com.custom.sampleapp", "Custom Sample App")
+        try {
+            val result = useCase(
+                sourcePackage = "com.custom.sampleapp",
+                title = "Sample App",
+                text = "Notification from Sample App: your balance is 500"
+            )
+            assertTrue(result is NotificationParseResult.Dropped)
+            assertEquals(DropReason.UNKNOWN_DIRECTION, (result as NotificationParseResult.Dropped).reason)
+        } finally {
+            PackageWhitelist.removeWatchedApp("com.custom.sampleapp")
+        }
+    }
+
+    @Test
+    fun treatsRefundAsCredit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Refund",
+            text = "Refund of Rs 250 processed"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(250.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isCredit)
+        assertFalse(success.isDebit)
+    }
+
+    @Test
+    fun dropsWillBeDebitedByMandate() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Mandate Notice",
+            text = "Rs 199 will be debited by Sample Streaming on 25 Nov"
+        )
+        assertTrue(result is NotificationParseResult.Dropped)
+        assertEquals(DropReason.MANDATE_NOTICE, (result as NotificationParseResult.Dropped).reason)
+    }
+
+    @Test
+    fun capturesHasBeenDebitedBy() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Payment Successful",
+            text = "Rs 199 has been debited by Sample Streaming"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(199.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isDebit)
+    }
+
+    @Test
+    fun parsesPaidYouAsCredit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Rahul paid you",
+            text = "Rahul paid you Rs 500"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(500.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isCredit)
+        assertFalse(success.isDebit)
+    }
+
+    @Test
+    fun parsesSentYouAsCredit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Payment received",
+            text = "Sample Friend sent you Rs 350"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(350.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isCredit)
+        assertFalse(success.isDebit)
+    }
+
+    @Test
+    fun parsesNormalPaidToMerchantAsDebit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Paid Rs 120 to Sample Store",
+            text = "Paid Rs 120 to Sample Store using Bank A/c ending 1234"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(120.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isDebit)
+        assertFalse(success.isCredit)
+    }
+
+    @Test
     fun testParseWhitelistedGooglePayTransaction() {
         val result = useCase(
             sourcePackage = PackageWhitelist.PACKAGE_GPAY,

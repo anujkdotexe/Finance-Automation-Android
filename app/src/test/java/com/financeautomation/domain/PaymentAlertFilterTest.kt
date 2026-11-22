@@ -174,7 +174,7 @@ class PaymentAlertFilterTest {
         processor.process(PackageWhitelist.PACKAGE_GPAY, "Get cashback", "Get up to Rs 100 cashback on your next payment")
         processor.process(PackageWhitelist.PACKAGE_PHONEPE, "Your order", "Your order of Rs 777 is being prepared")
         processor.process(PackageWhitelist.PACKAGE_PAYTM, "Transaction", "Transaction successful for Rs 888")
-        processor.process(sms, "HDFCBK", "482910 is your OTP for payment of Rs 555. Do not share.")
+        processor.process(sms, "VM-HDFCBK", "482910 is your OTP for payment of Rs 555. Do not share.")
 
         val events = com.financeautomation.core.utils.PipelineTrail.bufferedEventsForTesting()
         val codes = events.map { it.code }

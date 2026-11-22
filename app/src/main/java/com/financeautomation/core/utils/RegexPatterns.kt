@@ -31,7 +31,7 @@ object RegexPatterns {
 
     // Financial transaction keywords check for SMS filtering
     val FINANCIAL_KEYWORDS_REGEX: Regex = Regex(
-        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c(?:\s+no)?|account|acct|ac|spent|paid\s+thru|paid\s+to|received|dr\.?|cr\.?|debit|debits|credit|credits|payment\s+of|bill\s+payment\s+of|successfully\s+paid|recharge\s+of|jiopay|upi\s*ref|upi:)(?=\W|$)"""
+        """(?i)\b(debited|credited|withdrawn|transferred|txn|a/c(?:\s+no)?|account|acct|ac|spent|paid\s+thru|paid\s+to|paid\s+you|sent\s+you|received|dr\.?|cr\.?|debit|debits|credit|credits|payment\s+of|bill\s+payment\s+of|successfully\s+paid|recharge\s+of|jiopay|upi\s*ref|upi:)(?=\W|$)"""
     )
 
     // UPI Virtual Payment Address (VPA) regex
@@ -85,7 +85,7 @@ object RegexPatterns {
 
     // A completed outgoing payment: a debit verb tied to an amount
     val DEBIT_CONFIRMATION_REGEX: Regex = Regex(
-        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?|recharge\s+of|recharge\s+successful|bill\s+payment\s+of|dr\.?)\b[^\d₹]{0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
+        """(?i)\b(?:paid|debited|sent|spent|withdrawn|deducted|purchased?|recharge\s+of|recharge\s+successful|bill\s+payment\s+of|dr\.?)\b(?:(?!\byou\b)[^\d₹]){0,12}(?:rs\.?|inr|₹)\s*[\d,]+""" +
             """|(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|was\s+|is\s+)?(?:debited|paid|sent|spent|withdrawn|deducted|purchased?|dr\.?)\b""" +
             """|(?:Plan\s+Name|प्लान\s+का\s+नाम|प्लॅन\s+चे\s+नाव)\s*:\s*[\d,]+(?:\.\d{1,2})?"""
     )
@@ -195,13 +195,15 @@ object RegexPatterns {
         "JioPay-S", "JioSvc-S", "iPaytm-S", "blnkit-S", "IRCTCi-S", "IRSMSa-S"
     )
 
-    private val BANK_SENDER_UPPER_REGEX: Regex = Regex("""^[A-Z0-9][A-Z0-9-]{2,19}$""")
+    private val BANK_SENDER_DLT_REGEX: Regex = Regex("""^[A-Z]{2}-[A-Za-z0-9]{2,12}(?:-[STPGstpg])?$""")
+    private val BANK_SENDER_SUFFIX_REGEX: Regex = Regex("""^[A-Z0-9]{3,12}-[STPG]$""")
 
     /**
-     * True for sender ids that look like a bank or payment header: letters and digits in capitals with dashes and no
-     * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK, JIOPAY-S), a 4 to 9 digit short code (56161, 5676766), or a registered
-     * mixed-case biller header (JioPay-S). Contact names such as "Rahul", "Mom", "Dr-Rao", "Mr-Sharma", "Rahul-K",
-     * "Mom-S", "Raj-Mo", "Mary-Jane", or "Smith-Jones", and personal phone numbers are not bank senders.
+     * True for sender ids that look like a bank or payment header: DLT header format with operator/circle prefix
+     * (e.g. VM-HDFCBK, AX-SBIUPI-S, JD-ICICIT-S), uppercase DLT suffix headers (e.g. CANBNK-S, SBIUPI-S, BESCOM-S),
+     * a 4 to 9 digit short code (56161, 5676766), or a registered mixed-case biller header (JioPay-S).
+     * Contact names such as "Rahul", "Mom", "Boss", "Dad", "ABC", "Mom-S", "HDFCBK" (without prefix hyphen or suffix),
+     * and personal phone numbers are not bank senders.
      */
     fun isBankSenderId(sender: String): Boolean {
         val s = sender.trim()
@@ -209,7 +211,7 @@ object RegexPatterns {
         if (s.all { it.isDigit() }) return s.length in 4..9
         if (!s.any { it.isLetter() }) return false
         if (MIXED_CASE_BILLER_REGISTRY.contains(s)) return true
-        return BANK_SENDER_UPPER_REGEX.matches(s)
+        return BANK_SENDER_DLT_REGEX.matches(s) || BANK_SENDER_SUFFIX_REGEX.matches(s)
     }
 
     private val TOWARDS_BILLER_REGEX: Regex = Regex(

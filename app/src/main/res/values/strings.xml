@@ -399,6 +399,8 @@
     <string name="problem_report_preview_title">Technical data to be sent:</string>
     <string name="problem_report_send_button">Send</string>
     <string name="problem_report_success">Thank you. Your report has been submitted.</string>
+    <string name="problem_report_already_sent">Thank you. This report was already submitted.</string>
+    <string name="problem_report_maybe_sent">Your report may already have been sent. If your connection dropped, it will be delivered once connected.</string>
     <string name="problem_report_error_prefix">Failed to send: </string>
     <string name="problem_report_close">Close</string>
     <string name="diag_locked_title">Diagnostics locked</string>
@@ -1101,4 +1103,17 @@
     <string name="transaction_split_indicator">Split (%1$s)</string>
     <string name="category_spend_archived_format">%1$s (archived)</string>
     <string name="category_archived_suffix">(archived)</string>
+
+    <!-- Confirmation Dialog Strings (A10) -->
+    <string name="confirm_void_title">Void %1$s?</string>
+    <string name="confirm_void_title_generic">Void entry?</string>
+    <string name="confirm_void_message">Are you sure you want to void this entry? It will be struck through in your ledger.</string>
+    <string name="confirm_sign_out_title">Sign out?</string>
+    <string name="confirm_sign_out_message">Are you sure you want to sign out? You will need to link your Google account again to sync.</string>
+    <string name="confirm_archive_account_title">Archive %1$s?</string>
+    <string name="confirm_archive_account_message">Are you sure you want to archive this account? Existing transactions will keep their history.</string>
+    <string name="confirm_delete_account_title">Delete %1$s?</string>
+    <string name="confirm_delete_account_message">Are you sure you want to delete this account? This action cannot be undone.</string>
+    <string name="confirm_hide_category_title">Hide %1$s?</string>
+    <string name="confirm_hide_category_message">Are you sure you want to hide this category? It will no longer appear in category selection.</string>
 </resources>

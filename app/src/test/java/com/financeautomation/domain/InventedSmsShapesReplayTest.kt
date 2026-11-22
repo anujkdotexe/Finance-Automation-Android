@@ -331,7 +331,7 @@ class InventedSmsShapesReplayTest {
     @Test
     fun testDrRaoAllowedThroughGateButDroppedDownstream() {
         val promoText = "Dr. Rao presents exciting offers on electronics. Visit store today."
-        val sender = "HDFCBK"
+        val sender = "VM-HDFCBK"
 
         // Gate level: matches 'dr.' so allowed through initial keyword gate
         val passesGate = NotificationPreFilter.shouldReadFullText(smsPackage, sender, promoText)
@@ -353,7 +353,7 @@ class InventedSmsShapesReplayTest {
     fun testAcTokenWideningPassesGateButDroppedDownstream() {
         // W4: ac token allows non-transaction message with 'ac' through gate, but parser safely drops it downstream
         val acPromoText = "Ac service discount: get 20% off on your split ac repair. Book today on DemoApp."
-        val sender = "HDFCBK"
+        val sender = "VM-HDFCBK"
 
         val passesGate = NotificationPreFilter.shouldReadFullText(smsPackage, sender, acPromoText)
         assertTrue("ac token allows message through keyword gate", passesGate)

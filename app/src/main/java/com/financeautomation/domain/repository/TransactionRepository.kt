@@ -132,6 +132,14 @@ interface TransactionRepository {
         category: String = com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER
     ): Result<String>
 
+    suspend fun logFriendPaid(
+        creditor: String,
+        amount: Double,
+        whatFor: String,
+        timestamp: Long = System.currentTimeMillis(),
+        category: String = com.financeautomation.core.constants.CategoryConstants.CATEGORY_OTHER
+    ): Result<String> = logPayable(creditor, amount, whatFor, timestamp, category)
+
     /**
      * Enqueues a repayment operation for cloud sync.
      */

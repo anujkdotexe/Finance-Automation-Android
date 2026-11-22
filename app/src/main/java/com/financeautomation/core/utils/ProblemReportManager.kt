@@ -14,6 +14,12 @@ import kotlinx.coroutines.withTimeout
 import java.util.UUID
 import java.util.concurrent.TimeoutException
 
+enum class ReportOutcome {
+    SENT,
+    ALREADY_SENT,
+    MAYBE_SENT
+}
+
 /**
  * Manages user-initiated problem reports sent to Firebase Firestore.
  * Conforms strictly to AGENTS.md section 2B item 3 and firebase/firestore.rules.
@@ -126,7 +132,7 @@ object ProblemReportManager {
         timeoutMillis: Long = SUBMIT_TIMEOUT_MILLIS,
         isRetry: Boolean = false,
         submitter: (suspend (String, Map<String, Any?>) -> Unit)? = null
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<ReportOutcome> = withContext(Dispatchers.IO) {
         if (!isFirebaseConfigured(context) && submitter == null) {
             return@withContext Result.failure(
                 IllegalStateException("Firebase service is not configured on this device")
@@ -144,7 +150,7 @@ object ProblemReportManager {
                 }
             }
             Diagnostics.record("ProblemReportManager", "Report submitted successfully: ${payload.reasonCode}")
-            Result.success("Report submitted successfully")
+            Result.success(ReportOutcome.SENT)
         } catch (e: TimeoutCancellationException) {
             val errorMsg = "Submission timed out after ${timeoutMillis / 1000} seconds. If your phone was offline, the report may still arrive later once connected."
             Diagnostics.record("ProblemReportManager", "Submission error: $errorMsg")
@@ -156,11 +162,11 @@ object ProblemReportManager {
 
             if (isAlreadyExists) {
                 Diagnostics.record("ProblemReportManager", "Report $documentId already exists, treated as already sent")
-                Result.success("Report was already submitted")
+                Result.success(ReportOutcome.ALREADY_SENT)
             } else if (isRetry && isPermissionDenied) {
                 val successMessage = "Report may already have been sent"
                 Diagnostics.record("ProblemReportManager", "Report retry for $documentId received permission denied: $successMessage")
-                Result.success(successMessage)
+                Result.success(ReportOutcome.MAYBE_SENT)
             } else {
                 val scrubbedError = PrivacyScrubber.scrub(e.message ?: e.javaClass.simpleName)
                 Diagnostics.record("ProblemReportManager", "Submission error: $scrubbedError")

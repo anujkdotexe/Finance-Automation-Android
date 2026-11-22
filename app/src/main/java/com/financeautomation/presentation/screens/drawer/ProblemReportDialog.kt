@@ -48,6 +48,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.financeautomation.R
 import com.financeautomation.core.utils.PrivacyScrubber
 import com.financeautomation.core.utils.ProblemReportManager
+import com.financeautomation.core.utils.ReportOutcome
 import com.financeautomation.core.utils.ProblemReportPayload
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -308,8 +309,13 @@ fun ProblemReportDialog(
                                     )
                                     isSubmitting = false
                                     result.fold(
-                                        onSuccess = { msg ->
-                                            successMessage = msg
+                                        onSuccess = { outcome ->
+                                            val messageRes = when (outcome) {
+                                                ReportOutcome.SENT -> R.string.problem_report_success
+                                                ReportOutcome.ALREADY_SENT -> R.string.problem_report_already_sent
+                                                ReportOutcome.MAYBE_SENT -> R.string.problem_report_maybe_sent
+                                            }
+                                            successMessage = context.getString(messageRes)
                                             isSuccess = true
                                         },
                                         onFailure = { error ->

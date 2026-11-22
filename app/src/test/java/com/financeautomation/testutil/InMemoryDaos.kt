@@ -130,6 +130,11 @@ class InMemoryPayableDao : PayableDao {
         }
         return count
     }
+    override suspend fun updateAfterNetting(uuid: String, amountIOwe: Double, status: String, dateRepaidSerial: Int?): Int {
+        val payable = storage[uuid] ?: return 0
+        storage[uuid] = payable.copy(amountIOwe = amountIOwe, repaymentStatus = status, dateRepaidSerial = dateRepaidSerial)
+        return 1
+    }
     override suspend fun deleteAll() { storage.clear() }
     override suspend fun getAllForYear(
         startSerial: Int,

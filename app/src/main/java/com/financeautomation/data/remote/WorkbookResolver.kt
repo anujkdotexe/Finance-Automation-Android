@@ -399,7 +399,8 @@ open class WorkbookResolver(
             val provRes = googleSheetsClient.provisionMasterWorkbook(
                 spreadsheetId = newSpreadsheetId,
                 accounts = accounts,
-                categories = categories
+                categories = categories,
+                year = year
             )
             if (provRes is Result.Error) {
                 return@withContext Result.Error(provRes.exception)
@@ -466,7 +467,7 @@ open class WorkbookResolver(
 
             val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
             val categories = categoryRepository?.getAllCategories(includeArchived = false)?.map { it.name } ?: emptyList()
-            val provRes = googleSheetsClient.provisionMasterWorkbook(newId, accounts, categories)
+            val provRes = googleSheetsClient.provisionMasterWorkbook(newId, accounts, categories, year)
             if (provRes is Result.Error) {
                 return@withContext Result.Error(provRes.exception)
             }
@@ -555,7 +556,8 @@ open class WorkbookResolver(
             val provRes = googleSheetsClient.provisionMasterWorkbook(
                 spreadsheetId = spreadsheetId,
                 accounts = accounts,
-                categories = categories
+                categories = categories,
+                year = forYear
             )
             if (provRes is Result.Error) {
                 return Result.Error(provRes.exception)

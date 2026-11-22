@@ -1,6 +1,7 @@
 package com.financeautomation.domain.utils
 
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.domain.model.LedgerDebit
 import com.financeautomation.domain.model.Transaction
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -148,17 +149,7 @@ object AccountingUtils {
             return listOf(ReceivableShare(key, display, txn.owedToMe))
         }
 
-        val totalHeads = rawTokens.size + 1
-        val expectedShare = round2(txn.totalAmount / totalHeads)
-        val sameHeadCount = kotlin.math.abs(txn.myShare - expectedShare) <= 0.02
-        // After some friends repaid, they were removed from companions, so the head count shrank. In an equal split every
-        // friend owes the same amount as the user's own share; recover the original head count from total / myShare and
-        // accept the row when the remaining owed is the remaining friends times that share.
-        val originalHeads = if (txn.myShare > Tolerances.MONEY_LEFT) Math.round(txn.totalAmount / txn.myShare).toInt() else 0
-        val shrunkEqualSplit = originalHeads > totalHeads &&
-            kotlin.math.abs(round2(txn.totalAmount / originalHeads) - txn.myShare) <= 0.02 &&
-            kotlin.math.abs(txn.owedToMe - rawTokens.size * txn.myShare) <= 0.02 * rawTokens.size
-        val isEqualSplit = sameHeadCount || shrunkEqualSplit
+        val isEqualSplit = isEqualSplit(txn.totalAmount, txn.myShare, txn.companions, txn.owedToMe)
 
         return if (isEqualSplit) {
             val sharePerPerson = round2(txn.owedToMe / rawTokens.size)
@@ -172,5 +163,30 @@ object AccountingUtils {
             listOf(ReceivableShare(key, display, txn.owedToMe))
         }
     }
+
+    fun isEqualSplit(totalAmount: Double, myShare: Double, companions: String?, owedToMe: Double? = null): Boolean {
+        val rawTokens = tokens(companions)
+        if (rawTokens.isEmpty() || companions.equals("Personal", ignoreCase = true)) {
+            return false
+        }
+        val parsed = parseCompanionAmountsWithDisplay(rawTokens)
+        if (parsed != null && parsed.isNotEmpty()) {
+            return false
+        }
+        val totalHeads = rawTokens.size + 1
+        val expectedShare = round2(totalAmount / totalHeads)
+        if (kotlin.math.abs(myShare - expectedShare) <= 0.02) return true
+        // After some friends repaid, they were removed from companions, so the head count shrank. In an equal split every
+        // friend owes the same amount as the user's own share; recover the original head count from total / myShare and
+        // accept the row when the remaining owed is the remaining friends times that share.
+        if (owedToMe == null) return false
+        val originalHeads = if (myShare > Tolerances.MONEY_LEFT) Math.round(totalAmount / myShare).toInt() else 0
+        return originalHeads > totalHeads &&
+            kotlin.math.abs(round2(totalAmount / originalHeads) - myShare) <= 0.02 &&
+            kotlin.math.abs(owedToMe - rawTokens.size * myShare) <= 0.02 * rawTokens.size
+    }
+
+    fun isEqualSplit(debit: LedgerDebit): Boolean =
+        isEqualSplit(debit.total, debit.myShare, debit.companions, debit.owed)
 }
 

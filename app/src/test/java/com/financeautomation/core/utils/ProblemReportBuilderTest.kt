@@ -388,6 +388,32 @@ class ProblemReportBuilderTest {
     }
 
     @Test
+    fun submitReportSuccessfulInvocationReturnsSentOutcome() = kotlinx.coroutines.test.runTest {
+        val payload = ProblemReportPayload(
+            schemaVersion = 1,
+            appVersion = "1.0.0",
+            versionCode = 1,
+            deviceModel = "Test Phone",
+            androidSdk = 34,
+            installId = UUID.randomUUID().toString(),
+            screen = "About",
+            reasonCode = "test_success",
+            counters = null,
+            text = "Testing success outcome"
+        )
+        val mockContext = object : android.content.ContextWrapper(null) {}
+        val result = ProblemReportManager.submitReport(
+            context = mockContext,
+            payload = payload,
+            documentId = "test-doc-id-success",
+            timeoutMillis = 1000L,
+            submitter = { _, _ -> }
+        )
+        assertTrue("Successful submit should succeed", result.isSuccess)
+        assertEquals(ReportOutcome.SENT, result.getOrNull())
+    }
+
+    @Test
     fun submitReportRetryAfterTimeoutWithPermissionDeniedIsSuccessWithMayAlreadyHaveBeenSentWording() = kotlinx.coroutines.test.runTest {
         val payload = ProblemReportPayload(
             schemaVersion = 1,
@@ -419,12 +445,7 @@ class ProblemReportBuilderTest {
             }
         )
         assertTrue("Retry after timeout with PERMISSION_DENIED must be treated as success", retryResult.isSuccess)
-        val successMsg = retryResult.getOrNull()
-        assertNotNull("Success message must be present", successMsg)
-        assertTrue(
-            "Success message must contain 'may already have been sent' wording",
-            successMsg!!.contains("may already have been sent")
-        )
+        assertEquals(ReportOutcome.MAYBE_SENT, retryResult.getOrNull())
     }
 
     @Test
@@ -460,6 +481,7 @@ class ProblemReportBuilderTest {
             }
         )
         assertTrue("ALREADY_EXISTS on first attempt must be treated as success", firstAttemptResult.isSuccess)
+        assertEquals(ReportOutcome.ALREADY_SENT, firstAttemptResult.getOrNull())
 
         // On retry attempt (isRetry = true)
         val retryResult = ProblemReportManager.submitReport(
@@ -477,5 +499,6 @@ class ProblemReportBuilderTest {
             }
         )
         assertTrue("ALREADY_EXISTS on retry attempt must be treated as success", retryResult.isSuccess)
+        assertEquals(ReportOutcome.ALREADY_SENT, retryResult.getOrNull())
     }
 }

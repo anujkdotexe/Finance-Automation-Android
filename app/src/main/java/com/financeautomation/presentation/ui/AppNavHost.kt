@@ -276,6 +276,7 @@ fun AppNavHost(
         baseRoute == AppRoutes.TRANSACTIONS
 
     var accountMenuExpanded by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
     var isSpeedDialOpen by remember { mutableStateOf(false) }
 
     val speedDialRotation by animateFloatAsState(
@@ -516,8 +517,7 @@ fun AppNavHost(
                                                 text = { Text(stringResource(R.string.action_sign_out), color = MaterialTheme.colorScheme.error) },
                                                 onClick = {
                                                     accountMenuExpanded = false
-                                                    settingsViewModel.onGoogleSignOut(context)
-                                                    onReRunSetup()
+                                                    showSignOutConfirm = true
                                                 }
                                             )
                                         }
@@ -528,6 +528,19 @@ fun AppNavHost(
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 titleContentColor = MaterialTheme.colorScheme.onSurface
                             )
+                        )
+                    }
+                    if (showSignOutConfirm) {
+                        com.financeautomation.presentation.components.ConfirmActionDialog(
+                            title = stringResource(R.string.confirm_sign_out_title),
+                            message = stringResource(R.string.confirm_sign_out_message),
+                            confirmLabel = stringResource(R.string.action_sign_out),
+                            onConfirm = {
+                                showSignOutConfirm = false
+                                settingsViewModel.onGoogleSignOut(context)
+                                onReRunSetup()
+                            },
+                            onDismiss = { showSignOutConfirm = false }
                         )
                     }
                 },
