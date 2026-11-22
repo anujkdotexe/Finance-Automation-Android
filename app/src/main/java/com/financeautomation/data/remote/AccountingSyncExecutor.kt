@@ -178,7 +178,13 @@ open class AccountingSyncExecutor(
         tabName: String
     ): Result<Unit> {
         val req = AccountingRequestJsonAdapter.voidInflowRequestFromJson(item.payloadJson)
+        // New layout id column first, then the older layout one (same order as the restore path)
         val rowRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID, req.inflowId)
+            .let { res ->
+                if (res is Result.Success && res.data == null) {
+                    googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1, req.inflowId)
+                } else res
+            }
         if (rowRes is Result.Error) return Result.Error(rowRes.exception)
         val row = (rowRes as Result.Success).data
             ?: return Result.Error(IllegalStateException("Income row not found in $tabName for ${req.inflowId}"))
@@ -537,12 +543,17 @@ open class AccountingSyncExecutor(
     ): Result<Unit> {
         // Appends first
         for (append in plan.appends) {
-            val colUuid = when (append.table) {
-                TableType.DEBIT -> SheetSchemaConstants.COL_LETTER_DEBIT_UUID
-                TableType.INFLOW -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID
-                TableType.PAYABLE -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
+            val (colUuid, colUuidV1) = when (append.table) {
+                TableType.DEBIT -> SheetSchemaConstants.COL_LETTER_DEBIT_UUID to SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1
+                TableType.INFLOW -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID to SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1
+                TableType.PAYABLE -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID to SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1
             }
             val existingCheck = googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, colUuid, append.uuid)
+                .let { res ->
+                    if (res is Result.Success && res.data == null) {
+                        googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, colUuidV1, append.uuid)
+                    } else res
+                }
             if (existingCheck is Result.Success && existingCheck.data != null) {
                 continue
             } else if (existingCheck is Result.Error) {
