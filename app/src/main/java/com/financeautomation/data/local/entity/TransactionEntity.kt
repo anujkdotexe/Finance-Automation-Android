@@ -85,7 +85,14 @@ data class TransactionEntity(
     val note: String = ""
 ) {
     fun toDomain(): Transaction {
-        val domainStatus = TransactionStatus.fromString(status)
+        val parsedStatus = TransactionStatus.fromString(status)
+        // An unknown status string must not hide money still owed: Personal is only trusted when nothing is owed
+        val domainStatus =
+            if (parsedStatus == TransactionStatus.PERSONAL && !status.trim().equals("Personal", ignoreCase = true) && owedToMe > 0.0) {
+                TransactionStatus.PENDING
+            } else {
+                parsedStatus
+            }
 
         val domainReviewState = try {
             ReviewState.valueOf(reviewState)

@@ -34,9 +34,11 @@ object LivingBurn {
     /** True for user-excluded categories and for Savings and Transfer. */
     fun isExcluded(category: String, excludedNames: Set<String>): Boolean {
         val trimmed = category.trim().lowercase()
-        return excludedNames.contains(trimmed) ||
-            trimmed == CategoryConstants.CATEGORY_SAVINGS.lowercase() ||
-            trimmed == "transfer"
+        // Legacy spellings (Saving, SIP, Investment, Mutual Fund) read from the sheet or database count as Savings
+        val normalized = CategoryConstants.normalizeCategory(category).trim().lowercase()
+        return excludedNames.contains(trimmed) || excludedNames.contains(normalized) ||
+            normalized == CategoryConstants.CATEGORY_SAVINGS.lowercase() ||
+            normalized == "transfer"
     }
 
     /** Start (inclusive) and end (exclusive) epoch milliseconds of a calendar month in [zone]. */
