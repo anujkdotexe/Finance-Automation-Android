@@ -20,14 +20,14 @@ class SenderAndAmountHeuristicsTest {
 
     @Test
     fun realBankHeadersAndShortCodesAreAccepted() {
-        for (id in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "5676766", "56161", "JioPay-S")) {
+        for (id in listOf("VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "5676766", "56161", "JioPay-S", "HDFCBK", "SLCBNK")) {
             assertTrue("$id should be a bank sender", RegexPatterns.isBankSenderId(id))
         }
     }
 
     @Test
     fun contactNamesAndPersonalNumbersAreRejected() {
-        for (id in listOf("Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", "98123 45678", "", "  ", "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma", "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo", "MOM", "BOSS", "RAHUL", "DAD", "ABC", "HDFCBK")) {
+        for (id in listOf("Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", "98123 45678", "", "  ", "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma", "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo", "MOM", "BOSS", "RAHUL", "DAD", "ABC")) {
             assertFalse("$id must not be read", RegexPatterns.isBankSenderId(id))
         }
     }

@@ -195,21 +195,33 @@ object RegexPatterns {
         "JioPay-S", "JioSvc-S", "iPaytm-S", "blnkit-S", "IRCTCi-S", "IRSMSa-S"
     )
 
+    /**
+     * Known uppercase bank or payment headers that some phones show without the operator prefix.
+     * Exact, case sensitive match. Only real institutional headers belong here, never anything that could be a
+     * person name.
+     */
+    private val KNOWN_PLAIN_BANK_HEADERS: Set<String> = setOf(
+        "SLCBNK", "HDFCBK", "SBIUPI", "SBIINB", "ICICIT", "AXISBK", "KOTAKB",
+        "PNBSMS", "BOBTXN", "CANBNK", "IDFCFB", "YESBNK", "INDBNK", "UNIONB"
+    )
+
     private val BANK_SENDER_DLT_REGEX: Regex = Regex("""^[A-Z]{2}-[A-Za-z0-9]{2,12}(?:-[STPGstpg])?$""")
     private val BANK_SENDER_SUFFIX_REGEX: Regex = Regex("""^[A-Z0-9]{3,12}-[STPG]$""")
 
     /**
      * True for sender ids that look like a bank or payment header: DLT header format with operator/circle prefix
      * (e.g. VM-HDFCBK, AX-SBIUPI-S, JD-ICICIT-S), uppercase DLT suffix headers (e.g. CANBNK-S, SBIUPI-S, BESCOM-S),
-     * a 4 to 9 digit short code (56161, 5676766), or a registered mixed-case biller header (JioPay-S).
-     * Contact names such as "Rahul", "Mom", "Boss", "Dad", "ABC", "Mom-S", "HDFCBK" (without prefix hyphen or suffix),
-     * and personal phone numbers are not bank senders.
+     * a 4 to 9 digit short code (56161, 5676766), a registered mixed-case biller header (JioPay-S), or a known
+     * hyphenless uppercase bank header (HDFCBK, SLCBNK) from [KNOWN_PLAIN_BANK_HEADERS].
+     * Contact names such as "Rahul", "Mom", "Boss", "Dad", "ABC", "Mom-S", "RAHUL", "BOSS" (without prefix hyphen or
+     * suffix and not in the known header set), and personal phone numbers are not bank senders.
      */
     fun isBankSenderId(sender: String): Boolean {
         val s = sender.trim()
         if (s.isEmpty() || s.any { it.isWhitespace() } || s.startsWith("+")) return false
         if (s.all { it.isDigit() }) return s.length in 4..9
         if (!s.any { it.isLetter() }) return false
+        if (KNOWN_PLAIN_BANK_HEADERS.contains(s)) return true
         if (MIXED_CASE_BILLER_REGISTRY.contains(s)) return true
         return BANK_SENDER_DLT_REGEX.matches(s) || BANK_SENDER_SUFFIX_REGEX.matches(s)
     }
