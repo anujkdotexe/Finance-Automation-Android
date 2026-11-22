@@ -64,6 +64,10 @@ interface PendingCaptureDao {
     @Query("UPDATE pending_captures SET state = 'WAITING', updatedAt = :updatedAt WHERE state = 'SHOWN'")
     suspend fun resetShownToWaiting(updatedAt: Long = System.currentTimeMillis()): Int
 
+    /** Resets only SHOWN rows that have been untouched since [cutoff], so a prompt that is on screen is left alone. */
+    @Query("UPDATE pending_captures SET state = 'WAITING', updatedAt = :updatedAt WHERE state = 'SHOWN' AND updatedAt < :cutoff")
+    suspend fun resetStaleShownToWaiting(cutoff: Long, updatedAt: Long = System.currentTimeMillis()): Int
+
     /**
      * Claims a capture that is still open by moving it to DONE inside one database transaction. Only the first caller
      * gets true; a second tap on the same notification sees DONE and gets false.

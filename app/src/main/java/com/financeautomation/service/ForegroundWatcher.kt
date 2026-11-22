@@ -250,7 +250,8 @@ class ForegroundWatcher(
                     val nowTime = System.currentTimeMillis()
                     if (nowTime - lastResetShown > 15_000L) {
                         try {
-                            resolveDao().resetShownToWaiting()
+                            // Only prompts untouched for 2 minutes; one that is on screen now keeps its state
+                            resolveDao().resetStaleShownToWaiting(nowTime - STALE_SHOWN_MS)
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
                         }
@@ -459,6 +460,7 @@ class ForegroundWatcher(
         const val POLL_INTERVAL_MS: Long = 700L
         const val REQUIRED_CONSECUTIVE_POLLS: Int = 2
         const val FAILURE_BACKOFF_MS: Long = 5000L
+        private const val STALE_SHOWN_MS: Long = 120_000L
         private const val MAX_LOOP_RETRIES: Int = 3
         private const val LOOP_RETRY_BASE_MS: Long = 2000L
     }

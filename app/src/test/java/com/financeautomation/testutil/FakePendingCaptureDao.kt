@@ -38,6 +38,13 @@ class FakePendingCaptureDao : PendingCaptureDao {
         captures[id] = cap.copy(state = "DISMISSED", updatedAt = updatedAt)
         return 1
     }
+    override suspend fun resetStaleShownToWaiting(cutoff: Long, updatedAt: Long): Int {
+        val shown = captures.values.filter { it.state == "SHOWN" && it.updatedAt < cutoff }
+        shown.forEach { cap ->
+            captures[cap.id] = cap.copy(state = "WAITING", updatedAt = updatedAt)
+        }
+        return shown.size
+    }
     override suspend fun resetShownToWaiting(updatedAt: Long): Int {
         val shown = captures.values.filter { it.state == "SHOWN" }
         shown.forEach { cap ->

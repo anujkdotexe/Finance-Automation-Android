@@ -162,6 +162,7 @@ object ForegroundHeadsUpHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingDetails)
         if (isCredit) {
             builder.addAction(0, context.getString(R.string.action_menu_income_title), pendingDetails)
