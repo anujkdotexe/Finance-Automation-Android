@@ -150,7 +150,19 @@ class GoogleAuthTokenProvider(
         val now = System.currentTimeMillis()
         val existing = cachedToken
         if (!existing.isNullOrBlank() && now < tokenExpiresAt) {
-            return existing
+            if (isMainThread()) return existing
+            // A token is only valid for the account it was issued to; a changed stored email drops it
+            val stored = try {
+                runBlocking(ioDispatcher) { emailProvider()?.trim() }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Diagnostics.record("GoogleAuthTokenProvider", "${e.javaClass.simpleName}: emailProvider")
+                null
+            }
+            if (!stored.isNullOrEmpty() && AuthAccountPolicy.cacheMatches(cachedFor, stored)) {
+                return existing
+            }
+            clearCache()
         }
         if (isMainThread()) {
             Diagnostics.record("GoogleAuthTokenProvider", "getAccessToken called on the main thread; not blocking")

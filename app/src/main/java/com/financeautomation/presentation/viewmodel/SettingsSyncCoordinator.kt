@@ -88,6 +88,8 @@ class SettingsSyncCoordinator(
                 }
                 return@launch
             }
+            // The previous account's token must not be reused for the new account
+            googleAuthTokenProvider?.clearCache()
             profileAvatarManager?.deleteAvatar()
             uiState.update { it.copy(pendingAccountSwitch = null) }
             continueSignIn(prompt.email, prompt.displayName, prompt.photoUrl)
