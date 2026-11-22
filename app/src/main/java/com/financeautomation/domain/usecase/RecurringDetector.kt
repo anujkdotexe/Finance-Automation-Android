@@ -21,9 +21,12 @@ data class RecurringSuggestion(
     val key: String = normalizeRecurringKey(name)
 )
 
-/** Lower-cased description with digits and white space removed, used to group repeating payments. */
+/**
+ * Lower-cased description with digits, white space and commas removed, used to group repeating payments.
+ * Commas are removed because the dismissed list is stored comma separated and refuses keys with a comma.
+ */
 fun normalizeRecurringKey(description: String): String =
-    description.lowercase().filterNot { it.isDigit() || it.isWhitespace() }
+    description.lowercase().filterNot { it.isDigit() || it.isWhitespace() || it == ',' }
 
 /**
  * Finds payments that repeat and are not yet tracked as subscriptions.
@@ -55,6 +58,11 @@ class RecurringDetector(private val zone: ZoneId = LivingBurn.KOLKATA) {
 
         val candidates = transactions
             .filter { it.status != TransactionStatus.VOID && it.totalAmount > 0.0 }
+            // Savings and Transfer are never subscriptions, and a refund is money coming back, not a payment
+            .filter {
+                !LivingBurn.isExcluded(it.category, emptySet()) &&
+                    !it.category.trim().equals(com.financeautomation.core.constants.CategoryConstants.CATEGORY_REFUND, ignoreCase = true)
+            }
             .map { Occurrence(it, Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate().toEpochDay()) }
             .filter { it.day in longFrom..todayDay }
 

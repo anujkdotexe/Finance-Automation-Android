@@ -1,5 +1,7 @@
 package com.financeautomation.domain.model
 
+import com.financeautomation.core.utils.formatRupeesAuto
+
 data class OpenDebtItem(
     val uuid: String,
     val description: String,
@@ -9,8 +11,8 @@ data class OpenDebtItem(
 ) {
     val displayLabel: String
         get() = if (person.isNotBlank()) {
-            "$description (₹${amountOwed.toInt()} - $person) [$tabName]"
+            "$description (${formatRupeesAuto(amountOwed)} - $person) [$tabName]"
         } else {
-            "$description (₹${amountOwed.toInt()}) [$tabName]"
+            "$description (${formatRupeesAuto(amountOwed)}) [$tabName]"
         }
 }

@@ -55,6 +55,10 @@ data class TripSummary(
 /** Pure Kotlin, no Android dependencies. */
 class TripSummaryUseCase {
 
+    /**
+     * [excludedCategories]: the names of the categories excluded from living burn in Settings, trimmed and lower case
+     * (use LivingBurn.excludedNames). [inflows]: income entries; refund inflows that mention the trip reduce the net spend.
+     */
     fun forTrip(
         name: String,
         transactions: List<Transaction>,
@@ -73,7 +77,7 @@ class TripSummaryUseCase {
         fun stillOwed(row: Transaction): Double = when (row.status) {
             TransactionStatus.PENDING -> row.owedToMe
             TransactionStatus.CARRIED_FWD ->
-                copies.firstOrNull { copyTextOf(it).equals(row.merchant.trim(), ignoreCase = true) }?.owedToMe ?: row.owedToMe
+                copies.firstOrNull { copyTextOf(it).equals(CarriedCopies.stripPrefixes(row.merchant), ignoreCase = true) }?.owedToMe ?: row.owedToMe
             else -> 0.0
         }
 
@@ -101,10 +105,11 @@ class TripSummaryUseCase {
         val days = if (spendRows.isEmpty()) {
             0
         } else {
-            val minTs = spendRows.minOf { it.timestamp }
-            val maxTs = spendRows.maxOf { it.timestamp }
-            val diff = maxOf(0L, maxTs - minTs)
-            (diff / (24 * 60 * 60 * 1000L)).toInt() + 1
+            // Calendar days in Asia/Kolkata, not 24 hour blocks
+            fun dayOf(ts: Long) = java.time.Instant.ofEpochMilli(ts).atZone(LivingBurn.KOLKATA).toLocalDate()
+            val first = dayOf(spendRows.minOf { it.timestamp })
+            val last = dayOf(spendRows.maxOf { it.timestamp })
+            maxOf(0L, java.time.temporal.ChronoUnit.DAYS.between(first, last)).toInt() + 1
         }
 
         // Shared LivingBurn definition: My share minus refunds
@@ -181,7 +186,7 @@ class TripSummaryUseCase {
 
     private fun isCarriedCopy(t: Transaction): Boolean = CarriedCopies.isCopy(t)
 
-    private fun copyTextOf(t: Transaction): String = t.merchant.trim().substringAfter("]", t.merchant).trim()
+    private fun copyTextOf(t: Transaction): String = CarriedCopies.stripPrefixes(t.merchant)
 
     /** One summary per distinct trip name found on the rows, keyed by the lower case name. */
     fun byTrip(

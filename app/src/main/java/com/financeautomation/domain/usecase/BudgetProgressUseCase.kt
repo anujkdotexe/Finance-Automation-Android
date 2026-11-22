@@ -69,7 +69,7 @@ class BudgetProgressUseCase(private val zone: ZoneId = LivingBurn.KOLKATA) {
     }
 
     private fun progress(budget: Budget, spent: Double): BudgetProgress {
-        val spentExact = BigDecimal.valueOf(spent)
+        val spentExact = BigDecimal.valueOf(com.financeautomation.domain.utils.AccountingUtils.round2(spent))
         val budgetExact = BigDecimal.valueOf(budget.monthlyAmount)
         // Compare spent * 100 with budget * 80 and budget * 100 so 80 and 100 percent fall on the right side exactly
         val spentTimes100 = spentExact.multiply(HUNDRED)

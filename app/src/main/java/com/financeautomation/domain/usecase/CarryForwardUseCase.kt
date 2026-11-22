@@ -55,7 +55,7 @@ class CarryForwardUseCase {
             val nextByDesc = allDebits.find { debit ->
                 debit.tab != current.tab &&
                         debit.item.startsWith(targetPrefix, ignoreCase = true) &&
-                        AccountingUtils.eq(debit.item.removePrefix(targetPrefix).trim(), current.item.removePrefix("[Carried from ").substringAfter("] ").trim())
+                        AccountingUtils.eq(CarriedCopies.stripPrefixes(debit.item), CarriedCopies.stripPrefixes(current.item))
             }
 
             if (nextByDesc != null) {
@@ -96,7 +96,7 @@ class CarryForwardUseCase {
             val nextByDesc = allPayables.find { payable ->
                 payable.tab != current.tab &&
                         payable.whatFor.startsWith(targetPrefix, ignoreCase = true) &&
-                        AccountingUtils.eq(payable.whatFor.removePrefix(targetPrefix).trim(), current.whatFor.removePrefix("[Carried from ").substringAfter("] ").trim())
+                        AccountingUtils.eq(CarriedCopies.stripPrefixes(payable.whatFor), CarriedCopies.stripPrefixes(current.whatFor))
             }
 
             if (nextByDesc != null) {
@@ -128,7 +128,7 @@ class CarryForwardUseCase {
         fun debitAlreadyCarried(d: LedgerDebit): Boolean {
             val key = (d.uuid ?: "${d.tab}!Row${d.row}").trim().lowercase()
             if (key in carriedFrom) return true
-            val text = "$prefix ${d.item}"
+            val text = "$prefix ${CarriedCopies.stripPrefixes(d.item)}"
             return targetDebits.any {
                 it.item.equals(text, ignoreCase = true) && Math.abs(it.owed - d.owed) < 0.005
             }
@@ -136,7 +136,7 @@ class CarryForwardUseCase {
         fun payableAlreadyCarried(p: LedgerPayable): Boolean {
             val key = (p.uuid ?: "${p.tab}!Row${p.row}").trim().lowercase()
             if (key in carriedFrom) return true
-            val text = "$prefix ${p.whatFor}"
+            val text = "$prefix ${CarriedCopies.stripPrefixes(p.whatFor)}"
             return targetPayables.any {
                 it.whatFor.equals(text, ignoreCase = true) && Math.abs(it.amountOwed - p.amountOwed) < 0.005
             }
@@ -157,7 +157,7 @@ class CarryForwardUseCase {
                     debit.dateSerial,
                     debit.timeSerial,
                     debit.account,
-                    "$prefix ${debit.item}",
+                    "$prefix ${CarriedCopies.stripPrefixes(debit.item)}",
                     debit.tripTag.orEmpty(),
                     debit.category,
                     AccountingUtils.round2(debit.owed),
@@ -191,7 +191,7 @@ class CarryForwardUseCase {
                     payable.dateIncurredSerial,
                     payable.timeSerial,
                     payable.paidBy,
-                    "$prefix ${payable.whatFor}",
+                    "$prefix ${CarriedCopies.stripPrefixes(payable.whatFor)}",
                     AccountingUtils.round2(payable.amountOwed),
                     "",
                     "Pending"

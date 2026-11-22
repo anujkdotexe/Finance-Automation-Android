@@ -362,7 +362,7 @@ class SettingsCustomizationCoordinator(
 
     fun onAddCompanion(name: String) {
         val existing = uiState.value.companions.map { it.name }
-        val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing, rejectGroupSeparators = true)
         if (!validation.isValid) {
             val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
             uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }
@@ -379,7 +379,7 @@ class SettingsCustomizationCoordinator(
 
     fun onRenameCompanion(companionId: String, newName: String) {
         val existing = uiState.value.companions.filter { it.id != companionId }.map { it.name }
-        val validation = com.financeautomation.core.utils.InputPolicy.validateName(newName, existing)
+        val validation = com.financeautomation.core.utils.InputPolicy.validateName(newName, existing, rejectGroupSeparators = true)
         if (!validation.isValid) {
             val err = validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Error
             uiState.update { it.copy(errorMessage = mapInputError(err.reason, err.limit)) }

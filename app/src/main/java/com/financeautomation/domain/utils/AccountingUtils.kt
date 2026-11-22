@@ -57,7 +57,13 @@ object AccountingUtils {
         return a.trim().lowercase() == b.trim().lowercase()
     }
 
-    private val AMOUNT_PATTERN = Pattern.compile("^(.*?)(?:[:=\\-\\s]\\s*|\\s*\\(?)(?:[₹$€£])?\\s*(\\d+(?:\\.\\d+)?)\\)?$")
+    /**
+     * "name amount" needs an explicit marker: a colon or equals sign, brackets, or a currency symbol before the number.
+     * A bare trailing number ("Rahul 2", "Rahul2") is part of the name, never an amount.
+     */
+    private val AMOUNT_PATTERN = Pattern.compile(
+        "^(.*?)\\s*(?:[:=]\\s*[₹$€£]?\\s*(\\d+(?:\\.\\d+)?)|\\(\\s*[₹$€£]?\\s*(\\d+(?:\\.\\d+)?)\\s*\\)|[₹$€£]\\s*(\\d+(?:\\.\\d+)?))$"
+    )
 
     data class ReceivableShare(
         val key: String,
@@ -95,7 +101,7 @@ object AccountingUtils {
             val matcher = AMOUNT_PATTERN.matcher(token.trim())
             if (matcher.matches()) {
                 val name = matcher.group(1)?.trim() ?: return null
-                val amountStr = matcher.group(2) ?: return null
+                val amountStr = matcher.group(2) ?: matcher.group(3) ?: matcher.group(4) ?: return null
                 val amount = amountStr.toDoubleOrNull() ?: return null
                 if (name.isBlank() || amount <= 0.0) return null
                 val (key, display) = formatReceivableLabel(listOf(name))
@@ -144,7 +150,15 @@ object AccountingUtils {
 
         val totalHeads = rawTokens.size + 1
         val expectedShare = round2(txn.totalAmount / totalHeads)
-        val isEqualSplit = kotlin.math.abs(txn.myShare - expectedShare) <= 0.02
+        val sameHeadCount = kotlin.math.abs(txn.myShare - expectedShare) <= 0.02
+        // After some friends repaid, they were removed from companions, so the head count shrank. In an equal split every
+        // friend owes the same amount as the user's own share; recover the original head count from total / myShare and
+        // accept the row when the remaining owed is the remaining friends times that share.
+        val originalHeads = if (txn.myShare > Tolerances.MONEY_LEFT) Math.round(txn.totalAmount / txn.myShare).toInt() else 0
+        val shrunkEqualSplit = originalHeads > totalHeads &&
+            kotlin.math.abs(round2(txn.totalAmount / originalHeads) - txn.myShare) <= 0.02 &&
+            kotlin.math.abs(txn.owedToMe - rawTokens.size * txn.myShare) <= 0.02 * rawTokens.size
+        val isEqualSplit = sameHeadCount || shrunkEqualSplit
 
         return if (isEqualSplit) {
             val sharePerPerson = round2(txn.owedToMe / rawTokens.size)

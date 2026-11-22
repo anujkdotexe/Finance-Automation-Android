@@ -13,10 +13,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * - After the app has been in the background for [timeoutMillis] or longer (60 seconds by default) the next return
  *   to the app is locked.
  * - Turning the lock on needs a successful authentication first ([enable]).
- * Pure Kotlin with an injectable clock, no Android framework dependencies.
+ * Pure Kotlin with an injectable clock, no Android framework dependencies. The clock must be monotonic (elapsed time,
+ * not the wall clock) so that changing the device date or time cannot shorten the timeout; the app passes
+ * SystemClock.elapsedRealtime, which also keeps counting while the device sleeps. The default is the JVM monotonic
+ * timer, used by plain JVM callers and tests.
  */
 class AppLockManager(
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000L },
     val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS
 ) {
     private val lock = Any()

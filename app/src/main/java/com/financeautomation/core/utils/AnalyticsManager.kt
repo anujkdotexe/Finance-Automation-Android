@@ -28,6 +28,21 @@ object AnalyticsManager {
     private const val KEY_OPT_IN = "analytics_opt_in"
     private const val MAX_PARAM_LENGTH = 20
 
+    /** Parameters that carry an identifier: letters, digits and underscore only, at most 20 characters. */
+    private val STRICT_ID_KEYS = setOf("item_id", "route_id", "error_kind", "app_id")
+    private val STRICT_ID = Regex("[A-Za-z0-9_]{1,20}")
+
+    /**
+     * The short id of a payment app from the registry (by package id or by its own short id), or "custom" for any
+     * other value, such as the package id of an app the user added.
+     */
+    private fun appIdFor(value: String): String {
+        val shortIds = com.financeautomation.core.constants.PackageWhitelist.REGISTRY.associate {
+            it.packageId to it.displayName.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').take(MAX_PARAM_LENGTH)
+        }
+        return shortIds[value] ?: if (value in shortIds.values) value else "custom"
+    }
+
     @Volatile
     private var appContext: Context? = null
 
@@ -74,6 +89,11 @@ object AnalyticsManager {
         )
     )
 
+    /**
+     * Test hook that forces the opt-in answer. Only tests set it; nothing in the app code does. It is not tied to
+     * BuildConfig.DEBUG because the unit tests run against the beta build type, where DEBUG is false.
+     */
+    @androidx.annotation.VisibleForTesting
     internal var testOptInOverride: Boolean? = null
     internal var testEventListener: ((eventName: String, params: Map<String, Any>?) -> Unit)? = null
 
@@ -200,29 +220,38 @@ object AnalyticsManager {
         val ctx = context ?: appContext
         if (!isOptedIn(ctx)) return false
 
+        var safeParams: Map<String, Any>? = null
         if (params != null) {
-            for ((key, value) in params) {
+            val checked = LinkedHashMap<String, Any>()
+            for ((key, rawValue) in params) {
                 if (!allowedKeys.contains(key)) return false
 
+                var value = rawValue
                 when (value) {
                     is Number -> {}
                     is String -> {
+                        // A package id of an app the user added themselves must never leave the device
+                        if (key == "app_id") value = appIdFor(value)
                         if (value.length > MAX_PARAM_LENGTH) return false
+                        if (key in STRICT_ID_KEYS && !STRICT_ID.matches(value)) return false
                         val allowedVals = ALLOWED_PARAM_VALUES[key]
                         if (allowedVals != null && !allowedVals.contains(value)) return false
                     }
                     else -> return false
                 }
+                checked[key] = value
             }
+            safeParams = checked
         }
 
-        testEventListener?.invoke(eventName, params)
+        testEventListener?.invoke(eventName, safeParams)
 
-        if (ctx == null || !isFirebaseAvailable(ctx)) return true
+        // Without Firebase nothing was submitted, so the event is not accepted
+        if (ctx == null || !isFirebaseAvailable(ctx)) return false
 
         val bundle = Bundle()
-        if (params != null) {
-            for ((key, value) in params) {
+        if (safeParams != null) {
+            for ((key, value) in safeParams) {
                 when (value) {
                     is Number -> bundle.putLong(key, value.toLong())
                     is String -> bundle.putString(key, value)

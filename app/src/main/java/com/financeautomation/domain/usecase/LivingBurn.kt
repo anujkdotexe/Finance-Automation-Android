@@ -34,9 +34,11 @@ object LivingBurn {
     /** True for user-excluded categories and for Savings and Transfer. */
     fun isExcluded(category: String, excludedNames: Set<String>): Boolean {
         val trimmed = category.trim().lowercase()
-        return excludedNames.contains(trimmed) ||
-            trimmed == CategoryConstants.CATEGORY_SAVINGS.lowercase() ||
-            trimmed == "transfer"
+        // Legacy spellings (Saving, SIP, Investment, Mutual Fund) read from the sheet or database count as Savings
+        val normalized = CategoryConstants.normalizeCategory(category).trim().lowercase()
+        return excludedNames.contains(trimmed) || excludedNames.contains(normalized) ||
+            normalized == CategoryConstants.CATEGORY_SAVINGS.lowercase() ||
+            normalized == "transfer"
     }
 
     /** Start (inclusive) and end (exclusive) epoch milliseconds of a calendar month in [zone]. */
@@ -59,8 +61,10 @@ object LivingBurn {
         excludedNames: Set<String>,
         inflows: List<com.financeautomation.domain.model.Inflow> = emptyList()
     ): Double {
-        val spent = transactions.filter { counts(it, window, excludedNames) }.sumOf { it.myShare }
-        return maxOf(0.0, spent - refundTotal(inflows, window))
+        val spent = com.financeautomation.domain.utils.AccountingUtils.round2(
+            transactions.filter { counts(it, window, excludedNames) }.sumOf { it.myShare }
+        )
+        return maxOf(0.0, com.financeautomation.domain.utils.AccountingUtils.round2(spent - refundTotal(inflows, window)))
     }
 
     /** True for an income entry of the refund kind ("Refund / Return" or "Refund"). */

@@ -100,7 +100,10 @@ object CompatibilityReportBuilder {
         // 2. User Note
         if (!data.userNote.isNullOrBlank()) {
             sb.appendLine("## 2. User Note")
-            sb.appendLine("> ${data.userNote.trim()}")
+            // Same scrubbing as the problem report; every line of a multi line note keeps the blockquote marker
+            com.financeautomation.core.utils.PrivacyScrubber.scrubWithoutLengthCap(data.userNote.trim())
+                .lines()
+                .forEach { sb.appendLine("> $it") }
             sb.appendLine()
         }
 

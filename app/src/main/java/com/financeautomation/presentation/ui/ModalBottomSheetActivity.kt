@@ -138,7 +138,14 @@ class ModalBottomSheetActivity : ComponentActivity() {
                     val tag = activeTripTag
                     value = if (lockedNow || tag == null) null else withContext(Dispatchers.IO) {
                         com.financeautomation.domain.usecase.TripSummaryUseCase()
-                            .forTrip(tag.name, app.appContainer.transactionRepository.getTransactions().first())
+                            .forTrip(
+                                tag.name,
+                                app.appContainer.transactionRepository.getTransactions().first(),
+                                excludedCategories = com.financeautomation.domain.usecase.LivingBurn.excludedNames(
+                                    app.appContainer.categoryRepository.getAllCategories(includeArchived = true)
+                                ),
+                                inflows = app.appContainer.inflowRepository.getAllInflows().first()
+                            )
                     }
                 }
                 var openDebts by remember { mutableStateOf<List<OpenDebtItem>>(emptyList()) }

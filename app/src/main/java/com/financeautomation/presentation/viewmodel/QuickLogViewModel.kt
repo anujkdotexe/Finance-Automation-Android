@@ -281,7 +281,7 @@ class QuickLogViewModel(
         viewModelScope.launch(ioDispatcher) {
             try {
                 val existing = _uiState.value.availableCompanions.map { it.name }
-                val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing)
+                val validation = com.financeautomation.core.utils.InputPolicy.validateName(name, existing, rejectGroupSeparators = true)
                 if (!validation.isValid) return@launch
                 val cleanName = (validation as com.financeautomation.core.utils.InputPolicy.ValidationResult.Valid).cleanValue
                 val newCompanion = Companion(

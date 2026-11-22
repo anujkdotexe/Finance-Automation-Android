@@ -42,6 +42,12 @@ object InputPolicy {
     private val FORBIDDEN_NAME_DELIMITERS = setOf('|', ':', ',')
 
     /**
+     * " & " and " and " between words: companion lists are split on them, so a name containing one
+     * would be read as two people.
+     */
+    private val NAME_JOINER_REGEX = Regex("\\s+(&|and)\\s+", RegexOption.IGNORE_CASE)
+
+    /**
      * Regex matching Unicode bidirectional override formatting characters:
      * U+202A..U+202E (Embedding/Override), U+2066..U+2069 (Isolate), U+200E (LRM), U+200F (RLM).
      */
@@ -123,12 +129,14 @@ object InputPolicy {
      * @param existingNames Existing active names in the same entity domain to check for duplicates.
      * @param maxLength Maximum allowed length (defaults to 40).
      * @param allowReserved If true, skips the reserved names check (useful for system lookups).
+     * @param rejectGroupSeparators If true (friend names only), rejects " & " and " and " because companion lists split on them.
      */
     fun validateName(
         raw: String,
         existingNames: Collection<String> = emptyList(),
         maxLength: Int = MAX_NAME_LENGTH,
-        allowReserved: Boolean = false
+        allowReserved: Boolean = false,
+        rejectGroupSeparators: Boolean = false
     ): ValidationResult {
         val clean = cleanName(raw)
         if (clean.isBlank()) {
@@ -137,7 +145,7 @@ object InputPolicy {
         if (clean.length > maxLength) {
             return ValidationResult.Error(InputError.TOO_LONG, maxLength)
         }
-        if (clean.any { it in FORBIDDEN_NAME_DELIMITERS }) {
+        if (clean.any { it in FORBIDDEN_NAME_DELIMITERS } || (rejectGroupSeparators && NAME_JOINER_REGEX.containsMatchIn(clean))) {
             return ValidationResult.Error(InputError.INVALID_CHARS)
         }
         if (!allowReserved && RESERVED_NAMES.any { it.equals(clean, ignoreCase = true) }) {

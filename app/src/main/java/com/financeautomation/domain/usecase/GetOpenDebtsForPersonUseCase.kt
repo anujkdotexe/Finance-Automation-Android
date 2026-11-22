@@ -46,7 +46,7 @@ class GetOpenDebtsForPersonUseCase(
                         AccountingUtils.tokens(debit.companions).any { it.equals(trimmedPerson, ignoreCase = true) }
                 }
                 .map { debit ->
-                    val debtUuid = debit.uuid?.takeIf { it.isNotBlank() } ?: "${debit.tab}!${debit.row}"
+                    val debtUuid = debit.uuid?.takeIf { it.isNotBlank() } ?: "'${debit.tab}'!${debit.row}"
                     OpenDebtItem(
                         uuid = debtUuid,
                         description = debit.item,

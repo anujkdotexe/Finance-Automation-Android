@@ -19,6 +19,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
+/** The shape of an id this app generates for a row (txn_, pay_, row_ or inf_ followed by hex digits). */
+private val GENERATED_ID = Regex("^(?:pay|row|txn|inf)_(?:carried_)?[0-9a-f]{12,32}$", RegexOption.IGNORE_CASE)
+
 /**
  * UseCase coordinating bi-directional synchronization between local Room SQLite
  * and the Google Sheets hidden Config tab (schema v1).
@@ -295,7 +298,7 @@ open class SyncConfigUseCase(
                         type = ConfigConstants.TYPE_BUDGET,
                         key = it.category,
                         values = listOf(formatBudgetAmount(it.monthlyAmount)),
-                        updatedAt = Instant.ofEpochMilli(it.updatedAt),
+                        updatedAt = if (it.updatedAt > 0L) Instant.ofEpochMilli(it.updatedAt) else now,
                         updatedBy = deviceId,
                         deleted = it.deleted
                     )
@@ -308,23 +311,21 @@ open class SyncConfigUseCase(
                         type = ConfigConstants.TYPE_PREF,
                         key = it.key,
                         values = listOf(it.value.orEmpty()),
-                        updatedAt = Instant.ofEpochMilli(it.updatedAt),
+                        updatedAt = if (it.updatedAt > 0L) Instant.ofEpochMilli(it.updatedAt) else now,
                         updatedBy = deviceId,
                         deleted = it.value == null
                     )
                 )
             }
 
-            // Tombstone any leaked entity tokens (txn_, pay_, inf_, row_) present in remote Config tab
+            // Tombstone any leaked generated entity ids (txn_, pay_, inf_, row_ plus hex digits) present in remote Config tab;
+            // a friend whose name merely starts with one of those words is kept
             val remoteResult = configRepository.readAll(spreadsheetId)
             if (remoteResult is Result.Success) {
                 for (remoteRow in remoteResult.data) {
                     if (remoteRow.type == ConfigConstants.TYPE_PERSON &&
                         !remoteRow.deleted &&
-                        (remoteRow.key.startsWith("txn_", ignoreCase = true) ||
-                         remoteRow.key.startsWith("pay_", ignoreCase = true) ||
-                         remoteRow.key.startsWith("inf_", ignoreCase = true) ||
-                         remoteRow.key.startsWith("row_", ignoreCase = true))
+                        GENERATED_ID.matches(remoteRow.key.trim())
                     ) {
                         dirtyRows.add(
                             ConfigRow(

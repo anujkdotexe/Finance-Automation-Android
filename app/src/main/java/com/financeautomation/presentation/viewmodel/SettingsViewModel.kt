@@ -206,7 +206,10 @@ class SettingsViewModel(
         viewModelScope.launch(ioDispatcher) {
             val summaries = com.financeautomation.domain.usecase.TripSummaryUseCase()
             transactionRepository.getTransactions().collect { rows ->
-                _uiState.update { it.copy(tripSummaries = summaries.byTrip(rows)) }
+                val excluded = categoryRepository?.let {
+                    com.financeautomation.domain.usecase.LivingBurn.excludedNames(it.getAllCategories(includeArchived = true))
+                } ?: emptySet()
+                _uiState.update { it.copy(tripSummaries = summaries.byTrip(rows, excluded)) }
             }
         }
         viewModelScope.launch(ioDispatcher) {

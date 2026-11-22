@@ -211,7 +211,13 @@ class OverlayController(
                 // Figures of the active trip, left out while the app lock is active
                 val tripSummary = if (locked || activeTripTag == null) null else
                     com.financeautomation.domain.usecase.TripSummaryUseCase()
-                        .forTrip(activeTripTag.name, transactionRepository.getTransactions().first())
+                        .forTrip(
+                            activeTripTag.name,
+                            transactionRepository.getTransactions().first(),
+                            excludedCategories = com.financeautomation.domain.usecase.LivingBurn.excludedNames(
+                                categoryRepository.getAllCategories(includeArchived = true)
+                            )
+                        )
 
                 val initialScreen = when (request) {
                     is OverlayRequest.ChooseAction -> if (locked) { viewModel.setManualMode(); OverlayFlowScreen.EXPENSE } else OverlayFlowScreen.MENU

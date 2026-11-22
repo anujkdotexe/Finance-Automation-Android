@@ -26,6 +26,9 @@ enum class SyncErrorKind {
     companion object {
         private val STATUS_IN_TEXT = Regex("""(?:^\s*|\b(?:http|status|code)[\s:=]*)([1-5]\d\d)\b""")
         private val QUOTA_OR_RATE = Regex("""\b(?:quota\w*|rate)\b""")
+        // Google reason strings are camelCase and run together once lowercased (ratelimitexceeded and so on)
+        private val RUN_TOGETHER_RATE = listOf("ratelimit", "quotaexceeded", "dailylimit")
+        private val RUN_TOGETHER_PERMISSION = listOf("insufficientpermission")
         private val PERMISSION = Regex("""\b(?:insufficient|permission\w*)\b""")
         private val AUTH_WORDS = Regex("""\b(?:unauthenticated|invalid credentials|authexpired|auth)\b""")
         private val SERVER_WORDS = Regex("""\b(?:internal server error|backend error)\b""")
@@ -48,7 +51,7 @@ enum class SyncErrorKind {
                 }
             }
 
-            if (msg.contains("quotaexceeded") || msg.contains("rate limit")) {
+            if (RUN_TOGETHER_RATE.any { msg.contains(it) } || msg.contains("rate limit")) {
                 return RATE_LIMITED
             }
             if (AUTH_WORDS.containsMatchIn(msg)) return AUTH_EXPIRED
@@ -127,10 +130,13 @@ enum class SyncErrorKind {
                 429 -> RATE_LIMITED
                 401 -> AUTH_EXPIRED
                 403 -> when {
-                    PERMISSION.containsMatchIn(msg) -> SHEET_CHANGED
-                    QUOTA_OR_RATE.containsMatchIn(msg) -> RATE_LIMITED
+                    PERMISSION.containsMatchIn(msg) || RUN_TOGETHER_PERMISSION.any { msg.contains(it) } -> SHEET_CHANGED
+                    QUOTA_OR_RATE.containsMatchIn(msg) || RUN_TOGETHER_RATE.any { msg.contains(it) } -> RATE_LIMITED
                     else -> UNKNOWN
                 }
+                // The sheet or its tab is gone, or a range no longer exists
+                404 -> SHEET_CHANGED
+                400 -> if (msg.contains("range")) SHEET_CHANGED else UNKNOWN
                 in 500..599 -> SERVER_BUSY
                 else -> UNKNOWN
             }
