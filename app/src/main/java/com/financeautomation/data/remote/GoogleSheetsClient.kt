@@ -781,10 +781,15 @@ open class GoogleSheetsClient(
 
             val requests = SheetProvisioner.buildRepairMonthTabSchemaRequests(sheetId, tabTitle = tabName)
 
+            // Use the real grid size for the shrink check; when the size cannot be read the defaults apply
+            val gridInfo = (getSheetTabsDetailed(spreadsheetId) as? Result.Success)?.data?.get(tabName)
+
             // Validate safety: must not shrink grid, write user values >= row 3, or use destructive operations
             val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
                 requests = requests,
-                isDataTab = true
+                isDataTab = true,
+                currentGridRows = gridInfo?.rowCount ?: 1000,
+                currentGridCols = gridInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
             )
             if (safetyViolations.isNotEmpty()) {
                 return@withContext Result.Error(

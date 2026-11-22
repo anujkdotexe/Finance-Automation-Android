@@ -20,9 +20,28 @@ object SheetRepairSafetyValidator {
     private val FORBIDDEN_REQUEST_KEYS = setOf(
         "deleteDimension",
         "deleteSheet",
-        "deleteRange",
-        "clear"
+        "deleteRange"
     )
+
+    /**
+     * Requests that rewrite, move or remove existing cell contents. A repair of a data tab must never send them.
+     * (The Sheets API has no request called "clear"; clearing is done with updateCells or deleteRange.)
+     */
+    private val DATA_TAB_FORBIDDEN_REQUEST_KEYS = setOf(
+        "findReplace",
+        "pasteData",
+        "appendCells",
+        "cutPaste",
+        "deleteDuplicates",
+        "trimWhitespace",
+        "sortRange",
+        "insertRange",
+        "moveDimension"
+    )
+
+    /** True when a request "fields" mask can write cell values: it names userEnteredValue or is the wildcard "*". */
+    private fun fieldsIncludeValues(fields: String): Boolean =
+        fields.contains("userEnteredValue") || fields.split(",").any { it.trim() == "*" }
 
     fun validateRepairRequests(
         requests: List<Map<String, Any?>>,
@@ -43,6 +62,21 @@ object SheetRepairSafetyValidator {
                             details = "Req #$index"
                         )
                     )
+                }
+            }
+
+            // 1b. Requests that rewrite or move existing data are forbidden on data tabs
+            if (isDataTab) {
+                for (key in DATA_TAB_FORBIDDEN_REQUEST_KEYS) {
+                    if (req.containsKey(key)) {
+                        violations.add(
+                            Violation(
+                                requestType = key,
+                                reason = "Request type '$key' can change existing data and is forbidden in repair operations on data tabs",
+                                details = "Req #$index"
+                            )
+                        )
+                    }
                 }
             }
 
@@ -79,7 +113,7 @@ object SheetRepairSafetyValidator {
                 val updateCells = req["updateCells"] as? Map<*, *>
                 if (updateCells != null) {
                     val fields = updateCells["fields"] as? String ?: ""
-                    val writesValues = fields.contains("userEnteredValue")
+                    val writesValues = fieldsIncludeValues(fields)
                     if (writesValues) {
                         val start = updateCells["start"] as? Map<*, *>
                         val range = updateCells["range"] as? Map<*, *>
@@ -124,7 +158,7 @@ object SheetRepairSafetyValidator {
                 val repeatCell = req["repeatCell"] as? Map<*, *>
                 if (repeatCell != null) {
                     val fields = repeatCell["fields"] as? String ?: ""
-                    if (fields.contains("userEnteredValue")) {
+                    if (fieldsIncludeValues(fields)) {
                         val range = repeatCell["range"] as? Map<*, *>
                         val endRow = (range?.get("endRowIndex") as? Number)?.toInt() ?: 0
                         if (endRow > 3) {
