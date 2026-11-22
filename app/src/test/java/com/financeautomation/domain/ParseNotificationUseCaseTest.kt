@@ -20,6 +20,30 @@ class ParseNotificationUseCaseTest {
     }
 
     @Test
+    fun dropsWillBeDebitedByMandate() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Mandate Notice",
+            text = "Rs 199 will be debited by Sample Streaming on 25 Nov"
+        )
+        assertTrue(result is NotificationParseResult.Dropped)
+        assertEquals(DropReason.MANDATE_NOTICE, (result as NotificationParseResult.Dropped).reason)
+    }
+
+    @Test
+    fun capturesHasBeenDebitedBy() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Payment Successful",
+            text = "Rs 199 has been debited by Sample Streaming"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(199.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isDebit)
+    }
+
+    @Test
     fun parsesPaidYouAsCredit() {
         val result = useCase(
             sourcePackage = PackageWhitelist.PACKAGE_GPAY,

@@ -104,7 +104,8 @@ class ParseNotificationUseCase(
         private val PAYMENT_REQUEST_REGEX = Regex("""(?i)\b(requested\s+money|collect\s+request|has\s+requested|requests?\s+(?:rs\.?|inr|₹)|payment\s+request)\b""")
         private val BALANCE_HOLD_REGEX = Regex("""(?i)\b(kept\s+as\s+hold|kept\s+on\s+hold|hold\s+has\s+been\s+removed|on\s+hold\s+has\s+been\s+removed)\b""")
         private val MANDATE_NOTICE_REGEX = Regex("""(?i)\b(upcoming\s+mandate|will\s+be\s+(?:auto\s+)?debited|will\s+be\s+(?:auto\s*)?renewed|auto\s+debited\s+via|mandate\s+(?:has\s+been\s+)?(?:successfully\s+)?(?:created|set|paused|revoked|modified|cancel\w*)|mandate\s+request|autopay\s+(?:successfully\s+)?created|autopay\b.{0,100}?\b(?:is\s+paused|is\s+scheduled)|is\s+scheduled\s+on|auto\s*pay\s+facility)\b""")
-        private val EXECUTED_DEBIT_WORDING_REGEX = Regex("""(?i)\b(has\s+been\s+debited|debited\s+by|paid\s+thru|paid\s+to|dr\.?|successfully\s+paid)\b""")
+        private val EXECUTED_DEBIT_WORDING_REGEX = Regex("""(?i)\b(has\s+been\s+debited|(?<!will be )(?<!to be )debited\s+by|paid\s+thru|paid\s+to|dr\.?|successfully\s+paid)\b""")
+        private val DEFINITE_PAST_DEBIT_REGEX = Regex("""(?i)\b(has\s+been\s+debited|was\s+debited|debited\s+from|paid\s+to)\b""")
         private val REVERSAL_CREDIT_REGEX = Regex("""(?i)\b(?:reversed|refund(?:ed)?)\s+to\s+your\s+account\b|\bamount\s+of\s+[^\n]+has\s+been\s+reversed\b""")
         private val CREDIT_TO_ME_REGEX = Regex("""(?i)\b(?:paid|sent|transferred|credited|gave)\s+(?:you|to\s+you)\b""")
         private val INVESTMENT_NON_MONEY_REGEX = Regex("""(?i)\b(?:cdsl|nsdl):?\s*(?:credit|debit)\b|\b(?:redemption\s+request|payout\s+shall\s+be\s+made)\b""")
@@ -278,12 +279,22 @@ class ParseNotificationUseCase(
             )
         }
 
-        val hasExecutedDebit = EXECUTED_DEBIT_WORDING_REGEX.containsMatchIn(fullContent) && RegexPatterns.extractAmount(fullContent) != null
-        if (MANDATE_NOTICE_REGEX.containsMatchIn(fullContent) && !hasExecutedDebit) {
-            return NotificationParseResult.Dropped(
-                reason = DropReason.MANDATE_NOTICE,
-                sourcePackage = sourcePackage
-            )
+        val hasMandateNotice = MANDATE_NOTICE_REGEX.containsMatchIn(fullContent)
+        val sentences = fullContent.split(Regex("""[.!?\n]+"""))
+        val hasExecutedDebit = EXECUTED_DEBIT_WORDING_REGEX.containsMatchIn(fullContent) &&
+            RegexPatterns.extractAmount(fullContent) != null &&
+            sentences.any { sentence ->
+                EXECUTED_DEBIT_WORDING_REGEX.containsMatchIn(sentence) && !MANDATE_NOTICE_REGEX.containsMatchIn(sentence)
+            }
+
+        if (hasMandateNotice) {
+            val hasDefinitePastDebit = DEFINITE_PAST_DEBIT_REGEX.containsMatchIn(fullContent)
+            if (!hasDefinitePastDebit || !hasExecutedDebit) {
+                return NotificationParseResult.Dropped(
+                    reason = DropReason.MANDATE_NOTICE,
+                    sourcePackage = sourcePackage
+                )
+            }
         }
 
         if (INVESTMENT_NON_MONEY_REGEX.containsMatchIn(fullContent) && !hasExecutedDebit) {
