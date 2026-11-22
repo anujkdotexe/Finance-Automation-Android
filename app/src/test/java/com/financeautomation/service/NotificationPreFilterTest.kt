@@ -17,7 +17,7 @@ class NotificationPreFilterTest {
     fun isAllowedSenderRejectsPersonalSmsAndAcceptsBankSmsAndPaymentApps() {
         assertFalse(NotificationPreFilter.isAllowedSender(sms, "+919812345678"))
         assertFalse(NotificationPreFilter.isAllowedSender(sms, "John Doe"))
-        assertTrue(NotificationPreFilter.isAllowedSender(sms, "HDFCBK"))
+        assertTrue(NotificationPreFilter.isAllowedSender(sms, "VM-HDFCBK"))
         assertTrue(NotificationPreFilter.isAllowedSender(sms, "AX-SBIINB"))
         assertTrue(NotificationPreFilter.isAllowedSender(PackageWhitelist.PACKAGE_GPAY, "Swiggy"))
     }
@@ -35,7 +35,7 @@ class NotificationPreFilterTest {
 
     @Test
     fun bankSmsIsReadFurther() {
-        assertTrue(NotificationPreFilter.shouldReadFullText(sms, "HDFCBK", "Rs 649 debited from A/c XX1234 to VPA netflix@okaxis"))
+        assertTrue(NotificationPreFilter.shouldReadFullText(sms, "VM-HDFCBK", "Rs 649 debited from A/c XX1234 to VPA netflix@okaxis"))
     }
 
     @Test

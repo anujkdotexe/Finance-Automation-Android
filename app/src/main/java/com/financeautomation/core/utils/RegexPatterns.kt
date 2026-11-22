@@ -195,13 +195,14 @@ object RegexPatterns {
         "JioPay-S", "JioSvc-S", "iPaytm-S", "blnkit-S", "IRCTCi-S", "IRSMSa-S"
     )
 
-    private val BANK_SENDER_UPPER_REGEX: Regex = Regex("""^[A-Z0-9][A-Z0-9-]{2,19}$""")
+    private val BANK_SENDER_DLT_REGEX: Regex = Regex("""^[A-Z]{2}-[A-Za-z0-9]{2,12}(?:-[STPGstpg])?$""")
 
     /**
-     * True for sender ids that look like a bank or payment header: letters and digits in capitals with dashes and no
-     * spaces (VM-HDFCBK, AX-SBIUPI-S, HDFCBK, JIOPAY-S), a 4 to 9 digit short code (56161, 5676766), or a registered
-     * mixed-case biller header (JioPay-S). Contact names such as "Rahul", "Mom", "Dr-Rao", "Mr-Sharma", "Rahul-K",
-     * "Mom-S", "Raj-Mo", "Mary-Jane", or "Smith-Jones", and personal phone numbers are not bank senders.
+     * True for sender ids that look like a bank or payment header: DLT header format with operator/circle prefix
+     * (e.g. VM-HDFCBK, AX-SBIUPI-S, JD-ICICIT-S), a 4 to 9 digit short code (56161, 5676766), or a registered
+     * mixed-case biller header (JioPay-S).
+     * Contact names such as "Rahul", "Mom", "Boss", "Dad", "ABC", "HDFCBK" (without prefix hyphen), and personal
+     * phone numbers are not bank senders.
      */
     fun isBankSenderId(sender: String): Boolean {
         val s = sender.trim()
@@ -209,7 +210,7 @@ object RegexPatterns {
         if (s.all { it.isDigit() }) return s.length in 4..9
         if (!s.any { it.isLetter() }) return false
         if (MIXED_CASE_BILLER_REGISTRY.contains(s)) return true
-        return BANK_SENDER_UPPER_REGEX.matches(s)
+        return BANK_SENDER_DLT_REGEX.matches(s)
     }
 
     private val TOWARDS_BILLER_REGEX: Regex = Regex(

@@ -34,17 +34,17 @@ class OtpSuppressionTest {
     @Test
     fun bankDebitAlertsEndingWithDoNotShareBoilerplateAreCaptured() {
         assertCaptured(
-            sms, "HDFCBK",
+            sms, "VM-HDFCBK",
             "Rs 649.00 debited from A/c XX1234 on 12-11-26 to VPA netflix@okaxis (UPI Ref 412345678901). Do not share OTP/PIN with anyone. -HDFC Bank",
             649.0
         )
         assertCaptured(
-            sms, "ICICIB",
+            sms, "AX-ICICIB",
             "INR 1,200.00 spent on Card XX4455 at AMAZON on 12-Nov. NEVER share OTP, PIN or CVV with anyone. Not you? Call 18002662",
             1200.0
         )
         assertCaptured(
-            sms, "SBIUPI",
+            sms, "JD-SBIUPI",
             "Your A/c X1234 debited Rs.350 on 12/11 by UPI trf to Rajesh Kumar. Do not share OTP with anyone.",
             350.0
         )
@@ -52,7 +52,7 @@ class OtpSuppressionTest {
 
     @Test
     fun doNotShareAloneDoesNotSuppress() {
-        assertCaptured(sms, "AXISBK", "Do not share your password with anyone. Rs 100 debited from A/c XX9876 at Zomato", 100.0)
+        assertCaptured(sms, "AX-AXISBK", "Do not share your password with anyone. Rs 100 debited from A/c XX9876 at Zomato", 100.0)
     }
 
     @Test
@@ -64,7 +64,7 @@ class OtpSuppressionTest {
             "OTP: 556677. Do not share. Valid for 10 minutes."
         )
         for (text in otps) {
-            assertDroppedFor(sms, "HDFCBK", text, "OTP_MESSAGE")
+            assertDroppedFor(sms, "VM-HDFCBK", text, "OTP_MESSAGE")
         }
     }
 

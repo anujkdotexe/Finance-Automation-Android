@@ -81,7 +81,7 @@ class WhitelistedAppsParserTest {
 
         val parseResult = parseNotificationUseCase(
             sourcePackage = PackageWhitelist.PACKAGE_GOOGLE_MESSAGES,
-            title = "HDFCBK",
+            title = "VM-HDFCBK",
             text = "Your OTP for transaction of Rs 500.00 is 948102. Valid for 10 mins.",
             timestamp = 1700000000000L
         )
@@ -165,7 +165,7 @@ class WhitelistedAppsParserTest {
     fun parseBankSmsDebitNotification() {
         val result = parseNotificationUseCase(
             sourcePackage = PackageWhitelist.PACKAGE_GOOGLE_MESSAGES,
-            title = "HDFCBK",
+            title = "VM-HDFCBK",
             text = "Rs 1499.00 debited from a/c **4321 on 15-Nov-26 at Amazon India. Info: UPI/123456/Retail",
             timestamp = 1700000000000L
         )

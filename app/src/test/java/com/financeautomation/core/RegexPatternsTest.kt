@@ -166,11 +166,20 @@ class RegexPatternsTest {
     }
 
     @Test
+    fun isBankSenderIdRejectsAllCapsContactNamesAndAcceptsDltHeaders() {
+        for (rejected in listOf("MOM", "BOSS", "RAHUL", "DAD", "ABC", "HDFCBK")) {
+            assertFalse("$rejected must be rejected", RegexPatterns.isBankSenderId(rejected))
+        }
+        for (accepted in listOf("VM-HDFCBK", "AX-SBIUPI-S", "JD-ICICIT-S", "56161")) {
+            assertTrue("$accepted must be accepted", RegexPatterns.isBankSenderId(accepted))
+        }
+    }
+
+    @Test
     fun testHyphenatedBankHeadersAndContactNameRejection() {
         // Z1: DLT headers with channel suffix or operator prefix must be accepted
         val validHeaders = listOf(
-            "JioPay-S", "JIOPAY-S", "CANBNK-S", "HDFCBK-S", "SBIBNK-S", "blnkit-S", "iPaytm-S",
-            "VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "HDFCBK", "5676766", "56161"
+            "JioPay-S", "VM-HDFCBK", "AX-SBIUPI", "JD-PAYTMB", "JX-CANBNK-S", "5676766", "56161", "blnkit-S", "iPaytm-S"
         )
         for (header in validHeaders) {
             assertTrue("Header $header must be accepted as bank sender", RegexPatterns.isBankSenderId(header))
@@ -179,7 +188,7 @@ class RegexPatternsTest {
         // Z1: Hyphenated personal contact names and numbers must be rejected
         val rejectedContacts = listOf(
             "Mary-Jane", "Jean-Luc", "Anne-Marie", "Smith-Jones", "Rahul-Sharma", "Ali-Khan",
-            "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo",
+            "Dr-Rao", "Mr-Sharma", "Rahul-K", "Mom-S", "Raj-Mo", "HDFCBK",
             "Rahul", "Mom", "Ravi Kumar", "ravi kumar", "+919812345678", "9812345678", ""
         )
         for (contact in rejectedContacts) {
