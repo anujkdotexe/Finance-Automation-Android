@@ -82,6 +82,7 @@ import com.financeautomation.presentation.components.AppChip
 import com.financeautomation.presentation.components.ButtonPair
 import com.financeautomation.presentation.components.FilledButton
 import com.financeautomation.presentation.components.InflowRow
+import com.financeautomation.presentation.components.inflowTypeLabel
 import com.financeautomation.presentation.components.LinkButton
 import com.financeautomation.presentation.components.OutlinedButton
 import com.financeautomation.presentation.components.StatusChip
@@ -818,7 +819,7 @@ fun IncomeDetailSheet(
                     },
                     color = if (isVoid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
-                StatusChip(status = if (isVoid) "VOID" else inflow.inflowType)
+                StatusChip(status = if (isVoid) "VOID" else inflowTypeLabel(inflow.inflowType))
             }
 
             // Big Mono Amount in positive color (or muted if voided)
@@ -837,7 +838,7 @@ fun IncomeDetailSheet(
                     if (inflow.source.isNotBlank()) {
                         DetailRow(label = stringResource(R.string.txn_detail_source), value = inflow.source)
                     }
-                    DetailRow(label = stringResource(R.string.txn_detail_type), value = inflow.inflowType)
+                    DetailRow(label = stringResource(R.string.txn_detail_type), value = inflowTypeLabel(inflow.inflowType))
                     DetailRow(label = stringResource(R.string.txn_detail_account), value = inflow.account)
                     DetailRow(label = stringResource(R.string.txn_detail_datetime), value = DisplayDateTime.full(inflow.timestamp))
                     if (inflow.note.isNotBlank()) {

@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,7 +83,7 @@ fun AddSubscriptionSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by rememberSaveable { mutableStateOf(existing?.name ?: prefill?.name.orEmpty()) }
-    var amountText by remember {
+    var amountText by rememberSaveable {
         mutableStateOf(
             existing?.amount?.let { com.financeautomation.core.utils.formatAmountInput(it) }
                 ?: prefill?.let { com.financeautomation.core.utils.formatAmountInput(it.amount) }
@@ -92,7 +93,7 @@ fun AddSubscriptionSheet(
     val amountEntry = AmountEntry(amountText)
     var isFixedAmount by rememberSaveable { mutableStateOf(existing?.let { it.amount != null } ?: true) }
     var selectedFrequency by rememberSaveable { mutableStateOf(existing?.frequency ?: prefill?.frequency ?: SubscriptionFrequency.MONTHLY) }
-    val defaultAccount = existing?.account?.takeIf { it in accounts }
+    val defaultAccount = existing?.account?.takeIf { it.isNotBlank() }
         ?: prefill?.account?.takeIf { it in accounts }
         ?: accounts.firstOrNull()
         ?: CategoryConstants.ACCOUNT_OTHER
@@ -175,6 +176,7 @@ fun AddSubscriptionSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
             ) {
@@ -413,7 +415,7 @@ fun AddSubscriptionSheet(
                                 ) {
                                     val pillText = when {
                                         daysUntil == 0L -> stringResource(R.string.sub_add_due_today)
-                                        daysUntil > 0L -> stringResource(R.string.sub_add_due_in_days, daysUntil.toInt())
+                                        daysUntil > 0L -> pluralStringResource(R.plurals.sub_add_due_in_days, daysUntil.toInt(), daysUntil.toInt())
                                         else -> ""
                                     }
                                     if (pillText.isNotEmpty()) {
@@ -443,7 +445,12 @@ fun AddSubscriptionSheet(
                         horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s),
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                     ) {
-                        val availableAccounts = accounts.ifEmpty { listOf(CategoryConstants.ACCOUNT_OTHER) }
+                        val baseAccounts = accounts.ifEmpty { listOf(CategoryConstants.ACCOUNT_OTHER) }
+                        // Keep the saved account as a chip when it is no longer in the list, so Save does not change it.
+                        val availableAccounts = existing?.account
+                            ?.takeIf { it.isNotBlank() && it !in baseAccounts }
+                            ?.let { baseAccounts + it }
+                            ?: baseAccounts
                         availableAccounts.forEach { acc ->
                             val isSelected = selectedAccount == acc
                             FilterChip(
@@ -573,23 +580,24 @@ fun AddSubscriptionSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-                // Action Button Pair (pinned above keyboard via imePadding)
-                ButtonPair(
-                    outlinedText = stringResource(R.string.action_cancel),
-                    onOutlinedClick = onDismiss,
-                    filledText = stringResource(R.string.action_save),
-                    onFilledClick = {
-                        if (name.isNotBlank()) {
-                            val amt = if (isFixedAmount) amountEntry.amountOrZero.takeIf { amountEntry.canSave } else null
-                            onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe, noteText, anchorDateEpochDay)
-                        }
-                    },
-                    filledEnabled = name.isNotBlank() && (!isFixedAmount || amountEntry.canSave),
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+
+            // Action Button Pair (pinned below the scrolling form, above the keyboard via imePadding)
+            ButtonPair(
+                outlinedText = stringResource(R.string.action_cancel),
+                onOutlinedClick = onDismiss,
+                filledText = stringResource(R.string.action_save),
+                onFilledClick = {
+                    if (name.isNotBlank()) {
+                        val amt = if (isFixedAmount) amountEntry.amountOrZero.takeIf { amountEntry.canSave } else null
+                        onSave(name.trim(), amt, selectedFrequency, selectedAccount, remindMe, noteText, anchorDateEpochDay)
+                    }
+                },
+                filledEnabled = name.isNotBlank() && (!isFixedAmount || amountEntry.canSave),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 

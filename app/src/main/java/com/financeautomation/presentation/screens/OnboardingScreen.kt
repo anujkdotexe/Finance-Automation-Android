@@ -51,6 +51,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -99,7 +100,9 @@ import com.financeautomation.presentation.viewmodel.StepState
 fun OnboardingScreen(
     viewModel: OnboardingViewModel,
     onOnboardingFinished: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** False on the first run: leaving before setup is complete would only show this screen again. */
+    showBackButton: Boolean = true
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -203,12 +206,14 @@ fun OnboardingScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onOnboardingFinished) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back),
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
+                    if (showBackButton) {
+                        IconButton(onClick = onOnboardingFinished) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.cd_back),
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -393,7 +398,49 @@ private fun OnboardingAccountsSetupScreen(
 ) {
     var accountName by rememberSaveable { mutableStateOf("") }
     var lastFourDigits by rememberSaveable { mutableStateOf("") }
+    // Account count when Add was tapped; the fields are cleared only once the list has grown.
+    var accountCountAtAdd by remember { mutableStateOf<Int?>(null) }
+    var deleteTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     val context = LocalContext.current
+
+    LaunchedEffect(state.accounts, state.accountSetupError) {
+        val base = accountCountAtAdd
+        if (base != null) {
+            if (state.accounts.size > base) {
+                accountName = ""
+                lastFourDigits = ""
+                accountCountAtAdd = null
+            } else if (state.accountSetupError != null) {
+                accountCountAtAdd = null
+            }
+        }
+    }
+
+    deleteTarget?.let { (targetId, targetName) ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text(text = stringResource(R.string.onboarding_accounts_delete_title, targetName)) },
+            text = { Text(text = stringResource(R.string.onboarding_accounts_delete_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteAccount(targetId)
+                        deleteTarget = null
+                    }
+                ) {
+                    Text(
+                        text = stringResource(R.string.onboarding_accounts_delete_action),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text(text = stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -566,9 +613,8 @@ private fun OnboardingAccountsSetupScreen(
                         text = stringResource(R.string.onboarding_accounts_add_button),
                         onClick = {
                             if (accountName.isNotBlank()) {
+                                accountCountAtAdd = state.accounts.size
                                 onAddAccount(accountName.trim(), lastFourDigits.trim().ifEmpty { null })
-                                accountName = ""
-                                lastFourDigits = ""
                             }
                         },
                         enabled = accountName.isNotBlank(),
@@ -679,12 +725,12 @@ private fun OnboardingAccountsSetupScreen(
                                 }
                             } else {
                                 IconButton(
-                                    onClick = { onDeleteAccount(account.id) },
+                                    onClick = { deleteTarget = account.id to account.name },
                                     modifier = Modifier.size(FinanceTheme.sizes.buttonHeightMedium)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Delete,
-                                        contentDescription = null,
+                                        contentDescription = stringResource(R.string.onboarding_accounts_delete_cd, account.name),
                                         tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(FinanceTheme.sizes.iconMedium)
                                     )

@@ -41,7 +41,10 @@
     <string name="action_clear">Clear</string>
     <string name="action_refresh">Refresh</string>
     <string name="diagnostics_empty">No diagnostic events recorded. System running nominally.</string>
-    <string name="diagnostics_events_count">%d event(s) recorded</string>
+    <plurals name="diagnostics_events_count">
+        <item quantity="one">%d event recorded</item>
+        <item quantity="other">%d events recorded</item>
+    </plurals>
     <string name="health_oem_configured">Configured on this device</string>
     <string name="health_oem_open_settings">Open OEM settings</string>
     <string name="health_status_format">Status: %s</string>
@@ -170,12 +173,16 @@
     <string name="speed_dial_repaid_friend">Repaid a friend</string>
     <string name="speed_dial_trip_mode">Trip mode</string>
     <string name="speed_dial_income_refund">Income or refund</string>
+    <string name="speed_dial_close_cd">Close add menu</string>
 
     <string name="menu_sync_backup">Sync and backup</string>
     <string name="nav_subscriptions_placeholder">No subscriptions available</string>
     <string name="sub_add_pick_start_date">Pick a start date</string>
     <string name="sub_add_due_today">Due today</string>
-    <string name="sub_add_due_in_days">Due in %d days</string>
+    <plurals name="sub_add_due_in_days">
+        <item quantity="one">Due in %d day</item>
+        <item quantity="other">Due in %d days</item>
+    </plurals>
 
     <!-- Sheet Flow Prompts and Labels -->
     <string name="inflow_type_income">Income / Salary</string>
@@ -382,6 +389,7 @@
     <string name="diag_view_sync_log_desc">Inspect timestamps and error codes</string>
     <string name="diag_export_logs">Export logs</string>
     <string name="diag_export_logs_desc">Share sanitized debug logs to disk</string>
+    <string name="diag_export_logs_failed">Could not open the share sheet.</string>
     <string name="diag_report_problem">Report a problem</string>
     <string name="diag_report_problem_desc">Send technical diagnostics and a description to the developer</string>
     <string name="problem_report_title">Report a problem</string>
@@ -404,6 +412,7 @@
     <string name="sub_active_title">Active subscriptions</string>
     <string name="sub_next_due">Next due %1$s</string>
     <string name="sub_paused_label">Paused</string>
+    <string name="sub_no_due_date">No due date</string>
     <string name="sub_total_excludes_varies">%1$d without a fixed amount, not in this total</string>
     <string name="sub_next_due_formatted">Next due %1$s, %2$s</string>
     <string name="sub_paused_title">Paused subscriptions</string>
@@ -447,12 +456,27 @@
     <string name="friend_add_name_placeholder">e.g. Karan Malhotra</string>
     <string name="friend_add_name_helper">Used for splitting bills and tracking shared balances.</string>
     <string name="trip_active">Active</string>
+    <string name="trip_inactive">Inactive</string>
+    <string name="trip_ended">Ended</string>
+    <string name="trip_friend_owes">Owes %1$s</string>
+    <string name="trip_friend_repaid">Repaid %1$s</string>
+    <string name="trip_friend_settled">Settled</string>
+    <string name="trips_active_count">%1$d active</string>
+    <string name="trip_ledger_active">Active travel ledger</string>
+    <string name="trip_ledger_past">Past travel ledger</string>
+    <string name="trip_cost_you_label">COST YOU</string>
+    <string name="people_owes_you_amount">Owes you %1$s</string>
+    <string name="people_you_owe_amount">You owe %1$s</string>
+    <string name="people_settled_up_zero">Settled up (₹0.00)</string>
     <string name="trip_total_spend_label">Total spend</string>
 
     <!-- About Screen (U12) -->
     <string name="about_app_name">Finance Automation</string>
     <string name="about_version_label">Version %1$s (Build %2$d)</string>
     <string name="about_engine_active">On-device engine active</string>
+    <string name="about_capture_off">Capture off</string>
+    <string name="kpi_card_cd">%1$s, rupees %2$s, opens transactions</string>
+    <string name="kpi_card_cd_details">%1$s, rupees %2$s, %3$s, opens transactions</string>
     <string name="about_privacy_title">Strict privacy sandbox</string>
     <string name="about_privacy_desc">We never read personal chats, emails, or OTP messages.</string>
     <string name="about_metric_sms_filter">SMS filter</string>
@@ -535,6 +559,14 @@
     <string name="action_undo">Undo</string>
 
     <!-- Plurals -->
+    <plurals name="people_members_count">
+        <item quantity="one">%d member</item>
+        <item quantity="other">%d members</item>
+    </plurals>
+    <plurals name="people_open_items">
+        <item quantity="one">%d open item</item>
+        <item quantity="other">%d open items</item>
+    </plurals>
     <plurals name="review_pending_count">
         <item quantity="one">%d transaction needs review</item>
         <item quantity="other">%d transactions need review</item>
@@ -577,7 +609,10 @@
     <string name="insights_other">Other</string>
     <string name="insights_percent">%1$d%%</string>
     <string name="insights_donut_center_label">Total</string>
-    <string name="insights_donut_cd">Spending by category, %1$s in total across %2$d groups</string>
+    <plurals name="insights_donut_cd">
+        <item quantity="one">Spending by category, %1$s in total across %2$d group</item>
+        <item quantity="other">Spending by category, %1$s in total across %2$d groups</item>
+    </plurals>
     <string name="insights_legend_row_cd">%1$s, %2$s, %3$d percent. Opens the transactions.</string>
     <string name="insights_legend_other_cd">Other categories, %1$s, %2$d percent</string>
     <string name="insights_bars_cd">Living burn by month: %1$s</string>
@@ -651,6 +686,12 @@
     <string name="sync_advanced">Advanced</string>
     <string name="sync_mirror">Mirror</string>
     <string name="sync_restore">Restore</string>
+    <string name="sync_show_details">Show</string>
+    <string name="sync_hide_details">Hide</string>
+    <string name="sync_mirror_confirm_title">Replace the cloud copy of your settings?</string>
+    <string name="sync_mirror_confirm_body">This overwrites the settings stored in your Google account with the ones on this phone.</string>
+    <string name="sync_restore_confirm_title">Replace settings on this phone?</string>
+    <string name="sync_restore_confirm_body">This overwrites the accounts, categories, friends and other settings on this phone with the copy stored in your Google account.</string>
     <string name="sync_regenerate_formulas">Regenerate dashboard formulas</string>
     <string name="sync_provisioning">Provisioning workbook...</string>
     <string name="txn_your_share">Your share</string>
@@ -662,6 +703,9 @@
     <string name="txn_chip_show_void">Show void</string>
     <string name="txn_chip_needs_review">Needs review</string>
     <string name="txn_chip_income">Income</string>
+    <string name="inflow_type_settlement">Settlement</string>
+    <string name="inflow_type_transfer_short">Transfer</string>
+    <string name="inflow_type_refund">Refund</string>
     <string name="txn_detail_account">Account</string>
     <string name="txn_detail_datetime">Date &amp; time</string>
     <string name="txn_detail_source">Source</string>
@@ -692,6 +736,7 @@
     <!-- KPI card & Dashboard burn cards -->
     <string name="dashboard_key_figures_cd">Key figures</string>
     <string name="kpi_pace_down">Down %1$d%% vs last month</string>
+    <string name="kpi_pace_same">Same as last month</string>
     <string name="kpi_pace_up">Up %1$d%% vs last month</string>
     <string name="kpi_daily_average">%1$s / day</string>
     <string name="kpi_savings_pct_income">%1$d%% of income</string>
@@ -717,6 +762,8 @@
 
     <!-- Subscriptions -->
     <string name="subscriptions_per_month">per month</string>
+    <string name="subscriptions_per_week">per week</string>
+    <string name="subscriptions_per_year">per year</string>
     <string name="currency_inr">INR (₹)</string>
     <string name="subscription_remind_in_4_days">In 4 days</string>
 
@@ -855,8 +902,10 @@
     <!-- Setup page: the step that needs the user -->
 
     <!-- Rows waiting in review, not counted in the burn -->
-    <string name="dashboard_unconfirmed_one">1 unconfirmed row, %1$s not counted</string>
-    <string name="dashboard_unconfirmed_many">%1$d unconfirmed rows, %2$s not counted</string>
+    <plurals name="dashboard_unconfirmed_rows">
+        <item quantity="one">%1$d unconfirmed row, %2$s not counted</item>
+        <item quantity="other">%1$d unconfirmed rows, %2$s not counted</item>
+    </plurals>
 
     <!-- Attention cards: what is wrong, why, and the one fix -->
     <string name="attn_needs_attention">Needs attention</string>
@@ -989,6 +1038,10 @@
     <string name="onboarding_accounts_make_default">Make default</string>
     <string name="onboarding_accounts_skip">Skip for now</string>
     <string name="onboarding_accounts_cannot_remove_builtin">Cash and Other are built in and cannot be removed.</string>
+    <string name="onboarding_accounts_delete_cd">Remove %1$s</string>
+    <string name="onboarding_accounts_delete_title">Remove %1$s?</string>
+    <string name="onboarding_accounts_delete_message">This account will be removed from your list.</string>
+    <string name="onboarding_accounts_delete_action">Remove</string>
 
     <!-- Settings v3 screen -->
     <string name="settings_screen_title">Settings</string>
@@ -1022,6 +1075,10 @@
     <string name="payment_apps_switch_cd">Watch %1$s</string>
     <string name="payment_apps_custom_generic_note">Generic parser: always sent to Needs Review</string>
     <string name="payment_apps_remove_action">Remove</string>
+    <string name="payment_apps_remove_confirm_title">Stop watching %1$s?</string>
+    <string name="payment_apps_remove_confirm_message">Payments from this app will no longer be captured.</string>
+    <string name="payment_apps_search_hint">Search apps</string>
+    <string name="capture_settings_open_failed">Could not open settings. Open it manually from system settings.</string>
 
     <!-- Trips Stitch v3 detail & insights -->
     <string name="trip_delete_title">Delete %1$s?</string>

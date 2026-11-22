@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,6 +33,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import com.financeautomation.R
 import com.financeautomation.core.utils.formatRupeesAuto
 import com.financeautomation.core.utils.formatRupeesCompact
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
@@ -114,7 +116,12 @@ fun KpiCard(
     onLongClick: (() -> Unit)? = null
 ) {
     val exactRupees = formatRupeesAuto(amount)
-    val cd = "$label, rupees $exactRupees, opens transactions"
+    val details = listOfNotNull(line1Text, line2Text).filter { it.isNotBlank() }.joinToString(", ")
+    val cd = if (details.isEmpty()) {
+        stringResource(R.string.kpi_card_cd, label, exactRupees)
+    } else {
+        stringResource(R.string.kpi_card_cd_details, label, exactRupees, details)
+    }
 
     Card(
         shape = FinanceShapes.appCard,

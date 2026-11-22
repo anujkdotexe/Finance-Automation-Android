@@ -6,9 +6,11 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.widget.Toast
 import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -35,11 +37,13 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -54,6 +58,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,6 +70,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -74,7 +81,6 @@ import com.financeautomation.presentation.components.OutlinedButton
 import com.financeautomation.presentation.health.OemHardeningHelper
 import com.financeautomation.presentation.overlay.OverlayController
 import com.financeautomation.presentation.screens.SetupHealthIntents
-import com.financeautomation.presentation.screens.settings.CaptureHealthCard
 import com.financeautomation.presentation.screens.settings.CompatibilityReportDialog
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -428,15 +434,11 @@ fun CapturePermissionsScreen(
                     pillType = if (hasNotification) StatusPillType.ON else StatusPillType.MISSING,
                     onFix = if (!hasNotification) {
                         {
-                            try {
-                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                })
-                            } catch (_: Exception) {
-                                context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                })
-                            }
+                            startSettingsOrToast(
+                                context,
+                                Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS),
+                                Intent(Settings.ACTION_SETTINGS)
+                            )
                         }
                     } else null
                 )
@@ -454,19 +456,13 @@ fun CapturePermissionsScreen(
                     pillType = if (!isBatteryOptimized) StatusPillType.ON else StatusPillType.RESTRICTED,
                     onFix = if (isBatteryOptimized) {
                         {
-                            try {
-                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            startSettingsOrToast(
+                                context,
+                                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                                     data = Uri.parse("package:${context.packageName}")
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                try {
-                                    context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    })
-                                } catch (_: Exception) {}
-                            }
+                                },
+                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            )
                         }
                     } else null
                 )
@@ -484,14 +480,13 @@ fun CapturePermissionsScreen(
                     pillType = if (hasOverlay) StatusPillType.ON else StatusPillType.MISSING,
                     onFix = if (!hasOverlay) {
                         {
-                            try {
-                                context.startActivity(Intent(
+                            startSettingsOrToast(
+                                context,
+                                Intent(
                                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                     Uri.parse("package:${context.packageName}")
-                                ).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                })
-                            } catch (_: Exception) {}
+                                )
+                            )
                         }
                     } else null
                 )
@@ -509,11 +504,7 @@ fun CapturePermissionsScreen(
                     pillType = if (hasUsageAccess) StatusPillType.ON else StatusPillType.MISSING,
                     onFix = if (!hasUsageAccess) {
                         {
-                            try {
-                                context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                })
-                            } catch (_: Exception) {}
+                            startSettingsOrToast(context, Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                         }
                     } else null
                 )
@@ -537,12 +528,14 @@ fun CapturePermissionsScreen(
                                 setupHealthViewModel?.toggleOemCompleted(done)
                             },
                             onOpenSettings = {
-                                oemCheck?.let { item ->
+                                if (oemCheck != null) {
                                     SetupHealthIntents.launchSettingsWithGuardedFallback(
                                         context,
-                                        item,
+                                        oemCheck,
                                         oemInfo
-                                    ) {}
+                                    ) { showSettingsOpenFailed(context) }
+                                } else {
+                                    showSettingsOpenFailed(context)
                                 }
                             },
                             oemFeedback = oemFeedbackSubmitted,
@@ -561,6 +554,7 @@ fun CapturePermissionsScreen(
 
                 var showWatchAppPicker by remember { mutableStateOf(false) }
                 var watchedAppsVersion by remember { mutableStateOf(0) }
+                var customAppToRemove by remember { mutableStateOf<String?>(null) }
 
                 // 6. Payment apps we watch
                 CaptureItemRow(
@@ -632,6 +626,7 @@ fun CapturePermissionsScreen(
                                     var customEnabled by remember(customPkg, dummy) {
                                         mutableStateOf(PackageWhitelist.isPackageEnabled(customPkg))
                                     }
+                                    val customLabel = remember(customPkg) { appLabelOrPackage(context, customPkg) }
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -641,7 +636,7 @@ fun CapturePermissionsScreen(
                                     ) {
                                         Column(modifier = Modifier.weight(1f).padding(end = FinanceTheme.spacing.s)) {
                                             Text(
-                                                text = customPkg,
+                                                text = customLabel,
                                                 style = FinanceTheme.typography.bodySmall,
                                                 fontWeight = FontWeight.Medium,
                                                 color = MaterialTheme.colorScheme.onSurface
@@ -665,13 +660,13 @@ fun CapturePermissionsScreen(
                                                     checkedTrackColor = MaterialTheme.colorScheme.primary,
                                                     uncheckedThumbColor = MaterialTheme.colorScheme.outline,
                                                     uncheckedTrackColor = FinanceTheme.colors.surfaceContainerHighest
-                                                )
+                                                ),
+                                                modifier = Modifier.semantics {
+                                                    contentDescription = context.getString(R.string.payment_apps_switch_cd, customLabel)
+                                                }
                                             )
                                             TextButton(
-                                                onClick = {
-                                                    PackageWhitelist.removeWatchedApp(customPkg)
-                                                    watchedAppsVersion++
-                                                }
+                                                onClick = { customAppToRemove = customPkg }
                                             ) {
                                                 Text(
                                                     text = stringResource(R.string.payment_apps_remove_action),
@@ -699,19 +694,29 @@ fun CapturePermissionsScreen(
 
                 if (showWatchAppPicker) {
                     val pm = context.packageManager
-                    val installedApps = remember {
-                        try {
-                            val mainIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
-                            val launchables = pm.queryIntentActivities(mainIntent, 0).map { it.activityInfo.packageName }.toSet()
-                            pm.getInstalledApplications(0)
-                                .filter { launchables.contains(it.packageName) }
-                                .map { it.packageName to pm.getApplicationLabel(it).toString() }
-                        } catch (_: Exception) {
-                            emptyList()
+                    // The package scan and label lookups can take a while, so they run off the main thread.
+                    val installedApps by produceState<List<Pair<String, String>>?>(initialValue = null) {
+                        value = withContext(Dispatchers.IO) {
+                            try {
+                                val mainIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
+                                val launchables = pm.queryIntentActivities(mainIntent, 0).map { it.activityInfo.packageName }.toSet()
+                                pm.getInstalledApplications(0)
+                                    .filter { launchables.contains(it.packageName) }
+                                    .map { it.packageName to pm.getApplicationLabel(it).toString() }
+                            } catch (_: Exception) {
+                                emptyList()
+                            }
                         }
                     }
-                    val availableApps = remember(installedApps, watchedAppsVersion) {
-                        PackageWhitelist.getAvailableAppsToWatch(installedApps)
+                    var pickerQuery by remember { mutableStateOf("") }
+                    val availableApps = remember(installedApps, watchedAppsVersion, pickerQuery) {
+                        installedApps?.let { apps ->
+                            PackageWhitelist.getAvailableAppsToWatch(apps).filter { (pkg, label) ->
+                                pickerQuery.isBlank() ||
+                                    label.contains(pickerQuery.trim(), ignoreCase = true) ||
+                                    pkg.contains(pickerQuery.trim(), ignoreCase = true)
+                            }
+                        }
                     }
 
                     AlertDialog(
@@ -733,7 +738,23 @@ fun CapturePermissionsScreen(
                                     style = FinanceTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (availableApps.isEmpty()) {
+                                OutlinedTextField(
+                                    value = pickerQuery,
+                                    onValueChange = { pickerQuery = it },
+                                    singleLine = true,
+                                    placeholder = { Text(stringResource(R.string.payment_apps_search_hint)) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                if (availableApps == null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = FinanceTheme.spacing.m),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                } else if (availableApps.isEmpty()) {
                                     Text(
                                         text = stringResource(R.string.payment_apps_none_found),
                                         style = FinanceTheme.typography.bodyMedium,
@@ -780,6 +801,45 @@ fun CapturePermissionsScreen(
                         confirmButton = {},
                         dismissButton = {
                             TextButton(onClick = { showWatchAppPicker = false }) {
+                                Text(stringResource(R.string.action_cancel))
+                            }
+                        }
+                    )
+                }
+
+                customAppToRemove?.let { removePkg ->
+                    val removeLabel = remember(removePkg) { appLabelOrPackage(context, removePkg) }
+                    AlertDialog(
+                        onDismissRequest = { customAppToRemove = null },
+                        title = {
+                            Text(
+                                text = stringResource(R.string.payment_apps_remove_confirm_title, removeLabel),
+                                style = FinanceTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = stringResource(R.string.payment_apps_remove_confirm_message),
+                                style = FinanceTheme.typography.bodyMedium
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    PackageWhitelist.removeWatchedApp(removePkg)
+                                    watchedAppsVersion++
+                                    customAppToRemove = null
+                                }
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.payment_apps_remove_action),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { customAppToRemove = null }) {
                                 Text(stringResource(R.string.action_cancel))
                             }
                         }
@@ -836,11 +896,6 @@ fun CapturePermissionsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        // Developer Health Diagnostics
-        if (state.developerMode) {
-            Spacer(modifier = Modifier.height(FinanceTheme.spacing.s))
-            CaptureHealthCard(modifier = Modifier.fillMaxWidth())
-        }
     }
 
     reportDialogMode?.let { isMissed ->
@@ -850,3 +905,29 @@ fun CapturePermissionsScreen(
         )
     }
 }
+
+/** Starts the first intent that opens; shows a toast when none can be opened on this phone. */
+private fun startSettingsOrToast(context: Context, vararg intents: Intent) {
+    for (intent in intents) {
+        try {
+            context.startActivity(intent.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+            return
+        } catch (_: Exception) {
+            // Try the next intent.
+        }
+    }
+    showSettingsOpenFailed(context)
+}
+
+private fun showSettingsOpenFailed(context: Context) {
+    Toast.makeText(context, context.getString(R.string.capture_settings_open_failed), Toast.LENGTH_LONG).show()
+}
+
+/** The installed app's label, or the package id when the app is not installed or has no label. */
+private fun appLabelOrPackage(context: Context, packageName: String): String =
+    try {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString().ifBlank { packageName }
+    } catch (_: Exception) {
+        packageName
+    }

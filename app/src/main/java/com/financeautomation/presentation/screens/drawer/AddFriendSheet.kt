@@ -87,6 +87,7 @@ fun AddFriendSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
             ) {
@@ -123,22 +124,23 @@ fun AddFriendSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-                // Action Button Pair (pinned above keyboard via imePadding)
-                ButtonPair(
-                    outlinedText = stringResource(R.string.action_cancel),
-                    onOutlinedClick = onDismiss,
-                    filledText = stringResource(R.string.action_save),
-                    onFilledClick = {
-                        if (friendName.isNotBlank()) {
-                            onSave(friendName.trim())
-                        }
-                    },
-                    filledEnabled = friendName.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+
+            // Action Button Pair (pinned below the scrolling form, above the keyboard via imePadding)
+            ButtonPair(
+                outlinedText = stringResource(R.string.action_cancel),
+                onOutlinedClick = onDismiss,
+                filledText = stringResource(R.string.action_save),
+                onFilledClick = {
+                    if (friendName.isNotBlank()) {
+                        onSave(friendName.trim())
+                    }
+                },
+                filledEnabled = friendName.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

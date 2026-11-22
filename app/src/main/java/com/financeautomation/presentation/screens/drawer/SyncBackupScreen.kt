@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -94,6 +95,10 @@ fun SyncBackupScreen(
 
     var showCreateFreshDialog by rememberSaveable { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
+    var showMirrorConfirm by remember { mutableStateOf(false) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+    // Account email and spreadsheet id are masked until the user taps Show; the choice is not saved.
+    var showSensitive by remember { mutableStateOf(false) }
 
     val gso = remember {
         com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
@@ -173,6 +178,74 @@ fun SyncBackupScreen(
                 OutlinedButton(
                     onClick = { showSignOutDialog = false }
                 ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    if (showMirrorConfirm) {
+        AlertDialog(
+            onDismissRequest = { showMirrorConfirm = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.sync_mirror_confirm_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.sync_mirror_confirm_body),
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showMirrorConfirm = false
+                        viewModel.onMirrorConfigToCloud()
+                    }
+                ) {
+                    Text(stringResource(R.string.sync_btn_backup_now))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showMirrorConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    if (showRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirm = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.sync_restore_confirm_title),
+                    style = FinanceTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.sync_restore_confirm_body),
+                    style = FinanceTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestoreConfirm = false
+                        viewModel.onRestoreConfigFromCloud()
+                    }
+                ) {
+                    Text(stringResource(R.string.sync_restore))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showRestoreConfirm = false }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -349,7 +422,7 @@ fun SyncBackupScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = accountEmail.orEmpty(),
+                                text = if (showSensitive) accountEmail.orEmpty() else maskEmail(accountEmail.orEmpty()),
                                 style = FinanceTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -357,7 +430,7 @@ fun SyncBackupScreen(
                             )
                         } else if (!accountEmail.isNullOrBlank()) {
                             Text(
-                                text = accountEmail,
+                                text = if (showSensitive) accountEmail else maskEmail(accountEmail),
                                 style = FinanceTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -373,6 +446,14 @@ fun SyncBackupScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        }
+                        if (!accountEmail.isNullOrBlank() || state.spreadsheetId.isNotBlank()) {
+                            TextButton(onClick = { showSensitive = !showSensitive }) {
+                                Text(
+                                    text = stringResource(if (showSensitive) R.string.sync_hide_details else R.string.sync_show_details),
+                                    style = FinanceTheme.typography.labelMedium
+                                )
+                            }
                         }
                     }
 
@@ -531,7 +612,7 @@ fun SyncBackupScreen(
                 Box(modifier = Modifier.padding(FinanceTheme.spacing.m)) {
                     ButtonPair(
                         outlinedText = stringResource(R.string.sync_btn_backup_now),
-                        onOutlinedClick = viewModel::onMirrorConfigToCloud,
+                        onOutlinedClick = { showMirrorConfirm = true },
                         filledText = stringResource(R.string.sync_btn_sync_now),
                         onFilledClick = viewModel::onSyncNow,
                         outlinedEnabled = !state.isConfigSyncing,
@@ -593,7 +674,13 @@ fun SyncBackupScreen(
                             style = FinanceTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        OutlinedTextField(
+                        if (!showSensitive && state.spreadsheetId.isNotBlank()) {
+                            Text(
+                                text = maskSpreadsheetId(state.spreadsheetId),
+                                style = FinanceTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        } else OutlinedTextField(
                             value = spreadsheetInput,
                             onValueChange = { spreadsheetInput = it },
                             placeholder = { Text(stringResource(R.string.settings_spreadsheet_id_placeholder), style = FinanceTheme.typography.bodyMedium) },
@@ -622,21 +709,10 @@ fun SyncBackupScreen(
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
                     OutlinedButton(
-                        onClick = viewModel::onMirrorConfigToCloud,
+                        onClick = { showRestoreConfirm = true },
                         enabled = !state.isConfigSyncing,
                         shape = FinanceTheme.shapes.medium,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.sync_mirror),
-                            maxLines = 1
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = viewModel::onRestoreConfigFromCloud,
-                        enabled = !state.isConfigSyncing,
-                        shape = FinanceTheme.shapes.medium,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = stringResource(R.string.sync_restore),
@@ -736,7 +812,20 @@ fun SyncBackupScreen(
 
         SnackbarHost(
             hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
         )
     }
 }
+
+/** First two characters of the name part, then stars, then the domain: ab***@example.com. */
+private fun maskEmail(email: String): String {
+    val at = email.indexOf('@')
+    if (at <= 0) return email
+    return email.take(minOf(2, at)) + "***" + email.substring(at)
+}
+
+/** First four and last four characters with an ellipsis between them. */
+private fun maskSpreadsheetId(id: String): String =
+    if (id.length <= 8) id else id.take(4) + "\u2026" + id.takeLast(4)

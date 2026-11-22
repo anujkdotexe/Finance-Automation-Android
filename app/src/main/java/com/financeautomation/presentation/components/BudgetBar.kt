@@ -49,7 +49,7 @@ fun BudgetBar(
     val fill: Color = when (state) {
         BudgetState.NORMAL -> MaterialTheme.colorScheme.primary
         BudgetState.WARNING -> FinanceTheme.colors.moneyOwed
-        BudgetState.OVER -> MaterialTheme.colorScheme.errorContainer
+        BudgetState.OVER -> MaterialTheme.colorScheme.error
     }
     Box(
         modifier = modifier

@@ -5,12 +5,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -54,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,7 +88,6 @@ fun PeopleTripsScreen(
         state.tripSummaries[name.trim().lowercase()] ?: tripUseCase.forTrip(name, emptyList())
     var selectedCompanionForEdit by remember { mutableStateOf<FriendCompanion?>(null) }
     var personToRemove by remember { mutableStateOf<FriendCompanion?>(null) }
-    var tripToRemove by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -148,7 +151,7 @@ fun PeopleTripsScreen(
                             shape = FinanceShapes.pill
                         ) {
                             Text(
-                                text = "${state.companions.size} members",
+                                text = pluralStringResource(R.plurals.people_members_count, state.companions.size, state.companions.size),
                                 style = FinanceTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
@@ -211,7 +214,7 @@ fun PeopleTripsScreen(
                             shape = FinanceShapes.pill
                         ) {
                             Text(
-                                text = if (state.activeTripTag.isNotBlank()) stringResource(R.string.trip_active) else "0 active",
+                                text = stringResource(R.string.trips_active_count, state.tripTags.count { it.isActive }),
                                 style = FinanceTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
@@ -238,7 +241,7 @@ fun PeopleTripsScreen(
                         TripCard(
                             tripName = trip.name,
                             isActive = isActive,
-                            statusText = if (isActive) stringResource(R.string.trip_active) else "Inactive",
+                            statusText = if (isActive) stringResource(R.string.trip_active) else stringResource(R.string.trip_inactive),
                             peopleCount = summary.peopleCount,
                             totalSpend = formatRupees(summary.totalPaid),
                             costYou = formatRupees(summary.netExpenditure),
@@ -338,18 +341,6 @@ fun PeopleTripsScreen(
         )
     }
 
-    tripToRemove?.let { name ->
-        ConfirmRemoveDialog(
-            title = stringResource(R.string.trips_remove_title, name),
-            message = stringResource(R.string.trips_remove_message),
-            onConfirm = {
-                viewModel.onRemoveTripTag(name)
-                tripToRemove = null
-            },
-            onDismiss = { tripToRemove = null }
-        )
-    }
-
     openTripName?.let { name ->
         val tripTag = state.tripTags.firstOrNull { it.name.equals(name, ignoreCase = true) }
         val isActive = tripTag?.isActive == true || name.equals(state.activeTripTag, ignoreCase = true)
@@ -423,13 +414,13 @@ private fun FriendItemRow(
         else -> stringResource(R.string.people_settled)
     }
     val subtitleText = when {
-        openItemCount > 0 -> "$openItemCount ${if (openItemCount == 1) "open item" else "open items"}"
+        openItemCount > 0 -> pluralStringResource(R.plurals.people_open_items, openItemCount, openItemCount)
         else -> stringResource(R.string.people_all_caught_up)
     }
     val textColor = when {
         isPositive -> MaterialTheme.colorScheme.primary
         isNegative -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.outline
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Surface(
@@ -526,6 +517,7 @@ private fun FriendItemRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TripCard(
     tripName: String,
@@ -560,6 +552,7 @@ private fun TripCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
@@ -577,24 +570,31 @@ private fun TripCard(
                             )
                         }
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = tripName,
                             style = FinanceTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = if (dateRange.isNotBlank()) dateRange else if (isActive) "Active travel ledger" else "Past travel ledger",
+                            text = if (dateRange.isNotBlank()) dateRange else stringResource(
+                                if (isActive) R.string.trip_ledger_active else R.string.trip_ledger_past
+                            ),
                             style = FinanceTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
                 Surface(
                     color = if (isActive) MaterialTheme.colorScheme.primaryContainer else FinanceTheme.colors.surfaceContainerHigh,
-                    shape = FinanceShapes.pill
+                    shape = FinanceShapes.pill,
+                    modifier = Modifier.padding(start = FinanceTheme.spacing.s)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs),
@@ -640,9 +640,12 @@ private fun TripCard(
                     }
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m),
-                    verticalAlignment = Alignment.CenterVertically
+                FlowRow(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = FinanceTheme.spacing.s),
+                    horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
                 ) {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
@@ -660,7 +663,7 @@ private fun TripCard(
                     if (costYou.isNotBlank()) {
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "COST YOU",
+                                text = stringResource(R.string.trip_cost_you_label),
                                 style = FinanceTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -735,6 +738,8 @@ private fun FriendDetailSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = FinanceTheme.spacing.l, vertical = FinanceTheme.spacing.m),
             verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
         ) {
@@ -748,9 +753,9 @@ private fun FriendDetailSheet(
             // Current balance info
             val balanceStr = formatRupees(kotlin.math.abs(companion.balance), includeDecimals = true)
             val balanceText = when {
-                companion.balance > 0.001 -> "Owes you $balanceStr"
-                companion.balance < -0.001 -> "You owe $balanceStr"
-                else -> "Settled up (₹0.00)"
+                companion.balance > 0.001 -> stringResource(R.string.people_owes_you_amount, balanceStr)
+                companion.balance < -0.001 -> stringResource(R.string.people_you_owe_amount, balanceStr)
+                else -> stringResource(R.string.people_settled_up_zero)
             }
             Text(
                 text = balanceText,
