@@ -85,6 +85,7 @@ fun CategoriesScreen(
     var selectedCategoryForEdit by remember { mutableStateOf<Category?>(null) }
     var selectedCategoryForColor by remember { mutableStateOf<Category?>(null) }
     var budgetCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingHideCategory by remember { mutableStateOf<Category?>(null) }
     val budgetRepository = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.financeautomation.FinanceApplication)
         .appContainer.budgetRepository
     val budgets by budgetRepository.observeBudgets().collectAsState(initial = emptyList())
@@ -140,7 +141,12 @@ fun CategoriesScreen(
                 },
                 onClick = { category -> selectedCategoryForEdit = category },
                 onChangeColor = { selectedCategoryForColor = it },
-                onArchive = { viewModel.onArchiveCategory(it) }
+                onArchive = { catId ->
+                    val cat = state.categories.find { it.id == catId }
+                    if (cat != null) {
+                        pendingHideCategory = cat
+                    }
+                }
             )
         }
     }
@@ -151,6 +157,19 @@ fun CategoriesScreen(
             existingAmount = budgetByName[name.trim().lowercase()]?.monthlyAmount,
             repository = budgetRepository,
             onDismiss = { budgetCategory = null }
+        )
+    }
+
+    pendingHideCategory?.let { cat ->
+        com.financeautomation.presentation.components.ConfirmActionDialog(
+            title = stringResource(R.string.confirm_hide_category_title, cat.name),
+            message = stringResource(R.string.confirm_hide_category_message),
+            confirmLabel = stringResource(R.string.categories_hide),
+            onConfirm = {
+                viewModel.onArchiveCategory(cat.id)
+                pendingHideCategory = null
+            },
+            onDismiss = { pendingHideCategory = null }
         )
     }
 
@@ -298,8 +317,9 @@ fun CategoriesScreen(
 
                     OutlinedButton(
                         onClick = {
-                            viewModel.onArchiveCategory(cat.id)
+                            val toHide = cat
                             selectedCategoryForEdit = null
+                            pendingHideCategory = toHide
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

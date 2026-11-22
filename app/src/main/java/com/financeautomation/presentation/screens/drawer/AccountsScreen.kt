@@ -77,6 +77,7 @@ fun AccountsScreen(
     var selectedAccountForEdit by remember { mutableStateOf<Account?>(null) }
     var newAccountName by rememberSaveable { mutableStateOf("") }
     var newAccountDigits by rememberSaveable { mutableStateOf("") }
+    var pendingAccountAction by remember { mutableStateOf<PendingAccountAction?>(null) }
 
     var localAccounts by remember(state.accounts) { mutableStateOf(state.accounts) }
     var draggingAccountId by remember { mutableStateOf<String?>(null) }
@@ -152,8 +153,8 @@ fun AccountsScreen(
                                 transactionCount = txCount,
                                 onEdit = { selectedAccountForEdit = account },
                                 onSetDefault = { viewModel.onDefaultAccountChanged(account.name) },
-                                onArchive = { viewModel.onArchiveAccount(account.id) },
-                                onDelete = { viewModel.onDeleteAccount(account.id) },
+                                onArchive = { pendingAccountAction = PendingAccountAction.Archive(account) },
+                                onDelete = { pendingAccountAction = PendingAccountAction.Delete(account) },
                                 modifier = Modifier
                                     .onSizeChanged { size ->
                                         if (size.height > 0) {
@@ -298,8 +299,9 @@ fun AccountsScreen(
 
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
-                                viewModel.onArchiveAccount(account.id)
+                                val acc = account
                                 selectedAccountForEdit = null
+                                pendingAccountAction = PendingAccountAction.Archive(acc)
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -437,6 +439,40 @@ fun AccountsScreen(
             }
         )
     }
+
+    pendingAccountAction?.let { action ->
+        when (action) {
+            is PendingAccountAction.Archive -> {
+                com.financeautomation.presentation.components.ConfirmActionDialog(
+                    title = stringResource(R.string.confirm_archive_account_title, action.account.name),
+                    message = stringResource(R.string.confirm_archive_account_message),
+                    confirmLabel = stringResource(R.string.accounts_archive),
+                    onConfirm = {
+                        viewModel.onArchiveAccount(action.account.id)
+                        pendingAccountAction = null
+                    },
+                    onDismiss = { pendingAccountAction = null }
+                )
+            }
+            is PendingAccountAction.Delete -> {
+                com.financeautomation.presentation.components.ConfirmActionDialog(
+                    title = stringResource(R.string.confirm_delete_account_title, action.account.name),
+                    message = stringResource(R.string.confirm_delete_account_message),
+                    confirmLabel = "Delete",
+                    onConfirm = {
+                        viewModel.onDeleteAccount(action.account.id)
+                        pendingAccountAction = null
+                    },
+                    onDismiss = { pendingAccountAction = null }
+                )
+            }
+        }
+    }
+}
+
+private sealed interface PendingAccountAction {
+    data class Archive(val account: Account) : PendingAccountAction
+    data class Delete(val account: Account) : PendingAccountAction
 }
 
 @Composable

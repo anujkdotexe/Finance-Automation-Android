@@ -566,13 +566,33 @@ fun QuickLogSheet(
 
         // Optional Void Action for already-logged transactions
         if (state.transactionId != null && onVoid != null) {
+            var showVoidConfirm by rememberSaveable { mutableStateOf(false) }
+
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
             OutlinedButton(
                 text = stringResource(R.string.action_void),
-                onClick = onVoid,
+                onClick = { showVoidConfirm = true },
                 enabled = !state.isSaving,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (showVoidConfirm) {
+                val title = if (state.payee.isNotBlank()) {
+                    stringResource(R.string.confirm_void_title, state.payee)
+                } else {
+                    stringResource(R.string.confirm_void_title_generic)
+                }
+                ConfirmActionDialog(
+                    title = title,
+                    message = stringResource(R.string.confirm_void_message),
+                    confirmLabel = stringResource(R.string.action_void),
+                    onConfirm = {
+                        showVoidConfirm = false
+                        onVoid()
+                    },
+                    onDismiss = { showVoidConfirm = false }
+                )
+            }
         }
     }
 }
