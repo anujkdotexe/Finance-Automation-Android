@@ -625,6 +625,12 @@ class DefaultAppContainer(
             transactionDaoProvider = { awaitDatabase().transactionDao() },
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
             categoryDaoProvider = { awaitDatabase().categoryDao() },
+            syncQueueDaoProvider = { awaitDatabase().syncQueueDao() },
+            transactionRunnerProvider = {
+                val db = awaitDatabase()
+                val runner: suspend (suspend () -> Unit) -> Unit = { block -> db.withTransaction { block() } }
+                runner
+            },
             predictCategoryUseCase = predictCategoryUseCase,
             overlayControllerProvider = { overlayController }
         )
@@ -703,6 +709,7 @@ class DefaultAppContainer(
                     accountDao = db.accountDao(),
                     preferenceDao = db.preferenceDao(),
                     transactionDao = db.transactionDao(),
+                    syncQueueDao = db.syncQueueDao(),
                     subscriptionMatcher = subscriptionMatcher,
                     parseUseCase = parseNotificationUseCase,
                     runInTransaction = runner,

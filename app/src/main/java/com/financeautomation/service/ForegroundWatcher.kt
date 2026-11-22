@@ -25,6 +25,7 @@ import com.financeautomation.core.utils.PipelineTrail
 import com.financeautomation.data.local.dao.CategoryDao
 import com.financeautomation.data.local.dao.CategoryStatDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
+import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.PendingCaptureEntity
 import com.financeautomation.data.local.entity.TransactionEntity
@@ -59,6 +60,8 @@ class ForegroundWatcher(
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
     private val categoryStatDaoProvider: (suspend () -> CategoryStatDao)? = null,
     private val categoryDaoProvider: (suspend () -> CategoryDao)? = null,
+    private val syncQueueDaoProvider: (suspend () -> SyncQueueDao)? = null,
+    private val transactionRunnerProvider: (suspend () -> (suspend (suspend () -> Unit) -> Unit))? = null,
     private val predictCategoryUseCase: PredictCategoryUseCase? = null,
     private val overlayControllerProvider: (() -> OverlayController)? = null,
     private val onTriggerPrompt: ((PendingCaptureEntity) -> Unit)? = null
@@ -372,7 +375,9 @@ class ForegroundWatcher(
         val tDao = directTransactionDao ?: transactionDaoProvider?.invoke()
         NotificationProcessor.expireStaleCaptures(
             pendingCaptureDao = pDao,
-            transactionDao = tDao
+            transactionDao = tDao,
+            runInTransaction = transactionRunnerProvider?.invoke(),
+            syncQueueDao = syncQueueDaoProvider?.invoke()
         )
     }
 

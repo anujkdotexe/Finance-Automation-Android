@@ -16,9 +16,11 @@ import com.financeautomation.data.local.dao.AccountDao
 import com.financeautomation.data.local.dao.HandledNotificationDao
 import com.financeautomation.data.local.dao.PendingCaptureDao
 import com.financeautomation.data.local.dao.PreferenceDao
+import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.local.entity.HandledNotificationEntity
 import com.financeautomation.data.local.entity.PendingCaptureEntity
+import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
@@ -75,6 +77,7 @@ class NotificationProcessor(
     private val accountDao: AccountDao? = null,
     private val preferenceDao: PreferenceDao? = null,
     private val transactionDao: TransactionDao? = null,
+    private val syncQueueDao: SyncQueueDao? = null,
     private val subscriptionMatcher: SubscriptionMatcher? = null,
     private val parseUseCase: ParseNotificationUseCase = ParseNotificationUseCase(),
     private val runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null,
@@ -311,7 +314,8 @@ class NotificationProcessor(
             pendingCaptureDao = pDao,
             transactionDao = transactionDao,
             now = now,
-            runInTransaction = runInTransaction
+            runInTransaction = runInTransaction,
+            syncQueueDao = syncQueueDao
         )
     }
 
@@ -552,6 +556,9 @@ class NotificationProcessor(
 
         const val WINDOW_DUPLICATE_ALERT_MS: Long = 180_000L
 
+        /** Serialises expiry between the processor and the foreground watcher, which does not hold the process mutex. */
+        private val expiryMutex = Mutex()
+
         const val WINDOW_SAME_PACKAGE_MERGE_MS: Long = 180_000L
         const val WINDOW_CROSS_PACKAGE_MERGE_MS: Long = 600_000L
         const val WINDOW_CONFIRMED_LATE_MERGE_MS: Long = 86_400_000L // 24 hours for matching reference id
@@ -630,8 +637,9 @@ class NotificationProcessor(
             transactionDao: TransactionDao?,
             now: Long = System.currentTimeMillis(),
             defaultAccount: String = CategoryConstants.ACCOUNT_OTHER,
-            runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null
-        ) {
+            runInTransaction: (suspend (suspend () -> Unit) -> Unit)? = null,
+            syncQueueDao: SyncQueueDao? = null
+        ) = expiryMutex.withLock {
             val cutoff = now - 24L * 60L * 60L * 1000L
             val expired = pendingCaptureDao.getExpiredWaitingCaptures(cutoff)
             for (cap in expired) {
@@ -654,12 +662,13 @@ class NotificationProcessor(
                         maxTimestamp = cap.timestamp + 5_000L,
                         minAmount = capAmount - 0.01,
                         maxAmount = capAmount + 0.01
-                    ).firstOrNull { it.id != cap.id }
+                    ).firstOrNull { it.id != cap.id && it.id != CaptureClaim.expenseIdFor(cap.id) }
 
                     val isDup = similar != null || cap.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
                     val duplicateOfId = similar?.id
 
-                    val txnId = "txn_${UUID.randomUUID().toString().replace("-", "").take(12)}"
+                    // Deterministic id: a second run, or the other save path, writes the same row instead of a duplicate
+                    val txnId = CaptureClaim.expenseIdFor(cap.id)
                     val txn = TransactionEntity(
                         id = txnId,
                         timestamp = cap.timestamp,
@@ -680,8 +689,18 @@ class NotificationProcessor(
                         duplicateOfId = duplicateOfId
                     )
                     val op: suspend () -> Unit = {
-                        transactionDao.insert(txn)
-                        pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
+                        // Claim first: only the caller that wins the claim inserts, so two callers never create two rows
+                        if (pendingCaptureDao.claimForLogging(cap.id)) {
+                            transactionDao.insert(txn)
+                            syncQueueDao?.insert(
+                                SyncQueueEntity(
+                                    transactionId = txn.id,
+                                    operationType = SyncQueueEntity.OP_INSERT,
+                                    payloadJson = txn.id
+                                )
+                            )
+                            pendingCaptureDao.updateState(cap.id, PendingCaptureEntity.STATE_DONE)
+                        }
                     }
                     if (runInTransaction != null) {
                         runInTransaction.invoke(op)
