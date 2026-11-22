@@ -57,7 +57,13 @@ object AccountingUtils {
         return a.trim().lowercase() == b.trim().lowercase()
     }
 
-    private val AMOUNT_PATTERN = Pattern.compile("^(.*?)(?:[:=\\-\\s]\\s*|\\s*\\(?)(?:[₹$€£])?\\s*(\\d+(?:\\.\\d+)?)\\)?$")
+    /**
+     * "name amount" needs an explicit marker: a colon or equals sign, brackets, or a currency symbol before the number.
+     * A bare trailing number ("Rahul 2", "Rahul2") is part of the name, never an amount.
+     */
+    private val AMOUNT_PATTERN = Pattern.compile(
+        "^(.*?)\\s*(?:[:=]\\s*[₹$€£]?\\s*(\\d+(?:\\.\\d+)?)|\\(\\s*[₹$€£]?\\s*(\\d+(?:\\.\\d+)?)\\s*\\)|[₹$€£]\\s*(\\d+(?:\\.\\d+)?))$"
+    )
 
     data class ReceivableShare(
         val key: String,
@@ -95,7 +101,7 @@ object AccountingUtils {
             val matcher = AMOUNT_PATTERN.matcher(token.trim())
             if (matcher.matches()) {
                 val name = matcher.group(1)?.trim() ?: return null
-                val amountStr = matcher.group(2) ?: return null
+                val amountStr = matcher.group(2) ?: matcher.group(3) ?: matcher.group(4) ?: return null
                 val amount = amountStr.toDoubleOrNull() ?: return null
                 if (name.isBlank() || amount <= 0.0) return null
                 val (key, display) = formatReceivableLabel(listOf(name))
