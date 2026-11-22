@@ -1485,7 +1485,7 @@ open class GoogleSheetsClient(
                             ChartManager.COLUMN_CHART_TITLE,
                             ChartManager.DOUGHNUT_CHART_TITLE,
                             ChartManager.INSIGHTS_CHART_TITLE
-                        )
+                        ) + ChartManager.LEGACY_CHART_TITLES
                     )
                 } else {
                     emptyList()

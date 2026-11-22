@@ -21,9 +21,27 @@ object ChartManager {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    const val COLUMN_CHART_TITLE = "Full Year Spending by Month (Personal Burn vs Total Outflow)"
+    const val COLUMN_CHART_TITLE = "Spending by Month: Personal Burn and Total Outflow"
     const val DOUGHNUT_CHART_TITLE = "Current Month Spend by Category"
-    const val INSIGHTS_CHART_TITLE = "Current Month Spend (Categories & Trips)"
+    const val INSIGHTS_CHART_TITLE = "Current Month Spend (trips shown as one slice)"
+
+    /** Titles used by earlier builds; charts with these titles are removed before the new ones are added. */
+    val LEGACY_CHART_TITLES: Set<String> = setOf(
+        "Full Year Spending by Month (Personal Burn vs Total Outflow)",
+        "Current Month Spend (Categories & Trips)"
+    )
+
+    /** Minimum number of category rows covered by the category doughnut range. */
+    const val MIN_CATEGORY_CHART_ROWS = 20
+
+    private const val TITLE_TEXT_COLOR = 0x20 / 255f
+
+    /** Dark, bold, readable chart title format (matches the provisioner dark text colour 202020). */
+    private fun titleTextFormat(): Map<String, Any?> = mapOf(
+        "foregroundColor" to mapOf("red" to TITLE_TEXT_COLOR, "green" to TITLE_TEXT_COLOR, "blue" to TITLE_TEXT_COLOR),
+        "bold" to true,
+        "fontSize" to 12
+    )
 
     /**
      * Builds updateSpreadsheetProperties request to enforce en_GB locale and Asia/Kolkata timezone.
@@ -117,7 +135,7 @@ object ChartManager {
 
     /**
      * Builds addChart batchUpdate requests for the Clustered Column Chart, Doughnut Chart, and Insights Chart.
-     * The Doughnut Chart dynamically scales its row range to match [categoryCount] (minimum 10 rows).
+     * The Doughnut Chart dynamically scales its row range to match [categoryCount] (minimum 20 rows).
      * The Insights Chart shows Categories & Trips breakdown anchored at A65.
      */
     fun buildChartRequests(
@@ -127,7 +145,7 @@ object ChartManager {
         categoryCount: Int = 10,
         insightsItemCount: Int = 11
     ): List<Map<String, Any?>> {
-        val categoryEndRow = 5 + maxOf(10, categoryCount)
+        val categoryEndRow = 5 + maxOf(MIN_CATEGORY_CHART_ROWS, categoryCount)
         val insightsEndRow = 64 + maxOf(10, insightsItemCount)
         return listOf(
             // 1. Clustered Column Chart (A7, 520x266)
@@ -136,9 +154,14 @@ object ChartManager {
                     "chart" to mapOf(
                         "spec" to mapOf(
                             "title" to COLUMN_CHART_TITLE,
+                            "titleTextFormat" to titleTextFormat(),
                             "basicChart" to mapOf(
                                 "chartType" to "COLUMN",
                                 "legendPosition" to "BOTTOM_LEGEND",
+                                "axis" to listOf(
+                                    mapOf("position" to "BOTTOM_AXIS", "title" to "Month"),
+                                    mapOf("position" to "LEFT_AXIS", "title" to "Rupees")
+                                ),
                                 "domains" to listOf(
                                     mapOf(
                                         "domain" to mapOf(
@@ -146,7 +169,7 @@ object ChartManager {
                                                 "sources" to listOf(
                                                     mapOf(
                                                         "sheetId" to dashboardSheetId,
-                                                        "startRowIndex" to 5,
+                                                        "startRowIndex" to 4,
                                                         "endRowIndex" to 17,
                                                         "startColumnIndex" to 20,
                                                         "endColumnIndex" to 21
@@ -163,7 +186,7 @@ object ChartManager {
                                                 "sources" to listOf(
                                                     mapOf(
                                                         "sheetId" to dashboardSheetId,
-                                                        "startRowIndex" to 5,
+                                                        "startRowIndex" to 4,
                                                         "endRowIndex" to 17,
                                                         "startColumnIndex" to 21,
                                                         "endColumnIndex" to 22
@@ -180,7 +203,7 @@ object ChartManager {
                                                 "sources" to listOf(
                                                     mapOf(
                                                         "sheetId" to dashboardSheetId,
-                                                        "startRowIndex" to 5,
+                                                        "startRowIndex" to 4,
                                                         "endRowIndex" to 17,
                                                         "startColumnIndex" to 22,
                                                         "endColumnIndex" to 23
@@ -192,7 +215,7 @@ object ChartManager {
                                         "color" to columnChartColorSecondary
                                     )
                                 ),
-                                "headerCount" to 0
+                                "headerCount" to 1
                             )
                         ),
                         "position" to mapOf(
@@ -215,8 +238,9 @@ object ChartManager {
                     "chart" to mapOf(
                         "spec" to mapOf(
                             "title" to DOUGHNUT_CHART_TITLE,
+                            "titleTextFormat" to titleTextFormat(),
                             "pieChart" to mapOf(
-                                "legendPosition" to "RIGHT_LEGEND",
+                                "legendPosition" to "LABELED_LEGEND",
                                 "pieHole" to 0.5,
                                 "domain" to mapOf(
                                     "sourceRange" to mapOf(
@@ -266,8 +290,9 @@ object ChartManager {
                     "chart" to mapOf(
                         "spec" to mapOf(
                             "title" to INSIGHTS_CHART_TITLE,
+                            "titleTextFormat" to titleTextFormat(),
                             "pieChart" to mapOf(
-                                "legendPosition" to "RIGHT_LEGEND",
+                                "legendPosition" to "LABELED_LEGEND",
                                 "pieHole" to 0.5,
                                 "domain" to mapOf(
                                     "sourceRange" to mapOf(
