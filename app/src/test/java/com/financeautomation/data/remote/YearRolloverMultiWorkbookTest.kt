@@ -164,6 +164,10 @@ class YearRolloverMultiWorkbookTest {
                         {"range":"'Jan27'!V4:AB","majorDimension":"ROWS","values":[]}
                     ]}"""
                 }
+                // The executor re-finds the Dec26 debit row by its id before marking it Carried (id column AD, rows 4 down)
+                req.method == "GET" && url.contains("sheet_finance_2026") && url.contains("/values/") && url.contains("AD4") -> {
+                    """{"range":"'Dec26'!AD4:AD","majorDimension":"ROWS","values":[["debit_dec26_uuid"]]}"""
+                }
                 // Check if uuid exists (findRowByUuid) -> returns empty
                 req.method == "GET" && url.contains("/values/") && (url.contains("AD") || url.contains("AC")) -> {
                     """{"range":"'Jan27'!AD3:AD","majorDimension":"ROWS","values":[]}"""

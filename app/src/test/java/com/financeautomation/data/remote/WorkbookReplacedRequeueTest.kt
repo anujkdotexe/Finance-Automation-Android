@@ -1175,6 +1175,11 @@ class WorkbookReplacedRequeueTest {
             } else null
         }
 
+        // The executor re-finds the edited debit row by its id in the hidden id column (AD, rows 4 down)
+        server.uuidColumnValues = { call ->
+            if (call.url.contains("AD4")) listOf("tx_earlier") else emptyList()
+        }
+
         val executor = createTestAccountingSyncExecutor(
             sheetsClient = server.client(),
             syncQueueDao = qDao,
