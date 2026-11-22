@@ -38,10 +38,11 @@ internal class FakeFinanceDatabase : FinanceDatabase() {
     val account: AccountDao = fakeDao()
     val preference: PreferenceDao = fakeDao()
     val transaction: TransactionDao = fakeDao()
+    val category: CategoryDao = fakeDao()
 
     override fun transactionDao(): TransactionDao = transaction
     override fun companionDao(): CompanionDao = fakeDao()
-    override fun categoryDao(): CategoryDao = fakeDao()
+    override fun categoryDao(): CategoryDao = category
     override fun syncQueueDao(): SyncQueueDao = fakeDao()
     override fun accountDao(): AccountDao = account
     override fun tripTagDao(): TripTagDao = fakeDao()
@@ -227,17 +228,21 @@ class AppContainerTest {
     }
 
     @Test
-    fun foregroundWatcher_receivesCategoryDaoProvider() {
+    fun foregroundWatcher_receivesCategoryDaoProvider() = kotlinx.coroutines.runBlocking {
+        val fakeDb = FakeFinanceDatabase()
         val container: AppContainer = DefaultAppContainer(
             applicationContext = createFakeContext(),
             providedTokenProvider = fakeTokenProvider,
-            providedDatabaseReady = CompletableDeferred()
+            providedDatabaseReady = CompletableDeferred(fakeDb)
         )
         val watcher = container.foregroundWatcher
         val field = com.financeautomation.service.ForegroundWatcher::class.java.getDeclaredField("categoryDaoProvider")
         field.isAccessible = true
-        val provider = field.get(watcher)
+        @Suppress("UNCHECKED_CAST")
+        val provider = field.get(watcher) as? (suspend () -> CategoryDao)?
         assertNotNull("ForegroundWatcher must receive non-null categoryDaoProvider (F23)", provider)
+        val resolvedDao = provider!!.invoke()
+        assertSame("Provider must return the categoryDao from the database (F23)", fakeDb.categoryDao(), resolvedDao)
     }
 
     private class RecordingTransactionRepository : TransactionRepository {
