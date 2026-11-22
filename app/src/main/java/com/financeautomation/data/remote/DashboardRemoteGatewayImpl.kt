@@ -38,9 +38,11 @@ class DashboardRemoteGatewayImpl(
                     IllegalStateException("Dashboard tab not found in spreadsheet ${com.financeautomation.core.utils.PrivacyScrubber.scrub(spreadsheetId)}")
                 )
 
+            val resolvedYear = DashboardFormulaBuilder.extractWorkbookYear(sheetProperties.keys)
             val dashboardRequests = DashboardFormulaBuilder.buildDashboardFormulaRequests(
                 dashboardSheetId = dashboardSheetId,
-                categories = categories
+                categories = categories,
+                year = resolvedYear
             )
 
             if (dashboardRequests.isEmpty()) {

@@ -1342,6 +1342,13 @@ open class GoogleSheetsClient(
         spreadsheetId: String,
         accounts: List<String> = emptyList(),
         categories: List<String> = emptyList()
+    ): Result<Unit> = provisionMasterWorkbook(spreadsheetId, accounts, categories, 0)
+
+    open suspend fun provisionMasterWorkbook(
+        spreadsheetId: String,
+        accounts: List<String> = emptyList(),
+        categories: List<String> = emptyList(),
+        year: Int = 0
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val tabsResult = getSheetTabsWithIds(spreadsheetId)
@@ -1399,46 +1406,52 @@ open class GoogleSheetsClient(
                 )
             }
 
-            // 2. Ensure current month tab exists with at least 31 columns (never shrink existing rows or columns)
-            val currentMonthTab = ZonedDateTime.now(clock.withZone(DEFAULT_SHEET_ZONE_ID))
-                .format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
+            val resolvedYear = if (year != 0) year else DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
 
-            if (!tabsMap.containsKey(currentMonthTab)) {
-                setupRequests.add(
-                    mapOf(
-                        "addSheet" to mapOf(
-                            "properties" to mapOf(
-                                "title" to currentMonthTab,
-                                "gridProperties" to mapOf(
-                                    "rowCount" to 1000,
-                                    "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+            // 2. Ensure current month tab exists with at least 31 columns only if current year matches resolvedYear
+            val currentZonedDateTime = ZonedDateTime.now(clock.withZone(DEFAULT_SHEET_ZONE_ID))
+            val currentYear = currentZonedDateTime.year
+            val currentMonthTab = currentZonedDateTime.format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
+            val isCurrentYear = (resolvedYear == currentYear)
+
+            if (isCurrentYear) {
+                if (!tabsMap.containsKey(currentMonthTab)) {
+                    setupRequests.add(
+                        mapOf(
+                            "addSheet" to mapOf(
+                                "properties" to mapOf(
+                                    "title" to currentMonthTab,
+                                    "gridProperties" to mapOf(
+                                        "rowCount" to 1000,
+                                        "columnCount" to SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                                    )
                                 )
                             )
                         )
                     )
-                )
-            } else {
-                val monthSheetId = tabsMap[currentMonthTab]
-                val monthInfo = detailedTabs[currentMonthTab]
-                val curRows = monthInfo?.rowCount ?: 1000
-                val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
-                val targetRows = maxOf(curRows, 1000)
-                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
-                if (monthSheetId != null && (targetRows > curRows || targetCols > curCols)) {
-                    setupRequests.add(
-                        mapOf(
-                            "updateSheetProperties" to mapOf(
-                                "properties" to mapOf(
-                                    "sheetId" to monthSheetId,
-                                    "gridProperties" to mapOf(
-                                        "rowCount" to targetRows,
-                                        "columnCount" to targetCols
-                                    )
-                                ),
-                                "fields" to "gridProperties(rowCount,columnCount)"
+                } else {
+                    val monthSheetId = tabsMap[currentMonthTab]
+                    val monthInfo = detailedTabs[currentMonthTab]
+                    val curRows = monthInfo?.rowCount ?: 1000
+                    val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                    val targetRows = maxOf(curRows, 1000)
+                    val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                    if (monthSheetId != null && (targetRows > curRows || targetCols > curCols)) {
+                        setupRequests.add(
+                            mapOf(
+                                "updateSheetProperties" to mapOf(
+                                    "properties" to mapOf(
+                                        "sheetId" to monthSheetId,
+                                        "gridProperties" to mapOf(
+                                            "rowCount" to targetRows,
+                                            "columnCount" to targetCols
+                                        )
+                                    ),
+                                    "fields" to "gridProperties(rowCount,columnCount)"
+                                )
                             )
                         )
-                    )
+                    }
                 }
             }
 
@@ -1518,41 +1531,43 @@ open class GoogleSheetsClient(
                 }
             }
 
-            // 4. Format current month sheet (safe formatting: rows 1-3 only, skip existing rules, never shrink)
-            val currentMonthId = tabsMap[currentMonthTab]
-            if (currentMonthId != null) {
-                val monthInfo = detailedTabs[currentMonthTab]
-                val curRows = monthInfo?.rowCount ?: 1000
-                val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
-                val targetRows = maxOf(curRows, 1000)
-                val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
-                val existingRules = monthInfo?.existingRuleFormulas ?: emptySet()
+            // 4. Format current month sheet if it belongs to resolvedYear
+            if (isCurrentYear) {
+                val currentMonthId = tabsMap[currentMonthTab]
+                if (currentMonthId != null) {
+                    val monthInfo = detailedTabs[currentMonthTab]
+                    val curRows = monthInfo?.rowCount ?: 1000
+                    val curCols = monthInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
+                    val targetRows = maxOf(curRows, 1000)
+                    val targetCols = maxOf(curCols, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+                    val existingRules = monthInfo?.existingRuleFormulas ?: emptySet()
 
-                val currentMonthRequests = SheetProvisioner.buildProvisionRequests(
-                    sheetId = currentMonthId,
-                    tabTitle = currentMonthTab,
-                    accounts = accounts,
-                    categories = categories,
-                    currentRowCount = targetRows,
-                    currentColumnCount = targetCols,
-                    existingRuleFormulas = existingRules
-                )
-
-                val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
-                    requests = currentMonthRequests,
-                    isDataTab = true,
-                    currentGridRows = curRows,
-                    currentGridCols = curCols
-                )
-                if (safetyViolations.isNotEmpty()) {
-                    return@withContext Result.Error(
-                        IllegalStateException("Month tab repair safety violation: $safetyViolations")
+                    val currentMonthRequests = SheetProvisioner.buildProvisionRequests(
+                        sheetId = currentMonthId,
+                        tabTitle = currentMonthTab,
+                        accounts = accounts,
+                        categories = categories,
+                        currentRowCount = targetRows,
+                        currentColumnCount = targetCols,
+                        existingRuleFormulas = existingRules
                     )
-                }
 
-                val monthRes = batchUpdate(spreadsheetId, currentMonthRequests)
-                if (monthRes is Result.Error) {
-                    return@withContext Result.Error(monthRes.exception)
+                    val safetyViolations = SheetRepairSafetyValidator.validateRepairRequests(
+                        requests = currentMonthRequests,
+                        isDataTab = true,
+                        currentGridRows = curRows,
+                        currentGridCols = curCols
+                    )
+                    if (safetyViolations.isNotEmpty()) {
+                        return@withContext Result.Error(
+                            IllegalStateException("Month tab repair safety violation: $safetyViolations")
+                        )
+                    }
+
+                    val monthRes = batchUpdate(spreadsheetId, currentMonthRequests)
+                    if (monthRes is Result.Error) {
+                        return@withContext Result.Error(monthRes.exception)
+                    }
                 }
             }
 

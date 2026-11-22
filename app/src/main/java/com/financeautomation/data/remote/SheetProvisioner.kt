@@ -228,6 +228,7 @@ object SheetProvisioner {
         val requests = mutableListOf<Map<String, Any?>>()
         val targetRowCount = maxOf(currentRowCount, 1000)
         val targetColumnCount = maxOf(currentColumnCount, SheetSchemaConstants.TOTAL_COLUMN_COUNT)
+        val yy = (year % 100).toString().padStart(2, '0')
 
         // 0. Ensure grid dimensions (at least 1000 rows x 26 columns, never shrink)
         requests.add(
@@ -517,7 +518,7 @@ object SheetProvisioner {
             Pair(
                 0,
                 Triple(
-                    DashboardFormulaBuilder.buildCurrentBurnFormula(emptyList()),
+                    DashboardFormulaBuilder.buildCurrentBurnFormula(emptyList(), year),
                     burnRedColor,
                     true
                 )
@@ -526,7 +527,7 @@ object SheetProvisioner {
             Pair(
                 3,
                 Triple(
-                    DashboardFormulaBuilder.buildPrevMonthBurnFormula(emptyList()),
+                    DashboardFormulaBuilder.buildPrevMonthBurnFormula(emptyList(), year),
                     darkTextColor,
                     true
                 )
@@ -535,7 +536,7 @@ object SheetProvisioner {
             Pair(
                 6,
                 Triple(
-                    """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!K4:K"), "Pending", INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!J4:J")), 0)""",
+                    """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!K4:K"), "Pending", INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!J4:J")), 0)""",
                     greenColor,
                     true
                 )
@@ -544,7 +545,7 @@ object SheetProvisioner {
             Pair(
                 9,
                 Triple(
-                    """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")), 0)""",
+                    """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")), 0)""",
                     burnRedColor,
                     true
                 )
@@ -553,7 +554,7 @@ object SheetProvisioner {
             Pair(
                 12,
                 Triple(
-                    """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!F4:F"), "Subscriptions", INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!I4:I")), 0)""",
+                    """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!F4:F"), "Subscriptions", INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!I4:I")), 0)""",
                     purpleColor,
                     true
                 )
@@ -694,7 +695,7 @@ object SheetProvisioner {
                 )
             )
             // Total Outflow (Col W) - excludes [Carried*
-            val totalOutflowFormula = """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNum & RIGHT(YEAR(TODAY()), 2) & "'!G4:G"), INDIRECT("'" & ${'$'}U$rowNum & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Carried*"), 0)"""
+            val totalOutflowFormula = """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNum & "$yy" & "'!G4:G"), INDIRECT("'" & ${'$'}U$rowNum & "$yy" & "'!D4:D"), "<>[Carried*"), 0)"""
             requests.add(
                 createCellRequest(
                     sheetId = dashboardSheetId,
@@ -952,7 +953,7 @@ object SheetProvisioner {
         requests.add(outerBordersRequest(dashboardSheetId, startRow = 26, endRow = 27, startCol = 7, endCol = 8))
 
         // Row 27: Dynamic Two-Stage QUERY Formulas
-        val theyOweMeQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
+        val theyOweMeQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -967,7 +968,7 @@ object SheetProvisioner {
             )
         )
 
-        val iOwePeopleQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+        val iOwePeopleQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -1308,7 +1309,7 @@ object SheetProvisioner {
             )
         )
         // 3. Trip Spend This Month (G58) - excludes Void, Savings, Transfer
-        val tripSpendMonthFormula = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+        val tripSpendMonthFormula = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Transfer"), 0)"""
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -2292,8 +2293,12 @@ object SheetProvisioner {
         )
     }
 
-    fun buildPaidThisMonthFormula(row1BasedIndex: Int): String {
-        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!G4:G"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "Subscriptions", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+    fun buildPaidThisMonthFormula(
+        row1BasedIndex: Int,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!G4:G"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "Subscriptions", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
     }
 
     fun buildPaidThisYearFormula(year: Int, row1BasedIndex: Int): String {
@@ -2319,7 +2324,7 @@ object SheetProvisioner {
         val freqText = sub.frequency.name.lowercase().replaceFirstChar { it.uppercase() }
         val activeBool = sub.active
         val perMonthFormula = DashboardFormulaBuilder.buildSubscriptionPerMonthFormula(row1BasedIndex)
-        val paidMonthFormula = buildPaidThisMonthFormula(row1BasedIndex)
+        val paidMonthFormula = buildPaidThisMonthFormula(row1BasedIndex, year)
         val paidYearFormula = buildPaidThisYearFormula(year, row1BasedIndex)
         val lastPaidDateFormula = buildLastPaidDateFormula(year, row1BasedIndex)
         val closedDateSerial: Any = if (sub.active || sub.closedDateEpochDay == null) {

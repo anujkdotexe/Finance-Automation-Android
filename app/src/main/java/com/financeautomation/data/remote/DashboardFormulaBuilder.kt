@@ -62,56 +62,93 @@ object DashboardFormulaBuilder {
     /**
      * Builds the formula for current month living burn KPI (cell A5 / range A5:C5).
      */
-    fun buildCurrentBurnFormula(excludedCategoryNames: List<String>): String =
-        burnFormula("""TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2)""", excludedCategoryNames)
+    fun buildCurrentBurnFormula(
+        excludedCategoryNames: List<String>,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return burnFormula("""TEXT(TODAY(), "mmm") & "$yy"""", excludedCategoryNames)
+    }
 
     /**
      * Builds the formula for previous month living burn KPI (cell D5 / range D5:F5).
      */
-    fun buildPrevMonthBurnFormula(excludedCategoryNames: List<String>): String =
-        burnFormula("""TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2)""", excludedCategoryNames)
+    fun buildPrevMonthBurnFormula(
+        excludedCategoryNames: List<String>,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return burnFormula("""TEXT(EDATE(TODAY(), -1), "mmm") & "$yy"""", excludedCategoryNames)
+    }
 
     /**
      * Builds the formula for monthly summary row [rowNumber] (cells V6 to V17, referencing U{rowNumber}).
      */
-    fun buildMonthlySummaryBurnFormula(rowNumber: Int, excludedCategoryNames: List<String>): String =
-        burnFormula("""${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2)""", excludedCategoryNames)
+    fun buildMonthlySummaryBurnFormula(
+        rowNumber: Int,
+        excludedCategoryNames: List<String>,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return burnFormula("""${'$'}U$rowNumber & "$yy"""", excludedCategoryNames)
+    }
 
     /**
      * Builds the SUMIFS formula for monthly summary gross outflow row [rowNumber] (cells W6 to W17, referencing U{rowNumber}).
      * Excludes rows whose description starts with '[Carried' to prevent double counting.
      */
-    fun buildMonthlySummaryOutflowFormula(rowNumber: Int): String {
-        return """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2) & "'!G4:G"), INDIRECT("'" & ${'$'}U$rowNumber & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Carried*"), 0)"""
+    fun buildMonthlySummaryOutflowFormula(
+        rowNumber: Int,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNumber & "$yy" & "'!G4:G"), INDIRECT("'" & ${'$'}U$rowNumber & "$yy" & "'!D4:D"), "<>[Carried*"), 0)"""
     }
 
     /**
      * Builds category spend SUMIF formula for category table row [rowNumber] (Z6 to Z15, referencing Y{rowNumber}).
      */
-    fun buildCategorySpendFormula(rowNumber: Int): String {
-        return """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
+    fun buildCategorySpendFormula(
+        rowNumber: Int,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I")), 0)"""
     }
 
     /**
      * Category spend formula for the Insights table (Column V row [rowNum], referencing category in Column U).
      * Excludes [Void] rows and trip-tagged rows (Column E blank).
      */
-    fun buildInsightCategorySpendFormula(rowNum: Int): String =
-        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*"), 0)"""
+    fun buildInsightCategorySpendFormula(
+        rowNum: Int,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*"), 0)"""
+    }
 
     /**
      * Trips slice spend formula for the Insights table.
      * Sums across tagged trip rows (Column E non-empty) excluding Void, Savings, Transfer.
      */
-    fun buildInsightTripSpendFormula(): String =
-        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+    fun buildInsightTripSpendFormula(
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Transfer"), 0)"""
+    }
 
     /**
      * Refunds slice formula for the Insights table.
      * Subtracts refund inflows from Table 2 so total of all Insights slices matches the Living Burn KPI.
      */
-    fun buildInsightRefundsFormula(): String =
-        """=-IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!T4:T"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!Q4:Q"), "Refund*"), 0)"""
+    fun buildInsightRefundsFormula(
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    ): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=-IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!T4:T"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!Q4:Q"), "Refund*"), 0)"""
+    }
 
     val MONTH_PREFIXES: List<String> = listOf(
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -276,10 +313,12 @@ object DashboardFormulaBuilder {
      */
     fun buildDashboardFormulaRequests(
         dashboardSheetId: Int,
-        categories: List<Category>
+        categories: List<Category>,
+        year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): List<Map<String, Any?>> {
         val requests = mutableListOf<Map<String, Any?>>()
         val excludedNames = categories.filter { it.isExcludedFromLivingBurn }.map { it.name }
+        val yy = (year % 100).toString().padStart(2, '0')
 
         // 1. Current Month Burn (A5)
         requests.add(
@@ -287,7 +326,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4, // 0-based row 5
                 colIndex = 0, // Col A
-                formula = buildCurrentBurnFormula(excludedNames)
+                formula = buildCurrentBurnFormula(excludedNames, year)
             )
         )
 
@@ -297,7 +336,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4, // 0-based row 5
                 colIndex = 3, // Col D
-                formula = buildPrevMonthBurnFormula(excludedNames)
+                formula = buildPrevMonthBurnFormula(excludedNames, year)
             )
         )
 
@@ -307,7 +346,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4,
                 colIndex = 6, // Col G
-                formula = """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!K4:K"), "Pending", INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!J4:J")), 0)"""
+                formula = """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!K4:K"), "Pending", INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!J4:J")), 0)"""
             )
         )
 
@@ -317,7 +356,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4,
                 colIndex = 9, // Col J
-                formula = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!AA4:AA")), 0)"""
+                formula = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")), 0)"""
             )
         )
 
@@ -327,7 +366,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4,
                 colIndex = 12, // Col M
-                formula = """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!F4:F"), "Subscriptions", INDIRECT("'"&TEXT(TODAY(),"mmm")&RIGHT(YEAR(TODAY()),2)&"'!I4:I")), 0)"""
+                formula = """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!F4:F"), "Subscriptions", INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!I4:I")), 0)"""
             )
         )
 
@@ -450,7 +489,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 0,  // Col A
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
+                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
             )
         )
 
@@ -459,7 +498,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 7,  // Col H
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
             )
         )
 
