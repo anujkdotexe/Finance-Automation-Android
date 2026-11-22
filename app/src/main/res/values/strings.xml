@@ -173,6 +173,7 @@
     <string name="speed_dial_repaid_friend">Repaid a friend</string>
     <string name="speed_dial_trip_mode">Trip mode</string>
     <string name="speed_dial_income_refund">Income or refund</string>
+    <string name="speed_dial_close_cd">Close add menu</string>
 
     <string name="menu_sync_backup">Sync and backup</string>
     <string name="nav_subscriptions_placeholder">No subscriptions available</string>

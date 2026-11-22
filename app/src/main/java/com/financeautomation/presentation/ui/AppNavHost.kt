@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -88,6 +91,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -624,7 +628,7 @@ fun AppNavHost(
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Add,
-                                contentDescription = if (isSpeedDialOpen) "Close add menu" else "Add",
+                                contentDescription = stringResource(if (isSpeedDialOpen) R.string.speed_dial_close_cd else R.string.action_add),
                                 modifier = Modifier
                                     .size(FinanceTheme.sizes.icon28)
                                     .rotate(speedDialRotation)
@@ -927,10 +931,17 @@ fun AppNavHost(
                         }
                 )
 
+                // The pills stack above the FAB: system navigation inset, the bottom bar, the FAB margin and the FAB itself.
+                val speedDialBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                    FinanceTheme.sizes.bottomBarHeight +
+                    FinanceTheme.spacing.xxl +
+                    FinanceTheme.sizes.fabSize +
+                    FinanceTheme.spacing.m
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = FinanceTheme.spacing.l, bottom = FinanceTheme.sizes.fabSize + FinanceTheme.spacing.xxl),
+                        .padding(end = FinanceTheme.spacing.l, bottom = speedDialBottom)
+                        .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
                 ) {
@@ -941,7 +952,7 @@ fun AppNavHost(
                             shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
                             modifier = Modifier
                                 .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-                                .clickable {
+                                .clickable(role = Role.Button) {
                                     isSpeedDialOpen = false
                                     launchFlow(item.flow, item.preselectedFriend)
                                 }
