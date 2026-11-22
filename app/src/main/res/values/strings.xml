@@ -695,7 +695,7 @@
     <string name="kpi_pace_up">Up %1$d%% vs last month</string>
     <string name="kpi_daily_average">%1$s / day</string>
     <string name="kpi_savings_pct_income">%1$d%% of income</string>
-    <string name="dashboard_exact_amount">%1$s: ₹%2$s</string>
+    <string name="dashboard_exact_amount">%1$s: %2$s</string>
 
     <!-- Review inbox -->
     <string name="sync_synced_recent">Synced recently</string>
