@@ -624,6 +624,7 @@ class DefaultAppContainer(
             pendingCaptureDaoProvider = { awaitDatabase().pendingCaptureDao() },
             transactionDaoProvider = { awaitDatabase().transactionDao() },
             categoryStatDaoProvider = { awaitDatabase().categoryStatDao() },
+            categoryDaoProvider = { awaitDatabase().categoryDao() },
             predictCategoryUseCase = predictCategoryUseCase,
             overlayControllerProvider = { overlayController }
         )

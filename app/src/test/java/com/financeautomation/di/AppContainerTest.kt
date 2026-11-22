@@ -226,6 +226,20 @@ class AppContainerTest {
         assertTrue("NotificationListenerServiceImpl must query container.getNotificationProcessor()", containerProcessorCalled)
     }
 
+    @Test
+    fun foregroundWatcher_receivesCategoryDaoProvider() {
+        val container: AppContainer = DefaultAppContainer(
+            applicationContext = createFakeContext(),
+            providedTokenProvider = fakeTokenProvider,
+            providedDatabaseReady = CompletableDeferred()
+        )
+        val watcher = container.foregroundWatcher
+        val field = com.financeautomation.service.ForegroundWatcher::class.java.getDeclaredField("categoryDaoProvider")
+        field.isAccessible = true
+        val provider = field.get(watcher)
+        assertNotNull("ForegroundWatcher must receive non-null categoryDaoProvider (F23)", provider)
+    }
+
     private class RecordingTransactionRepository : TransactionRepository {
         val requeuedYears = mutableListOf<Int>()
 
