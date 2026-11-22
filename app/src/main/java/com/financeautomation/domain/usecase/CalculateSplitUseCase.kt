@@ -51,6 +51,7 @@ class CalculateSplitUseCase(
     fun calculateSplitEqually(totalAmount: Double, companions: List<String>): SplitCalculation {
         val rounded = AccountingUtils.round2(totalAmount)
         val cleanCompanions = companions.flatMap { AccountingUtils.tokens(it) }
+            .distinctBy { it.trim().lowercase() }
         if (cleanCompanions.isEmpty()) {
             return calculateJustMe(rounded)
         }

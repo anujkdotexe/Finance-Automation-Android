@@ -42,6 +42,12 @@ object InputPolicy {
     private val FORBIDDEN_NAME_DELIMITERS = setOf('|', ':', ',')
 
     /**
+     * " & " and " and " between words: companion lists are split on them, so a name containing one
+     * would be read as two people.
+     */
+    private val NAME_JOINER_REGEX = Regex("\\s+(&|and)\\s+", RegexOption.IGNORE_CASE)
+
+    /**
      * Regex matching Unicode bidirectional override formatting characters:
      * U+202A..U+202E (Embedding/Override), U+2066..U+2069 (Isolate), U+200E (LRM), U+200F (RLM).
      */
@@ -137,7 +143,7 @@ object InputPolicy {
         if (clean.length > maxLength) {
             return ValidationResult.Error(InputError.TOO_LONG, maxLength)
         }
-        if (clean.any { it in FORBIDDEN_NAME_DELIMITERS }) {
+        if (clean.any { it in FORBIDDEN_NAME_DELIMITERS } || NAME_JOINER_REGEX.containsMatchIn(clean)) {
             return ValidationResult.Error(InputError.INVALID_CHARS)
         }
         if (!allowReserved && RESERVED_NAMES.any { it.equals(clean, ignoreCase = true) }) {
