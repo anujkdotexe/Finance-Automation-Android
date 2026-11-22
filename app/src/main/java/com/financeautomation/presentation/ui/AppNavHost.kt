@@ -850,7 +850,8 @@ fun AppNavHost(
                     composable(AppRoutes.DIAGNOSTICS) {
                         DiagnosticsScreen(
                             state = settingsState,
-                            onSyncNow = settingsViewModel::onSyncNow
+                            onSyncNow = settingsViewModel::onSyncNow,
+                            onClearMessages = settingsViewModel::clearMessages
                         )
                     }
 

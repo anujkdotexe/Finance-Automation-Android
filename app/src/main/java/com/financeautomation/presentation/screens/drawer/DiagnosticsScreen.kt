@@ -62,6 +62,7 @@ import kotlinx.coroutines.launch
 fun DiagnosticsScreen(
     state: SettingsUiState,
     onSyncNow: () -> Unit = {},
+    onClearMessages: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -73,11 +74,13 @@ fun DiagnosticsScreen(
     LaunchedEffect(state.userMessage) {
         state.userMessage?.let {
             Toast.makeText(context, it.asString(context), Toast.LENGTH_SHORT).show()
+            onClearMessages()
         }
     }
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let {
             Toast.makeText(context, it.asString(context), Toast.LENGTH_LONG).show()
+            onClearMessages()
         }
     }
 
@@ -197,9 +200,13 @@ fun DiagnosticsScreen(
                                 putExtra(Intent.EXTRA_TEXT, com.financeautomation.core.utils.ProblemReportManager.buildDiagnosticsExportReport(context))
                                 type = "text/plain"
                             }
-                            context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.diag_share_chooser_title)).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            })
+                            try {
+                                context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.diag_share_chooser_title)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (e: android.content.ActivityNotFoundException) {
+                                Toast.makeText(context, context.getString(R.string.diag_export_logs_failed), Toast.LENGTH_SHORT).show()
+                            }
                         }
                     )
 

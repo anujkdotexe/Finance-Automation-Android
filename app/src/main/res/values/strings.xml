@@ -382,6 +382,7 @@
     <string name="diag_view_sync_log_desc">Inspect timestamps and error codes</string>
     <string name="diag_export_logs">Export logs</string>
     <string name="diag_export_logs_desc">Share sanitized debug logs to disk</string>
+    <string name="diag_export_logs_failed">Could not open the share sheet.</string>
     <string name="diag_report_problem">Report a problem</string>
     <string name="diag_report_problem_desc">Send technical diagnostics and a description to the developer</string>
     <string name="problem_report_title">Report a problem</string>
