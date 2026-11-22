@@ -292,13 +292,6 @@ object UsageEvents {
  *   notification/SMS message text, or free text that has not been reviewed and confirmed by the user.
  */
 object ProblemReportFields {
-    private val FORBIDDEN_WORD_REGEX: Regex by lazy {
-        Regex("\\b(?:" + FORBIDDEN_WORDS.joinToString("|") { Regex.escape(it) } + ")\\w*", RegexOption.IGNORE_CASE)
-    }
-
-    /** Free text with every forbidden word (and words that start with one) masked. */
-    fun maskForbiddenWords(text: String): String = FORBIDDEN_WORD_REGEX.replace(text, "[removed]")
-
     const val FIELD_SCHEMA_VERSION = "schemaVersion"
     const val FIELD_CREATED_AT = "createdAt"
     const val FIELD_APP_VERSION = "appVersion"
