@@ -485,7 +485,7 @@ open class GoogleSheetsClient(
         requiredRow: Int = -1
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2CgridProperties(rowCount)))"
+            val url = "$baseUrl/$spreadsheetId?fields=sheets(properties(sheetId%2Ctitle%2CgridProperties(rowCount%2CcolumnCount)))"
             val request = newRequestBuilder(url).get().build()
 
             okHttpClient.newCall(request).execute().use { response ->
@@ -511,6 +511,8 @@ open class GoogleSheetsClient(
                     val sheetId = targetSheet["sheetId"]?.jsonPrimitive?.content?.toIntOrNull()
                         ?: return@withContext Result.Error(IllegalStateException("Could not resolve sheetId for tab $tabName"))
                     val totalRows = targetSheet["gridProperties"]?.jsonObject?.get("rowCount")?.jsonPrimitive?.content?.toIntOrNull() ?: 1000
+                    val totalCols = targetSheet["gridProperties"]?.jsonObject?.get("columnCount")?.jsonPrimitive?.content?.toIntOrNull()
+                        ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT
 
                     // The caller already scanned the sheet to find requiredRow, so do not read the column again
                     val currentDataRows = if (requiredRow > 0) 0 else {
@@ -520,7 +522,38 @@ open class GoogleSheetsClient(
                     val lastRow = maxOf(currentDataRows + 3, requiredRow) // header occupies rows 1-3
 
                     if (lastRow >= totalRows - threshold) {
-                        return@withContext appendDimension(spreadsheetId, sheetId, "ROWS", expandBy)
+                        // New rows get the format of the last existing row (number formats, borders and the spacer
+                        // column fills), so a tab does not turn plain once it grows past its formatted rows.
+                        val growRequests = listOf(
+                            mapOf(
+                                "appendDimension" to mapOf(
+                                    "sheetId" to sheetId,
+                                    "dimension" to "ROWS",
+                                    "length" to expandBy
+                                )
+                            ),
+                            mapOf(
+                                "copyPaste" to mapOf(
+                                    "source" to mapOf(
+                                        "sheetId" to sheetId,
+                                        "startRowIndex" to totalRows - 1,
+                                        "endRowIndex" to totalRows,
+                                        "startColumnIndex" to 0,
+                                        "endColumnIndex" to totalCols
+                                    ),
+                                    "destination" to mapOf(
+                                        "sheetId" to sheetId,
+                                        "startRowIndex" to totalRows,
+                                        "endRowIndex" to totalRows + expandBy,
+                                        "startColumnIndex" to 0,
+                                        "endColumnIndex" to totalCols
+                                    ),
+                                    "pasteType" to "PASTE_FORMAT",
+                                    "pasteOrientation" to "NORMAL"
+                                )
+                            )
+                        )
+                        return@withContext batchUpdate(spreadsheetId, growRequests)
                     }
                 }
                 Result.Success(Unit)
@@ -1731,7 +1764,8 @@ open class GoogleSheetsClient(
             if (monthTabs.isEmpty()) {
                 return@withContext Result.Success(false)
             }
-            val ranges = monthTabs.map { "'$it'!A4:A5" }
+            // Expenses (A), inflows (N) and payables (W): a tab with entries in only one table still has data
+            val ranges = monthTabs.flatMap { listOf("'$it'!A4:A5", "'$it'!N4:N5", "'$it'!W4:W5") }
             return@withContext when (val batchRes = batchGetValues(spreadsheetId, ranges)) {
                 is Result.Success -> {
                     val hasData = batchRes.data.values.any { rows -> rows.isNotEmpty() }
@@ -1884,9 +1918,13 @@ open class GoogleSheetsClient(
             val tabsMap = (tabsResult as Result.Success).data
 
             val resolvedYear = year ?: DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
-            ensureSubscriptionsTabExists(spreadsheetId, accounts, resolvedYear)
+            val ensureRes = ensureSubscriptionsTabExists(spreadsheetId, accounts, resolvedYear)
+            if (ensureRes is Result.Error) return@withContext Result.Error(ensureRes.exception)
 
-            val sheetId = tabsMap[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
+            // Read the tab map again: a tab created by the call above was not in the first read
+            val tabsAfterEnsure = getSheetTabsWithIds(spreadsheetId)
+            if (tabsAfterEnsure is Result.Error) return@withContext Result.Error(tabsAfterEnsure.exception)
+            val sheetId = (tabsAfterEnsure as Result.Success).data[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
                 ?: return@withContext Result.Error(SheetNotFoundException(spreadsheetId, "Subscriptions sheetId missing"))
 
             val rows = subscriptions.mapIndexed { idx, sub ->
@@ -1904,8 +1942,8 @@ open class GoogleSheetsClient(
                     "updateCells" to mapOf(
                         "range" to mapOf(
                             "sheetId" to sheetId,
+                            // No endRowIndex: the range runs to the last row of the grid, whatever its size
                             "startRowIndex" to SheetSchemaConstants.SUBSCRIPTIONS_DATA_START_ROW_INDEX,
-                            "endRowIndex" to 500,
                             "startColumnIndex" to 0,
                             "endColumnIndex" to SheetSchemaConstants.SUBSCRIPTIONS_COLUMN_COUNT
                         ),
@@ -2085,9 +2123,13 @@ open class GoogleSheetsClient(
             val tabsMap = (tabsResult as Result.Success).data
 
             val resolvedYear = year ?: DashboardFormulaBuilder.extractWorkbookYear(tabsMap.keys)
-            ensureTripsTabExists(spreadsheetId, resolvedYear)
+            val ensureRes = ensureTripsTabExists(spreadsheetId, resolvedYear)
+            if (ensureRes is Result.Error) return@withContext Result.Error(ensureRes.exception)
 
-            val sheetId = tabsMap[SheetSchemaConstants.TRIPS_TAB_NAME]
+            // Read the tab map again: a tab created by the call above was not in the first read
+            val tabsAfterEnsure = getSheetTabsWithIds(spreadsheetId)
+            if (tabsAfterEnsure is Result.Error) return@withContext Result.Error(tabsAfterEnsure.exception)
+            val sheetId = (tabsAfterEnsure as Result.Success).data[SheetSchemaConstants.TRIPS_TAB_NAME]
                 ?: return@withContext Result.Error(SheetNotFoundException(spreadsheetId, "Trips sheetId missing"))
 
             val rows = trips.mapIndexed { idx, trip ->
@@ -2107,8 +2149,8 @@ open class GoogleSheetsClient(
                     "updateCells" to mapOf(
                         "range" to mapOf(
                             "sheetId" to sheetId,
+                            // No endRowIndex: the range runs to the last row of the grid, whatever its size
                             "startRowIndex" to SheetSchemaConstants.TRIPS_DATA_START_ROW_INDEX,
-                            "endRowIndex" to 200,
                             "startColumnIndex" to 0,
                             "endColumnIndex" to SheetSchemaConstants.TRIPS_COLUMN_COUNT
                         ),
