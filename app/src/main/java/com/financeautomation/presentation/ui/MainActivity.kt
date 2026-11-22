@@ -242,7 +242,8 @@ class MainActivity : FragmentActivity() {
                             onOnboardingFinished = {
                                 forceOnboarding = false
                                 setupLatched = false
-                            }
+                            },
+                            showBackButton = forceOnboarding
                         )
                     } else {
                         val navController = rememberNavController()

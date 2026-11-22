@@ -1038,6 +1038,10 @@
     <string name="onboarding_accounts_make_default">Make default</string>
     <string name="onboarding_accounts_skip">Skip for now</string>
     <string name="onboarding_accounts_cannot_remove_builtin">Cash and Other are built in and cannot be removed.</string>
+    <string name="onboarding_accounts_delete_cd">Remove %1$s</string>
+    <string name="onboarding_accounts_delete_title">Remove %1$s?</string>
+    <string name="onboarding_accounts_delete_message">This account will be removed from your list.</string>
+    <string name="onboarding_accounts_delete_action">Remove</string>
 
     <!-- Settings v3 screen -->
     <string name="settings_screen_title">Settings</string>
