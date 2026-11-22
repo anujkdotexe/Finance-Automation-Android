@@ -71,10 +71,8 @@ object QuickLogTransactionHelper {
     ) {
         try {
             PipelineTrail.record(PipelineStage.CAPTURE, PipelineCode.DISMISSED)
-            pendingCaptureDaoProvider.invoke().updateState(
-                captureId,
-                PendingCaptureEntity.STATE_DISMISSED
-            )
+            // Only an open capture is dismissed: a capture already claimed or saved keeps its state
+            pendingCaptureDaoProvider.invoke().markDismissedIfOpen(captureId)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Diagnostics.record("QuickLogTransactionHelper", "${e.javaClass.simpleName}: onDismiss updateState DISMISSED")
@@ -222,7 +220,25 @@ object QuickLogTransactionHelper {
         return { txn -> repository.markCyclePaidForSubscription(subscriptionId, epochDay, txn.id) }
     }
 
+    /**
+     * Claim, insert and restore run to the end even if the caller is cancelled (for example the sheet is closed
+     * while the save is running), so a capture is never left claimed with no expense behind it.
+     */
     suspend fun logNewExpense(
+        state: QuickLogUiState,
+        logExpenseUseCase: LogExpenseUseCase,
+        pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,
+        categoryStatDaoProvider: (suspend () -> CategoryStatDao)?,
+        predictCategoryUseCase: PredictCategoryUseCase,
+        subscriptionRepository: SubscriptionRepository? = null
+    ): Result<Transaction> = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        logNewExpenseToCompletion(
+            state, logExpenseUseCase, pendingCaptureDaoProvider, categoryStatDaoProvider,
+            predictCategoryUseCase, subscriptionRepository
+        )
+    }
+
+    private suspend fun logNewExpenseToCompletion(
         state: QuickLogUiState,
         logExpenseUseCase: LogExpenseUseCase,
         pendingCaptureDaoProvider: suspend () -> PendingCaptureDao,

@@ -547,7 +547,8 @@ class QuickLogViewModel(
      */
     fun onDismiss() {
         val state = _uiState.value
-        if (state.isSaved || state.isDismissed) return
+        // A save in progress cannot be dismissed: the entry is being written and the capture is claimed
+        if (state.isSaving || state.isSaved || state.isDismissed) return
 
         _uiState.update { it.copy(isDismissed = true) }
         val cid = state.captureId ?: return
