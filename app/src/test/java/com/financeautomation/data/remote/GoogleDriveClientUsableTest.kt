@@ -46,11 +46,10 @@ class GoogleDriveClientUsableTest {
     }
 
     @Test
-    fun fileForbidden403ReturnsSuccessFalse() = runBlocking {
+    fun fileForbidden403ReturnsError() = runBlocking {
         val client = clientWithResponse(403, """{"error":{"code":403,"message":"Forbidden","errors":[{"reason":"forbidden"}]}}""")
         val res = client.isFileUsable("forbidden_id")
-        assertTrue("403 forbidden must return Result.Success", res is Result.Success)
-        assertFalse("403 forbidden file must not be usable", (res as Result.Success).data)
+        assertTrue("403 must return Result.Error so no second workbook is created", res is Result.Error)
     }
 
     @Test
