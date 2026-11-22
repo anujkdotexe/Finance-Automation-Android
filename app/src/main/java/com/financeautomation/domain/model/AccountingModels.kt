@@ -53,7 +53,9 @@ data class CellEdit(
     val tab: String,
     val row: Int,
     val column: String,
-    val value: Any?
+    val value: Any?,
+    /** Id of the sheet row this edit was planned for. Lets the executor find the row again if the sheet changed. */
+    val uuid: String? = null
 )
 
 /**

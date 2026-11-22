@@ -489,6 +489,47 @@ open class AccountingSyncExecutor(
         return Result.Success(Unit)
     }
 
+    private val payableColumnLetters = setOf("W", "X", "Y", "Z", "AA", "AB", "AC")
+    private val inflowColumnLetters = setOf("N", "O", "P", "Q", "R", "S", "T", "U")
+
+    private fun isDebitColumn(column: String): Boolean {
+        val c = column.uppercase()
+        return c !in payableColumnLetters && c !in inflowColumnLetters
+    }
+
+    /** The id column of the table an edited column belongs to, and the id column of the older layout. */
+    private fun uuidColumnsFor(column: String): Pair<String, String> {
+        val c = column.uppercase()
+        return when {
+            c in payableColumnLetters ->
+                SheetSchemaConstants.COL_LETTER_PAYABLE_UUID to SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1
+            c in inflowColumnLetters ->
+                SheetSchemaConstants.COL_LETTER_INFLOW_UUID to SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1
+            else ->
+                SheetSchemaConstants.COL_LETTER_DEBIT_UUID to SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1
+        }
+    }
+
+    /** Reads one id column of one tab (rows 4 down) into a map of lower case id to row number, once per apply. */
+    private suspend fun loadUuidColumn(
+        cache: MutableMap<Triple<String, String, String>, Map<String, Int>>,
+        spreadsheetId: String,
+        tab: String,
+        colLetter: String
+    ): Result<Map<String, Int>> {
+        val key = Triple(spreadsheetId, tab, colLetter)
+        cache[key]?.let { return Result.Success(it) }
+        val res = googleSheetsClient.getRangeValues(spreadsheetId, "'$tab'!${colLetter}4:$colLetter")
+        if (res is Result.Error) return Result.Error(res.exception)
+        val map = HashMap<String, Int>()
+        (res as Result.Success).data.forEachIndexed { i, row ->
+            val cell = row.firstOrNull()?.toString()?.trim()?.lowercase()
+            if (!cell.isNullOrEmpty()) map.putIfAbsent(cell, i + 4)
+        }
+        cache[key] = map
+        return Result.Success(map)
+    }
+
     private suspend fun applyAccountingPlan(
         spreadsheetId: String,
         plan: AccountingPlan,
@@ -529,22 +570,36 @@ open class AccountingSyncExecutor(
                 }
             }
 
-            // Map settled UUIDs to re-check and adjust row indexes if sheet was reordered
-            val settledRowMap = mutableMapOf<Pair<String, Int>, Int>()
+            // Every edit is applied to the row that currently holds its entry id, never to a remembered row number.
+            // Each id column is read once per tab for the whole apply.
+            val settledUuidByRow = mutableMapOf<Pair<String, Int>, String>()
             for (settled in plan.settled) {
-                if (!settled.uuid.isNullOrBlank()) {
-                    val targetId = if (sourceSpreadsheetId != null && sourceSpreadsheetId != spreadsheetId) sourceSpreadsheetId else spreadsheetId
-                    val foundRow = googleSheetsClient.findRowByUuid(targetId, settled.tab, SheetSchemaConstants.COL_LETTER_DEBIT_UUID, settled.uuid)
-                    if (foundRow is Result.Success && foundRow.data != null) {
-                        settledRowMap[Pair(settled.tab, settled.row)] = foundRow.data
-                    }
-                }
+                if (!settled.uuid.isNullOrBlank()) settledUuidByRow[Pair(settled.tab, settled.row)] = settled.uuid
             }
+            val columnCache = mutableMapOf<Triple<String, String, String>, Map<String, Int>>()
 
             for ((targetId, edits) in editsByTarget) {
-                val rangesWithValues = edits.associate { edit ->
-                    val actualRow = settledRowMap[Pair(edit.tab, edit.row)] ?: edit.row
-                    "'${edit.tab}'!${edit.column}$actualRow" to listOf(listOf(edit.value))
+                val rangesWithValues = LinkedHashMap<String, List<List<Any?>>>()
+                for (edit in edits) {
+                    val expectedUuid = edit.uuid?.takeIf { it.isNotBlank() }
+                        ?: settledUuidByRow[Pair(edit.tab, edit.row)]?.takeIf { isDebitColumn(edit.column) }
+                    val actualRow = if (expectedUuid == null) {
+                        // An older stored plan without ids: keep the planned row
+                        edit.row
+                    } else {
+                        val (primaryCol, legacyCol) = uuidColumnsFor(edit.column)
+                        val primary = loadUuidColumn(columnCache, targetId, edit.tab, primaryCol)
+                        if (primary is Result.Error) return Result.Error(primary.exception)
+                        var found = (primary as Result.Success).data[expectedUuid.trim().lowercase()]
+                        if (found == null) {
+                            val legacy = loadUuidColumn(columnCache, targetId, edit.tab, legacyCol)
+                            if (legacy is Result.Error) return Result.Error(legacy.exception)
+                            found = (legacy as Result.Success).data[expectedUuid.trim().lowercase()]
+                        }
+                        // Both id columns were read in full: the row is really gone from this tab. Not retried.
+                        found ?: return Result.Error(IllegalStateException("Sheet row moved or removed in ${edit.tab}; edit not applied"))
+                    }
+                    rangesWithValues["'${edit.tab}'!${edit.column}$actualRow"] = listOf(listOf(edit.value))
                 }
                 val editRes = googleSheetsClient.batchUpdateValues(targetId, rangesWithValues)
                 if (editRes is Result.Error) return Result.Error(editRes.exception)
