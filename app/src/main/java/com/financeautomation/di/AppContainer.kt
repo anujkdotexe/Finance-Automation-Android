@@ -589,7 +589,20 @@ class DefaultAppContainer(
             carryForwardUseCase = carryForwardUseCase,
             nettingUseCase = nettingUseCase,
             yearCloseUseCase = yearCloseUseCase,
-            previousWorkbookIdProvider = { year -> preferencesRepository.getSpreadsheetIdForYearSync(year) }
+            previousWorkbookIdProvider = { year ->
+                val stored = preferencesRepository.getSpreadsheetIdForYearSync(year)
+                if (!stored.isNullOrBlank()) {
+                    stored
+                } else {
+                    // After a reinstall the id is unknown: find the workbook of that year on Drive and remember it
+                    val lookup = googleDriveClient.findWorkbookForYear(year)
+                    // A Drive error is raised so the queue item retries instead of failing as "not found"
+                    if (lookup is com.financeautomation.core.model.Result.Error) throw lookup.exception
+                    val found = (lookup as? com.financeautomation.core.model.Result.Success)?.data
+                    if (!found.isNullOrBlank()) preferencesRepository.setSpreadsheetIdForYear(year, found)
+                    found
+                }
+            }
         )
     }
 
