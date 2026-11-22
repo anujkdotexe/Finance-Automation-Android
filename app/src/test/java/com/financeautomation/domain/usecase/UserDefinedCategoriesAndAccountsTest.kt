@@ -216,7 +216,7 @@ class UserDefinedCategoriesAndAccountsTest {
         val spec = ((doughnut["addChart"] as Map<*, *>)["chart"] as Map<*, *>)["spec"] as Map<*, *>
         val pieChart = spec["pieChart"] as Map<*, *>
         val domainSources = ((pieChart["domain"] as Map<*, *>)["sourceRange"] as Map<*, *>)["sources"] as List<Map<*, *>>
-        assertEquals(16, domainSources[0]["endRowIndex"])
+        assertEquals(25, domainSources[0]["endRowIndex"])
     }
 
     @Test

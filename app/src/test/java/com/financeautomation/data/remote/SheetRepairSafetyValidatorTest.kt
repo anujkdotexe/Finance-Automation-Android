@@ -39,13 +39,13 @@ class SheetRepairSafetyValidatorTest {
     }
 
     @Test
-    fun testFailsOnClear() {
+    fun testFailsOnRequestThatRewritesDataOnDataTab() {
         val requests = listOf(
-            mapOf("clear" to mapOf("range" to "Nov26!A4:AE"))
+            mapOf("sortRange" to mapOf("range" to mapOf("sheetId" to 123)))
         )
-        val violations = SheetRepairSafetyValidator.validateRepairRequests(requests)
+        val violations = SheetRepairSafetyValidator.validateRepairRequests(requests, isDataTab = true)
         assertEquals(1, violations.size)
-        assertEquals("clear", violations[0].requestType)
+        assertEquals("sortRange", violations[0].requestType)
     }
 
     @Test

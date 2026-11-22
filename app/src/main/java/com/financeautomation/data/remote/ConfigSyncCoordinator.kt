@@ -1,6 +1,7 @@
 package com.financeautomation.data.remote
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.core.utils.safeCall
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.entity.SyncQueueEntity
@@ -127,16 +128,29 @@ class ConfigSyncCoordinator(
             pushMutex.withLock {
                 val res = syncConfigUseCase.push()
                 val spreadsheetId = preferencesRepository?.getSpreadsheetIdSync()
+                var mirrorError: Throwable? = null
                 if (!spreadsheetId.isNullOrBlank()) {
                     try {
-                        subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(spreadsheetId)
+                        val subRes = subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(spreadsheetId)
+                        if (subRes is Result.Error) {
+                            Diagnostics.record("ConfigSyncCoordinator", "SUBSCRIPTIONS_MIRROR_FAILED: ${subRes.exception.javaClass.simpleName}")
+                            mirrorError = mirrorError ?: subRes.exception
+                        }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
+                        Diagnostics.record("ConfigSyncCoordinator", "SUBSCRIPTIONS_MIRROR_FAILED: ${e.javaClass.simpleName}")
+                        mirrorError = mirrorError ?: e
                     }
                     try {
-                        tripsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(spreadsheetId)
+                        val tripRes = tripsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(spreadsheetId)
+                        if (tripRes is Result.Error) {
+                            Diagnostics.record("ConfigSyncCoordinator", "TRIPS_MIRROR_FAILED: ${tripRes.exception.javaClass.simpleName}")
+                            mirrorError = mirrorError ?: tripRes.exception
+                        }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
+                        Diagnostics.record("ConfigSyncCoordinator", "TRIPS_MIRROR_FAILED: ${e.javaClass.simpleName}")
+                        mirrorError = mirrorError ?: e
                     }
                 }
                 if (res is Result.Error) {
@@ -146,6 +160,8 @@ class ConfigSyncCoordinator(
                     )
                     throw res.exception
                 }
+                // The config push itself worked; report a failed tab mirror so the queued push is tried again
+                mirrorError?.let { throw it }
             }
         }
     }
@@ -158,16 +174,29 @@ class ConfigSyncCoordinator(
             if (force || syncConfigUseCase.shouldPull()) {
                 val res = syncConfigUseCase.pull()
                 val spreadsheetId = preferencesRepository?.getSpreadsheetIdSync()
+                var tabSyncError: Throwable? = null
                 if (!spreadsheetId.isNullOrBlank()) {
                     try {
-                        subscriptionsSheetSyncCoordinatorProvider?.invoke()?.syncSubscriptionsTab(spreadsheetId)
+                        val subRes = subscriptionsSheetSyncCoordinatorProvider?.invoke()?.syncSubscriptionsTab(spreadsheetId)
+                        if (subRes is Result.Error) {
+                            Diagnostics.record("ConfigSyncCoordinator", "SUBSCRIPTIONS_SYNC_FAILED: ${subRes.exception.javaClass.simpleName}")
+                            tabSyncError = tabSyncError ?: subRes.exception
+                        }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
+                        Diagnostics.record("ConfigSyncCoordinator", "SUBSCRIPTIONS_SYNC_FAILED: ${e.javaClass.simpleName}")
+                        tabSyncError = tabSyncError ?: e
                     }
                     try {
-                        tripsSheetSyncCoordinatorProvider?.invoke()?.syncTripsTab(spreadsheetId)
+                        val tripRes = tripsSheetSyncCoordinatorProvider?.invoke()?.syncTripsTab(spreadsheetId)
+                        if (tripRes is Result.Error) {
+                            Diagnostics.record("ConfigSyncCoordinator", "TRIPS_SYNC_FAILED: ${tripRes.exception.javaClass.simpleName}")
+                            tabSyncError = tabSyncError ?: tripRes.exception
+                        }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
+                        Diagnostics.record("ConfigSyncCoordinator", "TRIPS_SYNC_FAILED: ${e.javaClass.simpleName}")
+                        tabSyncError = tabSyncError ?: e
                     }
                 }
                 if (res is Result.Error) {
@@ -177,6 +206,7 @@ class ConfigSyncCoordinator(
                     )
                     throw res.exception
                 }
+                tabSyncError?.let { throw it }
             }
         }
     }

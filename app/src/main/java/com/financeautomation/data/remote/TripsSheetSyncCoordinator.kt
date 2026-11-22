@@ -13,6 +13,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.UUID
@@ -28,6 +30,9 @@ open class TripsSheetSyncCoordinator(
 ) {
 
     private val tripSummaryUseCase = TripSummaryUseCase()
+
+    /** Only one tab sync runs at a time, so two callers cannot both create a trip from the same blank id row. */
+    private val syncMutex = Mutex()
     private val baseHashes = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private suspend fun getBaseHash(id: String): String? {
@@ -68,7 +73,10 @@ open class TripsSheetSyncCoordinator(
      * Tab edits update Room, and Room rewrites Config JSON mirror.
      * On same-field conflict between sheet and Room, sheet wins (recorded with code CONFLICT_SHEET_WON).
      */
-    open suspend fun syncTripsTab(spreadsheetId: String): Result<Unit> = withContext(ioDispatcher) {
+    open suspend fun syncTripsTab(spreadsheetId: String): Result<Unit> =
+        syncMutex.withLock { syncTripsTabLocked(spreadsheetId) }
+
+    private suspend fun syncTripsTabLocked(spreadsheetId: String): Result<Unit> = withContext(ioDispatcher) {
         try {
             val ensureRes = googleSheetsClient.ensureTripsTabExists(spreadsheetId)
             if (ensureRes is Result.Error) return@withContext Result.Error(ensureRes.exception)
@@ -100,6 +108,26 @@ open class TripsSheetSyncCoordinator(
                         null
                     } else parsedEnd
 
+                    // A row whose id cell is blank may already have a local trip from an earlier sync whose id
+                    // write back failed: reuse it instead of creating a duplicate.
+                    val reusableTrip = tripTagRepository.getAllTripTags(includeArchived = false).firstOrNull {
+                        it.id !in processedTripIds &&
+                            it.name.trim().equals(row.name.trim(), ignoreCase = true) &&
+                            it.startDateEpochDay == startEpochDay
+                    }
+                    if (reusableTrip != null) {
+                        processedTripIds.add(reusableTrip.id)
+                        val reuseRes = googleSheetsClient.updateCell(
+                            spreadsheetId = spreadsheetId,
+                            tabName = SheetSchemaConstants.TRIPS_TAB_NAME,
+                            cellCoordinate = "${SheetSchemaConstants.COL_LETTER_TRIP_ID}${row.rowNumber}",
+                            value = reusableTrip.id
+                        )
+                        if (reuseRes is Result.Error) {
+                            Diagnostics.record("TripsSync", "ID_WRITEBACK_FAILED")
+                        }
+                        continue
+                    }
                     val newId = "trip_" + UUID.randomUUID().toString().replace("-", "").take(12)
                     if (!isStatusActive && endEpochDay == null) {
                         endEpochDay = todayEpochDay
@@ -123,12 +151,16 @@ open class TripsSheetSyncCoordinator(
                     saveBaseHash(newId, computeTripTagHash(newTrip))
 
                     // Write back new ID to cell K{row.rowNumber}
-                    googleSheetsClient.updateCell(
+                    val writeBack = googleSheetsClient.updateCell(
                         spreadsheetId = spreadsheetId,
                         tabName = SheetSchemaConstants.TRIPS_TAB_NAME,
                         cellCoordinate = "${SheetSchemaConstants.COL_LETTER_TRIP_ID}${row.rowNumber}",
                         value = newId
                     )
+                    if (writeBack is Result.Error) {
+                        // The next sync finds the row without an id and reuses this trip by name and start date
+                        Diagnostics.record("TripsSync", "ID_WRITEBACK_FAILED")
+                    }
                 } else {
                     val existing = tripTagRepository.getTagById(row.id)
                     if (existing == null) {
