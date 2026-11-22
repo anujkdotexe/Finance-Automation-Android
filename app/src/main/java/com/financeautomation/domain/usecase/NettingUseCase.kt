@@ -81,12 +81,12 @@ class NettingUseCase {
                 )
 
                 // Record edits: Date Repaid (AB), Paid By (Y), Amount I Owe (AA), Repayment Status (AC)
-                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial))
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial, payable.uuid))
                 if (payable.paidBy != repRes.newPaidBy) {
-                    edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy))
+                    edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy, payable.uuid))
                 }
-                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed))
-                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus))
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed, payable.uuid))
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus, payable.uuid))
             }
         }
 

@@ -33,7 +33,11 @@ class CorruptKeyFileException(message: String) : Exception(message)
  * 5. Transient Keystore errors never delete the passphrase file. Only permanently invalidated keys
  *    trigger regeneration.
  */
-class DatabaseKeyProvider(private val context: Context) {
+class DatabaseKeyProvider(
+    private val context: Context,
+    /** Pause between read attempts; injected so a test does not have to wait. */
+    private val sleeper: (Long) -> Unit = { Thread.sleep(it) }
+) {
 
     companion object {
         private const val TAG = "DatabaseKeyProvider"
@@ -44,6 +48,10 @@ class DatabaseKeyProvider(private val context: Context) {
         private const val GCM_IV_LENGTH = 12
         private const val PASSPHRASE_BYTE_COUNT = 32
         private const val KEY_FILE_NAME = "database_passphrase.enc"
+
+        /** A miss right after boot or an app update can be brief; it is permanent only if it persists. */
+        private const val PERMANENT_CHECK_ATTEMPTS = 3
+        private const val PERMANENT_CHECK_PAUSE_MILLIS = 200L
 
         /**
          * True only when the stored passphrase can never be read again: the master key was invalidated, is gone from
@@ -82,20 +90,31 @@ class DatabaseKeyProvider(private val context: Context) {
     @Synchronized
     fun getRawPassphrase(): ByteArray {
         val file = keyFile
-        if (file.exists() && file.length() > GCM_IV_LENGTH) {
-            try {
-                return decryptPassphrase(file)
-            } catch (e: Exception) {
-                val isPermanent = isPermanentKeyFailure(e) { keyStore.containsAlias(KEY_ALIAS) }
-                if (isPermanent) {
+        if (file.exists()) {
+            // The key file and the Keystore alias can be briefly unreadable after boot or an update. Read again a few
+            // times before a miss counts as permanent, and never delete the file on the first miss.
+            for (attempt in 1..PERMANENT_CHECK_ATTEMPTS) {
+                try {
+                    if (file.length() <= GCM_IV_LENGTH) {
+                        throw CorruptKeyFileException("Passphrase file is too short")
+                    }
+                    return decryptPassphrase(file)
+                } catch (e: Exception) {
+                    val isPermanent = isPermanentKeyFailure(e) { keyStore.containsAlias(KEY_ALIAS) }
+                    if (!isPermanent) {
+                        Log.e(TAG, "Transient Keystore error during passphrase decryption: ${e.javaClass.simpleName}. Preserving key file.")
+                        throw e
+                    }
+                    if (attempt < PERMANENT_CHECK_ATTEMPTS) {
+                        Log.w(TAG, "Key read failed (${e.javaClass.simpleName}), attempt $attempt of $PERMANENT_CHECK_ATTEMPTS. Trying again.")
+                        sleeper(PERMANENT_CHECK_PAUSE_MILLIS)
+                        continue
+                    }
                     Log.e(TAG, "Keystore master key invalidated or key file corrupt: ${e.javaClass.simpleName}. Regenerating key.")
                     file.delete()
                     try {
                         keyStore.deleteEntry(KEY_ALIAS)
                     } catch (ignored: Exception) {}
-                } else {
-                    Log.e(TAG, "Transient Keystore error during passphrase decryption: ${e.javaClass.simpleName}. Preserving key file.")
-                    throw e
                 }
             }
         }

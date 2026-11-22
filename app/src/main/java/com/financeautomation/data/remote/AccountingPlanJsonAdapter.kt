@@ -49,6 +49,7 @@ object AccountingPlanJsonAdapter {
                         put("row", JsonPrimitive(edit.row))
                         put("column", JsonPrimitive(edit.column))
                         put("value", edit.value.toJsonPrimitive())
+                        edit.uuid?.let { put("uuid", JsonPrimitive(it)) }
                     })
                 }
             })
@@ -103,7 +104,8 @@ object AccountingPlanJsonAdapter {
                 valPrim.doubleOrNull != null -> valPrim.doubleOrNull
                 else -> valPrim.content
             }
-            edits.add(CellEdit(tab = tab, row = row, column = column, value = rawVal))
+            val editUuid = obj["uuid"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+            edits.add(CellEdit(tab = tab, row = row, column = column, value = rawVal, uuid = editUuid))
         }
 
         val appends = mutableListOf<NewRow>()

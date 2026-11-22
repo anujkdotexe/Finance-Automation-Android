@@ -259,12 +259,14 @@ class OverlayController(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
+                                        // Tapping outside while a save is running must not cancel or undo it
+                                        if (isSubmittingExpense.get() || viewModel.uiState.value.isSaving) return@clickable
                                         PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_DISMISSED)
                                         val capId = currentCaptureId
                                         if (capId != null) {
                                             mainScope.launch(ioDispatcher) {
                                                 try {
-                                                    pendingCaptureDaoProvider().updateState(capId, PendingCaptureEntity.STATE_DISMISSED)
+                                                    pendingCaptureDaoProvider().markDismissedIfOpen(capId)
                                                 } catch (e: Exception) {
                                                     if (e is CancellationException) throw e
                                                 }
@@ -331,19 +333,21 @@ class OverlayController(
                                         onStartTrip = actionDispatcher::startTrip,
                                         onEndTrip = actionDispatcher::endTrip,
                                         onDismiss = {
-                                            PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_DISMISSED)
-                                            val capId = currentCaptureId
-                                            if (capId != null) {
-                                                mainScope.launch(ioDispatcher) {
-                                                    try {
-                                                        pendingCaptureDaoProvider().updateState(capId, PendingCaptureEntity.STATE_DISMISSED)
-                                                    } catch (e: Exception) {
-                                                        if (e is CancellationException) throw e
+                                            if (!isSubmittingExpense.get() && !viewModel.uiState.value.isSaving) {
+                                                PipelineTrail.record(PipelineStage.PROMPT, PipelineCode.USER_DISMISSED)
+                                                val capId = currentCaptureId
+                                                if (capId != null) {
+                                                    mainScope.launch(ioDispatcher) {
+                                                        try {
+                                                            pendingCaptureDaoProvider().markDismissedIfOpen(capId)
+                                                        } catch (e: Exception) {
+                                                            if (e is CancellationException) throw e
+                                                        }
                                                     }
                                                 }
+                                                viewModel.onDismiss()
+                                                dismiss()
                                             }
-                                            viewModel.onDismiss()
-                                            dismiss()
                                         },
                                         onKeyboardFocusChanged = { hasFocus ->
                                             setKeyboardFocus(hasFocus)

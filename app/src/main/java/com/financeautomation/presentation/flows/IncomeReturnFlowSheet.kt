@@ -126,6 +126,11 @@ fun IncomeReturnFlowSheet(
     var autoSettleAll by rememberSaveable { mutableStateOf(true) }
     val selectedDebtIds = remember { mutableStateListOf<String>() }
 
+    // Ticked bills belong to one person and one income type: a change of either one drops them
+    LaunchedEffect(selectedOption, settlerName.trim().lowercase()) {
+        selectedDebtIds.clear()
+    }
+
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
 
@@ -332,7 +337,12 @@ fun IncomeReturnFlowSheet(
             onOutlinedClick = onDismiss,
             filledText = stringResource(R.string.btn_save_income),
             onFilledClick = {
-                val refs = if (autoSettleAll) emptyList() else selectedDebtIds.toList()
+                // Explicit bills are sent only for a friend settlement with at least one ticked bill
+                val refs = if (selectedOption == InflowOption.FRIEND_SETTLEMENT && !autoSettleAll && selectedDebtIds.isNotEmpty()) {
+                    selectedDebtIds.toList()
+                } else {
+                    emptyList()
+                }
                 val cleanSettler = com.financeautomation.core.utils.InputPolicy.cleanName(settlerName)
                 val effectiveReason = com.financeautomation.core.utils.InputPolicy.buildSettlementReason(
                     name = settlerName,

@@ -60,12 +60,12 @@ class RepaymentWaterfallUseCase(
                     repaidCount++
                     remaining = AccountingUtils.round2(remaining - repRes.applied)
 
-                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial))
+                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial, live.uuid))
                     if (live.paidBy != repRes.newPaidBy) {
-                        allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy))
+                        allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy, live.uuid))
                     }
-                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed))
-                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus))
+                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed, live.uuid))
+                    allEdits.add(CellEdit(live.tab, live.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus, live.uuid))
 
                     val idx = workingPayables.indexOfFirst { it.tab == live.tab && it.row == live.row }
                     if (idx >= 0) {
@@ -97,12 +97,12 @@ class RepaymentWaterfallUseCase(
                     repaidCount++
                     remaining = AccountingUtils.round2(remaining - repRes.applied)
 
-                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial))
+                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID, dateSerial, payable.uuid))
                     if (payable.paidBy != repRes.newPaidBy) {
-                        allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy))
+                        allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY, repRes.newPaidBy, payable.uuid))
                     }
-                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed))
-                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus))
+                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, repRes.newOwed, payable.uuid))
+                    allEdits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, repRes.newStatus, payable.uuid))
 
                     workingPayables[i] = payable.copy(
                         amountOwed = repRes.newOwed,

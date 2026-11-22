@@ -98,6 +98,12 @@ class QuickLogViewModel(
      * Loads a pending capture intercepted by the NotificationListenerService.
      */
     fun loadCapture(captureId: String) {
+        // A new capture never inherits the previous entry (transaction id, split, flags). The same unfinished capture
+        // asked for again after a rotation keeps what the person already typed.
+        _uiState.update { current ->
+            if (current.captureId == captureId && !current.isSaved && !current.isDismissed && !current.isVoided) current
+            else freshStateKeepingLists(current)
+        }
         viewModelScope.launch(ioDispatcher) {
             try {
                 val dao = pendingCaptureDaoProvider.invoke()
@@ -202,6 +208,16 @@ class QuickLogViewModel(
         }
     }
 
+    /** A blank entry that keeps the lists loaded from the repositories, so nothing of the last entry is reused. */
+    private fun freshStateKeepingLists(current: QuickLogUiState): QuickLogUiState = QuickLogUiState(
+        selectedAccount = current.selectedAccount,
+        availableAccounts = current.availableAccounts,
+        availableCategories = current.availableCategories,
+        availableCompanions = current.availableCompanions,
+        activeTripTag = current.activeTripTag,
+        isSaving = current.isSaving
+    )
+
     /**
      * Initializes manual entry mode without a pending capture.
      */
@@ -213,20 +229,7 @@ class QuickLogViewModel(
             !current.isSaved && !current.isDismissed &&
             (current.amountText.isNotEmpty() || current.payee.isNotEmpty())
         if (unfinished) return
-        _uiState.update {
-            it.copy(
-                captureId = null,
-                sourcePackage = "manual",
-                amountText = "",
-                amount = 0.0,
-                payee = "",
-                note = "",
-                isNeedsAmount = false,
-                isPossibleDuplicate = false,
-                isSaved = false,
-                isDismissed = false
-            )
-        }
+        _uiState.update { freshStateKeepingLists(it) }
         recalculateSplit()
         refreshPredictedCategories("")
     }
@@ -352,32 +355,40 @@ class QuickLogViewModel(
         onSaved: (message: UiText, transactionId: String) -> Unit,
         onError: ((UiText) -> Unit)?
     ) {
+        // Compare and set in one step: a second tap in the same frame sees isSaving already true and returns
+        var wasSaving = false
+        _uiState.update { current ->
+            wasSaving = current.isSaving
+            if (wasSaving) current else current.copy(isSaving = true)
+        }
+        if (wasSaving) return
         val trimmedPayee = com.financeautomation.core.utils.InputPolicy.cleanName(_uiState.value.payee)
         val trimmedNote = com.financeautomation.core.utils.InputPolicy.cleanNote(_uiState.value.note)
         _uiState.update { it.copy(payee = trimmedPayee, note = trimmedNote) }
-        val state = _uiState.value
+        // isSaving is true now only because of the guard above; the checks below judge the entry itself
+        val state = _uiState.value.copy(isSaving = false)
         if (state.amount <= 0.0) {
             val err = UiText.res(R.string.quicklog_err_amount_zero)
-            _uiState.update { it.copy(errorMessage = err) }
+            _uiState.update { it.copy(errorMessage = err, isSaving = false) }
             onError?.invoke(err)
             return
         }
         if (state.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
             val err = UiText.dynamic("Credit transactions cannot be saved as debit expenses.")
-            _uiState.update { it.copy(errorMessage = err) }
+            _uiState.update { it.copy(errorMessage = err, isSaving = false) }
             onError?.invoke(err)
             return
         }
         if (!state.isSaveEnabled) {
             val err = UiText.dynamic("At least one companion must be specified when an amount is owed to me")
-            _uiState.update { it.copy(errorMessage = err) }
+            _uiState.update { it.copy(errorMessage = err, isSaving = false) }
             onError?.invoke(err)
             return
         }
         val captureTs = state.captureTimestamp
         if (captureTs != null && com.financeautomation.core.utils.isFuture(captureTs)) {
             val err = UiText.res(R.string.quicklog_err_future_date)
-            _uiState.update { it.copy(errorMessage = err) }
+            _uiState.update { it.copy(errorMessage = err, isSaving = false) }
             onError?.invoke(err)
             return
         }
@@ -536,7 +547,8 @@ class QuickLogViewModel(
      */
     fun onDismiss() {
         val state = _uiState.value
-        if (state.isSaved || state.isDismissed) return
+        // A save in progress cannot be dismissed: the entry is being written and the capture is claimed
+        if (state.isSaving || state.isSaved || state.isDismissed) return
 
         _uiState.update { it.copy(isDismissed = true) }
         val cid = state.captureId ?: return

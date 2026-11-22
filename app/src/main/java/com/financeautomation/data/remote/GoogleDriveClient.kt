@@ -137,6 +137,7 @@ open class GoogleDriveClient(
                 .addQueryParameter("q", propertyQuery)
                 .addQueryParameter("fields", "files(id, name)")
                 .addQueryParameter("spaces", "drive")
+                .addQueryParameter("orderBy", "createdTime desc")
                 .build()
 
             val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
@@ -257,6 +258,7 @@ open class GoogleDriveClient(
                 .addQueryParameter("q", query)
                 .addQueryParameter("fields", "files(id, name)")
                 .addQueryParameter("spaces", "drive")
+                .addQueryParameter("orderBy", "createdTime desc")
                 .build()
 
             val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
@@ -316,9 +318,9 @@ open class GoogleDriveClient(
     /**
      * Checks if a file exists, is accessible, and is not in the trash.
      * Calls GET $baseUrl/files/$fileId?fields=id,trashed.
-     * - Returns Result.Success(false) if trashed == true, HTTP 404, or non-retryable 403.
+     * - Returns Result.Success(false) only if trashed == true or HTTP 404.
      * - Returns Result.Success(true) if HTTP 200 and trashed == false.
-     * - Returns Result.Error(exception) on network/server errors (IOException, timeout, 5xx, 429).
+     * - Returns Result.Error(exception) on every other failure (network, 5xx, 429, any 403, any other non 2xx).
      */
     open suspend fun isFileUsable(fileId: String): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
@@ -333,11 +335,8 @@ open class GoogleDriveClient(
                 }
                 if (!response.isSuccessful) {
                     val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_GET, response.code, bodyString)
-                    val isRateLimit = response.code == 403 &&
-                        apiError.reason?.lowercase() in API_RATE_LIMIT_REASONS
-                    if (response.code == 403 && !isRateLimit) {
-                        return@withContext Result.Success(false)
-                    }
+                    // Only 404 and a trashed file are unusable; every other failure is reported so the caller retries
+                    // and never creates a second workbook because of a quota or permission hiccup
                     return@withContext Result.Error(
                         GoogleDriveApiException(
                             response.code,
@@ -652,6 +651,32 @@ open class GoogleDriveClient(
                 } else {
                     Result.Error(IOException("Drive API returned empty folder id for Archive folder"))
                 }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Marks a workbook that was replaced by a newer one: its fiscalYear property becomes "superseded", so a later
+     * search by year finds only the current workbook. The file itself is not touched otherwise.
+     */
+    open suspend fun markWorkbookSuperseded(fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val request = newRequestBuilder("$baseUrl/files/$fileId")
+                .patch("""{"appProperties":{"fiscalYear":"superseded"}}""".toRequestBody(jsonMediaType))
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val bodyString = response.body?.string().orEmpty()
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_UPDATE, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to mark workbook superseded"), apiError)
+                    )
+                }
+                Result.Success(Unit)
             }
         } catch (e: CancellationException) {
             throw e

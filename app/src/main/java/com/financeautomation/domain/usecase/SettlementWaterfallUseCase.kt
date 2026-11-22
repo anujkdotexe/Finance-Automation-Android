@@ -217,21 +217,21 @@ class SettlementWaterfallUseCase {
         if (isShared) {
             if (applied >= row.owed - Tolerances.SHARE_FULLY_COVERED) {
                 updatedCompanions = settler
-                edits.add(CellEdit(row.tab, row.row, "H", settler))
+                edits.add(CellEdit(row.tab, row.row, "H", settler, row.uuid))
             } else if (applied >= share - Tolerances.SHARE_FULLY_COVERED) {
                 val copy = list.toMutableList()
                 copy.removeAt(matchIdx)
                 val joined = copy.joinToString(", ")
                 updatedCompanions = joined
-                edits.add(CellEdit(row.tab, row.row, "H", joined))
+                edits.add(CellEdit(row.tab, row.row, "H", joined, row.uuid))
             }
         }
 
         val remainingOwed = maxOf(0.0, AccountingUtils.round2(row.owed - applied))
         val excess = maxOf(0.0, AccountingUtils.round2(paid - applied))
 
-        edits.add(CellEdit(row.tab, row.row, "J", remainingOwed))
-        edits.add(CellEdit(row.tab, row.row, "K", if (remainingOwed == 0.0) "Settled" else "Pending"))
+        edits.add(CellEdit(row.tab, row.row, "J", remainingOwed, row.uuid))
+        edits.add(CellEdit(row.tab, row.row, "K", if (remainingOwed == 0.0) "Settled" else "Pending", row.uuid))
 
         return SettlementStepResult(
             applied = applied,

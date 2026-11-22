@@ -721,8 +721,11 @@ class TransactionRepositoryImpl(
             }
 
             // Never delivered: there is nothing on the sheet to void, so drop its queue items and void it here only
+            // A stored plan means the delivery may have started and the sheet may already hold the row: queue a void then
             val neverDelivered = existing.sheetRowIndex == null &&
-                qDao.getAllQueueFlow().first().any { it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT }
+                qDao.getAllQueueFlow().first().any {
+                    it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT && it.planJson == null
+                }
             if (neverDelivered) {
                 runInDbTransaction {
                     qDao.deleteByTransactionId(id)
@@ -826,7 +829,7 @@ class TransactionRepositoryImpl(
                 }
 
                 val pendingInsert = qDao.getAllPending().any {
-                    it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT
+                    it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT && it.planJson == null
                 }
                 if (pendingInsert && existing.sheetRowIndex == null) {
                     val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
@@ -1576,10 +1579,38 @@ class TransactionRepositoryImpl(
                             }
                         }
 
+                        var updateTab = tabName
                         if (targetRow == null) {
                             val scanRes = findDebitRow(spreadsheetId, tabName, txn.id)
-                            if (scanRes is Result.Success && scanRes.data != null) {
-                                targetRow = scanRes.data
+                            if (scanRes is Result.Error) {
+                                // A network or server error is not "row not found": retry later
+                                if (failItem(item, txn, scanRes.exception, st)) break else continue
+                            }
+                            targetRow = (scanRes as Result.Success).data
+                        }
+
+                        if (targetRow == null) {
+                            // Not in the computed month tab: the date may have been moved to another month. Look in every month tab.
+                            val tabsRes = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
+                            if (tabsRes is Result.Error) {
+                                if (failItem(item, txn, tabsRes.exception, st)) break else continue
+                            }
+                            var scanFailure: Throwable? = null
+                            for (other in (tabsRes as Result.Success).data.keys.filter { it != tabName && MONTH_TAB_PATTERN.matches(it) }) {
+                                val r = findDebitRow(spreadsheetId, other, txn.id)
+                                if (r is Result.Error) {
+                                    scanFailure = r.exception
+                                    break
+                                }
+                                val found = (r as Result.Success).data
+                                if (found != null) {
+                                    updateTab = other
+                                    targetRow = found
+                                    break
+                                }
+                            }
+                            if (scanFailure != null) {
+                                if (failItem(item, txn, scanFailure, st)) break else continue
                             }
                         }
 
@@ -1592,7 +1623,7 @@ class TransactionRepositoryImpl(
                         }
 
                         val payload = SheetPayloadMapper.mapTransactionToTable1(txn)
-                        val updateResult = googleSheetsClient.updateRow(spreadsheetId, tabName, targetRow, payload)
+                        val updateResult = googleSheetsClient.updateRow(spreadsheetId, updateTab, targetRow, payload)
                         if (updateResult is Result.Success) {
                             transactionDao.updateSyncState(txn.id, SyncState.SYNCED.name, targetRow)
                             syncQueueDao.delete(item)

@@ -168,7 +168,7 @@ class CarryForwardUseCase {
                 )
 
                 appends.add(NewRow(TableType.DEBIT, targetTab, newUuid, newCells))
-                edits.add(CellEdit(debit.tab, debit.row, "K", "Carried Fwd"))
+                edits.add(CellEdit(debit.tab, debit.row, "K", "Carried Fwd", debit.uuid))
 
                 lineage.add(
                     LineageRecord(
@@ -198,7 +198,7 @@ class CarryForwardUseCase {
                 )
 
                 appends.add(NewRow(TableType.PAYABLE, targetTab, newUuid, newCells))
-                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, "Carried Fwd"))
+                edits.add(CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, "Carried Fwd", payable.uuid))
 
                 lineage.add(
                     LineageRecord(
