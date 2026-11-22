@@ -134,16 +134,23 @@ object DatabaseEncryptionMigrator {
                 encDb.close()
             }
 
-            // 5. Swap files: securely delete plain database and companion files, rename encrypted copy
+            // 5. Swap files. The plain file is only moved aside until the encrypted copy is in place; it is wiped after
+            // the rename worked, and put back if the rename failed, so a failure never loses both copies.
+            val plainAside = File(dbFile.parentFile, "$dbName.plain_old")
+            if (plainAside.exists()) securelyDeleteFile(plainAside)
+            if (!dbFile.renameTo(plainAside)) {
+                throw IllegalStateException("Failed to move the plain database aside")
+            }
             val walFile = File(dbFile.parentFile, "$dbName-wal")
             val shmFile = File(dbFile.parentFile, "$dbName-shm")
-            if (walFile.exists()) securelyDeleteFile(walFile)
-            if (shmFile.exists()) securelyDeleteFile(shmFile)
-
-            securelyDeleteFile(dbFile)
             if (!encFile.renameTo(dbFile)) {
+                plainAside.renameTo(dbFile)
                 throw IllegalStateException("Failed to rename encrypted database to target name")
             }
+            // The encrypted file is in place: now the plain data and its companion files can go
+            if (walFile.exists()) securelyDeleteFile(walFile)
+            if (shmFile.exists()) securelyDeleteFile(shmFile)
+            securelyDeleteFile(plainAside)
 
             Log.i(TAG, "SQLCipher database migration completed successfully. All ${cachedCounts.size} tables verified.")
             return null
@@ -214,12 +221,28 @@ object DatabaseEncryptionMigrator {
             )
 
             var anyTableRestored = false
+            val failedTables = mutableListOf<String>()
             for (table in tablesToRestore) {
                 try {
-                    encDb.execSQL("INSERT OR IGNORE INTO $table SELECT * FROM plain_backup.$table;")
+                    val target = columnNames(encDb, "main", table)
+                    val source = columnNames(encDb, "plain_backup", table)
+                    if (source.isEmpty()) {
+                        // The backup has no such table (it is newer than the backup): nothing to restore
+                        continue
+                    }
+                    if (target.isEmpty()) {
+                        throw IllegalStateException("Table missing in the encrypted database")
+                    }
+                    val shared = target.filter { it in source }
+                    if (shared.isEmpty()) {
+                        throw IllegalStateException("No shared columns")
+                    }
+                    val cols = shared.joinToString(", ") { "\"$it\"" }
+                    encDb.execSQL("INSERT OR IGNORE INTO \"$table\" ($cols) SELECT $cols FROM plain_backup.\"$table\";")
                     anyTableRestored = true
                 } catch (e: Exception) {
-                    Log.w(TAG, "Fallback restore table $table skipped: ${e.javaClass.simpleName}")
+                    failedTables.add(table)
+                    Log.w(TAG, "Fallback restore table $table failed: ${e.javaClass.simpleName}")
                 }
             }
 
@@ -229,15 +252,33 @@ object DatabaseEncryptionMigrator {
                 Log.w(TAG, "Fallback detach plain_backup failed: ${e.javaClass.simpleName}")
             }
 
-            if (anyTableRestored) {
+            if (failedTables.isEmpty() && anyTableRestored) {
                 Log.i(TAG, "Plain backup fallback restoration completed table-by-table.")
                 securelyDeleteFile(plainBackupFile)
+            } else if (failedTables.isNotEmpty()) {
+                // Keep the plain backup: it is the only copy of the tables that did not come across
+                com.financeautomation.core.utils.Diagnostics.record(
+                    TAG,
+                    "restore incomplete, backup kept; failed tables: ${failedTables.joinToString(",")}"
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to attach plain backup for recovery: ${e.javaClass.simpleName}")
         } finally {
             encDb?.close()
         }
+    }
+
+    /** Column names of [table] in the schema [schema] ("main" or an attached name); empty when the table does not exist. */
+    private fun columnNames(db: SQLiteDatabase, schema: String, table: String): List<String> {
+        val names = mutableListOf<String>()
+        db.rawQuery("PRAGMA $schema.table_info(\"$table\")", null).use { cursor ->
+            val nameIdx = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) {
+                if (nameIdx >= 0) names.add(cursor.getString(nameIdx))
+            }
+        }
+        return names
     }
 
     fun securelyDeleteFile(file: File) {
