@@ -512,7 +512,7 @@ fun AppNavHost(
                                                 text = { Text(stringResource(R.string.action_sign_out), color = MaterialTheme.colorScheme.error) },
                                                 onClick = {
                                                     accountMenuExpanded = false
-                                                    settingsViewModel.onGoogleSignOut()
+                                                    settingsViewModel.onGoogleSignOut(context)
                                                     onReRunSetup()
                                                 }
                                             )

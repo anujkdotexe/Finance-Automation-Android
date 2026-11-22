@@ -142,6 +142,8 @@ class SettingsSyncCoordinator(
             preferencesRepository.setPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR, null, isDirty = false)
             preferencesRepository.clearKeysWithPrefix(PreferencesRepository.KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX)
             profileAvatarManager?.deleteAvatar()
+            // Exported CSVs hold the signed out user's transactions, so they must not stay in the cache
+            com.financeautomation.data.account.AccountCacheCleaner.clearExports(context?.cacheDir)
             context?.let { ctx ->
                 try {
                     val avatarFile = java.io.File(ctx.filesDir, "google_avatar.png")

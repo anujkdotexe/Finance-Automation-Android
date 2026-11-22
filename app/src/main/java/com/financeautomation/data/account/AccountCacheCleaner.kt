@@ -4,7 +4,7 @@ import java.io.File
 
 /** Removes what an account left in the app cache. */
 object AccountCacheCleaner {
-    /** Deletes the CSV exports folder of the previous account (the files are shared only for a short time anyway). */
+    /** Deletes the CSV exports folder of the previous account or of a signed out user (the files are shared only for a short time anyway). */
     fun clearExports(cacheDir: File?) {
         val exports = File(cacheDir ?: return, "exports")
         if (exports.isDirectory) exports.listFiles()?.forEach { it.delete() }
