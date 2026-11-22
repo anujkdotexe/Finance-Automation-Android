@@ -468,6 +468,8 @@
     <string name="about_version_label">Version %1$s (Build %2$d)</string>
     <string name="about_engine_active">On-device engine active</string>
     <string name="about_capture_off">Capture off</string>
+    <string name="kpi_card_cd">%1$s, rupees %2$s, opens transactions</string>
+    <string name="kpi_card_cd_details">%1$s, rupees %2$s, %3$s, opens transactions</string>
     <string name="about_privacy_title">Strict privacy sandbox</string>
     <string name="about_privacy_desc">We never read personal chats, emails, or OTP messages.</string>
     <string name="about_metric_sms_filter">SMS filter</string>

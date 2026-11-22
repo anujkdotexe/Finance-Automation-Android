@@ -26,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -80,7 +82,8 @@ fun AppChip(
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onClick()
                 }
-            ),
+            )
+            .semantics { this.selected = selected },
         contentAlignment = Alignment.Center
     ) {
     Surface(
@@ -158,7 +161,8 @@ fun <T> SegmentedChoice(
                                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                 onOptionSelected(option)
                             }
-                        ),
+                        )
+                        .semantics { this.selected = isSelected },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
