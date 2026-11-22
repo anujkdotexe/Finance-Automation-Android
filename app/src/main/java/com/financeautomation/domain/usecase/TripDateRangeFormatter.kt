@@ -1,9 +1,10 @@
 package com.financeautomation.domain.usecase
 
 import com.financeautomation.domain.model.Transaction
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -22,23 +23,24 @@ object TripDateRangeFormatter {
         }
         val first = transactions.minOf { it.timestamp }
         val last = transactions.maxOf { it.timestamp }
-        val sdf = SimpleDateFormat("d MMM yyyy", Locale.ENGLISH)
-        val sdfShort = SimpleDateFormat("d MMM", Locale.ENGLISH)
+        val sdf = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
+        val sdfShort = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+        // Dates are always shown in the sheet zone, whatever the device zone is
+        val day1: LocalDate = Instant.ofEpochMilli(first).atZone(ZONE).toLocalDate()
+        val day2: LocalDate = Instant.ofEpochMilli(last).atZone(ZONE).toLocalDate()
 
         return if (isActive) {
-            "Started ${sdf.format(Date(first))}"
+            "Started ${sdf.format(day1)}"
         } else {
-            val cal1 = Calendar.getInstance().apply { timeInMillis = first }
-            val cal2 = Calendar.getInstance().apply { timeInMillis = last }
-            if (cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-                cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
-            ) {
-                sdf.format(Date(first))
-            } else if (cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)) {
-                "${sdfShort.format(Date(first))} - ${sdf.format(Date(last))}"
+            if (day1 == day2) {
+                sdf.format(day1)
+            } else if (day1.year == day2.year) {
+                "${sdfShort.format(day1)} - ${sdf.format(day2)}"
             } else {
-                "${sdf.format(Date(first))} - ${sdf.format(Date(last))}"
+                "${sdf.format(day1)} - ${sdf.format(day2)}"
             }
         }
     }
+
+    private val ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 }
