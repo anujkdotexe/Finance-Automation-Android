@@ -31,7 +31,7 @@ typealias EmptyOrMissingConfigTabException = com.financeautomation.domain.model.
 typealias AppConfigSnapshot = com.financeautomation.domain.model.AppConfigSnapshot
 
 /**
- * Manages the hidden 'Config' tab in Google Sheets (range A1:P50).
+ * Manages the hidden 'Config' tab in Google Sheets (range A1:P250).
  * Mirrors application configuration to cloud and restores it on fresh install.
  */
 class ConfigSheetManager(
@@ -76,7 +76,7 @@ class ConfigSheetManager(
                                 "title" to CONFIG_TAB_NAME,
                                 "hidden" to true,
                                 "gridProperties" to mapOf(
-                                    "rowCount" to 50,
+                                    "rowCount" to CONFIG_GRID_ROWS,
                                     "columnCount" to 16
                                 )
                             )
@@ -86,6 +86,29 @@ class ConfigSheetManager(
                 val batchRes = googleSheetsClient.batchUpdate(spreadsheetId, addSheetRequest)
                 if (batchRes is Result.Error) {
                     return@withContext Result.Error(batchRes.exception)
+                }
+            } else {
+                // A Config tab made by an older build has 50 rows; grow it so a larger mirror can be written
+                val detailed = googleSheetsClient.getSheetTabsDetailed(spreadsheetId)
+                val info = (detailed as? Result.Success)?.data?.get(CONFIG_TAB_NAME)
+                if (info != null && info.rowCount < CONFIG_GRID_ROWS) {
+                    val growRes = googleSheetsClient.batchUpdate(
+                        spreadsheetId,
+                        listOf(
+                            mapOf(
+                                "updateSheetProperties" to mapOf(
+                                    "properties" to mapOf(
+                                        "sheetId" to info.sheetId,
+                                        "gridProperties" to mapOf("rowCount" to CONFIG_GRID_ROWS)
+                                    ),
+                                    "fields" to "gridProperties.rowCount"
+                                )
+                            )
+                        )
+                    )
+                    if (growRes is Result.Error) {
+                        return@withContext Result.Error(growRes.exception)
+                    }
                 }
             }
             Result.Success(Unit)
@@ -97,7 +120,7 @@ class ConfigSheetManager(
     }
 
     /**
-     * Mirrors the entire configuration snapshot into 'Config'!A1:P50.
+     * Mirrors the entire configuration snapshot into 'Config'!A1:P250.
      * Contains ZERO financial data.
      */
     suspend fun mirrorConfig(
@@ -112,7 +135,7 @@ class ConfigSheetManager(
 
             val rows = buildConfigGrid(snapshot)
 
-            val range = "'$CONFIG_TAB_NAME'!A1:P50"
+            val range = CONFIG_RANGE
             val encodedRange = URLEncoder.encode(range, "UTF-8")
             val url = "$baseUrl/$spreadsheetId/values/$encodedRange?valueInputOption=RAW"
 
@@ -151,13 +174,13 @@ class ConfigSheetManager(
     }
 
     /**
-     * Reads 'Config'!A1:P50 and reconstructs the configuration snapshot.
+     * Reads 'Config'!A1:P250 and reconstructs the configuration snapshot.
      */
     suspend fun readConfig(
         spreadsheetId: String
     ): Result<AppConfigSnapshot> = withContext(ioDispatcher) {
         try {
-            val rangeResult = googleSheetsClient.getRangeValues(spreadsheetId, "'$CONFIG_TAB_NAME'!A1:P50")
+            val rangeResult = googleSheetsClient.getRangeValues(spreadsheetId, CONFIG_RANGE)
             if (rangeResult is Result.Error) {
                 val err = rangeResult.exception
                 val msg = err.message.orEmpty()
@@ -186,9 +209,9 @@ class ConfigSheetManager(
     }
 
     /**
-     * Builds the 50x16 2D matrix representing the configuration table.
+     * Builds the header plus [CONFIG_ROW_CAPACITY] row, 16 column matrix representing the configuration table.
      * Row 0: Headers
-     * Rows 1..49: Entries
+     * Rows 1..[CONFIG_ROW_CAPACITY]: Entries
      */
     fun buildConfigGrid(snapshot: AppConfigSnapshot): List<List<Any?>> {
         val grid = mutableListOf<List<Any?>>()
@@ -205,7 +228,7 @@ class ConfigSheetManager(
 
         val prefList = snapshot.preferences.toList()
 
-        for (i in 0 until 49) {
+        for (i in 0 until CONFIG_ROW_CAPACITY) {
             val row = MutableList<Any?>(16) { "" }
 
             // Accounts: Cols 0..4
@@ -256,7 +279,7 @@ class ConfigSheetManager(
     }
 
     /**
-     * Parses the 50x16 2D matrix into domain objects.
+     * Parses the 16 column matrix into domain objects.
      */
     fun parseConfigGrid(grid: List<List<Any?>>): AppConfigSnapshot {
         val accounts = mutableListOf<Account>()
@@ -273,8 +296,8 @@ class ConfigSheetManager(
             val accName = com.financeautomation.core.utils.InputPolicy.cleanName(accRaw).take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
             if (accName.isNotBlank() && !accName.equals("AccountName", ignoreCase = true)) {
                 val lastFour = row.getOrNull(1)?.toString()?.let { com.financeautomation.core.utils.InputPolicy.cleanDigits4(it) }?.ifEmpty { null }
-                val isDefault = row.getOrNull(2)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
-                val isArchived = row.getOrNull(3)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
+                val isDefault = row.getOrNull(2)?.toString()?.trim()?.equals("true", ignoreCase = true) ?: false
+                val isArchived = row.getOrNull(3)?.toString()?.trim()?.equals("true", ignoreCase = true) ?: false
                 val order = row.getOrNull(4)?.toString()?.trim()?.toIntOrNull() ?: (rowIndex - 1)
                 accounts.add(
                     Account(
@@ -292,9 +315,9 @@ class ConfigSheetManager(
             val catRaw = row.getOrNull(5)?.toString().orEmpty()
             val catName = com.financeautomation.core.utils.InputPolicy.cleanName(catRaw).take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
             if (catName.isNotBlank() && !catName.equals("CategoryName", ignoreCase = true)) {
-                val isBurnExcluded = row.getOrNull(6)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
-                val isDefault = row.getOrNull(7)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
-                val isArchived = row.getOrNull(8)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
+                val isBurnExcluded = row.getOrNull(6)?.toString()?.trim()?.equals("true", ignoreCase = true) ?: false
+                val isDefault = row.getOrNull(7)?.toString()?.trim()?.equals("true", ignoreCase = true) ?: false
+                val isArchived = row.getOrNull(8)?.toString()?.trim()?.equals("true", ignoreCase = true) ?: false
                 val order = row.getOrNull(9)?.toString()?.trim()?.toIntOrNull() ?: (rowIndex - 1)
                 categories.add(
                     Category(
@@ -324,7 +347,7 @@ class ConfigSheetManager(
             val tagRaw = row.getOrNull(12)?.toString().orEmpty()
             val tagName = com.financeautomation.core.utils.InputPolicy.cleanName(tagRaw).take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
             if (tagName.isNotBlank() && !tagName.equals("TripTagName", ignoreCase = true)) {
-                val isActive = row.getOrNull(13)?.toString()?.trim()?.toBooleanStrictOrNull() ?: false
+                val isActive = row.getOrNull(13)?.toString()?.trim()?.equals("true", ignoreCase = true) ?: false
                 tripTags.add(
                     TripTag(
                         id = "tag_${rowIndex}",
@@ -353,5 +376,13 @@ class ConfigSheetManager(
 
     companion object {
         const val CONFIG_TAB_NAME: String = "Config"
+
+        /** Entry rows below the header row that the mirror holds per column group. */
+        const val CONFIG_ROW_CAPACITY: Int = 200
+
+        /** Grid rows the Config tab needs: header plus capacity, with room to spare. */
+        const val CONFIG_GRID_ROWS: Int = 250
+
+        private const val CONFIG_RANGE: String = "'Config'!A1:P$CONFIG_GRID_ROWS"
     }
 }
