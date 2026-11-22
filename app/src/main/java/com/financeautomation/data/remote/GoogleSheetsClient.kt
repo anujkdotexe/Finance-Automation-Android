@@ -7,6 +7,8 @@ import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.domain.model.Subscription
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -192,6 +194,9 @@ open class GoogleSheetsClient(
     }
 
     private val verifiedMonthTabs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** One lock per spreadsheet and tab so two callers never run the Note column repair at the same time. */
+    private val monthTabRepairLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
     private val verifiedTitleRepairTabs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private fun isTransportOrServerError(throwable: Throwable): Boolean = when (throwable) {
@@ -218,13 +223,10 @@ open class GoogleSheetsClient(
             verifiedMonthTabs.add(key)
             return Result.Success(Unit)
         }
+        // Any failure (transport or not) is returned and the tab is not marked verified, so the next call tries again
         val err = (res as Result.Error).exception
-        if (isTransportOrServerError(err)) {
-            return Result.Error(err)
-        }
-        Diagnostics.record("GoogleSheetsClient", "ensureMonthTabReady non-transport fallback: ${err.message}")
-        verifiedMonthTabs.add(key)
-        return Result.Success(Unit)
+        Diagnostics.record("GoogleSheetsClient", "ensureMonthTabReady failed: ${err.javaClass.simpleName}")
+        return Result.Error(err)
     }
 
     /**
@@ -703,9 +705,8 @@ open class GoogleSheetsClient(
         if (tabsMap.containsKey(tabName)) {
             val repairRes = repairMonthTabSchema(spreadsheetId, tabName)
             if (repairRes is Result.Error) {
-                val err = repairRes.exception
-                if (isTransportOrServerError(err)) return@withContext Result.Error(err)
-                Diagnostics.record("GoogleSheetsClient", "ensureMonthTabExists non-transport repair fallback: ${err.message}")
+                Diagnostics.record("GoogleSheetsClient", "ensureMonthTabExists repair failed: ${repairRes.exception.javaClass.simpleName}")
+                return@withContext Result.Error(repairRes.exception)
             }
             return@withContext Result.Success(false)
         }
@@ -716,9 +717,8 @@ open class GoogleSheetsClient(
             if (recheck is Result.Success && recheck.data.containsKey(tabName)) {
                 val repairRes = repairMonthTabSchema(spreadsheetId, tabName)
                 if (repairRes is Result.Error) {
-                    val err = repairRes.exception
-                    if (isTransportOrServerError(err)) return@withContext Result.Error(err)
-                    Diagnostics.record("GoogleSheetsClient", "ensureMonthTabExists non-transport repair fallback: ${err.message}")
+                    Diagnostics.record("GoogleSheetsClient", "ensureMonthTabExists repair failed: ${repairRes.exception.javaClass.simpleName}")
+                    return@withContext Result.Error(repairRes.exception)
                 }
                 return@withContext Result.Success(false)
             }
@@ -734,6 +734,15 @@ open class GoogleSheetsClient(
      * Returns Result.Success(true) if repaired, Result.Success(false) if already up to date.
      */
     open suspend fun repairMonthTabSchema(
+        spreadsheetId: String,
+        tabName: String
+    ): Result<Boolean> {
+        val lock = monthTabRepairLocks.computeIfAbsent("$spreadsheetId:$tabName") { Mutex() }
+        // L3 is read again inside the lock, so a second caller sees the Note column the first caller added
+        return lock.withLock { repairMonthTabSchemaLocked(spreadsheetId, tabName) }
+    }
+
+    private suspend fun repairMonthTabSchemaLocked(
         spreadsheetId: String,
         tabName: String
     ): Result<Boolean> = withContext(Dispatchers.IO) {
