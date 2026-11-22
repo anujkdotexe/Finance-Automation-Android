@@ -26,7 +26,7 @@ class PeopleTripsRemoveWiringTest {
     @Test
     fun onlyAnInactiveTripOffersRemoveInTheDetailSheet() {
         // The trip cards no longer carry a Remove action; removal moved into the trip detail sheet
-        val cardBody = screen.substringAfter("private fun TripCard(").substringAfter("val removeTripDescription")
+        val cardBody = screen.substringAfter("private fun TripCard(").substringAfter("val removeTripDescription").substringBefore("\nprivate fun ")
         assertFalse("the trip card must not call onRemove", cardBody.contains("onRemove"))
 
         val actions = detailSheet.substringAfter("// Action Buttons")
