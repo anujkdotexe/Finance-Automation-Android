@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,10 +72,11 @@ fun ProblemReportDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var userText by remember { mutableStateOf("") }
+    var userText by rememberSaveable { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSuccess by remember { mutableStateOf(false) }
+    var submitJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val currentPayload = remember(userText, initialScreen, initialReasonCode) {
         ProblemReportManager.buildPayload(
@@ -86,9 +88,7 @@ fun ProblemReportDialog(
     }
 
     Dialog(
-        onDismissRequest = {
-            if (!isSubmitting) onDismiss()
-        },
+        onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
@@ -279,8 +279,11 @@ fun ProblemReportDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedButton(
-                            onClick = onDismiss,
-                            enabled = !isSubmitting,
+                            onClick = {
+                                submitJob?.cancel()
+                                onDismiss()
+                            },
+                            enabled = true,
                             modifier = Modifier
                                 .weight(1f)
                                 .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
@@ -293,7 +296,7 @@ fun ProblemReportDialog(
                                 if (isSubmitting) return@Button
                                 isSubmitting = true
                                 errorMessage = null
-                                coroutineScope.launch {
+                                submitJob = coroutineScope.launch {
                                     val result = ProblemReportManager.submitReport(context, currentPayload)
                                     isSubmitting = false
                                     result.fold(

@@ -318,4 +318,36 @@ class ProblemReportBuilderTest {
 
         return true
     }
+
+    @Test
+    fun submitReportTimesOutAfterSpecifiedDurationWithClearError() = kotlinx.coroutines.test.runTest {
+        val payload = ProblemReportPayload(
+            schemaVersion = 1,
+            appVersion = "1.0.0",
+            versionCode = 1,
+            deviceModel = "Test Phone",
+            androidSdk = 34,
+            installId = UUID.randomUUID().toString(),
+            screen = "About",
+            reasonCode = "test_hang",
+            counters = null,
+            text = "Testing timeout"
+        )
+        val mockContext = object : android.content.ContextWrapper(null) {}
+        val result = ProblemReportManager.submitReport(
+            context = mockContext,
+            payload = payload,
+            timeoutMillis = 100L,
+            submitter = {
+                kotlinx.coroutines.delay(10_000L)
+            }
+        )
+        assertTrue("Submission should fail when hanging", result.isFailure)
+        val exception = result.exceptionOrNull()
+        assertTrue("Exception should be TimeoutException", exception is java.util.concurrent.TimeoutException)
+        assertTrue(
+            "Error message should mention timeout duration",
+            exception?.message?.contains("timed out") == true
+        )
+    }
 }

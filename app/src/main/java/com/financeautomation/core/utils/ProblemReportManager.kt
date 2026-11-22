@@ -6,9 +6,12 @@ import com.financeautomation.BuildConfig
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.util.UUID
+import java.util.concurrent.TimeoutException
 
 /**
  * Manages user-initiated problem reports sent to Firebase Firestore.
@@ -102,22 +105,36 @@ object ProblemReportManager {
         return sb.toString()
     }
 
+    const val SUBMIT_TIMEOUT_MILLIS = 15_000L
+
     suspend fun submitReport(
         context: Context,
-        payload: ProblemReportPayload
+        payload: ProblemReportPayload,
+        timeoutMillis: Long = SUBMIT_TIMEOUT_MILLIS,
+        submitter: (suspend (Map<String, Any?>) -> Unit)? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        if (!isFirebaseConfigured(context)) {
+        if (!isFirebaseConfigured(context) && submitter == null) {
             return@withContext Result.failure(
                 IllegalStateException("Firebase service is not configured on this device")
             )
         }
 
         try {
-            val db = FirebaseFirestore.getInstance()
-            val firestoreData = payload.toFirestoreData(isServerTimestamp = true)
-            db.collection(COLLECTION_NAME).add(firestoreData).await()
+            withTimeout(timeoutMillis) {
+                val firestoreData = payload.toFirestoreData(isServerTimestamp = true)
+                if (submitter != null) {
+                    submitter(firestoreData)
+                } else {
+                    val db = FirebaseFirestore.getInstance()
+                    db.collection(COLLECTION_NAME).add(firestoreData).await()
+                }
+            }
             Diagnostics.record("ProblemReportManager", "Report submitted successfully: ${payload.reasonCode}")
             Result.success(Unit)
+        } catch (e: TimeoutCancellationException) {
+            val errorMsg = "Submission timed out after ${timeoutMillis / 1000} seconds. Please check your connection and try again."
+            Diagnostics.record("ProblemReportManager", "Submission error: $errorMsg")
+            Result.failure(TimeoutException(errorMsg))
         } catch (e: Exception) {
             val scrubbedError = PrivacyScrubber.scrub(e.message ?: e.javaClass.simpleName)
             Diagnostics.record("ProblemReportManager", "Submission error: $scrubbedError")
