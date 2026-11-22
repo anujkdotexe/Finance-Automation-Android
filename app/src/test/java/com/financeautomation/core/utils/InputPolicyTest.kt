@@ -18,10 +18,43 @@ class InputPolicyTest {
 
     @Test
     fun cleanNameStripsBidiAndControlCharacters() {
-        // \u202E is RIGHT-TO-LEFT OVERRIDE, \u0000 is null char, \u001F is control char
+        // \u202E is RIGHT-TO-LEFT OVERRIDE, \u0000 is null char (replaced with space), \u001F is control char (trimmed)
         val raw = "Test\u202E\u0000String\u001F"
         val clean = InputPolicy.cleanName(raw)
-        assertEquals("TestString", clean)
+        assertEquals("Test String", clean)
+    }
+
+    @Test
+    fun cleanNameReplacesControlCharsWithSpaceG24() {
+        val rawWithNewline = "Big\nBasket"
+        assertEquals("Big Basket", InputPolicy.cleanName(rawWithNewline))
+        assertEquals("Big Basket", InputPolicy.cleanNameWhileTyping(rawWithNewline))
+
+        val rawWithCrlf = "Big\r\nBasket"
+        assertEquals("Big Basket", InputPolicy.cleanName(rawWithCrlf))
+    }
+
+    @Test
+    fun cleanWhileTypingPreservesTrailingSpacesUntilFinalTrim() {
+        // Test typing sequence "Team " then "Team d"
+        val step1 = InputPolicy.cleanNameWhileTyping("Team ")
+        assertEquals("Team ", step1)
+
+        val step2 = InputPolicy.cleanNameWhileTyping("Team d")
+        assertEquals("Team d", step2)
+
+        // Saved value is trimmed
+        assertEquals("Team", InputPolicy.cleanName("Team "))
+
+        // Note while typing keeps trailing space, cleanNote trims
+        val noteTyping = InputPolicy.cleanNoteWhileTyping("Lunch with team ")
+        assertEquals("Lunch with team ", noteTyping)
+        assertEquals("Lunch with team", InputPolicy.cleanNote("Lunch with team "))
+
+        // Search while typing keeps trailing space, cleanSearch trims
+        val searchTyping = InputPolicy.cleanSearchWhileTyping("Swiggy ")
+        assertEquals("Swiggy ", searchTyping)
+        assertEquals("Swiggy", InputPolicy.cleanSearch("Swiggy "))
     }
 
     @Test

@@ -240,15 +240,15 @@ class QuickLogViewModel(
     }
 
     fun onPayeeChanged(text: String) {
-        val clean = com.financeautomation.core.utils.InputPolicy.cleanName(text)
+        val clean = com.financeautomation.core.utils.InputPolicy.cleanNameWhileTyping(text)
             .take(com.financeautomation.core.utils.InputPolicy.MAX_MERCHANT_NAME_LENGTH)
         _uiState.update { it.copy(payee = clean) }
-        applyLastUsedAccountAndCategory(clean)
-        refreshPredictedCategories(clean)
+        applyLastUsedAccountAndCategory(clean.trim())
+        refreshPredictedCategories(clean.trim())
     }
 
     fun onNoteChanged(text: String) {
-        val clean = com.financeautomation.core.utils.InputPolicy.cleanNote(text)
+        val clean = com.financeautomation.core.utils.InputPolicy.cleanNoteWhileTyping(text)
             .take(com.financeautomation.core.utils.InputPolicy.MAX_NOTE_LENGTH)
         _uiState.update { it.copy(note = clean) }
     }
@@ -352,6 +352,9 @@ class QuickLogViewModel(
         onSaved: (message: UiText, transactionId: String) -> Unit,
         onError: ((UiText) -> Unit)?
     ) {
+        val trimmedPayee = com.financeautomation.core.utils.InputPolicy.cleanName(_uiState.value.payee)
+        val trimmedNote = com.financeautomation.core.utils.InputPolicy.cleanNote(_uiState.value.note)
+        _uiState.update { it.copy(payee = trimmedPayee, note = trimmedNote) }
         val state = _uiState.value
         if (state.amount <= 0.0) {
             val err = UiText.res(R.string.quicklog_err_amount_zero)

@@ -88,7 +88,7 @@ object InputPolicy {
     /**
      * Cleans a name string:
      * 1. Strips bidirectional override characters.
-     * 2. Strips ASCII control characters.
+     * 2. Replaces ASCII control characters with a space.
      * 3. Trims leading and trailing whitespace.
      * 4. Collapses inner consecutive whitespace to a single space.
      * 5. Normalizes to Unicode NFC.
@@ -96,9 +96,24 @@ object InputPolicy {
     fun cleanName(raw: String): String {
         if (raw.isEmpty()) return ""
         val withoutBidi = BIDI_CONTROL_REGEX.replace(raw, "")
-        val withoutControl = CONTROL_CHARS_REGEX.replace(withoutBidi, "")
-        val collapsed = MULTI_WHITESPACE_REGEX.replace(withoutControl.trim(), " ")
+        val withSpacesForControl = CONTROL_CHARS_REGEX.replace(withoutBidi, " ")
+        val collapsed = MULTI_WHITESPACE_REGEX.replace(withSpacesForControl.trim(), " ")
         return Normalizer.normalize(collapsed, Normalizer.Form.NFC)
+    }
+
+    /**
+     * Cleans a name string while actively typing:
+     * Same cleaning as [cleanName] but preserves trailing whitespace so active typing is not interrupted.
+     */
+    fun cleanNameWhileTyping(raw: String): String {
+        if (raw.isEmpty()) return ""
+        val withoutBidi = BIDI_CONTROL_REGEX.replace(raw, "")
+        val withSpacesForControl = CONTROL_CHARS_REGEX.replace(withoutBidi, " ")
+        val trimmedStart = withSpacesForControl.trimStart()
+        val hasTrailingSpace = trimmedStart.endsWith(" ")
+        val collapsed = MULTI_WHITESPACE_REGEX.replace(trimmedStart.trimEnd(), " ")
+        val result = if (hasTrailingSpace && collapsed.isNotEmpty()) "$collapsed " else collapsed
+        return Normalizer.normalize(result, Normalizer.Form.NFC)
     }
 
     /**
@@ -155,6 +170,19 @@ object InputPolicy {
     }
 
     /**
+     * Cleans a description or note string while typing:
+     * Same cleaning as [cleanNote] but trims only leading whitespace, preserving trailing spaces.
+     */
+    fun cleanNoteWhileTyping(raw: String): String {
+        if (raw.isEmpty()) return ""
+        val withoutBidi = BIDI_CONTROL_REGEX.replace(raw, "")
+        val filtered = withoutBidi.filter { c ->
+            c == '\n' || c == '\t' || (c.code >= 0x20 && c.code != 0x7F)
+        }
+        return Normalizer.normalize(filtered.trimStart(), Normalizer.Form.NFC)
+    }
+
+    /**
      * Validates a note or description string.
      */
     fun validateNote(raw: String, maxLength: Int = MAX_NOTE_LENGTH): ValidationResult {
@@ -167,15 +195,32 @@ object InputPolicy {
 
     /**
      * Cleans search query text:
-     * - Strips bidi overrides and control characters.
+     * - Strips bidi overrides.
+     * - Replaces control characters with a space.
+     * - Collapses multiple spaces and trims outer whitespace.
      * - Caps to MAX_SEARCH_LENGTH.
      */
     fun cleanSearch(raw: String, maxLength: Int = MAX_SEARCH_LENGTH): String {
         if (raw.isEmpty()) return ""
         val withoutBidi = BIDI_CONTROL_REGEX.replace(raw, "")
-        val withoutControl = CONTROL_CHARS_REGEX.replace(withoutBidi, "")
-        val collapsed = MULTI_WHITESPACE_REGEX.replace(withoutControl.trim(), " ")
+        val withSpacesForControl = CONTROL_CHARS_REGEX.replace(withoutBidi, " ")
+        val collapsed = MULTI_WHITESPACE_REGEX.replace(withSpacesForControl.trim(), " ")
         return Normalizer.normalize(collapsed, Normalizer.Form.NFC).take(maxLength)
+    }
+
+    /**
+     * Cleans search query text while typing:
+     * Same cleaning as [cleanSearch] but preserves trailing whitespace.
+     */
+    fun cleanSearchWhileTyping(raw: String, maxLength: Int = MAX_SEARCH_LENGTH): String {
+        if (raw.isEmpty()) return ""
+        val withoutBidi = BIDI_CONTROL_REGEX.replace(raw, "")
+        val withSpacesForControl = CONTROL_CHARS_REGEX.replace(withoutBidi, " ")
+        val trimmedStart = withSpacesForControl.trimStart()
+        val hasTrailingSpace = trimmedStart.endsWith(" ")
+        val collapsed = MULTI_WHITESPACE_REGEX.replace(trimmedStart.trimEnd(), " ")
+        val result = if (hasTrailingSpace && collapsed.isNotEmpty()) "$collapsed " else collapsed
+        return Normalizer.normalize(result, Normalizer.Form.NFC).take(maxLength)
     }
 
     /**

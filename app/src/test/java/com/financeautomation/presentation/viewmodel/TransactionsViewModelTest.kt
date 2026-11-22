@@ -327,6 +327,13 @@ class TransactionsViewModelTest {
         advanceUntilIdle()
         assertEquals(1, vm.uiState.value.groupedTransactions.flatMap { it.transactions }.size)
         assertEquals("t_groceries", vm.uiState.value.groupedTransactions.flatMap { it.transactions }[0].id)
+
+        // Trailing space while typing is preserved
+        vm.setSearchQuery("Groceries ")
+        advanceUntilIdle()
+        assertEquals("Groceries ", vm.uiState.value.searchQuery)
+        // Filtering works because search trims query
+        assertEquals(1, vm.uiState.value.groupedTransactions.flatMap { it.transactions }.size)
     }
 
     @Test

@@ -196,7 +196,7 @@ fun TripModeFlowSheet(
                 OutlinedTextField(
                     value = tagNameText,
                     onValueChange = {
-                        tagNameText = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                        tagNameText = com.financeautomation.core.utils.InputPolicy.cleanNameWhileTyping(it)
                             .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                     },
                     placeholder = {
@@ -230,7 +230,7 @@ fun TripModeFlowSheet(
                 OutlinedTextField(
                     value = placeText,
                     onValueChange = {
-                        placeText = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                        placeText = com.financeautomation.core.utils.InputPolicy.cleanNameWhileTyping(it)
                             .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                     },
                     placeholder = {

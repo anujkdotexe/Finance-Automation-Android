@@ -267,7 +267,7 @@ fun IncomeReturnFlowSheet(
             OutlinedTextField(
                 value = settlerName,
                 onValueChange = {
-                    val clean = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                    val clean = com.financeautomation.core.utils.InputPolicy.cleanNameWhileTyping(it)
                         .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                     settlerName = clean
                     if (selectedOption == InflowOption.FRIEND_SETTLEMENT) {

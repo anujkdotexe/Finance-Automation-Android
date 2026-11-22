@@ -515,7 +515,7 @@ private fun OnboardingAccountsSetupScreen(
                         OutlinedTextField(
                             value = accountName,
                             onValueChange = {
-                                accountName = InputPolicy.cleanName(it).take(InputPolicy.MAX_NAME_LENGTH)
+                                accountName = InputPolicy.cleanNameWhileTyping(it).take(InputPolicy.MAX_NAME_LENGTH)
                             },
                             placeholder = {
                                 Text(

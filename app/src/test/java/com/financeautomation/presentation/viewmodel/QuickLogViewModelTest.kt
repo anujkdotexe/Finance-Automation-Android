@@ -854,4 +854,50 @@ class QuickLogViewModelTest {
         vm.onCustomShareChanged("")
         assertEquals(true, vm.uiState.value.isSaveEnabled)
     }
+
+    @Test
+    fun testPayeeAndNoteWhileTypingKeepTrailingSpacesAndTrimOnSave() = runTest {
+        val fakeRepo = FakeTransactionRepo()
+        val vm = QuickLogViewModel(
+            transactionRepository = fakeRepo,
+            peopleRepository = FakePeopleRepo(),
+            categoryRepository = FakeCategoryRepo(),
+            accountRepository = FakeAccountRepo(),
+            tripTagRepository = FakeTripTagRepo(),
+            pendingCaptureDaoProvider = { FakePendingCaptureDao() },
+            syncQueueDaoProvider = { FakeTestSyncQueueDao() },
+            ioDispatcher = testDispatcher
+        )
+        advanceUntilIdle()
+        vm.setManualMode()
+        advanceUntilIdle()
+
+        // Typing sequence "Team " then "Team d"
+        vm.onPayeeChanged("Team ")
+        assertEquals("Team ", vm.uiState.value.payee)
+
+        vm.onPayeeChanged("Team d")
+        assertEquals("Team d", vm.uiState.value.payee)
+
+        // Reset to "Team " to verify save trims
+        vm.onPayeeChanged("Team ")
+        assertEquals("Team ", vm.uiState.value.payee)
+
+        // Note while typing
+        vm.onNoteChanged("Lunch with team ")
+        assertEquals("Lunch with team ", vm.uiState.value.note)
+
+        vm.onAmountChanged("100")
+        advanceUntilIdle()
+
+        var savedTxnId: String? = null
+        vm.onConfirmAndSave(
+            onSaved = { _, id -> savedTxnId = id },
+            onError = {}
+        )
+        advanceUntilIdle()
+
+        assertEquals("Team", vm.uiState.value.payee)
+        assertEquals("Lunch with team", vm.uiState.value.note)
+    }
 }

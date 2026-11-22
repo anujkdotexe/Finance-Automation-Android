@@ -259,7 +259,7 @@ fun AccountsScreen(
                         OutlinedTextField(
                             value = editName,
                             onValueChange = {
-                                editName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                editName = com.financeautomation.core.utils.InputPolicy.cleanNameWhileTyping(it)
                                     .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                             },
                             singleLine = true,
@@ -384,7 +384,7 @@ fun AccountsScreen(
                         OutlinedTextField(
                             value = newAccountName,
                             onValueChange = {
-                                newAccountName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                                newAccountName = com.financeautomation.core.utils.InputPolicy.cleanNameWhileTyping(it)
                                     .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                             },
                             placeholder = { Text(stringResource(R.string.accounts_name_placeholder), style = FinanceTheme.typography.bodyMedium) },

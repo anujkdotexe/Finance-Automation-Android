@@ -282,7 +282,7 @@ class TransactionsViewModel(
     }
 
     fun setSearchQuery(query: String) {
-        val clean = com.financeautomation.core.utils.InputPolicy.cleanSearch(query)
+        val clean = com.financeautomation.core.utils.InputPolicy.cleanSearchWhileTyping(query)
         searchQueryFlow.value = clean
     }
 

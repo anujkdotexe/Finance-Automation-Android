@@ -253,7 +253,7 @@ fun RepaidFriendFlowSheet(
                 OutlinedTextField(
                     value = personName,
                     onValueChange = {
-                        personName = com.financeautomation.core.utils.InputPolicy.cleanName(it)
+                        personName = com.financeautomation.core.utils.InputPolicy.cleanNameWhileTyping(it)
                             .take(com.financeautomation.core.utils.InputPolicy.MAX_NAME_LENGTH)
                     },
                     placeholder = { Text(stringResource(R.string.hint_friends_name), style = FinanceTheme.typography.bodyMedium) },
