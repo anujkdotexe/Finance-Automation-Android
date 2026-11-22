@@ -518,22 +518,31 @@ open class AccountingSyncExecutor(
 
     /** Reads one id column of one tab (rows 4 down) into a map of lower case id to row number, once per apply. */
     private suspend fun loadUuidColumn(
-        cache: MutableMap<Triple<String, String, String>, Map<String, Int>>,
+        cache: MutableMap<Triple<String, String, String>, UuidColumn>,
         spreadsheetId: String,
         tab: String,
         colLetter: String
-    ): Result<Map<String, Int>> {
+    ): Result<UuidColumn> {
         val key = Triple(spreadsheetId, tab, colLetter)
         cache[key]?.let { return Result.Success(it) }
         val res = googleSheetsClient.getRangeValues(spreadsheetId, "'$tab'!${colLetter}4:$colLetter")
         if (res is Result.Error) return Result.Error(res.exception)
         val map = HashMap<String, Int>()
+        val cells = ArrayList<String>()
         (res as Result.Success).data.forEachIndexed { i, row ->
-            val cell = row.firstOrNull()?.toString()?.trim()?.lowercase()
-            if (!cell.isNullOrEmpty()) map.putIfAbsent(cell, i + 4)
+            val cell = row.firstOrNull()?.toString()?.trim()?.lowercase().orEmpty()
+            cells.add(cell)
+            if (cell.isNotEmpty()) map.putIfAbsent(cell, i + 4)
         }
-        cache[key] = map
-        return Result.Success(map)
+        val column = UuidColumn(map, cells)
+        cache[key] = column
+        return Result.Success(column)
+    }
+
+    /** One id column read from row 4 down: id to row number, and the raw cell of every row read (index 0 is row 4). */
+    private class UuidColumn(val rowById: Map<String, Int>, val cells: List<String>) {
+        /** True when the row is inside the data read and its id cell is empty (an older row without an id). */
+        fun isBlankAt(row: Int): Boolean = row >= 4 && row - 4 < cells.size && cells[row - 4].isEmpty()
     }
 
     private suspend fun applyAccountingPlan(
@@ -587,7 +596,7 @@ open class AccountingSyncExecutor(
             for (settled in plan.settled) {
                 if (!settled.uuid.isNullOrBlank()) settledUuidByRow[Pair(settled.tab, settled.row)] = settled.uuid
             }
-            val columnCache = mutableMapOf<Triple<String, String, String>, Map<String, Int>>()
+            val columnCache = mutableMapOf<Triple<String, String, String>, UuidColumn>()
 
             for ((targetId, edits) in editsByTarget) {
                 val rangesWithValues = LinkedHashMap<String, List<List<Any?>>>()
@@ -601,13 +610,16 @@ open class AccountingSyncExecutor(
                         val (primaryCol, legacyCol) = uuidColumnsFor(edit.column)
                         val primary = loadUuidColumn(columnCache, targetId, edit.tab, primaryCol)
                         if (primary is Result.Error) return Result.Error(primary.exception)
-                        var found = (primary as Result.Success).data[expectedUuid.trim().lowercase()]
+                        val primaryColumn = (primary as Result.Success).data
+                        var found = primaryColumn.rowById[expectedUuid.trim().lowercase()]
                         if (found == null) {
                             val legacy = loadUuidColumn(columnCache, targetId, edit.tab, legacyCol)
                             if (legacy is Result.Error) return Result.Error(legacy.exception)
-                            found = (legacy as Result.Success).data[expectedUuid.trim().lowercase()]
+                            found = (legacy as Result.Success).data.rowById[expectedUuid.trim().lowercase()]
                         }
                         // Both id columns were read in full: the row is really gone from this tab. Not retried.
+                        // An older row written before ids existed has a blank id cell at the planned row: keep the planned row.
+                        if (found == null && primaryColumn.isBlankAt(edit.row)) found = edit.row
                         found ?: return Result.Error(IllegalStateException("Sheet row moved or removed in ${edit.tab}; edit not applied"))
                     }
                     rangesWithValues["'${edit.tab}'!${edit.column}$actualRow"] = listOf(listOf(edit.value))
