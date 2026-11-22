@@ -1,6 +1,7 @@
 package com.financeautomation.domain.utils
 
 import com.financeautomation.core.model.TransactionStatus
+import com.financeautomation.domain.model.LedgerDebit
 import com.financeautomation.domain.model.Transaction
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -142,9 +143,7 @@ object AccountingUtils {
             return listOf(ReceivableShare(key, display, txn.owedToMe))
         }
 
-        val totalHeads = rawTokens.size + 1
-        val expectedShare = round2(txn.totalAmount / totalHeads)
-        val isEqualSplit = kotlin.math.abs(txn.myShare - expectedShare) <= 0.02
+        val isEqualSplit = isEqualSplit(txn.totalAmount, txn.myShare, txn.companions)
 
         return if (isEqualSplit) {
             val sharePerPerson = round2(txn.owedToMe / rawTokens.size)
@@ -158,5 +157,22 @@ object AccountingUtils {
             listOf(ReceivableShare(key, display, txn.owedToMe))
         }
     }
+
+    fun isEqualSplit(totalAmount: Double, myShare: Double, companions: String?): Boolean {
+        val rawTokens = tokens(companions)
+        if (rawTokens.isEmpty() || companions.equals("Personal", ignoreCase = true)) {
+            return false
+        }
+        val parsed = parseCompanionAmountsWithDisplay(rawTokens)
+        if (parsed != null && parsed.isNotEmpty()) {
+            return false
+        }
+        val totalHeads = rawTokens.size + 1
+        val expectedShare = round2(totalAmount / totalHeads)
+        return kotlin.math.abs(myShare - expectedShare) <= 0.02
+    }
+
+    fun isEqualSplit(debit: LedgerDebit): Boolean =
+        isEqualSplit(debit.total, debit.myShare, debit.companions)
 }
 
