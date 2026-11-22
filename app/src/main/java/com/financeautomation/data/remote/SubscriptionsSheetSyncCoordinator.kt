@@ -12,6 +12,8 @@ import com.financeautomation.domain.usecase.SyncConfigUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.UUID
@@ -27,6 +29,9 @@ open class SubscriptionsSheetSyncCoordinator(
 ) {
 
     private val baseHashes = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** Only one tab sync runs at a time, so two callers cannot both create a subscription from the same blank id row. */
+    private val syncMutex = Mutex()
 
     private suspend fun getBaseHash(id: String): String? {
         baseHashes[id]?.let { return it }
@@ -74,7 +79,10 @@ open class SubscriptionsSheetSyncCoordinator(
      * Tab edits update Room, and Room rewrites Config JSON mirror.
      * On same-field conflict between sheet and Room, sheet wins (recorded with code CONFLICT_SHEET_WON).
      */
-    open suspend fun syncSubscriptionsTab(spreadsheetId: String): Result<Unit> = withContext(ioDispatcher) {
+    open suspend fun syncSubscriptionsTab(spreadsheetId: String): Result<Unit> =
+        syncMutex.withLock { syncSubscriptionsTabLocked(spreadsheetId) }
+
+    private suspend fun syncSubscriptionsTabLocked(spreadsheetId: String): Result<Unit> = withContext(ioDispatcher) {
         try {
             val accounts = accountRepository?.getAllAccounts(includeArchived = false)?.map { it.name } ?: emptyList()
             val ensureRes = googleSheetsClient.ensureSubscriptionsTabExists(spreadsheetId, accounts)
@@ -102,6 +110,26 @@ open class SubscriptionsSheetSyncCoordinator(
                         Diagnostics.record("SubscriptionsSync", "REJECTED_BAD_DATE")
                         todayEpochDay
                     }
+                    // A row whose id cell is blank may already have a local subscription from an earlier sync whose id
+                    // write back failed: reuse it instead of creating a duplicate.
+                    val reusable = subscriptionRepository.getActiveSubscriptions().firstOrNull {
+                        it.id !in processedSubIds &&
+                            it.name.trim().equals(row.name.trim(), ignoreCase = true) &&
+                            it.anchorEpochDay == resolvedEpochDay
+                    }
+                    if (reusable != null) {
+                        processedSubIds.add(reusable.id)
+                        val reuseRes = googleSheetsClient.updateCell(
+                            spreadsheetId = spreadsheetId,
+                            tabName = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME,
+                            cellCoordinate = "${SheetSchemaConstants.COL_LETTER_SUB_ID}${row.rowNumber}",
+                            value = reusable.id
+                        )
+                        if (reuseRes is Result.Error) {
+                            Diagnostics.record("SubscriptionsSync", "ID_WRITEBACK_FAILED")
+                        }
+                        continue
+                    }
                     val newId = "sub_" + UUID.randomUUID().toString().replace("-", "").take(12)
                     val newSub = Subscription(
                         id = newId,
@@ -124,12 +152,16 @@ open class SubscriptionsSheetSyncCoordinator(
                     roomModified = true
                     saveBaseHash(newId, computeSubHash(newSub))
 
-                    googleSheetsClient.updateCell(
+                    val writeBack = googleSheetsClient.updateCell(
                         spreadsheetId = spreadsheetId,
                         tabName = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME,
                         cellCoordinate = "${SheetSchemaConstants.COL_LETTER_SUB_ID}${row.rowNumber}",
                         value = newId
                     )
+                    if (writeBack is Result.Error) {
+                        // The next sync finds the row without an id and reuses this subscription by name and due date
+                        Diagnostics.record("SubscriptionsSync", "ID_WRITEBACK_FAILED")
+                    }
                 } else {
                     val existing = subscriptionRepository.getSubscription(row.id)
                     if (existing == null) {
