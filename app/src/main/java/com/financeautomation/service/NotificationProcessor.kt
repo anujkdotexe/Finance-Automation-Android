@@ -434,17 +434,10 @@ class NotificationProcessor(
                             return@filter false
                         }
 
-                        // Two final success debits from the same app with different notification keys and no
-                        // reference id are two real payments; they stay separate and the user decides in review
-                        if (candidate.sourcePackage == sourcePackage && wording == WordingClass.SUCCESS &&
-                            candidate.state != PendingCaptureEntity.STATE_AWAITING_SUCCESS &&
-                            sbnKey.isNotBlank() && !candidate.notificationKey.isNullOrBlank() &&
-                            candidate.notificationKey != sbnKey &&
-                            incomingRefId == null && extractRefFromFlags(candidate.flags) == null
-                        ) {
-                            if (!activeFlags.split(",").contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)) {
-                                activeFlags = appendFlag(activeFlags, PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
-                            }
+                        // Identical text from a different notification key was kept as a possible duplicate above;
+                        // it must not fold back into the capture it repeats. Different wording (a merchant SMS and a
+                        // generic debit SMS for one payment) still merges.
+                        if (keepAsPossibleDuplicate && candidate.contentHash == contentHash) {
                             return@filter false
                         }
 

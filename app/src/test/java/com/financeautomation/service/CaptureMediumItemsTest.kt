@@ -298,8 +298,22 @@ class CaptureMediumItemsTest {
             sbnKey = "0|gpay|502",
             postTime = t0 + 60_000L // 1 minute later (< 3 min window)
         )
-        assertTrue("Duplicate alert within window must be dropped", r2 is NotificationProcessingOutcome.Ignored)
-        assertEquals("Only one capture should exist in DB", 1, captureDao.captures.size)
+        assertTrue("Identical text with a different key is kept", r2 is NotificationProcessingOutcome.Captured)
+        assertTrue(
+            "The second capture is flagged as a possible duplicate",
+            (r2 as NotificationProcessingOutcome.Captured).capture.flags.contains(PendingCaptureEntity.FLAG_POSSIBLE_DUPLICATE)
+        )
+        assertEquals("Both captures should exist in DB", 2, captureDao.captures.size)
+
+        val r3 = processor.process(
+            sourcePackage = "com.google.android.apps.nbu.paisa.user",
+            title = "Google Pay",
+            text = text,
+            sbnKey = "0|gpay|502",
+            postTime = t0 + 60_000L
+        )
+        assertTrue("Same key and post time is still dropped", r3 is NotificationProcessingOutcome.Ignored)
+        assertEquals(2, captureDao.captures.size)
     }
 
     @Test
