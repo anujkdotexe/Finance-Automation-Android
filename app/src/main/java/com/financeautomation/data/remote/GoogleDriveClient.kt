@@ -137,6 +137,7 @@ open class GoogleDriveClient(
                 .addQueryParameter("q", propertyQuery)
                 .addQueryParameter("fields", "files(id, name)")
                 .addQueryParameter("spaces", "drive")
+                .addQueryParameter("orderBy", "createdTime desc")
                 .build()
 
             val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
@@ -257,6 +258,7 @@ open class GoogleDriveClient(
                 .addQueryParameter("q", query)
                 .addQueryParameter("fields", "files(id, name)")
                 .addQueryParameter("spaces", "drive")
+                .addQueryParameter("orderBy", "createdTime desc")
                 .build()
 
             val searchRequest = newRequestBuilder(searchUrl.toString()).get().build()
@@ -649,6 +651,32 @@ open class GoogleDriveClient(
                 } else {
                     Result.Error(IOException("Drive API returned empty folder id for Archive folder"))
                 }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Marks a workbook that was replaced by a newer one: its fiscalYear property becomes "superseded", so a later
+     * search by year finds only the current workbook. The file itself is not touched otherwise.
+     */
+    open suspend fun markWorkbookSuperseded(fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val request = newRequestBuilder("$baseUrl/files/$fileId")
+                .patch("""{"appProperties":{"fiscalYear":"superseded"}}""".toRequestBody(jsonMediaType))
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val bodyString = response.body?.string().orEmpty()
+                    val apiError = GoogleApiError.parse(GoogleEndpoint.DRIVE_FILES_UPDATE, response.code, bodyString)
+                    return@withContext Result.Error(
+                        GoogleDriveApiException(response.code, apiError.formatExceptionMessage("Failed to mark workbook superseded"), apiError)
+                    )
+                }
+                Result.Success(Unit)
             }
         } catch (e: CancellationException) {
             throw e

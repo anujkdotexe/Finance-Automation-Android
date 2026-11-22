@@ -472,6 +472,14 @@ open class WorkbookResolver(
                 return@withContext Result.Error(provRes.exception)
             }
 
+            // The old workbook must not carry the same year tag, or a later search could find either one
+            if (!oldStoredId.isNullOrBlank() && oldStoredId != newId) {
+                val markRes = googleDriveClient.markWorkbookSuperseded(oldStoredId)
+                if (markRes is Result.Error) {
+                    Diagnostics.record("WorkbookResolver", "markSuperseded: ${markRes.exception.javaClass.simpleName}")
+                }
+            }
+
             preferencesRepository.setSpreadsheetIdForYear(year, newId)
             val today = LocalDate.now(clock).toString()
             preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
