@@ -61,9 +61,12 @@ class QuickActionReceiver : BroadcastReceiver() {
             ?: intent.getStringExtra("category_name")
 
         val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
-        if (notificationId != -1) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            notificationManager?.cancel(notificationId)
+        // The notification is cancelled only once the work has succeeded, so a failed log leaves it to tap again
+        val cancelNotification: () -> Unit = {
+            if (notificationId != -1) {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                notificationManager?.cancel(notificationId)
+            }
         }
 
         val pendingResult = goAsync()
@@ -71,6 +74,7 @@ class QuickActionReceiver : BroadcastReceiver() {
         val dispatcher = testDispatcher ?: Dispatchers.IO
 
         if (action == ACTION_DISMISS_CAPTURE) {
+            cancelNotification()
             CoroutineScope(SupervisorJob() + dispatcher).launch {
                 try {
                     val container = app?.appContainer
@@ -103,14 +107,14 @@ class QuickActionReceiver : BroadcastReceiver() {
 
                     var loggedCapture: com.financeautomation.data.local.entity.PendingCaptureEntity? = null
                     var loggedCategoryName: String? = null
-                    val outcome = CaptureClaim.logOnce(captureDao, captureId) { capture ->
+                    val outcome = CaptureClaim.logOnceResult(captureDao, captureId) { capture ->
                         if (capture.kind.equals(com.financeautomation.data.local.entity.PendingCaptureEntity.KIND_CREDIT, ignoreCase = true)) {
                             // Credit captures must never be saved as a debit expense
-                            return@logOnce false
+                            return@logOnceResult CaptureClaim.LogResult.FAILED_RESTORE
                         }
                         if (resolvedCategory == null) {
                             captureDao.updateState(capture.id, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_NEEDS_REVIEW)
-                            return@logOnce false
+                            return@logOnceResult CaptureClaim.LogResult.SENT_TO_REVIEW
                         }
                         val loggedCategory = resolvedCategory
                         loggedCategoryName = loggedCategory
@@ -140,7 +144,12 @@ class QuickActionReceiver : BroadcastReceiver() {
                         )
                         val ok = logResult is com.financeautomation.core.model.Result.Success<*>
                         if (ok) loggedCapture = capture
-                        ok
+                        if (ok) CaptureClaim.LogResult.LOGGED else CaptureClaim.LogResult.FAILED_RESTORE
+                    }
+                    if (outcome == CaptureClaim.Outcome.LOGGED || outcome == CaptureClaim.Outcome.SENT_TO_REVIEW ||
+                        outcome == CaptureClaim.Outcome.ALREADY_HANDLED || outcome == CaptureClaim.Outcome.NOT_FOUND
+                    ) {
+                        cancelNotification()
                     }
                     val capture = loggedCapture
                     if (outcome == CaptureClaim.Outcome.LOGGED && capture != null) {
@@ -168,6 +177,7 @@ class QuickActionReceiver : BroadcastReceiver() {
                             repository = repository
                         )
                         if (outcome is QuickActionResult.Success) {
+                            cancelNotification()
                             try {
                                 SyncTransactionsWorker.enqueueExpedited(context.applicationContext)
                             } catch (e: Exception) {
