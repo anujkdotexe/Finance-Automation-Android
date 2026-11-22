@@ -1467,7 +1467,25 @@ object SheetProvisioner {
             !it.equals(SheetSchemaConstants.SAVINGS_KEYWORD, ignoreCase = true) &&
             !it.equals("Transfer", ignoreCase = true)
         }
-        val insightsCount = insightsCategories.size + 2 // categories + 1 trip slice + 1 refunds slice
+        // categories + 1 trip slice. Refunds are negative and a pie chart cannot plot a negative value,
+        // so the refunds row is written below the chart range and is not charted.
+        val insightsCount = insightsCategories.size + 1
+
+        // Clear the whole Insights data area first so rows from an earlier, longer category list do not stay.
+        requests.add(
+            mapOf(
+                "updateCells" to mapOf(
+                    "range" to mapOf(
+                        "sheetId" to dashboardSheetId,
+                        "startRowIndex" to 64,
+                        "endRowIndex" to 90,
+                        "startColumnIndex" to 20,
+                        "endColumnIndex" to 22
+                    ),
+                    "fields" to "userEnteredValue"
+                )
+            )
+        )
 
         insightsCategories.forEachIndexed { idx, catName ->
             val rowNum = 65 + idx
@@ -1546,13 +1564,14 @@ object SheetProvisioner {
         )
 
         // Refunds Slice row (subtracts refund inflows from Table 2 to maintain parity with Burn KPI)
-        val refundsSliceRowNum = tripSliceRowNum + 1
+        // Placed one row below the last charted row (the chart range is at least 10 rows) so it is never plotted.
+        val refundsSliceRowNum = 65 + maxOf(10, insightsCount) + 1
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
                 rowIndex = refundsSliceRowNum - 1,
                 colIndex = 20,
-                value = mapOf("stringValue" to "Refunds"),
+                value = mapOf("stringValue" to "Refunds (not charted)"),
                 format = mapOf(
                     "backgroundColor" to bodyAltRowBg,
                     "horizontalAlignment" to "LEFT",
