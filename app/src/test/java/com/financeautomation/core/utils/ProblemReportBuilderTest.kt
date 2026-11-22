@@ -353,7 +353,7 @@ class ProblemReportBuilderTest {
     }
 
     @Test
-    fun submitReportRetryWithSameDocumentIdTreatsAlreadyExistsOrPermissionDeniedAsSuccess() = kotlinx.coroutines.test.runTest {
+    fun submitReportFirstAttemptPermissionDeniedIsFailure() = kotlinx.coroutines.test.runTest {
         val payload = ProblemReportPayload(
             schemaVersion = 1,
             appVersion = "1.0.0",
@@ -362,37 +362,120 @@ class ProblemReportBuilderTest {
             androidSdk = 34,
             installId = UUID.randomUUID().toString(),
             screen = "About",
-            reasonCode = "test_retry",
+            reasonCode = "test_first_attempt",
             counters = null,
-            text = "Testing retry safety"
+            text = "Testing first attempt failure"
         )
         val mockContext = object : android.content.ContextWrapper(null) {}
-        val fixedDocId = "test-doc-id-1234"
+        val fixedDocId = "test-doc-id-first-attempt"
 
-        // Simulated already exists failure from Firestore on retry
-        val alreadyExistsResult = ProblemReportManager.submitReport(
+        val firstAttemptResult = ProblemReportManager.submitReport(
             context = mockContext,
             payload = payload,
             documentId = fixedDocId,
+            isRetry = false,
             timeoutMillis = 1000L,
             submitter = { id, _ ->
                 assertEquals(fixedDocId, id)
-                throw RuntimeException("ALREADY_EXISTS: Document already exists")
+                throw com.google.firebase.firestore.FirebaseFirestoreException(
+                    "Missing or insufficient permissions.",
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+                )
             }
         )
-        assertTrue("Already exists on retry must be treated as success", alreadyExistsResult.isSuccess)
+        assertTrue("First attempt with PERMISSION_DENIED must be a failure", firstAttemptResult.isFailure)
+        assertNotNull("Failure exception must be captured", firstAttemptResult.exceptionOrNull())
+    }
 
-        // Simulated permission denied failure on existing doc from create-only security rules
-        val permissionDeniedResult = ProblemReportManager.submitReport(
+    @Test
+    fun submitReportRetryAfterTimeoutWithPermissionDeniedIsSuccessWithMayAlreadyHaveBeenSentWording() = kotlinx.coroutines.test.runTest {
+        val payload = ProblemReportPayload(
+            schemaVersion = 1,
+            appVersion = "1.0.0",
+            versionCode = 1,
+            deviceModel = "Test Phone",
+            androidSdk = 34,
+            installId = UUID.randomUUID().toString(),
+            screen = "About",
+            reasonCode = "test_retry_timeout",
+            counters = null,
+            text = "Testing retry after timeout"
+        )
+        val mockContext = object : android.content.ContextWrapper(null) {}
+        val fixedDocId = "test-doc-id-retry-timeout"
+
+        val retryResult = ProblemReportManager.submitReport(
             context = mockContext,
             payload = payload,
             documentId = fixedDocId,
+            isRetry = true,
             timeoutMillis = 1000L,
             submitter = { id, _ ->
                 assertEquals(fixedDocId, id)
-                throw RuntimeException("PERMISSION_DENIED: False permission for update on create-only rule")
+                throw com.google.firebase.firestore.FirebaseFirestoreException(
+                    "Update rejected on create-only rules.",
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+                )
             }
         )
-        assertTrue("Permission denied on retry must be treated as success", permissionDeniedResult.isSuccess)
+        assertTrue("Retry after timeout with PERMISSION_DENIED must be treated as success", retryResult.isSuccess)
+        val successMsg = retryResult.getOrNull()
+        assertNotNull("Success message must be present", successMsg)
+        assertTrue(
+            "Success message must contain 'may already have been sent' wording",
+            successMsg!!.contains("may already have been sent")
+        )
+    }
+
+    @Test
+    fun submitReportAlreadyExistsIsSuccessOnAnyAttempt() = kotlinx.coroutines.test.runTest {
+        val payload = ProblemReportPayload(
+            schemaVersion = 1,
+            appVersion = "1.0.0",
+            versionCode = 1,
+            deviceModel = "Test Phone",
+            androidSdk = 34,
+            installId = UUID.randomUUID().toString(),
+            screen = "About",
+            reasonCode = "test_already_exists",
+            counters = null,
+            text = "Testing ALREADY_EXISTS"
+        )
+        val mockContext = object : android.content.ContextWrapper(null) {}
+        val fixedDocId = "test-doc-id-already-exists"
+
+        // On first attempt (isRetry = false)
+        val firstAttemptResult = ProblemReportManager.submitReport(
+            context = mockContext,
+            payload = payload,
+            documentId = fixedDocId,
+            isRetry = false,
+            timeoutMillis = 1000L,
+            submitter = { id, _ ->
+                assertEquals(fixedDocId, id)
+                throw com.google.firebase.firestore.FirebaseFirestoreException(
+                    "Document already exists",
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.ALREADY_EXISTS
+                )
+            }
+        )
+        assertTrue("ALREADY_EXISTS on first attempt must be treated as success", firstAttemptResult.isSuccess)
+
+        // On retry attempt (isRetry = true)
+        val retryResult = ProblemReportManager.submitReport(
+            context = mockContext,
+            payload = payload,
+            documentId = fixedDocId,
+            isRetry = true,
+            timeoutMillis = 1000L,
+            submitter = { id, _ ->
+                assertEquals(fixedDocId, id)
+                throw com.google.firebase.firestore.FirebaseFirestoreException(
+                    "Document already exists",
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.ALREADY_EXISTS
+                )
+            }
+        )
+        assertTrue("ALREADY_EXISTS on retry attempt must be treated as success", retryResult.isSuccess)
     }
 }

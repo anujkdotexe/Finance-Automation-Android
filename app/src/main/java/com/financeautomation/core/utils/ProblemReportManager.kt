@@ -5,6 +5,7 @@ import android.os.Build
 import com.financeautomation.BuildConfig
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.tasks.await
@@ -107,13 +108,25 @@ object ProblemReportManager {
 
     const val SUBMIT_TIMEOUT_MILLIS = 15_000L
 
+    private fun findFirestoreCode(throwable: Throwable?): FirebaseFirestoreException.Code? {
+        var current = throwable
+        while (current != null) {
+            if (current is FirebaseFirestoreException) {
+                return current.code
+            }
+            current = current.cause
+        }
+        return null
+    }
+
     suspend fun submitReport(
         context: Context,
         payload: ProblemReportPayload,
         documentId: String = UUID.randomUUID().toString(),
         timeoutMillis: Long = SUBMIT_TIMEOUT_MILLIS,
+        isRetry: Boolean = false,
         submitter: (suspend (String, Map<String, Any?>) -> Unit)? = null
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<String> = withContext(Dispatchers.IO) {
         if (!isFirebaseConfigured(context) && submitter == null) {
             return@withContext Result.failure(
                 IllegalStateException("Firebase service is not configured on this device")
@@ -131,19 +144,25 @@ object ProblemReportManager {
                 }
             }
             Diagnostics.record("ProblemReportManager", "Report submitted successfully: ${payload.reasonCode}")
-            Result.success(Unit)
+            Result.success("Report submitted successfully")
         } catch (e: TimeoutCancellationException) {
             val errorMsg = "Submission timed out after ${timeoutMillis / 1000} seconds. If your phone was offline, the report may still arrive later once connected."
             Diagnostics.record("ProblemReportManager", "Submission error: $errorMsg")
             Result.failure(TimeoutException(errorMsg))
         } catch (e: Exception) {
-            val scrubbedError = PrivacyScrubber.scrub(e.message ?: e.javaClass.simpleName)
-            val lowerError = scrubbedError.lowercase()
-            // If the document already exists or create-only permission is denied on retry, treat as already sent
-            if (lowerError.contains("already exists") || lowerError.contains("already_exists") || lowerError.contains("permission_denied") || lowerError.contains("permission denied")) {
-                Diagnostics.record("ProblemReportManager", "Report retry for $documentId resolved as already sent ($scrubbedError)")
-                Result.success(Unit)
+            val code = findFirestoreCode(e)
+            val isAlreadyExists = code == FirebaseFirestoreException.Code.ALREADY_EXISTS
+            val isPermissionDenied = code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+
+            if (isAlreadyExists) {
+                Diagnostics.record("ProblemReportManager", "Report $documentId already exists, treated as already sent")
+                Result.success("Report was already submitted")
+            } else if (isRetry && isPermissionDenied) {
+                val successMessage = "Report may already have been sent"
+                Diagnostics.record("ProblemReportManager", "Report retry for $documentId received permission denied: $successMessage")
+                Result.success(successMessage)
             } else {
+                val scrubbedError = PrivacyScrubber.scrub(e.message ?: e.javaClass.simpleName)
                 Diagnostics.record("ProblemReportManager", "Submission error: $scrubbedError")
                 Result.failure(e)
             }

@@ -77,6 +77,8 @@ fun ProblemReportDialog(
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSuccess by remember { mutableStateOf(false) }
+    var successMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var hasTimedOut by rememberSaveable { mutableStateOf(false) }
     var submitJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val currentPayload = remember(userText, initialScreen, initialReasonCode) {
@@ -144,7 +146,7 @@ fun ProblemReportDialog(
                             modifier = Modifier.size(48.dp)
                         )
                         Text(
-                            text = stringResource(R.string.problem_report_success),
+                            text = successMessage ?: stringResource(R.string.problem_report_success),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -301,14 +303,19 @@ fun ProblemReportDialog(
                                     val result = ProblemReportManager.submitReport(
                                         context = context,
                                         payload = currentPayload,
-                                        documentId = reportDocumentId
+                                        documentId = reportDocumentId,
+                                        isRetry = hasTimedOut
                                     )
                                     isSubmitting = false
                                     result.fold(
-                                        onSuccess = {
+                                        onSuccess = { msg ->
+                                            successMessage = msg
                                             isSuccess = true
                                         },
                                         onFailure = { error ->
+                                            if (error is java.util.concurrent.TimeoutException) {
+                                                hasTimedOut = true
+                                            }
                                             val msg = error.localizedMessage?.ifBlank { null }
                                                 ?: error.message?.ifBlank { null }
                                                 ?: error.javaClass.simpleName
