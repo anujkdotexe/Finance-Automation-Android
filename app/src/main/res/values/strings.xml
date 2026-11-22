@@ -404,6 +404,7 @@
     <string name="sub_active_title">Active subscriptions</string>
     <string name="sub_next_due">Next due %1$s</string>
     <string name="sub_paused_label">Paused</string>
+    <string name="sub_no_due_date">No due date</string>
     <string name="sub_total_excludes_varies">%1$d without a fixed amount, not in this total</string>
     <string name="sub_next_due_formatted">Next due %1$s, %2$s</string>
     <string name="sub_paused_title">Paused subscriptions</string>
@@ -717,6 +718,8 @@
 
     <!-- Subscriptions -->
     <string name="subscriptions_per_month">per month</string>
+    <string name="subscriptions_per_week">per week</string>
+    <string name="subscriptions_per_year">per year</string>
     <string name="currency_inr">INR (₹)</string>
     <string name="subscription_remind_in_4_days">In 4 days</string>
 

@@ -171,20 +171,27 @@ fun SubscriptionsScreen(
                             val nextDueText = if (nextDue != null && nextDueDay != null) {
                                 stringResource(R.string.sub_next_due_formatted, nextDue.name, formatDueDay(nextDueDay))
                             } else null
-                            if (state.variesAmountCount > 0) {
-                                Text(
-                                    text = stringResource(R.string.sub_total_excludes_varies, state.variesAmountCount),
-                                    style = FinanceTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                if (state.variesAmountCount > 0) {
+                                    Text(
+                                        text = stringResource(R.string.sub_total_excludes_varies, state.variesAmountCount),
+                                        style = FinanceTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.End
+                                    )
+                                }
 
-                            if (nextDueText != null) {
-                                Text(
-                                    text = nextDueText,
-                                    style = FinanceTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                if (nextDueText != null) {
+                                    Text(
+                                        text = nextDueText,
+                                        style = FinanceTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.End
+                                    )
+                                }
                             }
                         }
                     }
@@ -551,7 +558,9 @@ private fun SubscriptionItemCard(
                         text = if (nextDueDay != null) {
                             stringResource(R.string.sub_next_due, formatDueDay(nextDueDay))
                         } else {
-                            stringResource(R.string.sub_paused_label)
+                            stringResource(
+                                if (subscription.active) R.string.sub_no_due_date else R.string.sub_paused_label
+                            )
                         },
                         style = FinanceTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -574,7 +583,13 @@ private fun SubscriptionItemCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = stringResource(R.string.subscriptions_per_month),
+                    text = stringResource(
+                        when (subscription.frequency) {
+                            SubscriptionFrequency.WEEKLY -> R.string.subscriptions_per_week
+                            SubscriptionFrequency.MONTHLY -> R.string.subscriptions_per_month
+                            SubscriptionFrequency.YEARLY -> R.string.subscriptions_per_year
+                        }
+                    ),
                     style = FinanceTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
