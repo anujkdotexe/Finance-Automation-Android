@@ -386,4 +386,50 @@ class DashboardSubscriptionsAndTripsParityTest {
 
         assertTrue("Note must state that Paid in total covers this workbook's year only", text.contains("Paid in total covers this workbook's year only"))
     }
+
+    @Test
+    fun testTitleRowsEndWithDarkNavyBackgroundAndWhiteText() {
+        val darkNavy = mapOf("red" to 0.09803922f, "green" to 0.13333334f, "blue" to 0.49411765f, "alpha" to 1.0f)
+        val white = mapOf("red" to 1.0f, "green" to 1.0f, "blue" to 1.0f, "alpha" to 1.0f)
+
+        // 1. Subscriptions tab initial requests
+        val subReqs = SheetProvisioner.buildSubscriptionsRequests(sheetId = 9, year = 2026)
+        val subA1 = findCellUpdate(subReqs, rowIndex = 0, colIndex = 0)
+        assertNotNull("Subscriptions A1 update must exist", subA1)
+        val subFormat = (((subA1!!["rows"] as List<*>).first() as Map<*, *>)["values"] as List<*>).first() as Map<*, *>
+        val subUef = subFormat["userEnteredFormat"] as Map<*, *>
+        assertEquals(darkNavy, subUef["backgroundColor"])
+        val subTf = subUef["textFormat"] as Map<*, *>
+        assertEquals(white, subTf["foregroundColor"])
+
+        // 2. Trips tab initial requests
+        val tripReqs = SheetProvisioner.buildTripsRequests(sheetId = 8, year = 2026)
+        val tripA1 = findCellUpdate(tripReqs, rowIndex = 0, colIndex = 0)
+        assertNotNull("Trips A1 update must exist", tripA1)
+        val tripFormat = (((tripA1!!["rows"] as List<*>).first() as Map<*, *>)["values"] as List<*>).first() as Map<*, *>
+        val tripUef = tripFormat["userEnteredFormat"] as Map<*, *>
+        assertEquals(darkNavy, tripUef["backgroundColor"])
+        val tripTf = tripUef["textFormat"] as Map<*, *>
+        assertEquals(white, tripTf["foregroundColor"])
+
+        // 3. Subscriptions title repair requests
+        val subRepairReqs = SheetProvisioner.buildSubscriptionsTitleRepairRequests(sheetId = 9)
+        val subRepairA1 = findCellUpdate(subRepairReqs, rowIndex = 0, colIndex = 0)
+        assertNotNull("Subscriptions repair A1 update must exist", subRepairA1)
+        val subRepairFormat = (((subRepairA1!!["rows"] as List<*>).first() as Map<*, *>)["values"] as List<*>).first() as Map<*, *>
+        val subRepairUef = subRepairFormat["userEnteredFormat"] as Map<*, *>
+        assertEquals(darkNavy, subRepairUef["backgroundColor"])
+        val subRepairTf = subRepairUef["textFormat"] as Map<*, *>
+        assertEquals(white, subRepairTf["foregroundColor"])
+
+        // 4. Trips title repair requests
+        val tripRepairReqs = SheetProvisioner.buildTripsTitleRepairRequests(sheetId = 8)
+        val tripRepairA1 = findCellUpdate(tripRepairReqs, rowIndex = 0, colIndex = 0)
+        assertNotNull("Trips repair A1 update must exist", tripRepairA1)
+        val tripRepairFormat = (((tripRepairA1!!["rows"] as List<*>).first() as Map<*, *>)["values"] as List<*>).first() as Map<*, *>
+        val tripRepairUef = tripRepairFormat["userEnteredFormat"] as Map<*, *>
+        assertEquals(darkNavy, tripRepairUef["backgroundColor"])
+        val tripRepairTf = tripRepairUef["textFormat"] as Map<*, *>
+        assertEquals(white, tripRepairTf["foregroundColor"])
+    }
 }

@@ -2419,6 +2419,7 @@ object SheetProvisioner {
                                 mapOf(
                                     "userEnteredValue" to mapOf("stringValue" to "RECURRING EXPENSES & SUBSCRIPTIONS"),
                                     "userEnteredFormat" to mapOf(
+                                        "backgroundColor" to darkNavyBg,
                                         "textFormat" to mapOf(
                                             "fontSize" to 14,
                                             "bold" to true,
@@ -2703,6 +2704,7 @@ object SheetProvisioner {
                                 mapOf(
                                     "userEnteredValue" to mapOf("stringValue" to "TRIPS & EXPEDITIONS SUMMARY"),
                                     "userEnteredFormat" to mapOf(
+                                        "backgroundColor" to darkNavyBg,
                                         "textFormat" to mapOf(
                                             "fontSize" to 14,
                                             "bold" to true,
@@ -2840,6 +2842,114 @@ object SheetProvisioner {
         )
 
         return requests
+    }
+
+    fun buildSubscriptionsTitleRepairRequests(sheetId: Int): List<Map<String, Any?>> {
+        val bannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 0,
+            "endRowIndex" to 1,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 14
+        )
+        return listOf(
+            mapOf("unmergeCells" to mapOf("range" to bannerRange)),
+            mapOf("mergeCells" to mapOf("range" to bannerRange, "mergeType" to "MERGE_ALL")),
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to bannerRange,
+                    "cell" to mapOf(
+                        "userEnteredFormat" to mapOf(
+                            "backgroundColor" to darkNavyBg
+                        )
+                    ),
+                    "fields" to "userEnteredFormat.backgroundColor"
+                )
+            ),
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf(
+                        "sheetId" to sheetId,
+                        "rowIndex" to 0,
+                        "columnIndex" to 0
+                    ),
+                    "rows" to listOf(
+                        mapOf(
+                            "values" to listOf(
+                                mapOf(
+                                    "userEnteredValue" to mapOf("stringValue" to "RECURRING EXPENSES & SUBSCRIPTIONS"),
+                                    "userEnteredFormat" to mapOf(
+                                        "backgroundColor" to darkNavyBg,
+                                        "textFormat" to mapOf(
+                                            "fontSize" to 14,
+                                            "bold" to true,
+                                            "foregroundColor" to whiteColor
+                                        ),
+                                        "horizontalAlignment" to "CENTER",
+                                        "verticalAlignment" to "MIDDLE"
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
+    }
+
+    fun buildTripsTitleRepairRequests(sheetId: Int): List<Map<String, Any?>> {
+        val bannerRange = mapOf(
+            "sheetId" to sheetId,
+            "startRowIndex" to 0,
+            "endRowIndex" to 1,
+            "startColumnIndex" to 0,
+            "endColumnIndex" to 10
+        )
+        return listOf(
+            mapOf("unmergeCells" to mapOf("range" to bannerRange)),
+            mapOf("mergeCells" to mapOf("range" to bannerRange, "mergeType" to "MERGE_ALL")),
+            mapOf(
+                "repeatCell" to mapOf(
+                    "range" to bannerRange,
+                    "cell" to mapOf(
+                        "userEnteredFormat" to mapOf(
+                            "backgroundColor" to darkNavyBg
+                        )
+                    ),
+                    "fields" to "userEnteredFormat.backgroundColor"
+                )
+            ),
+            mapOf(
+                "updateCells" to mapOf(
+                    "start" to mapOf(
+                        "sheetId" to sheetId,
+                        "rowIndex" to 0,
+                        "columnIndex" to 0
+                    ),
+                    "rows" to listOf(
+                        mapOf(
+                            "values" to listOf(
+                                mapOf(
+                                    "userEnteredValue" to mapOf("stringValue" to "TRIPS & EXPEDITIONS SUMMARY"),
+                                    "userEnteredFormat" to mapOf(
+                                        "backgroundColor" to darkNavyBg,
+                                        "textFormat" to mapOf(
+                                            "fontSize" to 14,
+                                            "bold" to true,
+                                            "foregroundColor" to whiteColor
+                                        ),
+                                        "horizontalAlignment" to "CENTER",
+                                        "verticalAlignment" to "MIDDLE"
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    "fields" to "userEnteredValue,userEnteredFormat"
+                )
+            )
+        )
     }
 
     private fun createDataValidationRequest(

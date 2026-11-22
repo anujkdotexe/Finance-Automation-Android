@@ -1723,6 +1723,11 @@ open class GoogleSheetsClient(
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
         val tabsMap = (tabsResult as Result.Success).data
         if (tabsMap.containsKey(SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME)) {
+            val existingSheetId = tabsMap[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
+            if (existingSheetId != null) {
+                val repairReqs = SheetProvisioner.buildSubscriptionsTitleRepairRequests(existingSheetId)
+                executeBatchUpdate(spreadsheetId, repairReqs)
+            }
             return@withContext Result.Success(false)
         }
 
@@ -1928,6 +1933,11 @@ open class GoogleSheetsClient(
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
         val tabsMap = (tabsResult as Result.Success).data
         if (tabsMap.containsKey(SheetSchemaConstants.TRIPS_TAB_NAME)) {
+            val existingSheetId = tabsMap[SheetSchemaConstants.TRIPS_TAB_NAME]
+            if (existingSheetId != null) {
+                val repairReqs = SheetProvisioner.buildTripsTitleRepairRequests(existingSheetId)
+                executeBatchUpdate(spreadsheetId, repairReqs)
+            }
             return@withContext Result.Success(false)
         }
 
