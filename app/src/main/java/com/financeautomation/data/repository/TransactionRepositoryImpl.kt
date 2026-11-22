@@ -721,8 +721,11 @@ class TransactionRepositoryImpl(
             }
 
             // Never delivered: there is nothing on the sheet to void, so drop its queue items and void it here only
+            // A stored plan means the delivery may have started and the sheet may already hold the row: queue a void then
             val neverDelivered = existing.sheetRowIndex == null &&
-                qDao.getAllQueueFlow().first().any { it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT }
+                qDao.getAllQueueFlow().first().any {
+                    it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT && it.planJson == null
+                }
             if (neverDelivered) {
                 runInDbTransaction {
                     qDao.deleteByTransactionId(id)
@@ -826,7 +829,7 @@ class TransactionRepositoryImpl(
                 }
 
                 val pendingInsert = qDao.getAllPending().any {
-                    it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT
+                    it.transactionId == id && it.operationType == SyncQueueEntity.OP_INSERT && it.planJson == null
                 }
                 if (pendingInsert && existing.sheetRowIndex == null) {
                     val voidTitle = if (existing.merchant.startsWith("[Void] ")) {
