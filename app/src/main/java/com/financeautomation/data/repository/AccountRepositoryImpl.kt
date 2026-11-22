@@ -28,6 +28,7 @@ class AccountRepositoryImpl(
     private val configSyncCoordinatorProvider: (() -> ConfigSyncCoordinator)? = null,
     private val localGatewayProvider: (() -> ConfigSyncLocalGateway)? = null,
     private val transactionDaoProvider: (suspend () -> TransactionDao)? = null,
+    private val clock: java.time.Clock = java.time.Clock.systemUTC(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AccountRepository {
 
@@ -35,12 +36,14 @@ class AccountRepositoryImpl(
         accountDao: AccountDao,
         configSyncCoordinator: ConfigSyncCoordinator? = null,
         localGateway: ConfigSyncLocalGateway? = null,
+        clock: java.time.Clock = java.time.Clock.systemUTC(),
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     ) : this(
         accountDao = accountDao,
         accountDaoProvider = null,
         configSyncCoordinatorProvider = configSyncCoordinator?.let { { it } },
         localGatewayProvider = localGateway?.let { { it } },
+        clock = clock,
         ioDispatcher = ioDispatcher
     )
 
@@ -121,7 +124,7 @@ class AccountRepositoryImpl(
 
     override suspend fun setDefaultAccount(id: String): Unit = withContext(ioDispatcher) {
         val dao = resolveDao()
-        val now = System.currentTimeMillis()
+        val now = clock.millis()
         dao.makeOnlyDefault(id, now)
         configSyncCoordinator?.schedulePush()
     }
@@ -132,7 +135,7 @@ class AccountRepositoryImpl(
         val wasDefault = account?.isDefault == true
         dao.archiveAccount(id)
         if (wasDefault) {
-            val now = System.currentTimeMillis()
+            val now = clock.millis()
             val other = dao.getByName(CategoryConstants.ACCOUNT_OTHER)
             val fallbackId = if (other != null && !other.isArchived) {
                 other.id
@@ -160,7 +163,7 @@ class AccountRepositoryImpl(
         }
         val wasDefault = account?.isDefault == true
         val gateway = localGateway
-        val now = System.currentTimeMillis()
+        val now = clock.millis()
         if (account != null) {
             if (gateway != null) {
                 gateway.recordTombstone(com.financeautomation.core.constants.ConfigConstants.TYPE_ACCOUNT, account.name, now)
