@@ -89,29 +89,12 @@ fun SettingsScreen(
     ) {
         // Section Header
         Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_screen_title),
-                    style = FinanceTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = FinanceShapes.pill
-                ) {
-                    Text(
-                        text = "v3",
-                        style = FinanceTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.xs, vertical = 2.dp)
-                    )
-                }
-            }
+            Text(
+                text = stringResource(R.string.settings_screen_title),
+                style = FinanceTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Text(
                 text = stringResource(R.string.settings_screen_subtitle),
                 style = FinanceTheme.typography.bodySmall,
