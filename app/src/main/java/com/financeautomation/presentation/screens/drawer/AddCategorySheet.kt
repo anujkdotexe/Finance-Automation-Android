@@ -96,6 +96,7 @@ fun AddCategorySheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.l)
             ) {
@@ -156,24 +157,25 @@ fun AddCategorySheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
-
-                // Action Button Pair (pinned above keyboard via imePadding)
-                ButtonPair(
-                    outlinedText = stringResource(R.string.action_cancel),
-                    onOutlinedClick = onDismiss,
-                    filledText = stringResource(R.string.action_save),
-                    onFilledClick = {
-                        if (categoryName.isNotBlank()) {
-                            val chosenColor = com.financeautomation.presentation.theme.CategoryColorTokens.PALETTE
-                                .getOrNull(selectedColorIndex)?.name ?: "Teal"
-                            onSave(categoryName.trim(), chosenColor)
-                        }
-                    },
-                    filledEnabled = categoryName.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
+
+            Spacer(modifier = Modifier.height(FinanceTheme.spacing.m))
+
+            // Action Button Pair (pinned below the scrolling form, above the keyboard via imePadding)
+            ButtonPair(
+                outlinedText = stringResource(R.string.action_cancel),
+                onOutlinedClick = onDismiss,
+                filledText = stringResource(R.string.action_save),
+                onFilledClick = {
+                    if (categoryName.isNotBlank()) {
+                        val chosenColor = com.financeautomation.presentation.theme.CategoryColorTokens.PALETTE
+                            .getOrNull(selectedColorIndex)?.name ?: "Teal"
+                        onSave(categoryName.trim(), chosenColor)
+                    }
+                },
+                filledEnabled = categoryName.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
