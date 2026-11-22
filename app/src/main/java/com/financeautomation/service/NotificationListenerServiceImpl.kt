@@ -240,26 +240,23 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
         @Volatile
         var isConnected: Boolean = false
 
+        private const val REBIND_MIN_INTERVAL_MS = 30_000L
+
+        @Volatile
+        private var lastRebindAt = 0L
+
         /**
-         * Rebind routine: Disables and re-enables component setting and requests rebind.
+         * Asks the system to rebind the listener. Does nothing when notification access is off, and runs at most
+         * once every 30 seconds so a disconnect loop cannot churn the component.
          */
-        fun rebindService(context: Context) {
+        fun rebindService(context: Context, now: Long = System.currentTimeMillis()) {
             try {
-                val component = ComponentName(context, NotificationListenerServiceImpl::class.java)
-                val pm = context.packageManager
-                pm.setComponentEnabledSetting(
-                    component,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                pm.setComponentEnabledSetting(
-                    component,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    requestRebind(component)
+                if (!isAccessEnabled(context)) return
+                synchronized(this) {
+                    if (now - lastRebindAt < REBIND_MIN_INTERVAL_MS) return
+                    lastRebindAt = now
                 }
+                requestRebind(ComponentName(context, NotificationListenerServiceImpl::class.java))
             } catch (e: Exception) {
                 Diagnostics.record(TAG, "${e.javaClass.simpleName}: rebindService")
             }
