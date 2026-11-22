@@ -89,6 +89,8 @@ class ConfigSheetManager(
                 }
             }
             Result.Success(Unit)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.Error(e)
         }
@@ -141,6 +143,8 @@ class ConfigSheetManager(
                 }
                 Result.Success(Unit)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.Error(e)
         }
@@ -174,6 +178,8 @@ class ConfigSheetManager(
 
             val snapshot = parseConfigGrid(rawGrid)
             Result.Success(snapshot)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.Error(e)
         }

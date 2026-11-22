@@ -32,6 +32,8 @@ class RegenerateDashboardUseCase(
 
             val categories = categoryRepository.getAllCategories(includeArchived = true)
             dashboardRemoteGateway.regenerateDashboard(spreadsheetId, categories)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.Error(e)
         }

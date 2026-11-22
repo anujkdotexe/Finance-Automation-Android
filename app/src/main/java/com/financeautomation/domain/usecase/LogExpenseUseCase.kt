@@ -101,6 +101,8 @@ class LogExpenseUseCase(
                 is Result.Error -> Result.Error(insertResult.throwable, insertResult.message)
                 is Result.Loading -> Result.Loading
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             return Result.Error(e, e.message)
         }
