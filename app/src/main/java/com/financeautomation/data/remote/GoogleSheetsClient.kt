@@ -1511,6 +1511,22 @@ open class GoogleSheetsClient(
                     }
                 }
 
+                // Ensure Subscriptions and Trips tabs exist before provisioning Dashboard formulas referencing them
+                try {
+                    ensureSubscriptionsTabExists(spreadsheetId, accounts)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Pre-dashboard subscriptions tab error: ${e.javaClass.simpleName}")
+                }
+                try {
+                    ensureTripsTabExists(spreadsheetId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    com.financeautomation.core.utils.Diagnostics.record("SheetsProvision", "Pre-dashboard trips tab error: ${e.javaClass.simpleName}")
+                }
+
                 val dashInfo = detailedTabs["Dashboard"]
                 val dashCurRows = dashInfo?.rowCount ?: 1000
                 val dashCurCols = dashInfo?.columnCount ?: SheetSchemaConstants.TOTAL_COLUMN_COUNT

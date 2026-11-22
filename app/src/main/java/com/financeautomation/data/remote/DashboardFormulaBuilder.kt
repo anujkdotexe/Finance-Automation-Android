@@ -223,7 +223,7 @@ object DashboardFormulaBuilder {
     fun buildSubscriptionsActiveCountFormula(): String {
         val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
-        return """=COUNTIF($tab!${activeCol}4:$activeCol, TRUE)"""
+        return """=COUNTIF('$tab'!${activeCol}4:$activeCol, TRUE)"""
     }
 
     /**
@@ -233,7 +233,7 @@ object DashboardFormulaBuilder {
         val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
         val perMonthCol = SheetSchemaConstants.COL_LETTER_SUB_PER_MONTH
-        return """=SUMIF($tab!${activeCol}4:$activeCol, TRUE, $tab!${perMonthCol}4:$perMonthCol)"""
+        return """=SUMIF('$tab'!${activeCol}4:$activeCol, TRUE, '$tab'!${perMonthCol}4:$perMonthCol)"""
     }
 
     /**
@@ -246,7 +246,7 @@ object DashboardFormulaBuilder {
         val nameCol = SheetSchemaConstants.COL_LETTER_SUB_NAME
         val dateCol = SheetSchemaConstants.COL_LETTER_SUB_DUE_DATE
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
-        val filterExpr = "FILTER({$tab!${nameCol}4:$nameCol, $tab!${dateCol}4:$dateCol}, $tab!${activeCol}4:$activeCol=TRUE, $tab!${dateCol}4:$dateCol>=TODAY())"
+        val filterExpr = "FILTER({'$tab'!${nameCol}4:$nameCol, '$tab'!${dateCol}4:$dateCol}, '$tab'!${activeCol}4:$activeCol=TRUE, '$tab'!${dateCol}4:$dateCol>=TODAY())"
         val sortExpr = "SORT($filterExpr, 2, TRUE)"
         return """=IFERROR(INDEX($sortExpr, 1, 1) & " (" & TEXT(INDEX($sortExpr, 1, 2), "dd mmm") & ")", "None upcoming")"""
     }
@@ -262,7 +262,7 @@ object DashboardFormulaBuilder {
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
         val closedDateCol = SheetSchemaConstants.COL_LETTER_SUB_CLOSED_DATE
         val paidTotalCol = SheetSchemaConstants.COL_LETTER_SUB_PAID_IN_TOTAL
-        return """=IFERROR(QUERY($tab!$range, "SELECT $nameCol, $closedDateCol, $paidTotalCol WHERE $activeCol = FALSE AND $nameCol IS NOT NULL ORDER BY $closedDateCol DESC LIMIT 5", 0), "")"""
+        return """=IFERROR(QUERY('$tab'!$range, "SELECT $nameCol, $closedDateCol, $paidTotalCol WHERE $activeCol = FALSE AND $nameCol IS NOT NULL ORDER BY $closedDateCol DESC LIMIT 5", 0), "")"""
     }
 
     /**
@@ -499,6 +499,40 @@ object DashboardFormulaBuilder {
                 rowIndex = 26, // Row 27
                 colIndex = 7,  // Col H
                 formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+            )
+        )
+
+        // 10. Subscriptions KPI Values (A45, D45, G45) & Closed Subscriptions Query (A50)
+        requests.add(
+            createUpdateCellFormulaRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 44, // Row 45
+                colIndex = 0,  // Col A
+                formula = buildSubscriptionsActiveCountFormula()
+            )
+        )
+        requests.add(
+            createUpdateCellFormulaRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 44, // Row 45
+                colIndex = 3,  // Col D
+                formula = buildSubscriptionsMonthlyEquivalentFormula()
+            )
+        )
+        requests.add(
+            createUpdateCellFormulaRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 44, // Row 45
+                colIndex = 6,  // Col G
+                formula = buildNextDueSubscriptionFormula()
+            )
+        )
+        requests.add(
+            createUpdateCellFormulaRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 49, // Row 50
+                colIndex = 0,  // Col A
+                formula = buildClosedSubscriptionsQueryFormula()
             )
         )
 
