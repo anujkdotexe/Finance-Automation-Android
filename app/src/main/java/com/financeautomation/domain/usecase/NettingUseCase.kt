@@ -56,8 +56,9 @@ class NettingUseCase {
         // Create a working mutable copy of payables to reflect in-memory partial applications
         val workingPayables = payables.map { it.copy() }.toMutableList()
 
-        for (companion in list) {
-            var capLeft = cap
+        for ((companionIndex, companion) in list.withIndex()) {
+            // The last companion takes the rounding remainder so the caps add up to the owed amount
+            var capLeft = if (companionIndex == list.lastIndex) AccountingUtils.round2(owed - cap * (list.size - 1)) else cap
             for (i in workingPayables.indices) {
                 if (capLeft <= Tolerances.MONEY_LEFT || owedLeft <= Tolerances.MONEY_LEFT) break
                 val payable = workingPayables[i]
