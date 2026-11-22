@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -338,11 +339,19 @@ fun TransactionsContent(
 
         Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
+        val searchState = com.financeautomation.presentation.components.rememberDebouncedTextState(
+            value = state.searchQuery,
+            debounceMs = 250L,
+            onValueChanged = onSearchQueryChange
+        )
+
         // 4. Search Bar
         OutlinedTextField(
-            value = state.searchQuery,
-            onValueChange = onSearchQueryChange,
-            modifier = Modifier.fillMaxWidth(),
+            value = searchState.textFieldValue,
+            onValueChange = { searchState.onValueChange(it) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { searchState.onFocusChanged(it.isFocused) },
             placeholder = {
                 Text(
                     text = stringResource(R.string.transactions_search_placeholder),
@@ -358,8 +367,8 @@ fun TransactionsContent(
                 )
             },
             trailingIcon = {
-                if (state.searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchQueryChange("") }) {
+                if (searchState.textFieldValue.text.isNotEmpty()) {
+                    IconButton(onClick = { searchState.setExplicitText("") }) {
                         Icon(
                             imageVector = Icons.Rounded.Clear,
                             contentDescription = stringResource(R.string.txn_clear_search),

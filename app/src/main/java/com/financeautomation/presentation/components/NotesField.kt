@@ -57,6 +57,16 @@ fun NotesField(
     placeholder: String = stringResource(R.string.notes_field_placeholder),
     onFocusChanged: (Boolean) -> Unit = {}
 ) {
+    val noteState = rememberDebouncedTextState(
+        value = value,
+        debounceMs = 0L,
+        cleanText = { raw ->
+            raw.filter { c ->
+                c == '\n' || c == '\t' || (c.code >= 0x20 && c.code != 0x7F)
+            }.take(InputPolicy.MAX_NOTE_LENGTH)
+        },
+        onValueChanged = onValueChange
+    )
     var isExpanded by rememberSaveable(value) { mutableStateOf(value.isNotEmpty()) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -64,7 +74,7 @@ fun NotesField(
     val clearNoteCd = stringResource(R.string.notes_field_clear_cd)
 
     LaunchedEffect(isExpanded) {
-        if (isExpanded && value.isEmpty()) {
+        if (isExpanded && noteState.textFieldValue.text.isEmpty()) {
             try {
                 focusRequester.requestFocus()
             } catch (_: Exception) {}
@@ -72,7 +82,7 @@ fun NotesField(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        if (!isExpanded && value.isEmpty()) {
+        if (!isExpanded && noteState.textFieldValue.text.isEmpty()) {
             TextButton(
                 onClick = { isExpanded = true },
                 modifier = Modifier
@@ -94,13 +104,8 @@ fun NotesField(
             }
         } else {
             OutlinedTextField(
-                value = value,
-                onValueChange = { raw ->
-                    val filtered = raw.filter { c ->
-                        c == '\n' || c == '\t' || (c.code >= 0x20 && c.code != 0x7F)
-                    }.take(InputPolicy.MAX_NOTE_LENGTH)
-                    onValueChange(filtered)
-                },
+                value = noteState.textFieldValue,
+                onValueChange = { noteState.onValueChange(it) },
                 label = { Text(label, style = FinanceTheme.typography.bodySmall) },
                 placeholder = { Text(placeholder, style = FinanceTheme.typography.bodyMedium) },
                 leadingIcon = {
@@ -111,10 +116,10 @@ fun NotesField(
                     )
                 },
                 trailingIcon = {
-                    if (value.isNotEmpty()) {
+                    if (noteState.textFieldValue.text.isNotEmpty()) {
                         IconButton(
                             onClick = {
-                                onValueChange("")
+                                noteState.setExplicitText("")
                                 isExpanded = false
                             },
                             modifier = Modifier.semantics { contentDescription = clearNoteCd }
@@ -133,9 +138,9 @@ fun NotesField(
                         horizontalArrangement = Arrangement.End
                     ) {
                         Text(
-                            text = "${value.length}/${InputPolicy.MAX_NOTE_LENGTH}",
+                            text = "${noteState.textFieldValue.text.length}/${InputPolicy.MAX_NOTE_LENGTH}",
                             style = FinanceTheme.typography.bodySmall,
-                            color = if (value.length >= InputPolicy.MAX_NOTE_LENGTH) {
+                            color = if (noteState.textFieldValue.text.length >= InputPolicy.MAX_NOTE_LENGTH) {
                                 MaterialTheme.colorScheme.error
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -153,6 +158,7 @@ fun NotesField(
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
                     .onFocusChanged { focusState ->
+                        noteState.onFocusChanged(focusState.isFocused)
                         onFocusChanged(focusState.isFocused)
                     }
             )

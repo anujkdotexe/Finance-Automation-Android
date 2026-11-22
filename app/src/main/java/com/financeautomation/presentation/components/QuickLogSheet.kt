@@ -226,6 +226,12 @@ fun QuickLogSheet(
             }
         }
 
+        val payeeState = rememberDebouncedTextState(
+            value = state.payee,
+            debounceMs = 0L,
+            onValueChanged = onPayeeChanged
+        )
+
         // 2. What Was This For / Description Field
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -237,8 +243,8 @@ fun QuickLogSheet(
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
 
             OutlinedTextField(
-                value = state.payee,
-                onValueChange = onPayeeChanged,
+                value = payeeState.textFieldValue,
+                onValueChange = { payeeState.onValueChange(it) },
                 placeholder = {
                     Text(
                         text = stringResource(R.string.hint_add_description),
@@ -254,7 +260,10 @@ fun QuickLogSheet(
                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .onFocusChanged { onKeyboardFocusChanged(it.isFocused) }
+                    .onFocusChanged {
+                        payeeState.onFocusChanged(it.isFocused)
+                        onKeyboardFocusChanged(it.isFocused)
+                    }
             )
         }
 
