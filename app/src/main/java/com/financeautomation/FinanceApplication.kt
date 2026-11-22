@@ -28,6 +28,12 @@ class FinanceApplication : Application() {
     lateinit var appContainer: AppContainer
         private set
 
+    /**
+     * Application level scope for capture work. A listener rebind cancels the service scope, so the capture
+     * processing and the prompt watcher run here and are never cut off in the middle of a database transaction.
+     */
+    val captureScope: CoroutineScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
     private var startedActivityCount = 0
     private var lastNightMode: Int = 0
 

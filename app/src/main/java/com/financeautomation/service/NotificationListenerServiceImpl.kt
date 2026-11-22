@@ -40,6 +40,9 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)
 
+    private val workScope: CoroutineScope
+        get() = (applicationContext as? FinanceApplication)?.captureScope ?: serviceScope
+
     internal var testProcessor: NotificationProcessor? = null
 
     override fun onDestroy() {
@@ -133,7 +136,7 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
         }
 
         // Resume watcher for any persisted WAITING captures
-        watcher?.checkAndResume(serviceScope)
+        watcher?.checkAndResume(workScope)
 
         try {
             val notifications = activeNotifications ?: return
@@ -141,8 +144,8 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
             for (sbn in notifications) {
                 if (sbn != null && sbn.notification != null) {
                     val postTime = sbn.postTime
-                    // Catch up only recent notifications within the last 5 minutes
-                    if (now - postTime < 300_000L) {
+                    // Catch up notifications from the last 2 hours; the handled table dedupes replays for 24 hours
+                    if (now - postTime < CATCH_UP_WINDOW_MS) {
                         onNotificationPosted(sbn)
                     }
                 }
@@ -179,7 +182,7 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
         val container = app?.appContainer
         val watcher = container?.foregroundWatcher
 
-        serviceScope.launch {
+        workScope.launch {
             try {
                 val processor = testProcessor ?: container?.getNotificationProcessor() ?: return@launch
 
@@ -187,18 +190,18 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
                 when (outcome) {
                     is NotificationProcessingOutcome.Captured -> {
                         if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
-                            watcher?.notifyCaptureWaiting(serviceScope)
+                            watcher?.notifyCaptureWaiting(workScope)
                         }
                     }
                     is NotificationProcessingOutcome.Updated -> {
                         if (outcome.capture.state == PendingCaptureEntity.STATE_WAITING) {
-                            watcher?.notifyCaptureWaiting(serviceScope)
+                            watcher?.notifyCaptureWaiting(workScope)
                         }
                     }
                     is NotificationProcessingOutcome.Merged -> {
                         // Merged dual alert without posting duplicate notification; wake the prompt when it became WAITING
                         if (outcome.becameWaiting) {
-                            watcher?.notifyCaptureWaiting(serviceScope)
+                            watcher?.notifyCaptureWaiting(workScope)
                         }
                     }
                     is NotificationProcessingOutcome.Dismissed -> {
@@ -232,6 +235,7 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
     companion object {
         const val CHANNEL_FINANCIAL_ALERTS: String = "financial_alerts"
         private const val TAG = "NotificationListener"
+        private const val CATCH_UP_WINDOW_MS = 2L * 60L * 60L * 1000L
 
         @Volatile
         var isConnected: Boolean = false
