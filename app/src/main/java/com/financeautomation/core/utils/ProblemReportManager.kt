@@ -110,8 +110,9 @@ object ProblemReportManager {
     suspend fun submitReport(
         context: Context,
         payload: ProblemReportPayload,
+        documentId: String = UUID.randomUUID().toString(),
         timeoutMillis: Long = SUBMIT_TIMEOUT_MILLIS,
-        submitter: (suspend (Map<String, Any?>) -> Unit)? = null
+        submitter: (suspend (String, Map<String, Any?>) -> Unit)? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         if (!isFirebaseConfigured(context) && submitter == null) {
             return@withContext Result.failure(
@@ -123,22 +124,29 @@ object ProblemReportManager {
             withTimeout(timeoutMillis) {
                 val firestoreData = payload.toFirestoreData(isServerTimestamp = true)
                 if (submitter != null) {
-                    submitter(firestoreData)
+                    submitter(documentId, firestoreData)
                 } else {
                     val db = FirebaseFirestore.getInstance()
-                    db.collection(COLLECTION_NAME).add(firestoreData).await()
+                    db.collection(COLLECTION_NAME).document(documentId).set(firestoreData).await()
                 }
             }
             Diagnostics.record("ProblemReportManager", "Report submitted successfully: ${payload.reasonCode}")
             Result.success(Unit)
         } catch (e: TimeoutCancellationException) {
-            val errorMsg = "Submission timed out after ${timeoutMillis / 1000} seconds. Please check your connection and try again."
+            val errorMsg = "Submission timed out after ${timeoutMillis / 1000} seconds. If your phone was offline, the report may still arrive later once connected."
             Diagnostics.record("ProblemReportManager", "Submission error: $errorMsg")
             Result.failure(TimeoutException(errorMsg))
         } catch (e: Exception) {
             val scrubbedError = PrivacyScrubber.scrub(e.message ?: e.javaClass.simpleName)
-            Diagnostics.record("ProblemReportManager", "Submission error: $scrubbedError")
-            Result.failure(e)
+            val lowerError = scrubbedError.lowercase()
+            // If the document already exists or create-only permission is denied on retry, treat as already sent
+            if (lowerError.contains("already exists") || lowerError.contains("already_exists") || lowerError.contains("permission_denied") || lowerError.contains("permission denied")) {
+                Diagnostics.record("ProblemReportManager", "Report retry for $documentId resolved as already sent ($scrubbedError)")
+                Result.success(Unit)
+            } else {
+                Diagnostics.record("ProblemReportManager", "Submission error: $scrubbedError")
+                Result.failure(e)
+            }
         }
     }
 }

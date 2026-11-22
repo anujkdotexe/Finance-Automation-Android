@@ -338,7 +338,7 @@ class ProblemReportBuilderTest {
             context = mockContext,
             payload = payload,
             timeoutMillis = 100L,
-            submitter = {
+            submitter = { _, _ ->
                 kotlinx.coroutines.delay(10_000L)
             }
         )
@@ -346,8 +346,53 @@ class ProblemReportBuilderTest {
         val exception = result.exceptionOrNull()
         assertTrue("Exception should be TimeoutException", exception is java.util.concurrent.TimeoutException)
         assertTrue(
-            "Error message should mention timeout duration",
-            exception?.message?.contains("timed out") == true
+            "Error message should mention timeout duration and offline arrival notice",
+            exception?.message?.contains("timed out") == true &&
+                exception?.message?.contains("offline") == true
         )
+    }
+
+    @Test
+    fun submitReportRetryWithSameDocumentIdTreatsAlreadyExistsOrPermissionDeniedAsSuccess() = kotlinx.coroutines.test.runTest {
+        val payload = ProblemReportPayload(
+            schemaVersion = 1,
+            appVersion = "1.0.0",
+            versionCode = 1,
+            deviceModel = "Test Phone",
+            androidSdk = 34,
+            installId = UUID.randomUUID().toString(),
+            screen = "About",
+            reasonCode = "test_retry",
+            counters = null,
+            text = "Testing retry safety"
+        )
+        val mockContext = object : android.content.ContextWrapper(null) {}
+        val fixedDocId = "test-doc-id-1234"
+
+        // Simulated already exists failure from Firestore on retry
+        val alreadyExistsResult = ProblemReportManager.submitReport(
+            context = mockContext,
+            payload = payload,
+            documentId = fixedDocId,
+            timeoutMillis = 1000L,
+            submitter = { id, _ ->
+                assertEquals(fixedDocId, id)
+                throw RuntimeException("ALREADY_EXISTS: Document already exists")
+            }
+        )
+        assertTrue("Already exists on retry must be treated as success", alreadyExistsResult.isSuccess)
+
+        // Simulated permission denied failure on existing doc from create-only security rules
+        val permissionDeniedResult = ProblemReportManager.submitReport(
+            context = mockContext,
+            payload = payload,
+            documentId = fixedDocId,
+            timeoutMillis = 1000L,
+            submitter = { id, _ ->
+                assertEquals(fixedDocId, id)
+                throw RuntimeException("PERMISSION_DENIED: False permission for update on create-only rule")
+            }
+        )
+        assertTrue("Permission denied on retry must be treated as success", permissionDeniedResult.isSuccess)
     }
 }

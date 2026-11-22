@@ -72,6 +72,7 @@ fun ProblemReportDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val reportDocumentId = rememberSaveable { java.util.UUID.randomUUID().toString() }
     var userText by rememberSaveable { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -297,7 +298,11 @@ fun ProblemReportDialog(
                                 isSubmitting = true
                                 errorMessage = null
                                 submitJob = coroutineScope.launch {
-                                    val result = ProblemReportManager.submitReport(context, currentPayload)
+                                    val result = ProblemReportManager.submitReport(
+                                        context = context,
+                                        payload = currentPayload,
+                                        documentId = reportDocumentId
+                                    )
                                     isSubmitting = false
                                     result.fold(
                                         onSuccess = {
