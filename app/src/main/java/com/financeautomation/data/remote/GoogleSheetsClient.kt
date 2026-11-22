@@ -192,6 +192,7 @@ open class GoogleSheetsClient(
     }
 
     private val verifiedMonthTabs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val verifiedTitleRepairTabs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     private fun isTransportOrServerError(throwable: Throwable): Boolean = when (throwable) {
         is java.net.SocketTimeoutException,
@@ -1722,11 +1723,15 @@ open class GoogleSheetsClient(
         val tabsResult = getSheetTabsWithIds(spreadsheetId)
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
         val tabsMap = (tabsResult as Result.Success).data
+        val key = "$spreadsheetId:${SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME}"
         if (tabsMap.containsKey(SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME)) {
             val existingSheetId = tabsMap[SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME]
-            if (existingSheetId != null) {
+            if (existingSheetId != null && !verifiedTitleRepairTabs.contains(key)) {
                 val repairReqs = SheetProvisioner.buildSubscriptionsTitleRepairRequests(existingSheetId)
-                executeBatchUpdate(spreadsheetId, repairReqs)
+                val repairRes = executeBatchUpdate(spreadsheetId, repairReqs)
+                if (repairRes is Result.Success) {
+                    verifiedTitleRepairTabs.add(key)
+                }
             }
             return@withContext Result.Success(false)
         }
@@ -1755,6 +1760,7 @@ open class GoogleSheetsClient(
         val provRes = executeBatchUpdate(spreadsheetId, provRequests)
         if (provRes is Result.Error) return@withContext Result.Error(provRes.exception)
 
+        verifiedTitleRepairTabs.add(key)
         Result.Success(true)
     }
 
@@ -1932,11 +1938,15 @@ open class GoogleSheetsClient(
         val tabsResult = getSheetTabsWithIds(spreadsheetId)
         if (tabsResult is Result.Error) return@withContext Result.Error(tabsResult.exception)
         val tabsMap = (tabsResult as Result.Success).data
+        val key = "$spreadsheetId:${SheetSchemaConstants.TRIPS_TAB_NAME}"
         if (tabsMap.containsKey(SheetSchemaConstants.TRIPS_TAB_NAME)) {
             val existingSheetId = tabsMap[SheetSchemaConstants.TRIPS_TAB_NAME]
-            if (existingSheetId != null) {
+            if (existingSheetId != null && !verifiedTitleRepairTabs.contains(key)) {
                 val repairReqs = SheetProvisioner.buildTripsTitleRepairRequests(existingSheetId)
-                executeBatchUpdate(spreadsheetId, repairReqs)
+                val repairRes = executeBatchUpdate(spreadsheetId, repairReqs)
+                if (repairRes is Result.Success) {
+                    verifiedTitleRepairTabs.add(key)
+                }
             }
             return@withContext Result.Success(false)
         }
@@ -1965,6 +1975,7 @@ open class GoogleSheetsClient(
         val provRes = executeBatchUpdate(spreadsheetId, provRequests)
         if (provRes is Result.Error) return@withContext Result.Error(provRes.exception)
 
+        verifiedTitleRepairTabs.add(key)
         Result.Success(true)
     }
 

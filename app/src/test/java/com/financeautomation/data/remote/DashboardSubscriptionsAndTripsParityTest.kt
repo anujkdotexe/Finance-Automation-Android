@@ -1,6 +1,7 @@
 package com.financeautomation.data.remote
 
 import com.financeautomation.core.constants.SheetSchemaConstants
+import com.financeautomation.core.model.Result
 import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
@@ -463,5 +464,92 @@ class DashboardSubscriptionsAndTripsParityTest {
             sdv != null && sdv["rule"] == null
         }
         assertEquals("Trips repair must clear validation on Status column", 1, tripClearValidations.size)
+    }
+
+    private class CountingTitleRepairSheetsClient(
+        private val existingTabs: Map<String, Int>,
+        var failBatchUpdate: Boolean = false
+    ) : GoogleSheetsClient(
+        okHttpClient = okhttp3.OkHttpClient(),
+        tokenProvider = object : TokenProvider {
+            override fun getAccessToken(): String = "test"
+            override fun refreshAccessToken(): String = "test"
+        }
+    ) {
+        var batchUpdateCount = 0
+
+        override suspend fun getSheetTabsWithIds(spreadsheetId: String): Result<Map<String, Int>> {
+            return Result.Success(existingTabs)
+        }
+
+        override suspend fun executeBatchUpdate(
+            spreadsheetId: String,
+            requests: List<Map<String, Any?>>
+        ): Result<String> {
+            batchUpdateCount++
+            return if (failBatchUpdate) {
+                Result.Error(java.io.IOException("Simulated network failure"))
+            } else {
+                Result.Success("{}")
+            }
+        }
+    }
+
+    @Test
+    fun testTitleRepairRunsOnlyOncePerSpreadsheetAndTabPerProcess() = kotlinx.coroutines.runBlocking {
+        val spreadsheetId = "sheet_title_repair_once_${System.currentTimeMillis()}"
+        val client = CountingTitleRepairSheetsClient(
+            existingTabs = mapOf(
+                SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME to 9,
+                SheetSchemaConstants.TRIPS_TAB_NAME to 8
+            )
+        )
+
+        // Subscriptions tab: first call sends repair batchUpdate
+        val res1 = client.ensureSubscriptionsTabExists(spreadsheetId)
+        assertTrue(res1 is Result.Success)
+        assertEquals(1, client.batchUpdateCount)
+
+        // Subscriptions tab: second call should NOT send repair batchUpdate again
+        val res2 = client.ensureSubscriptionsTabExists(spreadsheetId)
+        assertTrue(res2 is Result.Success)
+        assertEquals(1, client.batchUpdateCount)
+
+        // Trips tab: first call sends repair batchUpdate
+        val tripRes1 = client.ensureTripsTabExists(spreadsheetId)
+        assertTrue(tripRes1 is Result.Success)
+        assertEquals(2, client.batchUpdateCount)
+
+        // Trips tab: second call should NOT send repair batchUpdate again
+        val tripRes2 = client.ensureTripsTabExists(spreadsheetId)
+        assertTrue(tripRes2 is Result.Success)
+        assertEquals(2, client.batchUpdateCount)
+    }
+
+    @Test
+    fun testTitleRepairDoesNotCacheOnFailure() = kotlinx.coroutines.runBlocking {
+        val spreadsheetId = "sheet_fail_test_${System.currentTimeMillis()}"
+        val client = CountingTitleRepairSheetsClient(
+            existingTabs = mapOf(
+                SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME to 9
+            ),
+            failBatchUpdate = true
+        )
+
+        // First call fails executeBatchUpdate -> must not cache
+        val res1 = client.ensureSubscriptionsTabExists(spreadsheetId)
+        assertTrue(res1 is Result.Success)
+        assertEquals(1, client.batchUpdateCount)
+
+        // Now repair succeeds -> because first failed, second call must try again
+        client.failBatchUpdate = false
+        val res2 = client.ensureSubscriptionsTabExists(spreadsheetId)
+        assertTrue(res2 is Result.Success)
+        assertEquals(2, client.batchUpdateCount)
+
+        // Third call -> already verified, so batchUpdateCount stays 2
+        val res3 = client.ensureSubscriptionsTabExists(spreadsheetId)
+        assertTrue(res3 is Result.Success)
+        assertEquals(2, client.batchUpdateCount)
     }
 }
