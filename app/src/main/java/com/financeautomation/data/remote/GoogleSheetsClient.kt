@@ -1810,7 +1810,12 @@ open class GoogleSheetsClient(
                 val row = rawRows[i]
                 if (row.isEmpty()) continue
                 val name = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_NAME)?.toString()?.trim().orEmpty()
-                val id = (row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID) ?: row.getOrNull(13) ?: row.getOrNull(12) ?: row.getOrNull(11) ?: if (row.size == 10) row.getOrNull(9) else null)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                val idFromStandardCol = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_ID)?.toString()?.trim()?.takeIf { it.startsWith("sub_") }
+                val fallbackId = if (row.size <= 14) {
+                    (row.getOrNull(13) ?: row.getOrNull(12) ?: row.getOrNull(11) ?: if (row.size == 10) row.getOrNull(9) else null)
+                        ?.toString()?.trim()?.takeIf { it.startsWith("sub_") }
+                } else null
+                val id = idFromStandardCol ?: fallbackId
                 if (name.isBlank() && id == null) continue
 
                 val amount = row.getOrNull(SheetSchemaConstants.COL_INDEX_SUB_AMOUNT)?.toString()?.replace(",", "")?.toDoubleOrNull()
