@@ -430,6 +430,25 @@ fun PreferencesScreen(
                 viewModel.sendTestCrashReport(context)
             }
         )
+
+        // Data
+        Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
+            Text(
+                text = stringResource(R.string.pref_data_title),
+                style = FinanceTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(R.string.pref_data_subtitle),
+                style = FinanceTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            com.financeautomation.presentation.components.OutlinedButton(
+                text = stringResource(R.string.clear_voided_menu),
+                onClick = { showClearVoided = true }
+            )
+        }
     }
 
     if (showAccountDialog) {
@@ -489,24 +508,6 @@ fun PreferencesScreen(
         )
     }
 
-    // Data
-    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-        Text(
-            text = stringResource(R.string.pref_data_title),
-            style = FinanceTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = stringResource(R.string.pref_data_subtitle),
-            style = FinanceTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        com.financeautomation.presentation.components.OutlinedButton(
-            text = stringResource(R.string.clear_voided_menu),
-            onClick = { showClearVoided = true }
-        )
-    }
     com.financeautomation.presentation.components.ClearVoidedHistoryHost(
         show = showClearVoided,
         onDismiss = { showClearVoided = false }
