@@ -166,6 +166,8 @@ class CalculateSplitUseCase(
         require(merchant.isNotBlank()) { "Merchant description cannot be blank" }
 
         val roundedAmount = AccountingUtils.round2(amount)
+        // 0.004 passes the check above but rounds to a zero total row
+        require(roundedAmount > 0.0) { "Transaction amount must be strictly greater than zero" }
         val cleanCompanions = companions.flatMap { AccountingUtils.tokens(it) }
             .distinctBy { it.trim().lowercase() }
         val companionsText = if (cleanCompanions.isEmpty()) "Personal" else cleanCompanions.joinToString(", ")
