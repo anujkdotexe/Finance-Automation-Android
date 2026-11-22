@@ -129,12 +129,14 @@ object InputPolicy {
      * @param existingNames Existing active names in the same entity domain to check for duplicates.
      * @param maxLength Maximum allowed length (defaults to 40).
      * @param allowReserved If true, skips the reserved names check (useful for system lookups).
+     * @param rejectGroupSeparators If true (friend names only), rejects " & " and " and " because companion lists split on them.
      */
     fun validateName(
         raw: String,
         existingNames: Collection<String> = emptyList(),
         maxLength: Int = MAX_NAME_LENGTH,
-        allowReserved: Boolean = false
+        allowReserved: Boolean = false,
+        rejectGroupSeparators: Boolean = false
     ): ValidationResult {
         val clean = cleanName(raw)
         if (clean.isBlank()) {
@@ -143,7 +145,7 @@ object InputPolicy {
         if (clean.length > maxLength) {
             return ValidationResult.Error(InputError.TOO_LONG, maxLength)
         }
-        if (clean.any { it in FORBIDDEN_NAME_DELIMITERS } || NAME_JOINER_REGEX.containsMatchIn(clean)) {
+        if (clean.any { it in FORBIDDEN_NAME_DELIMITERS } || (rejectGroupSeparators && NAME_JOINER_REGEX.containsMatchIn(clean))) {
             return ValidationResult.Error(InputError.INVALID_CHARS)
         }
         if (!allowReserved && RESERVED_NAMES.any { it.equals(clean, ignoreCase = true) }) {
