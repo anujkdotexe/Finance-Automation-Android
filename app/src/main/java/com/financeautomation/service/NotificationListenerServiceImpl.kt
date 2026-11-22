@@ -56,6 +56,18 @@ open class NotificationListenerServiceImpl : NotificationListenerService() {
         val sourcePackage = sbn.packageName ?: return
         if (sourcePackage == packageName) return
 
+        // Right after a cold start the per app switches may still be loading; decide only once they are known
+        if (!PackageWhitelist.isLoaded()) {
+            serviceScope.launch {
+                PackageWhitelist.awaitLoaded()
+                processPosted(sbn, sourcePackage)
+            }
+            return
+        }
+        processPosted(sbn, sourcePackage)
+    }
+
+    private fun processPosted(sbn: StatusBarNotification, sourcePackage: String) {
         if (!PackageWhitelist.isWhitelisted(sourcePackage)) {
             PipelineTrail.recordDroppedNotWhitelisted()
             return

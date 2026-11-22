@@ -123,15 +123,37 @@ object PackageWhitelist {
         }
     }
 
+    private val loadedSignal = kotlinx.coroutines.CompletableDeferred<Unit>()
+
+    /**
+     * Waits until the disabled and user watched sets have been read, so the first whitelist decision after a cold start
+     * honours the user's per app switches. Returns at once when no repository was registered, and gives up after a
+     * short time so a stuck preferences read can never block capture.
+     */
+    suspend fun awaitLoaded() {
+        if (isLoaded()) return
+        kotlinx.coroutines.withTimeoutOrNull(LOAD_WAIT_MS) { loadedSignal.await() }
+    }
+
+    /** True when whitelist decisions can be made now: the per app sets were loaded, or no repository exists to load from. */
+    fun isLoaded(): Boolean = loadedSignal.isCompleted || preferencesRepository == null
+
+    private const val LOAD_WAIT_MS = 5_000L
+
     suspend fun loadFromPreferences(prefs: PreferencesRepository) {
         preferencesRepository = prefs
-        val disabled = prefs.getDisabledPackages()
-        disabledPackages.clear()
-        disabledPackages.addAll(disabled)
+        try {
+            val disabled = prefs.getDisabledPackages()
+            disabledPackages.clear()
+            disabledPackages.addAll(disabled)
 
-        val watched = prefs.getUserWatchedPackages()
-        userWatchedPackages.clear()
-        userWatchedPackages.addAll(watched)
+            val watched = prefs.getUserWatchedPackages()
+            userWatchedPackages.clear()
+            userWatchedPackages.addAll(watched)
+        } finally {
+            // Complete even when the read failed, so capture continues with the defaults
+            loadedSignal.complete(Unit)
+        }
     }
 
     private fun persistDisabled() {
