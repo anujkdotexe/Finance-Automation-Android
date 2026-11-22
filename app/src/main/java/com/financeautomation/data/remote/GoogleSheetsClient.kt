@@ -38,6 +38,9 @@ import java.util.Locale
 
 private val DEFAULT_SHEET_ZONE_ID: ZoneId = ZoneId.of("Asia/Kolkata")
 private val ROW_INDEX_REGEX = Regex("""[A-Za-z]+(\d+)""")
+/** Marker key set when a batchGet response could be matched to the request by position. */
+private const val POSITIONAL_KEY = "__positional"
+
 private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
 
 /**
@@ -1005,9 +1008,27 @@ open class GoogleSheetsClient(
         ranges: List<String>,
         valueRenderOption: String = "UNFORMATTED_VALUE",
         dateTimeRenderOption: String = "SERIAL_NUMBER"
-    ): Result<Map<String, List<List<Any?>>>> = withContext(Dispatchers.IO) {
+    ): Result<Map<String, List<List<Any?>>>> {
+        val ordered = batchGetValuesOrdered(spreadsheetId, ranges, valueRenderOption, dateTimeRenderOption)
+        if (ordered is Result.Error) return Result.Error(ordered.exception)
+        val resultMap = mutableMapOf<String, List<List<Any?>>>()
+        for ((rangeName, rows) in (ordered as Result.Success).data) resultMap[rangeName] = rows
+        return Result.Success(resultMap)
+    }
+
+    /**
+     * Same call as [batchGetValues] but keeps the response order. The Sheets API returns one value range for every
+     * requested range, in the order requested, so index i of the result belongs to index i of [ranges].
+     * Each entry is the range name the API reported and its rows.
+     */
+    suspend fun batchGetValuesOrdered(
+        spreadsheetId: String,
+        ranges: List<String>,
+        valueRenderOption: String = "UNFORMATTED_VALUE",
+        dateTimeRenderOption: String = "SERIAL_NUMBER"
+    ): Result<List<Pair<String, List<List<Any?>>>>> = withContext(Dispatchers.IO) {
         try {
-            if (ranges.isEmpty()) return@withContext Result.Success(emptyMap())
+            if (ranges.isEmpty()) return@withContext Result.Success(emptyList())
 
             val encodedRanges = ranges.joinToString("&") { "ranges=" + URLEncoder.encode(it, "UTF-8") }
             val url = "$baseUrl/$spreadsheetId/values:batchGet?$encodedRanges&valueRenderOption=$valueRenderOption&dateTimeRenderOption=$dateTimeRenderOption"
@@ -1029,7 +1050,7 @@ open class GoogleSheetsClient(
                 }
 
                 val valueRanges = jsonResponse["valueRanges"]?.jsonArray.orEmpty()
-                val resultMap = mutableMapOf<String, List<List<Any?>>>()
+                val resultList = mutableListOf<Pair<String, List<List<Any?>>>>()
 
                 for (vrElem in valueRanges) {
                     val vrObj = vrElem.jsonObject
@@ -1045,10 +1066,10 @@ open class GoogleSheetsClient(
                         }
                     } ?: emptyList()
 
-                    resultMap[rangeName] = rowList
+                    resultList.add(rangeName to rowList)
                 }
 
-                Result.Success(resultMap)
+                Result.Success(resultList)
             }
         } catch (e: CancellationException) {
             throw e
@@ -2356,43 +2377,70 @@ open class GoogleSheetsClient(
                 }
             }
 
-            // Construct batch ranges for all sorted month tabs:
-            // Table 1: 'Tab'!A4:L and 'Tab'!AD4:AD (V1 fallback: A4:K and AC4:AC)
-            // Table 2: 'Tab'!N4:U and 'Tab'!AE4:AE (V1 fallback: M4:T and AD4:AD)
-            // Table 3: 'Tab'!W4:AC and 'Tab'!AF4:AF (V1 fallback: V4:AB and AE4:AE)
-            // Header: 'Tab'!L3:L3 to detect 31- vs 32-column layout by header Note
-            val batchRanges = mutableListOf<String>()
-            sortedTabs.forEach { tab ->
-                batchRanges.add("'$tab'!L3:L3")
-                batchRanges.add("'$tab'!A4:L")
-                batchRanges.add("'$tab'!AD4:AD")
-                batchRanges.add("'$tab'!N4:U")
-                batchRanges.add("'$tab'!AE4:AE")
-                batchRanges.add("'$tab'!W4:AC")
-                batchRanges.add("'$tab'!AF4:AF")
-                batchRanges.add("'$tab'!A4:K")
-                batchRanges.add("'$tab'!AC4:AC")
-                batchRanges.add("'$tab'!M4:T")
-                batchRanges.add("'$tab'!V4:AB")
-            }
-
-            val batchResult = batchGetValues(
-                spreadsheetId = spreadsheetId,
-                ranges = batchRanges,
-                valueRenderOption = "UNFORMATTED_VALUE",
-                dateTimeRenderOption = "SERIAL_NUMBER"
+            // Ranges requested for every month tab, in a fixed order:
+            // header L3 (decides 31- vs 32-column layout), then the 32-column ranges, then the 31-column (V1) ranges.
+            // Table 1: A4:L and AD4:AD (V1: A4:K and AC4:AC); Table 2: N4:U and AE4:AE (V1: M4:T and AD4:AD);
+            // Table 3: W4:AC and AF4:AF (V1: V4:AB and AE4:AE)
+            val tabRanges = listOf(
+                "L3:L3", "A4:L", "AD4:AD", "N4:U", "AE4:AE", "W4:AC", "AF4:AF",
+                "A4:K", "AC4:AC", "M4:T", "V4:AB"
             )
-            if (batchResult is Result.Error) return@withContext Result.Error(batchResult.exception)
-            val valuesMap = (batchResult as Result.Success).data
 
-            fun getValuesForRange(tab: String, colRange: String): List<List<Any?>> {
-                return valuesMap["'$tab'!$colRange"]
-                    ?: valuesMap["$tab!$colRange"]
-                    ?: valuesMap.entries.firstOrNull { (k, _) ->
-                        k.contains(tab, ignoreCase = true) && k.contains(colRange.substringBefore(":"), ignoreCase = true)
-                    }?.value
-                    ?: emptyList()
+            suspend fun readRanges(includeAf: Boolean): Result<Map<String, List<List<Any?>>>> {
+                val requested = mutableListOf<Pair<String, String>>() // tab to column range
+                sortedTabs.forEach { tab ->
+                    tabRanges.forEach { col ->
+                        if (includeAf || col != "AF4:AF") requested.add(tab to col)
+                    }
+                }
+                val ordered = batchGetValuesOrdered(
+                    spreadsheetId = spreadsheetId,
+                    ranges = requested.map { (tab, col) -> "'$tab'!$col" },
+                    valueRenderOption = "UNFORMATTED_VALUE",
+                    dateTimeRenderOption = "SERIAL_NUMBER"
+                )
+                if (ordered is Result.Error) return Result.Error(ordered.exception)
+                val responses = (ordered as Result.Success).data
+                val byPosition = LinkedHashMap<String, List<List<Any?>>>()
+                if (responses.size == requested.size) {
+                    // Normal case: the API answers every requested range in the order requested
+                    requested.forEachIndexed { i, (tab, col) -> byPosition["$tab|$col"] = responses[i].second }
+                    byPosition[POSITIONAL_KEY] = emptyList()
+                } else {
+                    // Defensive: a short or odd response cannot be matched by position, so match by range name
+                    Diagnostics.record("GoogleSheetsClient", "readLedgerSnapshot response count differs from request count")
+                    val byName = LinkedHashMap<String, List<List<Any?>>>()
+                    for ((name, rows) in responses) byName[name] = rows
+                    requested.forEach { (tab, col) ->
+                        val rows = byName["'$tab'!$col"]
+                            ?: byName["$tab!$col"]
+                            ?: byName.entries.firstOrNull { (k, _) ->
+                                k.contains(tab, ignoreCase = true) && k.contains(col.substringBefore(":"), ignoreCase = true)
+                            }?.value
+                        if (rows != null) byPosition["$tab|$col"] = rows
+                    }
+                }
+                return Result.Success(byPosition)
             }
+
+            // AF4:AF does not exist on a 31-column tab and the API answers 400 "exceeds grid limits" for it.
+            // Normal 32-column tabs are read in one call; only on that specific error is the read repeated without AF.
+            var withoutAf = false
+            var readResult = readRanges(includeAf = true)
+            if (readResult is Result.Error) {
+                val ex = readResult.exception
+                val gridLimit = ex is GoogleSheetsApiException && ex.statusCode == 400 &&
+                    ex.message?.contains("exceeds grid limits", ignoreCase = true) == true
+                if (!gridLimit) return@withContext Result.Error(ex)
+                withoutAf = true
+                readResult = readRanges(includeAf = false)
+                if (readResult is Result.Error) return@withContext Result.Error(readResult.exception)
+            }
+            val valuesMap = (readResult as Result.Success).data
+            val positional = valuesMap.containsKey(POSITIONAL_KEY)
+
+            fun getValuesForRange(tab: String, colRange: String): List<List<Any?>> =
+                valuesMap["$tab|$colRange"] ?: emptyList()
 
             val monthSnapshots = mutableListOf<MonthTabSnapshot>()
 
@@ -2400,8 +2448,18 @@ open class GoogleSheetsClient(
                 val sheetId = tabsMap[tab]
                     ?: return@withContext Result.Error(SheetNotFoundException(spreadsheetId, "Tab '$tab' not found in spreadsheet"))
                 val l3Header = getValuesForRange(tab, "L3:L3").firstOrNull()?.firstOrNull()?.toString()?.trim()
-                val isV2 = l3Header?.equals("Note", ignoreCase = true)
-                    ?: (valuesMap.keys.any { it.contains(tab, ignoreCase = true) && (it.contains("A4:L") || it.contains("AD4:AD") || it.contains("W4:AC") || it.contains("AF4:AF")) })
+                // A blank or missing L3 means the 31-column V1 layout. Only when the response could not be matched by
+                // position is the layout guessed from which ranges came back.
+                val isV2 = if (l3Header != null || positional) {
+                    l3Header?.equals("Note", ignoreCase = true) ?: false
+                } else {
+                    valuesMap.keys.any { it.startsWith("$tab|") && (it.endsWith("|A4:L") || it.endsWith("|AD4:AD") || it.endsWith("|W4:AC") || it.endsWith("|AF4:AF")) }
+                }
+                if (isV2 && withoutAf) {
+                    return@withContext Result.Error(
+                        IllegalStateException("Month tab '$tab' reports the 32-column layout but has no column AF")
+                    )
+                }
 
                 val debitsData = if (isV2) getValuesForRange(tab, "A4:L") else getValuesForRange(tab, "A4:K")
                 val debitsUuids = if (isV2) getValuesForRange(tab, "AD4:AD") else getValuesForRange(tab, "AC4:AC")
