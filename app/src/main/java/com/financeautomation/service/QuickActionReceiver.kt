@@ -76,7 +76,7 @@ class QuickActionReceiver : BroadcastReceiver() {
                     val container = app?.appContainer
                     if (!captureId.isNullOrBlank() && container != null) {
                         val db = container.awaitDatabase()
-                        db.pendingCaptureDao().updateState(captureId, com.financeautomation.data.local.entity.PendingCaptureEntity.STATE_DISMISSED)
+                        db.pendingCaptureDao().markDismissedIfOpen(captureId)
                     }
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e

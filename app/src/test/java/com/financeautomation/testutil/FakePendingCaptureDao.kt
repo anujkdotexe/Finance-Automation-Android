@@ -32,6 +32,12 @@ class FakePendingCaptureDao : PendingCaptureDao {
     override suspend fun updateState(id: String, state: String, updatedAt: Long) {
         captures[id]?.let { captures[id] = it.copy(state = state, updatedAt = updatedAt) }
     }
+    override suspend fun markDismissedIfOpen(id: String, updatedAt: Long): Int {
+        val cap = captures[id] ?: return 0
+        if (cap.state != "WAITING" && cap.state != "SHOWN") return 0
+        captures[id] = cap.copy(state = "DISMISSED", updatedAt = updatedAt)
+        return 1
+    }
     override suspend fun resetShownToWaiting(updatedAt: Long): Int {
         val shown = captures.values.filter { it.state == "SHOWN" }
         shown.forEach { cap ->

@@ -107,7 +107,7 @@ class OverlayAndWatcherResilienceTest {
         dao.insert(capture)
 
         // Directly test DAO state transition executed by QuickActionReceiver on ACTION_DISMISS_CAPTURE
-        dao.updateState("cap_swiped_heads_up", PendingCaptureEntity.STATE_DISMISSED)
+        dao.markDismissedIfOpen("cap_swiped_heads_up")
 
         val updated = dao.getById("cap_swiped_heads_up")
         assertNotNull(updated)

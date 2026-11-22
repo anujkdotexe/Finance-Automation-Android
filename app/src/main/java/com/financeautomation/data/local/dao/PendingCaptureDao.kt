@@ -57,6 +57,10 @@ interface PendingCaptureDao {
     @Query("UPDATE pending_captures SET state = :state, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateState(id: String, state: String, updatedAt: Long = System.currentTimeMillis())
 
+    /** Dismisses a capture only while it is still open, so a CLAIMED, DONE or NEEDS_REVIEW row is never overwritten. */
+    @Query("UPDATE pending_captures SET state = 'DISMISSED', updatedAt = :updatedAt WHERE id = :id AND state IN ('WAITING', 'SHOWN')")
+    suspend fun markDismissedIfOpen(id: String, updatedAt: Long = System.currentTimeMillis()): Int
+
     @Query("UPDATE pending_captures SET state = 'WAITING', updatedAt = :updatedAt WHERE state = 'SHOWN'")
     suspend fun resetShownToWaiting(updatedAt: Long = System.currentTimeMillis()): Int
 
