@@ -282,6 +282,8 @@ class DashboardSubscriptionsAndTripsParityTest {
         // Extract Insights items from rows 65+ (cols U and V)
         @Suppress("UNCHECKED_CAST")
         val cellUpdates = dashboardRequests.mapNotNull { it["updateCells"] as? Map<String, Any?> }
+            // The Insights block starts with a clearing request that has no rows; only requests with rows carry slices
+            .filter { it["rows"] != null }
             .filter {
                 val range = it["range"] as? Map<*, *>
                 val start = it["start"] as? Map<*, *>
@@ -307,7 +309,8 @@ class DashboardSubscriptionsAndTripsParityTest {
         assertFalse("Insights slices must NOT contain Savings", sliceLabels.contains("Savings"))
         assertFalse("Insights slices must NOT contain Transfer", sliceLabels.contains("Transfer"))
         assertTrue("Insights slices must contain Trips", sliceLabels.contains("Trips"))
-        assertTrue("Insights slices must contain Refunds", sliceLabels.contains("Refunds"))
+        // Refunds stay in the table so the slices add up to the burn KPI, but the row sits below the chart range
+        assertTrue("Insights slices must contain the uncharted Refunds row", sliceLabels.contains("Refunds (not charted)"))
 
         // Extract formula cells (col index 21) and evaluate each slice using the evaluator
         val formulaCells = cellUpdates
