@@ -432,4 +432,36 @@ class DashboardSubscriptionsAndTripsParityTest {
         val tripRepairTf = tripRepairUef["textFormat"] as Map<*, *>
         assertEquals(white, tripRepairTf["foregroundColor"])
     }
+
+    @Test
+    fun testNoDropdownsInSubscriptionsAndTripsAndValidationClearedOnRepair() {
+        val subReqs = SheetProvisioner.buildSubscriptionsRequests(sheetId = 9, year = 2026)
+        val hasSubValidationRule = subReqs.any {
+            val sdv = it["setDataValidation"] as? Map<*, *>
+            sdv?.get("rule") != null
+        }
+        assertFalse("Subscriptions provision requests must not contain dropdown validations (C3, C4)", hasSubValidationRule)
+
+        val tripReqs = SheetProvisioner.buildTripsRequests(sheetId = 8, year = 2026)
+        val hasTripValidationRule = tripReqs.any {
+            val sdv = it["setDataValidation"] as? Map<*, *>
+            sdv?.get("rule") != null
+        }
+        assertFalse("Trips provision requests must not contain dropdown validations (C3, C4)", hasTripValidationRule)
+
+        // Verify repair requests clear data validations with rule = null
+        val subRepairReqs = SheetProvisioner.buildSubscriptionsTitleRepairRequests(sheetId = 9)
+        val subClearValidations = subRepairReqs.filter {
+            val sdv = it["setDataValidation"] as? Map<*, *>
+            sdv != null && sdv["rule"] == null
+        }
+        assertEquals("Subscriptions repair must clear validations on 3 ranges", 3, subClearValidations.size)
+
+        val tripRepairReqs = SheetProvisioner.buildTripsTitleRepairRequests(sheetId = 8)
+        val tripClearValidations = tripRepairReqs.filter {
+            val sdv = it["setDataValidation"] as? Map<*, *>
+            sdv != null && sdv["rule"] == null
+        }
+        assertEquals("Trips repair must clear validation on Status column", 1, tripClearValidations.size)
+    }
 }

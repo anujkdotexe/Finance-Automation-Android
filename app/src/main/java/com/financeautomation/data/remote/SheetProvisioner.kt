@@ -2500,43 +2500,6 @@ object SheetProvisioner {
             )
         )
 
-        // Data Validations
-        // Frequency: Col C (index 2)
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startRow = 3,
-                endRow = targetRows,
-                startCol = 2,
-                endCol = 3,
-                values = listOf("Weekly", "Monthly", "Yearly")
-            )
-        )
-        // Default Account: Col E (index 4)
-        if (accounts.isNotEmpty()) {
-            requests.add(
-                createDataValidationRequest(
-                    sheetId = sheetId,
-                    startRow = 3,
-                    endRow = targetRows,
-                    startCol = 4,
-                    endCol = 5,
-                    values = accounts
-                )
-            )
-        }
-        // Active: Col F (index 5)
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startRow = 3,
-                endRow = targetRows,
-                startCol = 5,
-                endCol = 6,
-                values = listOf("TRUE", "FALSE")
-            )
-        )
-
         // Column widths
         val widths = listOf(
             0 to 160, 1 to 130, 2 to 100, 3 to 110, 4 to 120,
@@ -2784,18 +2747,6 @@ object SheetProvisioner {
             )
         )
 
-        // Data Validation for Status: Col D (index 3)
-        requests.add(
-            createDataValidationRequest(
-                sheetId = sheetId,
-                startRow = 3,
-                endRow = targetRows,
-                startCol = 3,
-                endCol = 4,
-                values = listOf("Active", "Ended")
-            )
-        )
-
         // Column widths
         val widths = listOf(
             0 to 180, 1 to 100, 2 to 100, 3 to 90, 4 to 70,
@@ -2894,7 +2845,11 @@ object SheetProvisioner {
                     ),
                     "fields" to "userEnteredValue,userEnteredFormat"
                 )
-            )
+            ),
+            // Clear existing data validations on Subscriptions tab (Frequency, Default Account, Active)
+            createClearDataValidationRequest(sheetId, startRow = 3, endRow = 500, startCol = 2, endCol = 3),
+            createClearDataValidationRequest(sheetId, startRow = 3, endRow = 500, startCol = 4, endCol = 5),
+            createClearDataValidationRequest(sheetId, startRow = 3, endRow = 500, startCol = 5, endCol = 6)
         )
     }
 
@@ -2948,17 +2903,18 @@ object SheetProvisioner {
                     ),
                     "fields" to "userEnteredValue,userEnteredFormat"
                 )
-            )
+            ),
+            // Clear existing data validation on Trips tab (Status)
+            createClearDataValidationRequest(sheetId, startRow = 3, endRow = 500, startCol = 3, endCol = 4)
         )
     }
 
-    private fun createDataValidationRequest(
+    fun createClearDataValidationRequest(
         sheetId: Int,
         startRow: Int,
         endRow: Int,
         startCol: Int,
-        endCol: Int,
-        values: List<String>
+        endCol: Int
     ): Map<String, Any?> = mapOf(
         "setDataValidation" to mapOf(
             "range" to mapOf(
@@ -2968,14 +2924,7 @@ object SheetProvisioner {
                 "startColumnIndex" to startCol,
                 "endColumnIndex" to endCol
             ),
-            "rule" to mapOf(
-                "condition" to mapOf(
-                    "type" to "ONE_OF_LIST",
-                    "values" to values.map { mapOf("userEnteredValue" to it) }
-                ),
-                "showCustomUi" to true,
-                "strict" to true
-            )
+            "rule" to null
         )
     )
 }
