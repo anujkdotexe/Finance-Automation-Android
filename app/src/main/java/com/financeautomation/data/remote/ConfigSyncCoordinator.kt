@@ -161,7 +161,8 @@ class ConfigSyncCoordinator(
                     throw res.exception
                 }
                 // The config push itself worked; report a failed tab mirror so the queued push is tried again
-                mirrorError?.let { throw it }
+                if (mirrorError != null) throw mirrorError
+                Unit
             }
         }
     }
@@ -206,7 +207,7 @@ class ConfigSyncCoordinator(
                     )
                     throw res.exception
                 }
-                tabSyncError?.let { throw it }
+                if (tabSyncError != null) throw tabSyncError
             }
         }
     }
