@@ -30,8 +30,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.financeautomation.R
+import com.financeautomation.presentation.components.PrivacySettingsGroup
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
@@ -193,90 +192,22 @@ fun SettingsScreen(
         }
 
         // Privacy & Telemetry Section
-        Surface(
-            color = FinanceTheme.colors.surfaceContainerLowest,
-            shape = FinanceShapes.large,
-            shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Switch 1: Send crash reports (wired to P1-6 opt-in)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = FinanceTheme.spacing.m)) {
-                        Text(
-                            text = stringResource(R.string.settings_privacy_crash_title),
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_privacy_crash_desc),
-                            style = FinanceTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Switch(
-                        checked = crashReportsEnabled,
-                        onCheckedChange = { enabled ->
-                            crashReportsEnabled = enabled
-                            viewModel.setCrashlyticsOptIn(context, enabled)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                            uncheckedTrackColor = FinanceTheme.colors.surfaceContainerHighest
-                        )
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m))
-
-                // Switch 2: Share anonymous usage counts (off by default, wired when P2-G is built)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = FinanceTheme.spacing.m)) {
-                        Text(
-                            text = stringResource(R.string.settings_privacy_analytics_title),
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_privacy_analytics_desc),
-                            style = FinanceTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Switch(
-                        checked = analyticsEnabled,
-                        onCheckedChange = { enabled ->
-                            analyticsEnabled = enabled
-                            viewModel.setAnalyticsOptIn(context, enabled)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                            uncheckedTrackColor = FinanceTheme.colors.surfaceContainerHighest
-                        )
-                    )
-                }
+        PrivacySettingsGroup(
+            crashReportsEnabled = crashReportsEnabled,
+            onCrashReportsChange = { enabled ->
+                crashReportsEnabled = enabled
+                viewModel.setCrashlyticsOptIn(context, enabled)
+            },
+            analyticsEnabled = analyticsEnabled,
+            onAnalyticsChange = { enabled ->
+                analyticsEnabled = enabled
+                viewModel.setAnalyticsOptIn(context, enabled)
+            },
+            developerMode = state.developerMode,
+            onSendTestReport = {
+                viewModel.sendTestCrashReport(context)
             }
-        }
+        )
     }
 }
 

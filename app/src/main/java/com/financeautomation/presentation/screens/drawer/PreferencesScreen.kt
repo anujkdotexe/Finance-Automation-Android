@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.financeautomation.R
 import com.financeautomation.domain.model.ThemeMode
+import com.financeautomation.presentation.components.PrivacySettingsGroup
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
 import com.financeautomation.presentation.viewmodel.SettingsUiState
@@ -402,11 +403,12 @@ fun PreferencesScreen(
         var crashReportsEnabled by remember(state.crashlyticsOptIn) {
             mutableStateOf(com.financeautomation.core.utils.CrashlyticsManager.isOptedIn(context))
         }
+        var analyticsEnabled by remember(state.analyticsOptIn) {
+            mutableStateOf(state.analyticsOptIn)
+        }
 
-        PrivacyGroup(
+        PrivacySettingsGroup(
             appLockEnabled = state.appLockEnabled,
-            hidePreview = state.hideRecentsPreview,
-            crashReportsEnabled = crashReportsEnabled,
             lockUnavailable = lockUnavailable,
             onAppLockChange = { wantOn ->
                 lockUnavailable = false
@@ -421,11 +423,19 @@ fun PreferencesScreen(
                     }
                 }
             },
+            hidePreview = state.hideRecentsPreview,
             onHidePreviewChange = { viewModel.setHideRecentsPreview(it) },
+            crashReportsEnabled = crashReportsEnabled,
             onCrashReportsChange = { enabled ->
                 crashReportsEnabled = enabled
                 viewModel.setCrashlyticsOptIn(context, enabled)
             },
+            analyticsEnabled = analyticsEnabled,
+            onAnalyticsChange = { enabled ->
+                analyticsEnabled = enabled
+                viewModel.setAnalyticsOptIn(context, enabled)
+            },
+            developerMode = state.developerMode,
             onSendTestReport = {
                 viewModel.sendTestCrashReport(context)
             }
@@ -512,123 +522,4 @@ fun PreferencesScreen(
         show = showClearVoided,
         onDismiss = { showClearVoided = false }
     )
-}
-
-@Composable
-private fun PrivacyGroup(
-    appLockEnabled: Boolean,
-    hidePreview: Boolean,
-    crashReportsEnabled: Boolean,
-    lockUnavailable: Boolean,
-    onAppLockChange: (Boolean) -> Unit,
-    onHidePreviewChange: (Boolean) -> Unit,
-    onCrashReportsChange: (Boolean) -> Unit,
-    onSendTestReport: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)) {
-        Text(
-            text = stringResource(R.string.pref_privacy_title),
-            style = FinanceTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Surface(
-            color = FinanceTheme.colors.surfaceContainerLowest,
-            shape = FinanceShapes.large,
-            shadowElevation = FinanceTheme.sizes.shadowElevationSmall,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                SwitchRow(
-                    title = stringResource(R.string.pref_app_lock_title),
-                    description = stringResource(R.string.pref_app_lock_desc),
-                    checked = appLockEnabled,
-                    onCheckedChange = onAppLockChange
-                )
-                if (lockUnavailable) {
-                    Text(
-                        text = stringResource(R.string.pref_app_lock_unavailable),
-                        style = FinanceTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
-                    )
-                }
-                HorizontalDivider(
-                    color = FinanceTheme.colors.surfaceContainerLow,
-                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
-                )
-                SwitchRow(
-                    title = stringResource(R.string.pref_hide_preview_title),
-                    description = stringResource(R.string.pref_hide_preview_desc),
-                    checked = hidePreview,
-                    onCheckedChange = onHidePreviewChange
-                )
-                HorizontalDivider(
-                    color = FinanceTheme.colors.surfaceContainerLow,
-                    modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
-                )
-                SwitchRow(
-                    title = stringResource(R.string.privacy_crash_title),
-                    description = stringResource(R.string.privacy_crash_body),
-                    checked = crashReportsEnabled,
-                    onCheckedChange = onCrashReportsChange
-                )
-                if (com.financeautomation.BuildConfig.DEBUG || com.financeautomation.BuildConfig.BUILD_TYPE == "beta") {
-                    HorizontalDivider(
-                        color = FinanceTheme.colors.surfaceContainerLow,
-                        modifier = Modifier.padding(horizontal = FinanceTheme.spacing.m)
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onSendTestReport)
-                            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.privacy_test_report_action),
-                            style = FinanceTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SwitchRow(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = FinanceTheme.sizes.minTouchTarget)
-            .clip(FinanceShapes.medium)
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = FinanceTheme.spacing.m, vertical = FinanceTheme.spacing.m),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.m)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = FinanceTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = description,
-                style = FinanceTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        androidx.compose.material3.Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
 }
