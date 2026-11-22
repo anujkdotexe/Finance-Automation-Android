@@ -58,6 +58,8 @@ class UndoRecentSaveTest {
     @Test
     fun undoOfARepaymentThatHasNotSyncedYetRemovesItFromTheQueue() = runBlocking {
         val h = SyncHarness()
+        h.repo.logPayable("Asha", 100.0, "lunch", ts)
+        h.qDao.queue.clear()
         val id = (h.repo.logRepayment("Asha", 50.0, null, ts) as Result.Success).data
         assertTrue(id.startsWith("rep_"))
         assertTrue(h.repo.undoRecentSave(id) is Result.Success)

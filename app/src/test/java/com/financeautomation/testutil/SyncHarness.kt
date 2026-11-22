@@ -25,6 +25,7 @@ class SyncHarness(
     val qDao = InMemoryQueueDao()
     val iDao = InMemoryInflowDao()
     val lDao = InMemoryLineageDao()
+    val pDao = InMemoryPayableDao()
     /** Test clock shared by the repository and the read gate; move it to test intervals and cooldowns. */
     var now = System.currentTimeMillis()
     val gate = com.financeautomation.data.remote.SheetsReadGate { now }
@@ -75,6 +76,7 @@ class SyncHarness(
     val repo = TransactionRepositoryImpl(
         transactionDao = tDao,
         syncQueueDao = qDao,
+        payableDao = pDao,
         inflowDao = iDao,
         lineageDao = lDao,
         googleSheetsClient = sheets,

@@ -622,6 +622,11 @@ class WorkbookResolverTest {
             provisioned.add(spreadsheetId)
             return provisionResult
         }
+
+        override suspend fun provisionMasterWorkbook(spreadsheetId: String, accounts: List<String>, categories: List<String>, year: Int): Result<Unit> {
+            provisioned.add(spreadsheetId)
+            return provisionResult
+        }
     }
 
     private fun prefsWithOldId() = FakePreferencesRepository().apply {

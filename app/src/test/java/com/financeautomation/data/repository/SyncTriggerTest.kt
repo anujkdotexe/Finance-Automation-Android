@@ -22,11 +22,13 @@ class SyncTriggerTest {
     private val tDao = InMemoryTransactionDao()
     private val qDao = InMemoryQueueDao()
     private val iDao = InMemoryInflowDao()
+    private val pDao = com.financeautomation.testutil.InMemoryPayableDao()
     private var triggers = 0
 
     private val repo = TransactionRepositoryImpl(
         transactionDao = tDao,
         syncQueueDao = qDao,
+        payableDao = pDao,
         inflowDao = iDao,
         accountingSyncExecutor = createTestAccountingSyncExecutor(syncQueueDao = qDao, transactionDao = tDao),
         onTriggerSync = { triggers++ },

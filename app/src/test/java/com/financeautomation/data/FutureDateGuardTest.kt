@@ -6,6 +6,7 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.TimeGuardConstants
+import com.financeautomation.data.local.dao.PayableDao
 import com.financeautomation.data.local.dao.SyncQueueDao
 import com.financeautomation.data.local.dao.TransactionDao
 import com.financeautomation.data.repository.TransactionRepositoryImpl
@@ -37,9 +38,10 @@ class FutureDateGuardTest {
             }
         } as T
 
-    private fun repo() = TransactionRepositoryImpl(
+    private fun repo(inMemPayableDao: PayableDao = com.financeautomation.testutil.InMemoryPayableDao()) = TransactionRepositoryImpl(
         transactionDao = recordingDao(TransactionDao::class.java),
         syncQueueDao = recordingDao(SyncQueueDao::class.java),
+        payableDao = inMemPayableDao,
         accountingSyncExecutor = com.financeautomation.testutil.createTestAccountingSyncExecutor(),
         ioDispatcher = Dispatchers.Unconfined
     )
@@ -112,6 +114,7 @@ class FutureDateGuardTest {
     @Test
     fun logRepaymentGuard() = runBlocking {
         val r = repo()
+        r.logPayable("A", 20.0, "Debt", System.currentTimeMillis() - day)
         fun call(ts: Long) = runBlocking { r.logRepayment("A", 5.0, null, ts) }
         assertFutureError(call(System.currentTimeMillis() + day))
         assertTrue(call(System.currentTimeMillis()) is Result.Success)

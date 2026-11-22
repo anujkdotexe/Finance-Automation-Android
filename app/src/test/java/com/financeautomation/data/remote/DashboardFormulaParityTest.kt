@@ -9,14 +9,20 @@ import org.junit.Test
  */
 class DashboardFormulaParityTest {
 
+    private val currentYear = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
+    private val yy = (currentYear % 100).toString().padStart(2, '0')
+    private val currentTab = """TEXT(TODAY(), "mmm") & "$yy""""
+    private val prevTab = """TEXT(EDATE(TODAY(), -1), "mmm") & "$yy""""
+    private val row6Tab = """${'$'}U6 & "$yy""""
+
     private val iosCurrentBurn =
-        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Transfer"), 0)"""
 
     private val iosPrevBurn =
-        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!I4:I"), INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+        """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & "$yy" & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(EDATE(TODAY(), -1), "mmm") & "$yy" & "'!F4:F"), "<>Transfer"), 0)"""
 
     private val iosMonthlyRow6 =
-        """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!I4:I"), INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Savings", INDIRECT("'" & ${'$'}U6 & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Transfer"), 0)"""
+        """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U6 & "$yy" & "'!I4:I"), INDIRECT("'" & ${'$'}U6 & "$yy" & "'!F4:F"), "<>Savings", INDIRECT("'" & ${'$'}U6 & "$yy" & "'!F4:F"), "<>Transfer"), 0)"""
 
     /**
      * Owner decision: living burn subtracts the refunds of the month and excludes [Void] transactions.
@@ -33,10 +39,6 @@ class DashboardFormulaParityTest {
         }
         return "=IFERROR(MAX(0, $coreWithVoid$refunds), 0)"
     }
-
-    private val currentTab = """TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2)"""
-    private val prevTab = """TEXT(EDATE(TODAY(), -1), "mmm") & RIGHT(YEAR(EDATE(TODAY(), -1)), 2)"""
-    private val row6Tab = """${'$'}U6 & RIGHT(YEAR(TODAY()), 2)"""
 
     @Test
     fun testCurrentBurnExcludesSavingsAndTransferLikeIos() {
@@ -57,7 +59,7 @@ class DashboardFormulaParityTest {
     @Test
     fun testUserExcludedCategoriesAreAddedAfterTheDefaults() {
         val formula = DashboardFormulaBuilder.buildCurrentBurnFormula(listOf("savings", "Dining Out", "transfer"))
-        assertTrue(formula.contains(""""<>Transfer", INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), "<>Dining Out")"""))
+        assertTrue(formula.contains(""""<>Transfer", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Dining Out")"""))
         assertEquals(1, Regex("<>Savings").findAll(formula, 0).count())
         assertEquals(1, Regex("<>Transfer").findAll(formula, 0).count())
     }
@@ -89,7 +91,7 @@ class DashboardFormulaParityTest {
 
     @Test
     fun testCategorySpendFormulaUsesTheLiveSpacing() {
-        val expected = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!F4:F"), Y6, INDIRECT("'" & TEXT(TODAY(), "mmm") & RIGHT(YEAR(TODAY()), 2) & "'!I4:I")), 0)"""
+        val expected = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), Y6, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I")), 0)"""
         assertEquals(expected, DashboardFormulaBuilder.buildCategorySpendFormula(6))
     }
 
