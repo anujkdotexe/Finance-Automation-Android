@@ -391,6 +391,8 @@
     <string name="problem_report_preview_title">Technical data to be sent:</string>
     <string name="problem_report_send_button">Send</string>
     <string name="problem_report_success">Thank you. Your report has been submitted.</string>
+    <string name="problem_report_already_sent">Thank you. This report was already submitted.</string>
+    <string name="problem_report_maybe_sent">Your report may already have been sent. If your connection dropped, it will be delivered once connected.</string>
     <string name="problem_report_error_prefix">Failed to send: </string>
     <string name="problem_report_close">Close</string>
     <string name="diag_locked_title">Diagnostics locked</string>
