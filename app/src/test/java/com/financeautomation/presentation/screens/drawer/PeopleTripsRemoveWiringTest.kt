@@ -10,6 +10,7 @@ import java.io.File
 class PeopleTripsRemoveWiringTest {
 
     private val screen = File("src/main/java/com/financeautomation/presentation/screens/drawer/PeopleTripsScreen.kt").readText()
+    private val detailSheet = File("src/main/java/com/financeautomation/presentation/screens/drawer/TripDetailSheet.kt").readText()
     private val coordinator = File("src/main/java/com/financeautomation/presentation/viewmodel/SettingsCustomizationCoordinator.kt").readText()
     private val viewModel = File("src/main/java/com/financeautomation/presentation/viewmodel/SettingsViewModel.kt").readText()
 
@@ -23,12 +24,23 @@ class PeopleTripsRemoveWiringTest {
     }
 
     @Test
-    fun onlyAnInactiveTripCardOffersRemove() {
-        val card = screen.substringAfter("private fun TripCard(")
-        val active = card.substringAfter("if (isActive) {").substringBefore("} else {")
-        assertFalse(active.contains("onRemove"))
-        assertTrue(card.substringAfter("} else {").contains("onRemove"))
-        assertTrue(screen.contains("viewModel.onRemoveTripTag(name)"))
+    fun onlyAnInactiveTripOffersRemoveInTheDetailSheet() {
+        // The trip cards no longer carry a Remove action; removal moved into the trip detail sheet
+        val cardBody = screen.substringAfter("private fun TripCard(").substringAfter("val removeTripDescription")
+        assertFalse("the trip card must not call onRemove", cardBody.contains("onRemove"))
+
+        val actions = detailSheet.substringAfter("// Action Buttons")
+        val active = actions.substringAfter("if (isActive) {").substringBefore("} else {")
+        assertTrue("an active trip shows Delete as a disabled button", active.contains("enabled = false"))
+        assertTrue(active.contains("R.string.trip_delete_active_blocked"))
+        assertFalse("an active trip never opens the delete dialog", active.contains("showDeleteConfirm = true"))
+        assertFalse(active.contains("onDeleteTrip"))
+
+        val inactive = actions.substringAfter("} else {")
+        assertTrue("an ended trip opens the delete dialog", inactive.contains("showDeleteConfirm = true"))
+        assertTrue("the trip is deleted only from the dialog confirm", detailSheet.substringAfter("if (showDeleteConfirm) {").contains("onDeleteTrip(summary.name)"))
+        assertEquals(1, "onDeleteTrip(summary.name)".toRegex(RegexOption.LITERAL).findAll(detailSheet).count())
+        assertTrue(screen.contains("viewModel.onRemoveTripTag(tripName)"))
     }
 
     @Test
