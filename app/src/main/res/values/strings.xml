@@ -673,6 +673,12 @@
     <string name="sync_advanced">Advanced</string>
     <string name="sync_mirror">Mirror</string>
     <string name="sync_restore">Restore</string>
+    <string name="sync_show_details">Show</string>
+    <string name="sync_hide_details">Hide</string>
+    <string name="sync_mirror_confirm_title">Replace the cloud copy of your settings?</string>
+    <string name="sync_mirror_confirm_body">This overwrites the settings stored in your Google account with the ones on this phone.</string>
+    <string name="sync_restore_confirm_title">Replace settings on this phone?</string>
+    <string name="sync_restore_confirm_body">This overwrites the accounts, categories, friends and other settings on this phone with the copy stored in your Google account.</string>
     <string name="sync_regenerate_formulas">Regenerate dashboard formulas</string>
     <string name="sync_provisioning">Provisioning workbook...</string>
     <string name="txn_your_share">Your share</string>
