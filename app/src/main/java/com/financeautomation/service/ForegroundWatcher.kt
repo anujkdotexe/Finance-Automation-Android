@@ -105,7 +105,13 @@ class ForegroundWatcher(
 
     private val mutex = Mutex()
     private var watcherJob: Job? = null
-    private val isStartingLoop = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    // Written under [mutex] when the loop starts and when it decides to stop, so a capture inserted while the loop
+    // is ending is never missed.
+    @Volatile
+    private var loopRunning = false
+
+    private fun loopAlive(): Boolean = loopRunning && watcherJob?.isActive == true
     private val pollCounters = ConcurrentHashMap<String, Int>()
     private val failedRetryDelays = ConcurrentHashMap<String, Long>()
     private val wakeChannel = Channel<Unit>(Channel.CONFLATED)
@@ -206,7 +212,7 @@ class ForegroundWatcher(
                     if (e is CancellationException) throw e
                 }
                 val waiting = resolveDao().getWaitingCaptures()
-                if (waiting.isNotEmpty() && watcherJob?.isActive != true) {
+                if (waiting.isNotEmpty() && !loopAlive()) {
                     startWatcherLoop(scope)
                 }
             }
@@ -219,7 +225,7 @@ class ForegroundWatcher(
     fun notifyCaptureWaiting(scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             mutex.withLock {
-                if (watcherJob?.isActive != true) {
+                if (!loopAlive()) {
                     startWatcherLoop(scope)
                 }
             }
@@ -227,7 +233,7 @@ class ForegroundWatcher(
     }
 
     private fun startWatcherLoop(scope: CoroutineScope) {
-        if (!isStartingLoop.compareAndSet(false, true)) return
+        loopRunning = true
         registerScreenReceiver()
         watcherJob = scope.launch(Dispatchers.IO) {
             try {
@@ -238,7 +244,9 @@ class ForegroundWatcher(
                     if (e is CancellationException) throw e
                 }
                 var lastResetShown = System.currentTimeMillis()
+                var consecutiveFailures = 0
                 while (isActive) {
+                    try {
                     val nowTime = System.currentTimeMillis()
                     if (nowTime - lastResetShown > 15_000L) {
                         try {
@@ -249,9 +257,20 @@ class ForegroundWatcher(
                         lastResetShown = nowTime
                     }
                     val waitingList = resolveDao().getWaitingCaptures()
+                    consecutiveFailures = 0
                     if (waitingList.isEmpty()) {
                         pollCounters.clear()
-                        break
+                        // Look again under the mutex: a capture inserted just now must not be left without a loop
+                        val stop = mutex.withLock {
+                            if (resolveDao().getWaitingCaptures().isEmpty()) {
+                                loopRunning = false
+                                unregisterScreenReceiver()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        if (stop) break else continue
                     }
 
                     if (!isScreenInteractiveAndUnlocked()) {
@@ -325,14 +344,28 @@ class ForegroundWatcher(
                     withTimeoutOrNull(POLL_INTERVAL_MS) {
                         wakeChannel.receive()
                     }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // A transient failure (for example a database error) must not end the loop for good
+                        consecutiveFailures++
+                        if (consecutiveFailures > MAX_LOOP_RETRIES) {
+                            Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: loop gave up after retries")
+                            break
+                        }
+                        Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: loop retry $consecutiveFailures")
+                        delay(LOOP_RETRY_BASE_MS shl (consecutiveFailures - 1))
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Diagnostics.record("ForegroundWatcher", "${e.javaClass.simpleName}: loop error")
             } finally {
-                isStartingLoop.set(false)
-                unregisterScreenReceiver()
+                if (loopRunning) {
+                    loopRunning = false
+                    unregisterScreenReceiver()
+                }
             }
         }
     }
@@ -426,5 +459,7 @@ class ForegroundWatcher(
         const val POLL_INTERVAL_MS: Long = 700L
         const val REQUIRED_CONSECUTIVE_POLLS: Int = 2
         const val FAILURE_BACKOFF_MS: Long = 5000L
+        private const val MAX_LOOP_RETRIES: Int = 3
+        private const val LOOP_RETRY_BASE_MS: Long = 2000L
     }
 }
