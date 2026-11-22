@@ -1,5 +1,6 @@
 package com.financeautomation.presentation.screens.drawer
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.financeautomation.R
@@ -42,8 +44,10 @@ private val LIBRARIES = listOf(
     OpenSourceLibrary("Kotlin & Coroutines", "JetBrains s.r.o.", "Apache License 2.0", "https://github.com/JetBrains/kotlin"),
     OpenSourceLibrary("Room Persistence Library", "Google LLC", "Apache License 2.0", "https://developer.android.com/jetpack/androidx/releases/room"),
     OpenSourceLibrary("SQLCipher for Android", "Zetetic LLC", "BSD License", "https://www.zetetic.net/sqlcipher/"),
+    OpenSourceLibrary("Kotlinx Serialization", "JetBrains s.r.o.", "Apache License 2.0", "https://github.com/Kotlin/kotlinx.serialization"),
     OpenSourceLibrary("OkHttp", "Square, Inc.", "Apache License 2.0", "https://square.github.io/okhttp/"),
     OpenSourceLibrary("Material Components for Android", "Google LLC", "Apache License 2.0", "https://github.com/material-components/material-components-android"),
+    OpenSourceLibrary("Firebase (Crashlytics, Analytics, Firestore)", "Google LLC", "Apache License 2.0", "https://github.com/firebase/firebase-android-sdk"),
     OpenSourceLibrary("Google Play Services Auth", "Google LLC", "Android Software Development Kit License", "https://developers.google.com/android/guides/overview")
 )
 
@@ -122,6 +126,7 @@ private fun LibraryItem(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(FinanceTheme.spacing.m),
         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.xs)
     ) {
