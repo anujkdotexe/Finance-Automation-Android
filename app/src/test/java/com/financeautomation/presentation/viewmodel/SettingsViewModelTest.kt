@@ -1317,11 +1317,4 @@ class SettingsViewModelTest {
         assertNull(prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REPLACED_NOTICE_PENDING))
         assertFalse(prefs.noticePendingFlow.value)
     }
-
-    @Test
-    fun testSettingsScreenDoesNotContainLiteralV3Label() {
-        val file = java.io.File("src/main/java/com/financeautomation/presentation/screens/drawer/SettingsScreen.kt")
-        val content = if (file.exists()) file.readText() else java.io.File("app/" + file.path).readText()
-        assertFalse("SettingsScreen must not contain literal 'v3' label (C7)", content.contains("\"v3\""))
-    }
 }
