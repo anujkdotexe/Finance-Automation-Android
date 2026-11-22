@@ -1046,6 +1046,10 @@
     <string name="payment_apps_switch_cd">Watch %1$s</string>
     <string name="payment_apps_custom_generic_note">Generic parser: always sent to Needs Review</string>
     <string name="payment_apps_remove_action">Remove</string>
+    <string name="payment_apps_remove_confirm_title">Stop watching %1$s?</string>
+    <string name="payment_apps_remove_confirm_message">Payments from this app will no longer be captured.</string>
+    <string name="payment_apps_search_hint">Search apps</string>
+    <string name="capture_settings_open_failed">Could not open settings. Open it manually from system settings.</string>
 
     <!-- Trips Stitch v3 detail & insights -->
     <string name="trip_delete_title">Delete %1$s?</string>
