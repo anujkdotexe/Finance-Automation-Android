@@ -142,7 +142,7 @@ fun TripDetailSheet(
                     shape = FinanceShapes.pill
                 ) {
                     Text(
-                        text = if (isActive) stringResource(R.string.trip_active) else "Ended",
+                        text = if (isActive) stringResource(R.string.trip_active) else stringResource(R.string.trip_ended),
                         style = FinanceTheme.typography.labelSmall,
                         color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = FinanceTheme.spacing.s, vertical = FinanceTheme.spacing.xxs)
@@ -208,10 +208,14 @@ fun TripDetailSheet(
                                 Text(
                                     text = "${cat.category} (${String.format(Locale.US, "%.0f%%", cat.percentage)})",
                                     style = FinanceTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
                                 Text(
                                     text = formatRupees(cat.amount),
+                                    modifier = Modifier.padding(start = FinanceTheme.spacing.s),
                                     style = FinanceTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -248,15 +252,19 @@ fun TripDetailSheet(
                                 Text(
                                     text = friend.name,
                                     style = FinanceTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
                                 val statusDesc = when {
-                                    friend.owedToMe > 0.001 -> "Owes ${formatRupees(friend.owedToMe)}"
-                                    friend.repaid > 0.001 -> "Repaid ${formatRupees(friend.repaid)}"
-                                    else -> "Settled"
+                                    friend.owedToMe > 0.001 -> stringResource(R.string.trip_friend_owes, formatRupees(friend.owedToMe))
+                                    friend.repaid > 0.001 -> stringResource(R.string.trip_friend_repaid, formatRupees(friend.repaid))
+                                    else -> stringResource(R.string.trip_friend_settled)
                                 }
                                 Text(
                                     text = statusDesc,
+                                    modifier = Modifier.padding(start = FinanceTheme.spacing.s),
                                     style = FinanceTheme.typography.bodySmall,
                                     color = if (friend.owedToMe > 0.001) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -347,10 +355,14 @@ private fun NetRow(label: String, value: String, emphasised: Boolean = false) {
             text = label,
             style = if (emphasised) FinanceTheme.typography.titleMedium else FinanceTheme.typography.bodyMedium,
             fontWeight = if (emphasised) FontWeight.SemiBold else FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
         Text(
             text = value,
+            modifier = Modifier.padding(start = FinanceTheme.spacing.s),
             style = FinanceTheme.typography.numeric,
             fontWeight = if (emphasised) FontWeight.Bold else FontWeight.Medium,
             color = if (emphasised) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface

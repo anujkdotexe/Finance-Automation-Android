@@ -448,6 +448,18 @@
     <string name="friend_add_name_placeholder">e.g. Karan Malhotra</string>
     <string name="friend_add_name_helper">Used for splitting bills and tracking shared balances.</string>
     <string name="trip_active">Active</string>
+    <string name="trip_inactive">Inactive</string>
+    <string name="trip_ended">Ended</string>
+    <string name="trip_friend_owes">Owes %1$s</string>
+    <string name="trip_friend_repaid">Repaid %1$s</string>
+    <string name="trip_friend_settled">Settled</string>
+    <string name="trips_active_count">%1$d active</string>
+    <string name="trip_ledger_active">Active travel ledger</string>
+    <string name="trip_ledger_past">Past travel ledger</string>
+    <string name="trip_cost_you_label">COST YOU</string>
+    <string name="people_owes_you_amount">Owes you %1$s</string>
+    <string name="people_you_owe_amount">You owe %1$s</string>
+    <string name="people_settled_up_zero">Settled up (₹0.00)</string>
     <string name="trip_total_spend_label">Total spend</string>
 
     <!-- About Screen (U12) -->
@@ -536,6 +548,14 @@
     <string name="action_undo">Undo</string>
 
     <!-- Plurals -->
+    <plurals name="people_members_count">
+        <item quantity="one">%d member</item>
+        <item quantity="other">%d members</item>
+    </plurals>
+    <plurals name="people_open_items">
+        <item quantity="one">%d open item</item>
+        <item quantity="other">%d open items</item>
+    </plurals>
     <plurals name="review_pending_count">
         <item quantity="one">%d transaction needs review</item>
         <item quantity="other">%d transactions need review</item>
