@@ -24,6 +24,10 @@ class VoidIncomeThatSettledDebtsTest {
 
     private fun SyncHarness.sheetHasOpenDebtFor(person: String) {
         val tab = ScriptedSheetsServer.currentTab()
+        // The executor re-finds the debit row by its id in the hidden id column (AD, rows 4 down) before editing it
+        server.uuidColumnValues = { call ->
+            if (call.url.contains("AD4")) listOf("txn_dinner") else emptyList()
+        }
         server.customRead = { call ->
             if (call.url.contains("values:batchGet")) {
                 """{"valueRanges":[

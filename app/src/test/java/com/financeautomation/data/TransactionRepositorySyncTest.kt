@@ -310,6 +310,23 @@ class TransactionRepositorySyncTest {
         var failBatchGetOnce: Boolean = false
         var customGetHandler: ((url: String) -> String?)? = null
 
+        /**
+         * Answers the hidden id column reads (rows 4 down, for example 'Nov26'!AD4:AD) that the executor makes to
+         * find each edited row by its id. [columns] maps a column letter to the ids on rows 4, 5, ... of [tab].
+         */
+        fun serveIdColumns(tab: String, columns: Map<String, List<String>>) {
+            customGetHandler = { url ->
+                if (!url.contains("/values/") || !url.contains(tab)) {
+                    null
+                } else {
+                    columns.entries.firstOrNull { url.contains("${it.key}4") }?.let { (col, ids) ->
+                        val values = ids.joinToString(",") { "[\"$it\"]" }
+                        """{"range":"'$tab'!${col}4:$col","majorDimension":"ROWS","values":[$values]}"""
+                    }
+                }
+            }
+        }
+
         val fakeTokenProvider = object : TokenProvider {
             override fun getAccessToken(): String = "test_token"
             override fun refreshAccessToken(): String = "test_token"
@@ -1221,6 +1238,8 @@ class TransactionRepositorySyncTest {
             ]
         }"""
 
+        mock.serveIdColumns("Nov26", mapOf("AD" to listOf("txn_lunch_123")))
+
         // First attempt: simulate 503 Service Unavailable on readLedgerSnapshot
         mock.failBatchGetOnce = true
         val syncResult1 = repo.syncPendingTransactions()
@@ -1311,6 +1330,8 @@ class TransactionRepositorySyncTest {
                 }
             ]
         }"""
+
+        mock.serveIdColumns("Nov26", mapOf("AD" to listOf("txn_dinner_123", "txn_lunch_456"), "AF" to listOf("pay_movie_789")))
 
         // Trigger carry forward for Dec26
         val cfRes = repo.carryForward(targetTab = "Dec26")
@@ -1602,6 +1623,8 @@ class TransactionRepositorySyncTest {
                 }
             ]
         }"""
+
+        mock.serveIdColumns("Nov26", mapOf("AD" to listOf("txn_nov_charlie_1")))
 
         // Dec 2026 timestamp: 1796120000000L (~Dec 1, 2026)
         val decTxn = TransactionEntity(
