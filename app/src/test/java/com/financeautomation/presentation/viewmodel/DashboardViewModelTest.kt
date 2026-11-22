@@ -197,6 +197,13 @@ class DashboardViewModelTest {
         override suspend fun insert(capture: PendingCaptureEntity) { captures.value = captures.value + capture }
         override suspend fun update(capture: PendingCaptureEntity) { captures.value = captures.value.map { if (it.id == capture.id) capture else it } }
         override suspend fun updateState(id: String, state: String, updatedAt: Long) {}
+        override suspend fun markDismissedIfOpen(id: String, updatedAt: Long): Int {
+            val cap = captures.value.firstOrNull { it.id == id } ?: return 0
+            if (cap.state != "WAITING" && cap.state != "SHOWN") return 0
+            captures.value = captures.value.map { if (it.id == id) it.copy(state = "DISMISSED", updatedAt = updatedAt) else it }
+            return 1
+        }
+        override suspend fun resetStaleShownToWaiting(cutoff: Long, updatedAt: Long): Int = 0
         override suspend fun resetShownToWaiting(updatedAt: Long): Int = 0
         override suspend fun deleteById(id: String) { captures.value = captures.value.filter { it.id != id } }
         override suspend fun pruneOldCompletedCaptures(cutoffTime: Long) {}

@@ -158,6 +158,8 @@ class QuickLogViewModelTest {
         override suspend fun getAwaitingSuccessCaptures(): List<PendingCaptureEntity> = emptyList()
         override suspend fun findSimilarByAmountAndTime(amount: Double, minTime: Long, maxTime: Long): List<PendingCaptureEntity> = emptyList()
         override suspend fun updateState(id: String, state: String, updatedAt: Long) {}
+        override suspend fun markDismissedIfOpen(id: String, updatedAt: Long): Int = 0
+        override suspend fun resetStaleShownToWaiting(cutoff: Long, updatedAt: Long): Int = 0
         override suspend fun resetShownToWaiting(updatedAt: Long): Int = 0
         override suspend fun deleteById(id: String) { captures.remove(id) }
         override suspend fun pruneOldCompletedCaptures(cutoffTime: Long) {}

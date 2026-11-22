@@ -910,6 +910,13 @@ class CaptureMediumItemsTest {
         override suspend fun updateState(id: String, state: String, updatedAt: Long) {
             captures[id]?.let { captures[id] = it.copy(state = state, updatedAt = updatedAt) }
         }
+        override suspend fun markDismissedIfOpen(id: String, updatedAt: Long): Int {
+            val cap = captures[id] ?: return 0
+            if (cap.state != "WAITING" && cap.state != "SHOWN") return 0
+            captures[id] = cap.copy(state = "DISMISSED", updatedAt = updatedAt)
+            return 1
+        }
+        override suspend fun resetStaleShownToWaiting(cutoff: Long, updatedAt: Long): Int = 0
         override suspend fun resetShownToWaiting(updatedAt: Long): Int = 0
         override suspend fun deleteById(id: String) { captures.remove(id) }
         override suspend fun pruneOldCompletedCaptures(cutoffTime: Long) {}
