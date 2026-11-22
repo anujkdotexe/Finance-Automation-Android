@@ -99,7 +99,7 @@ class ParseNotificationUseCase(
 
         private val FAILURE_REGEX = Regex("""(?i)\b(failed|declined|unsuccessful|could\s+not\s+be\s+(?:recovered|processed)|wrong\s+upi\s+pin|not\s+successful)\b""")
         private val PROCESSING_REGEX = Regex("""(?i)\b(processing|pending|initiated|in\s+progress)\b""")
-        private val SUCCESS_REGEX = Regex("""(?i)\b(paid|successful(?:ly)?|debited|sent|credited|received)\b""")
+        private val SUCCESS_REGEX = Regex("""(?i)\b(paid|successful(?:ly)?|debited|sent|credited|received|refund(?:ed)?|cashbacks?)\b""")
 
         private val PAYMENT_REQUEST_REGEX = Regex("""(?i)\b(requested\s+money|collect\s+request|has\s+requested|requests?\s+(?:rs\.?|inr|₹)|payment\s+request)\b""")
         private val BALANCE_HOLD_REGEX = Regex("""(?i)\b(kept\s+as\s+hold|kept\s+on\s+hold|hold\s+has\s+been\s+removed|on\s+hold\s+has\s+been\s+removed)\b""")
@@ -108,6 +108,7 @@ class ParseNotificationUseCase(
         private val DEFINITE_PAST_DEBIT_REGEX = Regex("""(?i)\b(has\s+been\s+debited|was\s+debited|debited\s+from|paid\s+to)\b""")
         private val REVERSAL_CREDIT_REGEX = Regex("""(?i)\b(?:reversed|refund(?:ed)?)\s+to\s+your\s+account\b|\bamount\s+of\s+[^\n]+has\s+been\s+reversed\b""")
         private val CREDIT_TO_ME_REGEX = Regex("""(?i)\b(?:paid|sent|transferred|credited|gave)\s+(?:you|to\s+you)\b""")
+        private val REFUND_CASHBACK_REGEX = Regex("""(?i)\b(refund(?:ed)?|cashbacks?)\b""")
         private val INVESTMENT_NON_MONEY_REGEX = Regex("""(?i)\b(?:cdsl|nsdl):?\s*(?:credit|debit)\b|\b(?:redemption\s+request|payout\s+shall\s+be\s+made)\b""")
         private val STORE_CREDIT_REGEX = Regex("""(?i)\b(?:can\s+be\s+redeemed\s+on\s+your\s+subsequent\s+orders|credits\s+have\s+been\s+added\s+to\s+your\s+\w+\s+account)\b""")
         private val AGGREGATOR_RECEIPT_REGEX = Regex("""(?i)\b(?:thank\s+you\s+for\s+(?:making\s+a\s+)?successful\s+transaction|transaction\s+with\s+txn\s+id\b.*has\s+been\s+successfully\s+processed)\b""")
@@ -344,10 +345,13 @@ class ParseNotificationUseCase(
             if (wording == WordingClass.UNKNOWN && !PackageWhitelist.isGenericWatchedApp(sourcePackage)) {
                 return NotificationParseResult.Dropped(reason = DropReason.NO_SUCCESS_WORDING, sourcePackage = sourcePackage)
             }
+            val isRefundOrCashback = REFUND_CASHBACK_REGEX.containsMatchIn(fullContent) &&
+                !RegexPatterns.hasDebitConfirmation(fullContent) && !RegexPatterns.isDebit(fullContent)
             val knownDirection = RegexPatterns.isDebit(fullContent) ||
                 RegexPatterns.isPaymentSuccessful(fullContent) ||
                 RegexPatterns.isCredit(fullContent) ||
-                CREDIT_TO_ME_REGEX.containsMatchIn(fullContent)
+                CREDIT_TO_ME_REGEX.containsMatchIn(fullContent) ||
+                isRefundOrCashback
             if (wording == WordingClass.SUCCESS && !knownDirection && !PackageWhitelist.isGenericWatchedApp(sourcePackage)) {
                 return NotificationParseResult.Dropped(reason = DropReason.UNKNOWN_DIRECTION, sourcePackage = sourcePackage)
             }
@@ -358,8 +362,11 @@ class ParseNotificationUseCase(
         val isReversalCredit = REVERSAL_CREDIT_REGEX.containsMatchIn(fullContent)
         val hasDebitAmount = RegexPatterns.hasDebitConfirmation(fullContent)
         val hasCreditAmount = RegexPatterns.hasCreditConfirmation(fullContent)
+        val isRefundOrCashback = REFUND_CASHBACK_REGEX.containsMatchIn(fullContent) &&
+            !hasDebitAmount && !RegexPatterns.isDebit(fullContent)
 
-        val hasKnownDirection = isCreditToMe || isReversalCredit || hasDebitAmount || hasCreditAmount ||
+        val hasKnownDirection = isCreditToMe || isReversalCredit || isRefundOrCashback ||
+            hasDebitAmount || hasCreditAmount ||
             RegexPatterns.isDebit(fullContent) || RegexPatterns.isCredit(fullContent) ||
             RegexPatterns.isPaymentSuccessful(fullContent)
 
@@ -374,12 +381,21 @@ class ParseNotificationUseCase(
         val isCredit = when {
             isCreditToMe -> true
             isReversalCredit -> true
+            isRefundOrCashback -> true
             hasDebitAmount -> false
             hasCreditAmount -> true
             RegexPatterns.isDebit(fullContent) -> false
             RegexPatterns.isCredit(fullContent) -> true
             RegexPatterns.isPaymentSuccessful(fullContent) -> false
-            else -> false
+            else -> {
+                if (!isSms && wording != WordingClass.PROCESSING) {
+                    return NotificationParseResult.Dropped(
+                        reason = DropReason.UNKNOWN_DIRECTION,
+                        sourcePackage = sourcePackage
+                    )
+                }
+                false
+            }
         }
         val isDebit = !isCredit
         val kind = if (isCredit) "CREDIT" else "DEBIT"

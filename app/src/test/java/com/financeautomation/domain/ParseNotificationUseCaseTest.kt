@@ -20,6 +20,36 @@ class ParseNotificationUseCaseTest {
     }
 
     @Test
+    fun dropsNonSmsWithUnknownDirection() {
+        PackageWhitelist.addWatchedApp("com.custom.sampleapp", "Custom Sample App")
+        try {
+            val result = useCase(
+                sourcePackage = "com.custom.sampleapp",
+                title = "Sample App",
+                text = "Notification from Sample App: your balance is 500"
+            )
+            assertTrue(result is NotificationParseResult.Dropped)
+            assertEquals(DropReason.UNKNOWN_DIRECTION, (result as NotificationParseResult.Dropped).reason)
+        } finally {
+            PackageWhitelist.removeWatchedApp("com.custom.sampleapp")
+        }
+    }
+
+    @Test
+    fun treatsRefundAsCredit() {
+        val result = useCase(
+            sourcePackage = PackageWhitelist.PACKAGE_GPAY,
+            title = "Refund",
+            text = "Refund of Rs 250 processed"
+        )
+        assertTrue(result is NotificationParseResult.Success)
+        val success = result as NotificationParseResult.Success
+        assertEquals(250.0, success.transaction.totalAmount, 0.001)
+        assertTrue(success.isCredit)
+        assertFalse(success.isDebit)
+    }
+
+    @Test
     fun dropsWillBeDebitedByMandate() {
         val result = useCase(
             sourcePackage = PackageWhitelist.PACKAGE_GPAY,
