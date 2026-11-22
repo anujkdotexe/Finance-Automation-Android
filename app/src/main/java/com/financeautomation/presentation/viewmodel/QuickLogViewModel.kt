@@ -98,6 +98,12 @@ class QuickLogViewModel(
      * Loads a pending capture intercepted by the NotificationListenerService.
      */
     fun loadCapture(captureId: String) {
+        // A new capture never inherits the previous entry (transaction id, split, flags). The same unfinished capture
+        // asked for again after a rotation keeps what the person already typed.
+        _uiState.update { current ->
+            if (current.captureId == captureId && !current.isSaved && !current.isDismissed && !current.isVoided) current
+            else freshStateKeepingLists(current)
+        }
         viewModelScope.launch(ioDispatcher) {
             try {
                 val dao = pendingCaptureDaoProvider.invoke()
@@ -202,6 +208,16 @@ class QuickLogViewModel(
         }
     }
 
+    /** A blank entry that keeps the lists loaded from the repositories, so nothing of the last entry is reused. */
+    private fun freshStateKeepingLists(current: QuickLogUiState): QuickLogUiState = QuickLogUiState(
+        selectedAccount = current.selectedAccount,
+        availableAccounts = current.availableAccounts,
+        availableCategories = current.availableCategories,
+        availableCompanions = current.availableCompanions,
+        activeTripTag = current.activeTripTag,
+        isSaving = current.isSaving
+    )
+
     /**
      * Initializes manual entry mode without a pending capture.
      */
@@ -213,20 +229,7 @@ class QuickLogViewModel(
             !current.isSaved && !current.isDismissed &&
             (current.amountText.isNotEmpty() || current.payee.isNotEmpty())
         if (unfinished) return
-        _uiState.update {
-            it.copy(
-                captureId = null,
-                sourcePackage = "manual",
-                amountText = "",
-                amount = 0.0,
-                payee = "",
-                note = "",
-                isNeedsAmount = false,
-                isPossibleDuplicate = false,
-                isSaved = false,
-                isDismissed = false
-            )
-        }
+        _uiState.update { freshStateKeepingLists(it) }
         recalculateSplit()
         refreshPredictedCategories("")
     }
