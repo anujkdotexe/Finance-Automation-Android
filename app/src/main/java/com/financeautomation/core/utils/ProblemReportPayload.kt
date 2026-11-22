@@ -46,7 +46,7 @@ data class ProblemReportPayload(
         if (!counters.isNullOrBlank()) {
             map[ProblemReportFields.FIELD_COUNTERS] = counters.trim().take(1500)
         }
-        val scrubbedText = PrivacyScrubber.scrubWithoutLengthCap(text).take(2000)
+        val scrubbedText = PrivacyScrubber.scrubWithoutLengthCap(ProblemReportFields.maskForbiddenWords(text)).take(2000)
         map[ProblemReportFields.FIELD_TEXT] = scrubbedText
 
         // Strict filter to only allowed fields
@@ -72,7 +72,7 @@ data class ProblemReportPayload(
             sb.appendLine(counters)
         }
         sb.appendLine("User Notes:")
-        sb.appendLine(PrivacyScrubber.scrubWithoutLengthCap(text).take(2000).ifEmpty { "(none)" })
+        sb.appendLine(PrivacyScrubber.scrubWithoutLengthCap(ProblemReportFields.maskForbiddenWords(text)).take(2000).ifEmpty { "(none)" })
         sb.appendLine("--------------------------------")
         return sb.toString()
     }
