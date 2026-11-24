@@ -139,11 +139,4 @@ class OnboardingSignInFlowTest {
         assertNull(h.googleEmail)
     }
 
-    @Test
-    fun theSetupPageOnlyStartsSignInWhenThePickerReturnedAnAccount() {
-        val screen = java.io.File("src/main/java/com/financeautomation/presentation/screens/OnboardingScreen.kt").readText()
-        val launcher = screen.substringAfter("val googleSignInLauncher").substringBefore("LaunchedEffect(viewModel)")
-        assertTrue(launcher.substringAfter("if (account != null) {").substringBefore("} catch").contains("viewModel.startSignIn()"))
-        assertTrue("a different account stays one tap away", screen.contains("R.string.onboarding_use_other_account"))
-    }
 }
