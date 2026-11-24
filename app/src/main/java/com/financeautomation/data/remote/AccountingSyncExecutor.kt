@@ -178,22 +178,68 @@ open class AccountingSyncExecutor(
         tabName: String
     ): Result<Unit> {
         val req = AccountingRequestJsonAdapter.voidInflowRequestFromJson(item.payloadJson)
+        var isV1 = false
+        var targetTab = tabName
         // New layout id column first, then the older layout one (same order as the restore path)
         val rowRes = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID, req.inflowId)
             .let { res ->
                 if (res is Result.Success && res.data == null) {
-                    googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1, req.inflowId)
+                    val v1 = googleSheetsClient.findRowByUuid(spreadsheetId, tabName, SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1, req.inflowId)
+                    if (v1 is Result.Success && v1.data != null) {
+                        isV1 = true
+                    }
+                    v1
                 } else res
             }
         if (rowRes is Result.Error) return Result.Error(rowRes.exception)
-        val row = (rowRes as Result.Success).data
-            ?: return Result.Error(IllegalStateException("Income row not found in $tabName for ${req.inflowId}"))
+        var row = (rowRes as Result.Success).data
 
-        val reasonRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_INFLOW_REASON}$row")
+        if (row == null) {
+            val tabsRes = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
+            if (tabsRes is Result.Success) {
+                for (other in tabsRes.data.keys.filter { it != tabName && MONTH_TAB_REGEX.matches(it) }) {
+                    val r = googleSheetsClient.findRowByUuid(spreadsheetId, other, SheetSchemaConstants.COL_LETTER_INFLOW_UUID, req.inflowId)
+                    if (r is Result.Success && r.data != null) {
+                        targetTab = other
+                        row = r.data
+                        break
+                    }
+                    val rV1 = googleSheetsClient.findRowByUuid(spreadsheetId, other, SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1, req.inflowId)
+                    if (rV1 is Result.Success && rV1.data != null) {
+                        targetTab = other
+                        row = rV1.data
+                        isV1 = true
+                        break
+                    }
+                }
+            }
+        }
+
+        if (row == null) {
+            if (req.deleteSheetRow) {
+                resolveInflowDao()?.deleteById(req.inflowId)
+                return Result.Success(Unit)
+            }
+            return Result.Error(IllegalStateException("Income row not found in $tabName for ${req.inflowId}"))
+        }
+
+        if (req.deleteSheetRow) {
+            val inflowRange = if (isV1) "'$targetTab'!${SheetSchemaConstants.TABLE_2_INFLOWS_RANGE_V1.substringBefore(':')}$row:${SheetSchemaConstants.TABLE_2_INFLOWS_RANGE_V1.substringAfter(':')}$row"
+                              else "'$targetTab'!${SheetSchemaConstants.COL_LETTER_INFLOW_DATE}$row:${SheetSchemaConstants.COL_LETTER_INFLOW_LINKED_DEBIT}$row"
+            val idRange = if (isV1) "'$targetTab'!${SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1}$row"
+                          else "'$targetTab'!${SheetSchemaConstants.COL_LETTER_INFLOW_UUID}$row"
+
+            val clearRes = googleSheetsClient.batchClearValues(spreadsheetId, listOf(inflowRange, idRange))
+            if (clearRes is Result.Error) return Result.Error(clearRes.exception)
+            resolveInflowDao()?.deleteById(req.inflowId)
+            return Result.Success(Unit)
+        }
+
+        val reasonRes = googleSheetsClient.getCellString(spreadsheetId, targetTab, "${SheetSchemaConstants.COL_LETTER_INFLOW_REASON}$row")
         if (reasonRes is Result.Error) return Result.Error(reasonRes.exception)
         val currentReason = (reasonRes as Result.Success).data.orEmpty()
 
-        val plan = voidTransactionUseCase.voidInflow(tabName, row, currentReason)
+        val plan = voidTransactionUseCase.voidInflow(targetTab, row, currentReason)
         val updates = plan.edits.associate { edit ->
             "'${edit.tab}'!${edit.column}${edit.row}" to listOf(listOf(edit.value))
         }

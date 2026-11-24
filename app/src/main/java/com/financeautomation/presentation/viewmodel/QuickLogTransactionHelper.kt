@@ -128,6 +128,7 @@ object QuickLogTransactionHelper {
             isFinancialLocked = isSettledOrCarried,
             isPossibleDuplicate = txn.isPossibleDuplicate,
             duplicateOfId = txn.duplicateOfId,
+            deliveredToSheet = txn.sheetRowIndex != null,
             isSaved = false,
             isVoided = false,
             errorMessage = null

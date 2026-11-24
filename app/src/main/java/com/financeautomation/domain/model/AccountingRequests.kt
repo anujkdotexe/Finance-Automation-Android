@@ -10,7 +10,13 @@ package com.financeautomation.domain.model
  */
 data class VoidInflowRequest(
     val inflowId: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val deleteSheetRow: Boolean = false
+)
+
+data class VoidExpenseRequest(
+    val id: String,
+    val deleteSheetRow: Boolean = false
 )
 
 data class LogCreditRequest(
