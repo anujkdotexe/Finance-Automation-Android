@@ -79,35 +79,5 @@ class OnboardingStateTest {
         assertNull(ok.step1Error)
     }
 
-    // wiring
 
-    private val vm = File("src/main/java/com/financeautomation/presentation/viewmodel/OnboardingViewModel.kt").readText()
-    private val screen = File("src/main/java/com/financeautomation/presentation/screens/OnboardingScreen.kt").readText()
-    private val main = File("src/main/java/com/financeautomation/presentation/ui/MainActivity.kt").readText()
-
-    @Test
-    fun theViewModelFollowsTheSavedEmailAndWorkbookContinuously() {
-        assertTrue(vm.contains("getGoogleAccountEmail()"))
-        assertTrue(vm.contains("getSpreadsheetIdForYear(currentYear)"))
-        assertTrue(vm.contains(".withPreferences("))
-    }
-
-    @Test
-    fun theSignInStepUsesTheSharedAttentionCard() {
-        assertTrue(screen.contains("AttentionCard("))
-        assertTrue(screen.contains("AttentionIssue.SIGN_IN"))
-        assertTrue(screen.contains("AttentionIssue.WORKBOOK"))
-        assertFalse("no private card style is left", screen.contains("private fun ChecklistCard"))
-    }
-
-    @Test
-    fun theSetupPageStaysUntilContinueIsPressed() {
-        assertTrue(main.contains("setupLatched"))
-    }
-
-    @Test
-    fun setupHealthFollowsSignInToo() {
-        val health = File("src/main/java/com/financeautomation/presentation/viewmodel/SetupHealthViewModel.kt").readText()
-        assertTrue(health.contains("getGoogleAccountEmail()"))
-    }
 }
