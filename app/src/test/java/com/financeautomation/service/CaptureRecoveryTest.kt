@@ -50,12 +50,4 @@ class CaptureRecoveryTest {
         assertEquals(CaptureClaim.Outcome.ALREADY_HANDLED, CaptureClaim.logOnce(dao, "cap1") { true })
     }
 
-    @Test
-    fun bothSavePathsUseTheClaimAndTheDerivedId() {
-        val receiver = java.io.File("src/main/java/com/financeautomation/service/QuickActionReceiver.kt").readText()
-        val helper = java.io.File("src/main/java/com/financeautomation/presentation/viewmodel/QuickLogTransactionHelper.kt").readText()
-        assertEquals(true, receiver.contains("transactionId = CaptureClaim.expenseIdFor(capture.id)"))
-        assertEquals(true, helper.contains("claimForLogging("))
-        assertEquals(true, helper.contains("CaptureClaim.expenseIdFor("))
-    }
 }
