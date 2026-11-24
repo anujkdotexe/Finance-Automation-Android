@@ -108,7 +108,7 @@ fun QuickLogSheet(
     onEndTrip: () -> Unit,
     onConfirmAndSave: () -> Unit,
     onDismiss: () -> Unit,
-    onVoid: (() -> Unit)? = null,
+    onVoid: ((Boolean) -> Unit)? = null,
     onKeyboardFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -567,6 +567,7 @@ fun QuickLogSheet(
         // Optional Void Action for already-logged transactions
         if (state.transactionId != null && onVoid != null) {
             var showVoidConfirm by rememberSaveable { mutableStateOf(false) }
+            var deleteSheetRow by rememberSaveable { mutableStateOf(false) }
 
             Spacer(modifier = Modifier.height(FinanceTheme.spacing.xs))
             OutlinedButton(
@@ -587,10 +588,18 @@ fun QuickLogSheet(
                     message = stringResource(R.string.confirm_void_message),
                     confirmLabel = stringResource(R.string.action_void),
                     onConfirm = {
+                        val del = deleteSheetRow
                         showVoidConfirm = false
-                        onVoid()
+                        deleteSheetRow = false
+                        onVoid(del)
                     },
-                    onDismiss = { showVoidConfirm = false }
+                    onDismiss = {
+                        showVoidConfirm = false
+                        deleteSheetRow = false
+                    },
+                    checkboxText = if (state.deliveredToSheet) stringResource(R.string.confirm_void_delete_sheet_row) else null,
+                    checkboxChecked = deleteSheetRow,
+                    onCheckboxChange = { deleteSheetRow = it }
                 )
             }
         }

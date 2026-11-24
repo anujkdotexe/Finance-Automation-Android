@@ -501,14 +501,14 @@ class QuickLogViewModel(
     }
 
     /**
-     * Voids the active transaction non-destructively (Design Guide 5.3).
+     * Voids the active transaction non-destructively or clears the row from the sheet.
      */
-    fun onVoid(onVoided: () -> Unit = {}) {
+    fun onVoid(deleteSheetRow: Boolean = false, onVoided: () -> Unit = {}) {
         val txnId = _uiState.value.transactionId ?: return
         _uiState.update { it.copy(isSaving = true, errorMessage = null) }
         viewModelScope.launch(ioDispatcher) {
             try {
-                when (val res = transactionRepository.voidTransaction(txnId)) {
+                when (val res = transactionRepository.voidTransaction(txnId, deleteSheetRow)) {
                     is Result.Success -> {
                         _uiState.update { it.copy(isSaving = false, isVoided = true) }
                         onVoided()

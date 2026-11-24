@@ -637,21 +637,21 @@ class TransactionsViewModel(
     var lastSavedTransactionId: String? = null
         private set
 
-    fun voidTransaction(txn: Transaction, onComplete: ((Boolean) -> Unit)? = null) {
+    fun voidTransaction(txn: Transaction, deleteSheetRow: Boolean = false, onComplete: ((Boolean) -> Unit)? = null) {
         lastVoidedTransaction = txn
         viewModelScope.launch(ioDispatcher) {
-            val result = transactionRepository.voidTransaction(txn.id)
+            val result = transactionRepository.voidTransaction(txn.id, deleteSheetRow)
             onComplete?.invoke(result is Result.Success)
         }
     }
 
-    fun voidTransaction(txnId: String) {
+    fun voidTransaction(txnId: String, deleteSheetRow: Boolean = false) {
         val currentTxn = _uiState.value.groupedTransactions
             .flatMap { it.transactions }
             .firstOrNull { it.id == txnId }
         lastVoidedTransaction = currentTxn
         viewModelScope.launch(ioDispatcher) {
-            transactionRepository.voidTransaction(txnId)
+            transactionRepository.voidTransaction(txnId, deleteSheetRow)
         }
     }
 
@@ -702,9 +702,9 @@ class TransactionsViewModel(
         }
     }
 
-    fun voidInflow(inflowId: String, onComplete: ((Boolean) -> Unit)? = null) {
+    fun voidInflow(inflowId: String, deleteSheetRow: Boolean = false, onComplete: ((Boolean) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
-            val result = inflowRepository?.voidInflow(inflowId)
+            val result = inflowRepository?.voidInflow(inflowId, deleteSheetRow)
             val success = result is Result.Success
             onComplete?.invoke(success)
         }

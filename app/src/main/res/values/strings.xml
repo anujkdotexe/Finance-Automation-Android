@@ -1111,6 +1111,7 @@
     <string name="confirm_void_title">Void %1$s?</string>
     <string name="confirm_void_title_generic">Void entry?</string>
     <string name="confirm_void_message">Are you sure you want to void this entry? It will be struck through in your ledger.</string>
+    <string name="confirm_void_delete_sheet_row">Also delete this entry from the sheet</string>
     <string name="confirm_sign_out_title">Sign out?</string>
     <string name="confirm_sign_out_message">Are you sure you want to sign out? You will need to link your Google account again to sync.</string>
     <string name="confirm_archive_account_title">Archive %1$s?</string>

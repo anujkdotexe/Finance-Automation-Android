@@ -1166,6 +1166,60 @@ open class GoogleSheetsClient(
     }
 
     /**
+     * Clears one or more explicit ranges using values:batchClear.
+     * Never deletes dimensions or rows; only clears the cell values in the specified ranges.
+     * Enforces safety validation to ensure header rows 1-3 are never cleared.
+     */
+    suspend fun batchClearValues(
+        spreadsheetId: String,
+        ranges: List<String>
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            if (ranges.isEmpty()) return@withContext Result.Success(Unit)
+
+            for (range in ranges) {
+                val clean = range.trim()
+                val cellPart = clean.substringAfter("!")
+                val tokens = cellPart.split(":")
+                for (token in tokens) {
+                    val digits = token.filter { it.isDigit() }
+                    if (digits.isNotEmpty()) {
+                        val rowNum = digits.toIntOrNull()
+                        if (rowNum != null && rowNum < 4) {
+                            return@withContext Result.Error(
+                                IllegalArgumentException("batchClearValues rejected unsafe range: attempts to clear header row < 4: $range")
+                            )
+                        }
+                    }
+                }
+            }
+
+            val url = "$baseUrl/$spreadsheetId/values:batchClear"
+            val requestBodyJson = buildJsonObject {
+                put("ranges", JsonArray(ranges.map { JsonPrimitive(it) }))
+            }.toString()
+
+            val request = newRequestBuilder(url)
+                .post(requestBodyJson.toRequestBody(jsonMediaType))
+                .build()
+
+            okHttpClient.newCall(request).execute().use { response ->
+                val bodyString = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@withContext Result.Error(
+                        createHttpException(response.code, bodyString, "batchClearValues failed", spreadsheetId, GoogleEndpoint.SHEETS_VALUES_BATCH_CLEAR)
+                    )
+                }
+                Result.Success(Unit)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
      * Updates an existing row in [tabName] at [rowIndex].
      * Uses valueInputOption=RAW for in-place modifications and voiding.
      */

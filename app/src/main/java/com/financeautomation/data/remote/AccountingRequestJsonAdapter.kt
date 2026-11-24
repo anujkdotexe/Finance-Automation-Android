@@ -4,11 +4,13 @@ import com.financeautomation.domain.model.CarryForwardRequest
 import com.financeautomation.domain.model.LogCreditRequest
 import com.financeautomation.domain.model.LogPayableRequest
 import com.financeautomation.domain.model.VoidInflowRequest
+import com.financeautomation.domain.model.VoidExpenseRequest
 import com.financeautomation.domain.model.LogRepaymentRequest
 import com.financeautomation.domain.model.YearCloseRequest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
@@ -60,6 +62,7 @@ object AccountingRequestJsonAdapter {
         return buildJsonObject {
             put("inflowId", JsonPrimitive(req.inflowId))
             put("timestamp", JsonPrimitive(req.timestamp))
+            put("deleteSheetRow", JsonPrimitive(req.deleteSheetRow))
         }.toString()
     }
 
@@ -67,7 +70,30 @@ object AccountingRequestJsonAdapter {
         val obj = json.parseToJsonElement(jsonStr).jsonObject
         return VoidInflowRequest(
             inflowId = obj["inflowId"]?.jsonPrimitive?.content.orEmpty(),
-            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+            timestamp = obj["timestamp"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
+            deleteSheetRow = obj["deleteSheetRow"]?.jsonPrimitive?.booleanOrNull ?: false
+        )
+    }
+
+    fun voidExpenseRequestToJson(req: VoidExpenseRequest): String {
+        return buildJsonObject {
+            put("id", JsonPrimitive(req.id))
+            put("deleteSheetRow", JsonPrimitive(req.deleteSheetRow))
+        }.toString()
+    }
+
+    fun voidExpenseRequestFromJson(payload: String): VoidExpenseRequest {
+        val trimmed = payload.trim()
+        if (trimmed.startsWith("{")) {
+            val obj = json.parseToJsonElement(trimmed).jsonObject
+            return VoidExpenseRequest(
+                id = obj["id"]?.jsonPrimitive?.content.orEmpty(),
+                deleteSheetRow = obj["deleteSheetRow"]?.jsonPrimitive?.booleanOrNull ?: false
+            )
+        }
+        return VoidExpenseRequest(
+            id = trimmed,
+            deleteSheetRow = false
         )
     }
 

@@ -2,6 +2,7 @@ package com.financeautomation.presentation.screens
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -45,6 +48,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -194,8 +198,8 @@ fun TransactionsScreen(
             IncomeDetailSheet(
                 inflow = inf,
                 onDismiss = { selectedInflow = null },
-                onVoid = {
-                    viewModel.voidInflow(inf.id) { success ->
+                onVoid = { deleteSheetRow ->
+                    viewModel.voidInflow(inf.id, deleteSheetRow) { success ->
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar(
                                 context.getString(if (success) R.string.txns_entry_voided_msg else R.string.txns_inflow_void_blocked_msg)
@@ -781,11 +785,12 @@ private fun SwipeableTransactionRow(
 fun IncomeDetailSheet(
     inflow: Inflow,
     onDismiss: () -> Unit,
-    onVoid: () -> Unit,
+    onVoid: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showConfirmVoid by rememberSaveable { mutableStateOf(false) }
+    var deleteSheetRow by rememberSaveable { mutableStateOf(false) }
 
     val displayTitle = inflow.source.ifBlank {
         when (inflow.inflowType.uppercase()) {
@@ -869,11 +874,37 @@ fun IncomeDetailSheet(
                             style = FinanceTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { deleteSheetRow = !deleteSheetRow }
+                                .minimumInteractiveComponentSize()
+                        ) {
+                            Checkbox(
+                                checked = deleteSheetRow,
+                                onCheckedChange = { deleteSheetRow = it }
+                            )
+                            Spacer(modifier = Modifier.width(FinanceTheme.spacing.xs))
+                            Text(
+                                text = stringResource(R.string.confirm_void_delete_sheet_row),
+                                style = FinanceTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                         ButtonPair(
                             outlinedText = stringResource(R.string.action_cancel),
-                            onOutlinedClick = { showConfirmVoid = false },
+                            onOutlinedClick = {
+                                showConfirmVoid = false
+                                deleteSheetRow = false
+                            },
                             filledText = stringResource(R.string.action_void),
-                            onFilledClick = onVoid
+                            onFilledClick = {
+                                val del = deleteSheetRow
+                                showConfirmVoid = false
+                                deleteSheetRow = false
+                                onVoid(del)
+                            }
                         )
                     }
                 } else {

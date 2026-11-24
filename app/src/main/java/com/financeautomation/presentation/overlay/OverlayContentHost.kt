@@ -156,7 +156,7 @@ fun OverlayContentHost(
                         onCustomShareChanged = quickLogViewModel::onCustomShareChanged,
                         onEndTrip = quickLogViewModel::onEndTrip,
                         onConfirmAndSave = onConfirmExpense,
-                        onVoid = { quickLogViewModel.onVoid { onDismiss() } },
+                        onVoid = { deleteSheetRow -> quickLogViewModel.onVoid(deleteSheetRow) { onDismiss() } },
                         onDismiss = {
                             if (openedFromMenu) {
                                 currentScreen = OverlayFlowScreen.MENU

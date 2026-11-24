@@ -7,6 +7,7 @@ import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SplitMode
 import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.data.local.entity.PayableEntity
+import com.financeautomation.data.local.entity.SyncQueueEntity
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.remote.AccountingSyncExecutor
 import com.financeautomation.data.remote.GoogleDriveClient
@@ -27,11 +28,13 @@ import com.financeautomation.testutil.InMemoryTransactionDao
 import com.financeautomation.testutil.createTestAccountingSyncExecutor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -478,5 +481,244 @@ class EndToEndMoneyTest {
         val computedBurn = LivingBurn.total(allTxns, window, emptySet(), allInflows)
 
         assertEquals(expectedHandBurn, computedBurn, 0.01)
+    }
+
+    @Test
+    fun test_m_voidWithBoxOff_writesVoidAndZeroAmounts() = runBlocking {
+        val exp = logExpenseUseCase(
+            amount = 600.0, merchant = "Dinner", category = "Food & Drink",
+            account = "Cash", splitMode = SplitMode.JUST_ME, timestamp = nowMillis
+        )
+        assertTrue(exp is Result.Success)
+        val txn = (exp as Result.Success).data
+        syncAll()
+
+        assertEquals("Dinner", fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION))
+        assertEquals(600.0, (fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT) as Number).toDouble(), 0.001)
+
+        val voidRes = repo.voidTransaction(txn.id, deleteSheetRow = false)
+        assertTrue(voidRes is Result.Success)
+        syncAll()
+
+        val desc = fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION)?.toString()
+        assertTrue("Description must be prefixed with [Void]", desc?.startsWith("[Void]") == true)
+        assertEquals(0.0, (fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT) as Number).toDouble(), 0.001)
+        assertEquals(0.0, (fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_MY_SHARE) as Number).toDouble(), 0.001)
+        assertEquals(0.0, (fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_OWED_TO_ME) as Number).toDouble(), 0.001)
+        assertEquals("Void", fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_STATUS))
+    }
+
+    @Test
+    fun test_n_voidWithBoxOn_clearsDebitCellsAndLeavesNeighboursIntact() = runBlocking {
+        val exp1 = (logExpenseUseCase(amount = 100.0, merchant = "Item 1", category = "Food & Drink", account = "Cash", splitMode = SplitMode.JUST_ME, timestamp = nowMillis) as Result.Success).data
+        val exp2 = (logExpenseUseCase(amount = 200.0, merchant = "Item 2", category = "Food & Drink", account = "Cash", splitMode = SplitMode.JUST_ME, timestamp = nowMillis) as Result.Success).data
+        val exp3 = (logExpenseUseCase(amount = 300.0, merchant = "Item 3", category = "Food & Drink", account = "Cash", splitMode = SplitMode.JUST_ME, timestamp = nowMillis) as Result.Success).data
+        syncAll()
+
+        assertEquals(exp1.id, fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+        assertEquals(exp2.id, fakeSheet.getCell(currentTab, 5, SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+        assertEquals(exp3.id, fakeSheet.getCell(currentTab, 6, SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+
+        // Void exp2 with deleteSheetRow = true
+        val voidRes = repo.voidTransaction(exp2.id, deleteSheetRow = true)
+        assertTrue(voidRes is Result.Success)
+        syncAll()
+
+        // Check row 5 (Item 2) is cleared (A..L and AD)
+        val colsDebit = listOf("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", SheetSchemaConstants.COL_LETTER_DEBIT_UUID)
+        for (col in colsDebit) {
+            val cellVal = fakeSheet.getCell(currentTab, 5, col)
+            assertNull("Row 5 col $col must be cleared/null", cellVal)
+        }
+
+        // Check row 4 (Item 1) is completely intact
+        assertEquals("Item 1", fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION))
+        assertEquals(100.0, (fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT) as Number).toDouble(), 0.001)
+        assertEquals(exp1.id, fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+
+        // Check row 6 (Item 3) is completely intact
+        assertEquals("Item 3", fakeSheet.getCell(currentTab, 6, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION))
+        assertEquals(300.0, (fakeSheet.getCell(currentTab, 6, SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT) as Number).toDouble(), 0.001)
+        assertEquals(exp3.id, fakeSheet.getCell(currentTab, 6, SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+
+        // Local DB: Item 2 deleted
+        assertNull(tDao.getById(exp2.id))
+        assertNotNull(tDao.getById(exp1.id))
+        assertNotNull(tDao.getById(exp3.id))
+    }
+
+    @Test
+    fun test_o_inflowVoidWithBoxOn_clearsTable2CellsAndLeavesNeighboursIntact() = runBlocking {
+        repo.logCredit(settler = "Source 1", amount = 1000.0, account = "Cash", inflowType = "Income", reason = "Bonus 1", timestamp = nowMillis)
+        repo.logCredit(settler = "Source 2", amount = 2000.0, account = "Cash", inflowType = "Income", reason = "Bonus 2", timestamp = nowMillis)
+        syncAll()
+
+        val allInflows = iDao.getAllForYear(0, Long.MAX_VALUE)
+        assertEquals(2, allInflows.size)
+        val inf1 = allInflows.first { it.source == "Source 1" }
+        val inf2 = allInflows.first { it.source == "Source 2" }
+
+        assertEquals(inf1.id, fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_INFLOW_UUID))
+        assertEquals(inf2.id, fakeSheet.getCell(currentTab, 5, SheetSchemaConstants.COL_LETTER_INFLOW_UUID))
+
+        // Void inf1 with deleteSheetRow = true
+        val voidRes = repo.voidTransaction(inf1.id, deleteSheetRow = true)
+        assertTrue(voidRes is Result.Success)
+        syncAll()
+
+        // Check row 4 (inf1) is cleared (N..U and AE)
+        val colsInflow = listOf("N", "O", "P", "Q", "R", "S", "T", "U", SheetSchemaConstants.COL_LETTER_INFLOW_UUID)
+        for (col in colsInflow) {
+            val cellVal = fakeSheet.getCell(currentTab, 4, col)
+            assertNull("Row 4 col $col must be cleared/null", cellVal)
+        }
+
+        // Check row 5 (inf2) is completely intact
+        assertEquals("Bonus 2", fakeSheet.getCell(currentTab, 5, SheetSchemaConstants.COL_LETTER_INFLOW_REASON))
+        assertEquals(2000.0, (fakeSheet.getCell(currentTab, 5, SheetSchemaConstants.COL_LETTER_INFLOW_AMOUNT) as Number).toDouble(), 0.001)
+        assertEquals(inf2.id, fakeSheet.getCell(currentTab, 5, SheetSchemaConstants.COL_LETTER_INFLOW_UUID))
+
+        // Local DB: inf1 deleted
+        assertNull(iDao.getById(inf1.id))
+        assertNotNull(iDao.getById(inf2.id))
+    }
+
+    @Test
+    fun test_p_expenseSplitWithKabir_afterDelete_balanceAndLivingBurnCorrect() = runBlocking {
+        val exp = (logExpenseUseCase(
+            amount = 1000.0, merchant = "Team Outing", category = "Food & Drink",
+            account = "Cash", splitMode = SplitMode.SPLIT_EQUALLY, companions = listOf("Kabir"),
+            timestamp = nowMillis
+        ) as Result.Success).data
+        syncAll()
+
+        val window = LivingBurn.monthWindow(2026, 11, kolkataZone)
+        val burnBefore = LivingBurn.total(tDao.getAllForYear(0, Long.MAX_VALUE).map { it.toDomain() }, window, emptySet())
+        assertEquals(500.0, burnBefore, 0.001)
+
+        val txnBefore = tDao.getById(exp.id)!!.toDomain()
+        assertEquals(500.0, txnBefore.owedToMe, 0.001)
+
+        // Void with deleteSheetRow = true
+        val voidRes = repo.voidTransaction(exp.id, deleteSheetRow = true)
+        assertTrue(voidRes is Result.Success)
+        syncAll()
+
+        // Burn and Kabir balance drop to 0
+        val allTxnsAfter = tDao.getAllForYear(0, Long.MAX_VALUE).map { it.toDomain() }
+        val burnAfter = LivingBurn.total(allTxnsAfter, window, emptySet())
+        assertEquals(0.0, burnAfter, 0.001)
+        assertNull(tDao.getById(exp.id))
+
+        // Sheet row 4 is cleared
+        assertNull(fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION))
+        assertNull(fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT))
+        assertNull(fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+    }
+
+    @Test
+    fun test_q_offlineQueueChoice_deliverOnce() = runBlocking {
+        val exp = (logExpenseUseCase(
+            amount = 400.0, merchant = "Book", category = "Shopping",
+            account = "Cash", splitMode = SplitMode.JUST_ME, timestamp = nowMillis
+        ) as Result.Success).data
+        syncAll()
+
+        // Offline void with deleteSheetRow = true (without immediate sync)
+        val voidRes = repo.voidTransaction(exp.id, deleteSheetRow = true)
+        assertTrue(voidRes is Result.Success)
+
+        // Verify queued operation
+        val queuedItems = qDao.getAllQueueFlow().first()
+        val voidItem = queuedItems.firstOrNull { it.transactionId == exp.id && it.operationType == SyncQueueEntity.OP_VOID }
+        assertNotNull("OP_VOID must be queued", voidItem)
+
+        val parsedReq = com.financeautomation.data.remote.AccountingRequestJsonAdapter.voidExpenseRequestFromJson(voidItem!!.payloadJson)
+        assertTrue("deleteSheetRow must be true in payload", parsedReq.deleteSheetRow)
+        assertEquals(exp.id, parsedReq.id)
+
+        // Now deliver
+        syncAll()
+
+        // Sheet row is cleared
+        assertNull(fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION))
+        assertNull(fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+        // Local entity deleted
+        assertNull(tDao.getById(exp.id))
+        // Queue empty
+        assertTrue(qDao.getAllQueueFlow().first().none { it.transactionId == exp.id })
+    }
+
+    @Test
+    fun test_r_doubleDeliveryIsSuccess() = runBlocking {
+        val exp = (logExpenseUseCase(
+            amount = 150.0, merchant = "Coffee", category = "Food & Drink",
+            account = "Cash", splitMode = SplitMode.JUST_ME, timestamp = nowMillis
+        ) as Result.Success).data
+        syncAll()
+
+        repo.voidTransaction(exp.id, deleteSheetRow = true)
+        syncAll()
+
+        // Double delivery / already cleared row: queue another void request for the same id
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = exp.id,
+                operationType = SyncQueueEntity.OP_VOID,
+                payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.voidExpenseRequestToJson(
+                    com.financeautomation.domain.model.VoidExpenseRequest(id = exp.id, deleteSheetRow = true)
+                )
+            )
+        )
+        // syncAll must succeed idempotently without error
+        syncAll()
+        assertTrue(qDao.getAllQueueFlow().first().isEmpty())
+    }
+
+    @Test
+    fun test_s_uuidMismatch_clearsNothing() = runBlocking {
+        // Row 4 has real entry
+        logExpenseUseCase(
+            amount = 800.0, merchant = "Valuable Item", category = "Shopping",
+            account = "Cash", splitMode = SplitMode.JUST_ME, timestamp = nowMillis
+        )
+        syncAll()
+
+        val origDesc = fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION)
+        val origTotal = fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT)
+
+        // Queue a void with deleteSheetRow = true for a bogus UUID with row index pointing to 4
+        val bogusId = "bogus-uuid-does-not-exist"
+        tDao.insert(
+            TransactionEntity(
+                id = bogusId,
+                timestamp = nowMillis,
+                dateSerial = 46000,
+                timeSerial = 0.5,
+                account = "Cash",
+                merchant = "Bogus",
+                category = "Other",
+                totalAmount = 50.0,
+                myShare = 50.0,
+                owedToMe = 0.0,
+                status = "Void",
+                sheetRowIndex = 4
+            )
+        )
+        qDao.insert(
+            SyncQueueEntity(
+                transactionId = bogusId,
+                operationType = SyncQueueEntity.OP_VOID,
+                payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.voidExpenseRequestToJson(
+                    com.financeautomation.domain.model.VoidExpenseRequest(id = bogusId, deleteSheetRow = true)
+                )
+            )
+        )
+
+        syncAll()
+
+        // Row 4 must NOT be cleared because its UUID did not match bogusId!
+        assertEquals("Row 4 description must remain intact", origDesc, fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_DESCRIPTION))
+        assertEquals("Row 4 amount must remain intact", origTotal, fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_TOTAL_AMOUNT))
     }
 }

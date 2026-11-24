@@ -22,6 +22,7 @@ object GoogleEndpoint {
     // Sheets: calls that write or echo transaction rows (summary line only, never a body)
     const val SHEETS_VALUES_UPDATE: String = "sheets.values.update"
     const val SHEETS_VALUES_BATCH_UPDATE: String = "sheets.values.batchUpdate"
+    const val SHEETS_VALUES_BATCH_CLEAR: String = "sheets.values.batchClear"
     const val SHEETS_VALUES_APPEND: String = "sheets.values.append"
 
     /** Default id for a call site that did not name its endpoint. Summary line only. */
@@ -47,6 +48,7 @@ object GoogleEndpoint {
     val SUMMARY_ONLY: Set<String> = setOf(
         SHEETS_VALUES_UPDATE,
         SHEETS_VALUES_BATCH_UPDATE,
+        SHEETS_VALUES_BATCH_CLEAR,
         SHEETS_VALUES_APPEND,
         SHEETS_OPERATION
     )

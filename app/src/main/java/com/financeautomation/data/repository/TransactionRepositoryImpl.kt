@@ -699,12 +699,14 @@ class TransactionRepositoryImpl(
         }
     }
 
-    override suspend fun voidTransaction(id: String): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun voidTransaction(id: String): Result<Unit> = voidTransaction(id, false)
+
+    override suspend fun voidTransaction(id: String, deleteSheetRow: Boolean): Result<Unit> = withContext(ioDispatcher) {
         // A running sync may be delivering this very row; wait for it so the decision below sees the final queue
-        withSyncLock { voidTransactionLocked(id) }
+        withSyncLock { voidTransactionLocked(id, deleteSheetRow) }
     }
 
-    private suspend fun voidTransactionLocked(id: String): Result<Unit> {
+    private suspend fun voidTransactionLocked(id: String, deleteSheetRow: Boolean = false): Result<Unit> {
         try {
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
@@ -713,7 +715,7 @@ class TransactionRepositoryImpl(
                 val iDao = resolveInflowDao()
                 val existingInflow = iDao?.getById(id)
                 if (existingInflow != null) {
-                    return voidInflowLocked(id, iDao)
+                    return voidInflowLocked(id, iDao, deleteSheetRow)
                 }
                 return Result.Error(IllegalArgumentException("Transaction not found: $id"))
             }
@@ -733,7 +735,11 @@ class TransactionRepositoryImpl(
             if (neverDelivered) {
                 runInDbTransaction {
                     qDao.deleteByTransactionId(id)
-                    tDao.voidTransaction(id, voidTitle)
+                    if (deleteSheetRow) {
+                        tDao.deleteById(id)
+                    } else {
+                        tDao.voidTransaction(id, voidTitle)
+                    }
                 }
                 requestSync()
                 return Result.Success(Unit)
@@ -742,10 +748,11 @@ class TransactionRepositoryImpl(
             runInDbTransaction {
                 tDao.voidTransaction(id, voidTitle)
 
+                val req = com.financeautomation.domain.model.VoidExpenseRequest(id = id, deleteSheetRow = deleteSheetRow)
                 val queueItem = SyncQueueEntity(
                     transactionId = id,
                     operationType = SyncQueueEntity.OP_VOID,
-                    payloadJson = id
+                    payloadJson = AccountingRequestJsonAdapter.voidExpenseRequestToJson(req)
                 )
                 qDao.insert(queueItem)
             }
@@ -763,25 +770,37 @@ class TransactionRepositoryImpl(
      * - Credit still in the queue: it never reached the sheet, so it is simply dropped.
      * - Credit already delivered: a void is queued so the sheet row is corrected too.
      */
-    private suspend fun voidInflowLocked(id: String, iDao: InflowDao): Result<Unit> {
+    private suspend fun voidInflowLocked(id: String, iDao: InflowDao, deleteSheetRow: Boolean = false): Result<Unit> {
         val qDao = resolveSyncQueueDao()
         val inflow = iDao.getById(id) ?: return Result.Error(IllegalArgumentException("Transaction not found: $id"))
         val queued = qDao.getAllQueueFlow().first().filter { it.transactionId == id }
         if (queued.any { it.operationType == SyncQueueEntity.OP_LOG_CREDIT }) {
             runInDbTransaction {
                 qDao.deleteByTransactionId(id)
-                iDao.updateStatus(id, "VOID")
+                if (deleteSheetRow) {
+                    iDao.deleteById(id)
+                } else {
+                    iDao.updateStatus(id, "VOID")
+                }
             }
             return Result.Success(Unit)
         }
         if (queued.any { it.operationType == SyncQueueEntity.OP_VOID_INFLOW }) {
-            iDao.updateStatus(id, "VOID")
+            if (deleteSheetRow) {
+                iDao.deleteById(id)
+            } else {
+                iDao.updateStatus(id, "VOID")
+            }
             return Result.Success(Unit)
         }
         if (preferencesRepository?.getPreference(SettledInflowMarker.key(id)) == "1") {
             return Result.Error(IllegalStateException(SettledInflowMarker.BLOCKED_MESSAGE))
         }
-        val request = com.financeautomation.domain.model.VoidInflowRequest(inflowId = id, timestamp = inflow.timestamp)
+        val request = com.financeautomation.domain.model.VoidInflowRequest(
+            inflowId = id,
+            timestamp = inflow.timestamp,
+            deleteSheetRow = deleteSheetRow
+        )
         runInDbTransaction {
             iDao.updateStatus(id, "VOID")
             qDao.insert(
@@ -1638,10 +1657,10 @@ class TransactionRepositoryImpl(
                         }
                     }
                     SyncQueueEntity.OP_VOID -> {
-                        val plan: AccountingPlan
-                        if (item.planJson != null) {
-                            plan = AccountingPlanJsonAdapter.fromJson(item.planJson)
-                        } else {
+                        val voidReq = AccountingRequestJsonAdapter.voidExpenseRequestFromJson(item.payloadJson)
+                        val deleteSheetRow = voidReq.deleteSheetRow
+
+                        if (deleteSheetRow) {
                             val cachedRow = txn.sheetRowIndex
                             var targetRow: Int? = null
 
@@ -1692,41 +1711,133 @@ class TransactionRepositoryImpl(
                             }
 
                             if (targetRow == null) {
-                                // Found in no month tab (for example the old workbook was replaced): there is nothing to void
-                                transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
+                                transactionDao.deleteById(txn.id)
                                 syncQueueDao.delete(item)
                                 continue
                             }
 
-                            val debit = LedgerDebit(
-                                tab = voidTab,
-                                row = targetRow,
-                                uuid = txn.id,
-                                dateSerial = txn.dateSerial,
-                                timeSerial = txn.timeSerial,
-                                account = txn.account,
-                                item = txn.merchant,
-                                tripTag = txn.tripTag,
-                                category = txn.category,
-                                total = txn.totalAmount,
-                                companions = txn.companions,
-                                myShare = txn.myShare,
-                                owed = txn.owedToMe,
-                                status = txn.status.value
-                            )
-                            plan = voidTransactionUseCase.voidDebit(debit)
-                            val planJson = AccountingPlanJsonAdapter.toJson(plan)
-                            syncQueueDao.updatePlanJson(item.id, planJson)
-                        }
+                            val isV1 = googleSheetsClient.getCellString(spreadsheetId, voidTab, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$targetRow")
+                                .let { it is Result.Success && it.data.equals(txn.id, ignoreCase = true) }
+                            val expenseRange = if (isV1) "'$voidTab'!A$targetRow:K$targetRow" else "'$voidTab'!A$targetRow:L$targetRow"
+                            val uuidRange = if (isV1) "'$voidTab'!${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$targetRow" else "'$voidTab'!${SheetSchemaConstants.COL_LETTER_DEBIT_UUID}$targetRow"
+                            val rangesToClear = mutableListOf(expenseRange, uuidRange)
 
-                        val applyRes = applyPlan(spreadsheetId, plan)
-                        if (applyRes is Result.Success) {
-                            transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
-                            syncQueueDao.delete(item)
-                            syncedCount++
+                            val pDao = resolvePayableDao()
+                            val linkedPayable = pDao?.getAll()?.firstOrNull { it.uuid == txn.id }
+                            if (linkedPayable != null && linkedPayable.sheetRowIndex != null) {
+                                val pRow = linkedPayable.sheetRowIndex
+                                val pTab = linkedPayable.tabName
+                                val payRange = if (isV1) "'$pTab'!${SheetSchemaConstants.TABLE_3_PAYABLES_RANGE_V1.substringBefore(':')}$pRow:${SheetSchemaConstants.TABLE_3_PAYABLES_RANGE_V1.substringAfter(':')}$pRow"
+                                               else "'$pTab'!${SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_INCURRED}$pRow:${SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS}$pRow"
+                                val payUuidRange = if (isV1) "'$pTab'!${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1}$pRow"
+                                                   else "'$pTab'!${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID}$pRow"
+                                rangesToClear.add(payRange)
+                                rangesToClear.add(payUuidRange)
+                            }
+
+                            val clearRes = googleSheetsClient.batchClearValues(spreadsheetId, rangesToClear)
+                            if (clearRes is Result.Success) {
+                                transactionDao.deleteById(txn.id)
+                                if (linkedPayable != null) {
+                                    pDao?.deleteByUuid(txn.id)
+                                }
+                                syncQueueDao.delete(item)
+                                syncedCount++
+                            } else {
+                                val err = (clearRes as Result.Error).exception
+                                if (failItem(item, txn, err, st)) break else continue
+                            }
                         } else {
-                            val err = (applyRes as Result.Error).exception
-                            if (failItem(item, txn, err, st)) break else continue
+                            val plan: AccountingPlan
+                            if (item.planJson != null) {
+                                plan = AccountingPlanJsonAdapter.fromJson(item.planJson)
+                            } else {
+                                val cachedRow = txn.sheetRowIndex
+                                var targetRow: Int? = null
+
+                                if (cachedRow != null && cachedRow >= 4) {
+                                    val cellUuidRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID}$cachedRow")
+                                    if (cellUuidRes is Result.Success && cellUuidRes.data.equals(txn.id, ignoreCase = true)) {
+                                        targetRow = cachedRow
+                                    } else {
+                                        val v1Res = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$cachedRow")
+                                        if (v1Res is Result.Success && v1Res.data.equals(txn.id, ignoreCase = true)) {
+                                            targetRow = cachedRow
+                                        }
+                                    }
+                                }
+
+                                var voidTab = tabName
+                                if (targetRow == null) {
+                                    val scanRes = findDebitRow(spreadsheetId, tabName, txn.id)
+                                    if (scanRes is Result.Error) {
+                                        if (failItem(item, txn, scanRes.exception, st)) break else continue
+                                    }
+                                    targetRow = (scanRes as Result.Success).data
+                                }
+
+                                if (targetRow == null) {
+                                    // Not in the computed month tab: the date may have been edited across a month. Look in every month tab.
+                                    val tabsRes = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
+                                    if (tabsRes is Result.Error) {
+                                        if (failItem(item, txn, tabsRes.exception, st)) break else continue
+                                    }
+                                    var failure: Throwable? = null
+                                    for (other in (tabsRes as Result.Success).data.keys.filter { it != tabName && MONTH_TAB_PATTERN.matches(it) }) {
+                                        val r = findDebitRow(spreadsheetId, other, txn.id)
+                                        if (r is Result.Error) {
+                                            failure = r.exception
+                                            break
+                                        }
+                                        val found = (r as Result.Success).data
+                                        if (found != null) {
+                                            voidTab = other
+                                            targetRow = found
+                                            break
+                                        }
+                                    }
+                                    if (failure != null) {
+                                        if (failItem(item, txn, failure, st)) break else continue
+                                    }
+                                }
+
+                                if (targetRow == null) {
+                                    // Found in no month tab (for example the old workbook was replaced): there is nothing to void
+                                    transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
+                                    syncQueueDao.delete(item)
+                                    continue
+                                }
+
+                                val debit = LedgerDebit(
+                                    tab = voidTab,
+                                    row = targetRow,
+                                    uuid = txn.id,
+                                    dateSerial = txn.dateSerial,
+                                    timeSerial = txn.timeSerial,
+                                    account = txn.account,
+                                    item = txn.merchant,
+                                    tripTag = txn.tripTag,
+                                    category = txn.category,
+                                    total = txn.totalAmount,
+                                    companions = txn.companions,
+                                    myShare = txn.myShare,
+                                    owed = txn.owedToMe,
+                                    status = txn.status.value
+                                )
+                                plan = voidTransactionUseCase.voidDebit(debit)
+                                val planJson = AccountingPlanJsonAdapter.toJson(plan)
+                                syncQueueDao.updatePlanJson(item.id, planJson)
+                            }
+
+                            val applyRes = applyPlan(spreadsheetId, plan)
+                            if (applyRes is Result.Success) {
+                                transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
+                                syncQueueDao.delete(item)
+                                syncedCount++
+                            } else {
+                                val err = (applyRes as Result.Error).exception
+                                if (failItem(item, txn, err, st)) break else continue
+                            }
                         }
                     }
                 }

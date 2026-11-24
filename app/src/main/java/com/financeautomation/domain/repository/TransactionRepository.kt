@@ -56,9 +56,11 @@ interface TransactionRepository {
     suspend fun updateCompanionName(oldName: String, newName: String): Result<Int> = Result.Success(0)
 
     /**
-     * Non-destructively voids a transaction by setting shares to 0.00 and status to Void.
+     * Voids a transaction. When [deleteSheetRow] is true, clears the row cells on the sheet;
+     * when false, sets shares to 0.00 and status to Void as in standard voiding.
      */
     suspend fun voidTransaction(id: String): Result<Unit>
+    suspend fun voidTransaction(id: String, deleteSheetRow: Boolean): Result<Unit> = voidTransaction(id)
 
     /**
      * Resolves a failed sync locally without writing to the sync queue.

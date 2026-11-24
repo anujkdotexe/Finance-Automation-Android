@@ -393,7 +393,7 @@ class DashboardSubscriptionsAndTripsParityTest {
 
     @Test
     fun testTitleRowsEndWithDarkNavyBackgroundAndWhiteText() {
-        val darkNavy = mapOf("red" to 0.101960786f, "green" to 0.13725491f, "blue" to 0.49411765f, "alpha" to 1.0f)
+        val darkNavy = SheetProvisioner.hexToColorMap("1A237E")
         val white = mapOf("red" to 1.0f, "green" to 1.0f, "blue" to 1.0f, "alpha" to 1.0f)
 
         // 1. Subscriptions tab initial requests

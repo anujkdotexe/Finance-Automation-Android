@@ -170,6 +170,9 @@ class FakeSheetApplier(
             method == "POST" && url.contains("values:batchUpdate") -> {
                 handleValuesBatchUpdate(body)
             }
+            method == "POST" && url.contains("values:batchClear") -> {
+                handleValuesBatchClear(body)
+            }
             method == "PUT" && url.contains("/values/") -> {
                 handleValuesUpdate(url, body)
             }
@@ -180,7 +183,7 @@ class FakeSheetApplier(
                 handleBatchUpdate(body)
             }
             else -> {
-                200 to "{}"
+                throw IllegalArgumentException("FakeSheetApplier unsupported request: $method $url")
             }
         }
     }
@@ -242,6 +245,31 @@ class FakeSheetApplier(
             }
         }
         return 200 to """{"totalUpdatedCells":$updatedCells,"responses":[]}"""
+    }
+
+    private fun handleValuesBatchClear(body: String): Pair<Int, String> {
+        val jsonElement = json.parseToJsonElement(body).jsonObject
+        val ranges = jsonElement["ranges"]?.jsonArray ?: JsonArray(emptyList())
+        val clearedRanges = mutableListOf<String>()
+
+        for (rangeElem in ranges) {
+            val rangeStr = rangeElem.jsonPrimitive.content
+            val parsedRange = parseA1Range(rangeStr)
+            val tabMap = grid[parsedRange.tab]
+            if (tabMap != null) {
+                for (r in parsedRange.startRow..parsedRange.endRow) {
+                    val rowMap = tabMap[r]
+                    if (rowMap != null) {
+                        for (c in parsedRange.startCol..parsedRange.endCol) {
+                            rowMap.remove(c)
+                        }
+                    }
+                }
+            }
+            clearedRanges.add(rangeStr)
+        }
+        val rangesJson = clearedRanges.joinToString(",") { "\"${escapeJson(it)}\"" }
+        return 200 to """{"spreadsheetId":"test_sheet_id","clearedRanges":[$rangesJson]}"""
     }
 
     private fun handleValuesUpdate(url: String, body: String): Pair<Int, String> {

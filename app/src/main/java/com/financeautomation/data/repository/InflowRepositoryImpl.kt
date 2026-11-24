@@ -72,7 +72,9 @@ class InflowRepositoryImpl(
         resolveDao().updateStatus(id, status)
     }
 
-    override suspend fun voidInflow(id: String): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun voidInflow(id: String): Result<Unit> = voidInflow(id, false)
+
+    override suspend fun voidInflow(id: String, deleteSheetRow: Boolean): Result<Unit> = withContext(ioDispatcher) {
         try {
             val dao = resolveDao()
             val existing = dao.getById(id)
@@ -84,7 +86,7 @@ class InflowRepositoryImpl(
 
             val queue = syncQueueDao ?: syncQueueDaoProvider?.invoke()
                 ?: throw IllegalStateException("SyncQueueDao or provider must be supplied")
-            val request = VoidInflowRequest(inflowId = id, timestamp = existing.timestamp)
+            val request = VoidInflowRequest(inflowId = id, timestamp = existing.timestamp, deleteSheetRow = deleteSheetRow)
             transactionRunner {
                 dao.updateStatus(id, VOID_STATUS)
                 queue.insert(
