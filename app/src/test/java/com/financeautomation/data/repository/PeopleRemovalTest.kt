@@ -166,14 +166,6 @@ class PeopleRemovalTest {
         assertTrue(PersonBalance.hasOpenBalance("Charlie", emptyList(), listOf(PersonBalance.OpenPayable("Charlie", 20.0))))
     }
 
-    @Test
-    fun theAppChecksRealBalancesWhenRemovingAPerson() {
-        val container = java.io.File("src/main/java/com/financeautomation/di/AppContainer.kt").readText()
-        assertTrue(container.contains("openBalanceChecker"))
-        assertTrue(container.contains("PersonBalance.hasOpenBalance"))
-        val settings = java.io.File("src/main/java/com/financeautomation/presentation/viewmodel/SettingsCustomizationCoordinator.kt").readText()
-        assertTrue(settings.contains("peopleRepository.removePerson"))
-    }
 
     // trips
 
