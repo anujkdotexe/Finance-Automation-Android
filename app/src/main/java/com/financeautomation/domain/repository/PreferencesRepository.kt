@@ -291,6 +291,12 @@ interface PreferencesRepository {
         const val KEY_USER_WATCHED_PACKAGES: String = "user_watched_packages"
         const val KEY_WORKBOOK_REPLACED_NOTICE_PENDING: String = "key_workbook_replaced_notice_pending"
         const val KEY_WORKBOOK_REQUEUE_PENDING_YEAR: String = "key_workbook_requeue_pending_year"
+        /** Id of the workbook that last acknowledged this device's synced rows; reconcile prunes only against it. */
+        const val KEY_LEDGER_CONFIRMED_WORKBOOK_ID: String = "key_ledger_confirmed_workbook_id"
+        /** Entries removed locally because the sheet no longer holds them, not yet shown to the user. */
+        const val KEY_SHEET_PRUNED_PENDING_COUNT: String = "key_sheet_pruned_pending_count"
+        /** "1" while a reconcile held back a bulk removal because many entries are missing from the sheet. */
+        const val KEY_SHEET_MANY_MISSING_FLAG: String = "key_sheet_many_missing_flag"
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
         const val KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX: String = "last_workbook_verified_date_"

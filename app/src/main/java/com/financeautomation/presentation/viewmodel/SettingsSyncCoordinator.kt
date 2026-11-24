@@ -472,10 +472,11 @@ class SettingsSyncCoordinator(
                             eventName = com.financeautomation.core.utils.UsageEvents.EVENT_SYNC_RESULT,
                             params = mapOf("error_kind" to "none", "count" to count)
                         )
+                        val pruneText = SheetPruneMessage.text(repo.takeSheetPruneNotice())
                         uiState.update {
                             it.copy(
                                 syncResult = "Synced $count transaction(s) to Google Sheets",
-                                userMessage = UiText.res(R.string.settings_msg_sync_completed)
+                                userMessage = pruneText ?: UiText.res(R.string.settings_msg_sync_completed)
                             )
                         }
                     }
@@ -512,7 +513,10 @@ class SettingsSyncCoordinator(
                 when (val result = repo.reconcileAllMonths()) {
                     is Result.Success -> {
                         val count = result.data
-                        val message = if (count > 0) {
+                        val pruneText = SheetPruneMessage.text(repo.takeSheetPruneNotice())
+                        val message = if (pruneText != null) {
+                            pruneText
+                        } else if (count > 0) {
                             UiText.res(R.string.settings_msg_reconciled_all_months, count)
                         } else {
                             UiText.res(R.string.settings_msg_all_months_up_to_date)
