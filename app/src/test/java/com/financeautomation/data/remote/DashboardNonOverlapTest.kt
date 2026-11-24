@@ -90,17 +90,17 @@ class DashboardNonOverlapTest {
         val requests = SheetProvisioner.buildDashboardRequests(dashboardSheetId = 1)
         val formulas = requests.flatMap { collectFormulas(it) }
 
-        // Must not contain bare IF over ranges like IF(Subscriptions!F4:F=TRUE, ...)
+        // Must not contain bare IF over ranges like IF('Subscriptions'!F4:F=TRUE, ...)
         for (f in formulas) {
             val hasBareIfOverRange = Regex("""IF\([^,]*![A-Z]\d+:[A-Z]\d*=""", RegexOption.IGNORE_CASE).containsMatchIn(f)
             assertFalse("Formula contains forbidden bare IF over range: $f", hasBareIfOverRange)
         }
 
         // Subscriptions band formulas
-        assertTrue(formulas.any { it.contains("COUNTIF(Subscriptions!F4:F, TRUE)") })
-        assertTrue(formulas.any { it.contains("SUMIF(Subscriptions!F4:F, TRUE, Subscriptions!I4:I)") })
-        assertTrue(formulas.any { it.contains("SORT(FILTER({Subscriptions!A4:A, Subscriptions!D4:D}") })
-        assertTrue(formulas.any { it.contains("QUERY(Subscriptions!A4:O, \"SELECT A, M, N") })
+        assertTrue(formulas.any { it.contains("COUNTIF('Subscriptions'!F4:F, TRUE)") })
+        assertTrue(formulas.any { it.contains("SUMIF('Subscriptions'!F4:F, TRUE, 'Subscriptions'!I4:I)") })
+        assertTrue(formulas.any { it.contains("SORT(FILTER({'Subscriptions'!A4:A, 'Subscriptions'!D4:D}") })
+        assertTrue(formulas.any { it.contains("QUERY('Subscriptions'!A4:O, \"SELECT A, M, N") })
 
         // Trips band formulas
         assertTrue(formulas.any { it.contains("FILTER(Trips!A4:A, Trips!D4:D=\"Active\")") })

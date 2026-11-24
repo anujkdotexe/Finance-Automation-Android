@@ -223,7 +223,7 @@ object DashboardFormulaBuilder {
     fun buildSubscriptionsActiveCountFormula(): String {
         val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
-        return """=COUNTIF($tab!${activeCol}4:$activeCol, TRUE)"""
+        return """=COUNTIF('$tab'!${activeCol}4:$activeCol, TRUE)"""
     }
 
     /**
@@ -233,7 +233,7 @@ object DashboardFormulaBuilder {
         val tab = SheetSchemaConstants.SUBSCRIPTIONS_TAB_NAME
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
         val perMonthCol = SheetSchemaConstants.COL_LETTER_SUB_PER_MONTH
-        return """=SUMIF($tab!${activeCol}4:$activeCol, TRUE, $tab!${perMonthCol}4:$perMonthCol)"""
+        return """=SUMIF('$tab'!${activeCol}4:$activeCol, TRUE, '$tab'!${perMonthCol}4:$perMonthCol)"""
     }
 
     /**
@@ -246,7 +246,7 @@ object DashboardFormulaBuilder {
         val nameCol = SheetSchemaConstants.COL_LETTER_SUB_NAME
         val dateCol = SheetSchemaConstants.COL_LETTER_SUB_DUE_DATE
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
-        val filterExpr = "FILTER({$tab!${nameCol}4:$nameCol, $tab!${dateCol}4:$dateCol}, $tab!${activeCol}4:$activeCol=TRUE, $tab!${dateCol}4:$dateCol>=TODAY())"
+        val filterExpr = "FILTER({'$tab'!${nameCol}4:$nameCol, '$tab'!${dateCol}4:$dateCol}, '$tab'!${activeCol}4:$activeCol=TRUE, '$tab'!${dateCol}4:$dateCol>=TODAY())"
         val sortExpr = "SORT($filterExpr, 2, TRUE)"
         return """=IFERROR(INDEX($sortExpr, 1, 1) & " (" & TEXT(INDEX($sortExpr, 1, 2), "dd mmm") & ")", "None upcoming")"""
     }
@@ -262,7 +262,7 @@ object DashboardFormulaBuilder {
         val activeCol = SheetSchemaConstants.COL_LETTER_SUB_ACTIVE
         val closedDateCol = SheetSchemaConstants.COL_LETTER_SUB_CLOSED_DATE
         val paidTotalCol = SheetSchemaConstants.COL_LETTER_SUB_PAID_IN_TOTAL
-        return """=IFERROR(QUERY($tab!$range, "SELECT $nameCol, $closedDateCol, $paidTotalCol WHERE $activeCol = FALSE AND $nameCol IS NOT NULL ORDER BY $closedDateCol DESC LIMIT 5", 0), "")"""
+        return """=IFERROR(QUERY('$tab'!$range, "SELECT $nameCol, $closedDateCol, $paidTotalCol WHERE $activeCol = FALSE AND $nameCol IS NOT NULL ORDER BY $closedDateCol DESC LIMIT 5", 0), "")"""
     }
 
     /**

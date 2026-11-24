@@ -5,7 +5,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 
 class SheetRequestShapeTest {
@@ -39,7 +38,6 @@ class SheetRequestShapeTest {
         assertEquals("FFFFFF", hex(tripTextColor))
     }
 
-    @Ignore("BUG: SheetProvisioner.kt:201 darkNavyBg uses 19227E instead of 1A237E")
     @Test
     fun testSubscriptionsAndTripsTitleRowsKeepNavyFill1A237E() {
         val subReqs = SheetProvisioner.buildSubscriptionsRequests(sheetId = 1, year = 2026)
@@ -273,7 +271,6 @@ class SheetRequestShapeTest {
 
     // 7. The subscription KPI formulas quote the Subscriptions tab name
 
-    @Ignore("BUG: DashboardFormulaBuilder.kt:226 subscription KPI formulas do not quote 'Subscriptions' tab name")
     @Test
     fun testSubscriptionKpiFormulasQuoteSubscriptionsTabName() {
         val activeCountFormula = DashboardFormulaBuilder.buildSubscriptionsActiveCountFormula()

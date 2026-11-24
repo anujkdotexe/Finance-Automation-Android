@@ -198,7 +198,7 @@ object SheetProvisioner {
     private val purpleColor = hexToColorMap("7A1FA1")
     private val blueSectionColor = hexToColorMap("3D85C6")
     private val lightSlateBg = hexToColorMap("EBEEF1")
-    private val darkNavyBg = hexToColorMap("19227E")
+    private val darkNavyBg = hexToColorMap("1A237E")
     private val ledgerBannerBg = hexToColorMap("1A237E")
     private val buttonNavyBg = hexToColorMap("283593")
     private val headerSlateBg = hexToColorMap("37474F")
