@@ -97,10 +97,10 @@ class DashboardNonOverlapTest {
         }
 
         // Subscriptions band formulas
-        assertTrue(formulas.any { it.contains("COUNTIF(Subscriptions!F4:F, TRUE)") })
-        assertTrue(formulas.any { it.contains("SUMIF(Subscriptions!F4:F, TRUE, Subscriptions!I4:I)") })
-        assertTrue(formulas.any { it.contains("SORT(FILTER({Subscriptions!A4:A, Subscriptions!D4:D}") })
-        assertTrue(formulas.any { it.contains("QUERY(Subscriptions!A4:O, \"SELECT A, M, N") })
+        assertTrue(formulas.any { it.contains("COUNTIF('Subscriptions'!F4:F, TRUE)") })
+        assertTrue(formulas.any { it.contains("SUMIF('Subscriptions'!F4:F, TRUE, 'Subscriptions'!I4:I)") })
+        assertTrue(formulas.any { it.contains("SORT(FILTER({'Subscriptions'!A4:A, 'Subscriptions'!D4:D}") })
+        assertTrue(formulas.any { it.contains("QUERY('Subscriptions'!A4:O, \"SELECT A, M, N") })
 
         // Trips band formulas
         assertTrue(formulas.any { it.contains("FILTER(Trips!A4:A, Trips!D4:D=\"Active\")") })

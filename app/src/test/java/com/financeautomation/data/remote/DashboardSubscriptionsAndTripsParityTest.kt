@@ -30,14 +30,14 @@ class DashboardSubscriptionsAndTripsParityTest {
         val noteCol = SheetSchemaConstants.COL_LETTER_SUB_NOTE // "G"
 
         // Must filter on due date and active
-        assertTrue("Formula must use due date column $expectedDateCol", formula.contains("Subscriptions!${expectedDateCol}4:$expectedDateCol"))
-        assertTrue("Formula must filter by due date >= TODAY() using column $expectedDateCol", formula.contains("Subscriptions!${expectedDateCol}4:$expectedDateCol>=TODAY()"))
-        assertTrue("Formula must filter by active using column $expectedActiveCol", formula.contains("Subscriptions!${expectedActiveCol}4:$expectedActiveCol=TRUE"))
-        assertTrue("Formula must include name column $expectedNameCol", formula.contains("Subscriptions!${expectedNameCol}4:$expectedNameCol"))
+        assertTrue("Formula must use due date column $expectedDateCol", formula.contains("'Subscriptions'!${expectedDateCol}4:$expectedDateCol"))
+        assertTrue("Formula must filter by due date >= TODAY() using column $expectedDateCol", formula.contains("'Subscriptions'!${expectedDateCol}4:$expectedDateCol>=TODAY()"))
+        assertTrue("Formula must filter by active using column $expectedActiveCol", formula.contains("'Subscriptions'!${expectedActiveCol}4:$expectedActiveCol=TRUE"))
+        assertTrue("Formula must include name column $expectedNameCol", formula.contains("'Subscriptions'!${expectedNameCol}4:$expectedNameCol"))
 
         // Must NOT use account column (E) or note column (G) for date comparison
-        assertFalse("Must NOT use account column $accountCol for date comparison", formula.contains("Subscriptions!${accountCol}4:$accountCol>=TODAY()"))
-        assertFalse("Must NOT use note column $noteCol for date comparison", formula.contains("Subscriptions!${noteCol}4:$noteCol>=TODAY()"))
+        assertFalse("Must NOT use account column $accountCol for date comparison", formula.contains("'Subscriptions'!${accountCol}4:$accountCol>=TODAY()"))
+        assertFalse("Must NOT use note column $noteCol for date comparison", formula.contains("'Subscriptions'!${noteCol}4:$noteCol>=TODAY()"))
 
         // Verify Dashboard cell G45 (row index 44, col index 6) receives this exact formula
         val dashboardRequests = SheetProvisioner.buildDashboardRequests(dashboardSheetId = 4, year = 2026)
@@ -393,7 +393,7 @@ class DashboardSubscriptionsAndTripsParityTest {
 
     @Test
     fun testTitleRowsEndWithDarkNavyBackgroundAndWhiteText() {
-        val darkNavy = mapOf("red" to 0.09803922f, "green" to 0.13333334f, "blue" to 0.49411765f, "alpha" to 1.0f)
+        val darkNavy = SheetProvisioner.hexToColorMap("1A237E")
         val white = mapOf("red" to 1.0f, "green" to 1.0f, "blue" to 1.0f, "alpha" to 1.0f)
 
         // 1. Subscriptions tab initial requests
