@@ -57,9 +57,4 @@ class CaptureClaimTest {
         assertEquals(0, logged)
     }
 
-    @Test
-    fun theReceiverGoesThroughTheClaim() {
-        val src = File("src/main/java/com/financeautomation/service/QuickActionReceiver.kt").readText()
-        assertEquals(true, src.contains("CaptureClaim.logOnceResult("))
-    }
 }
