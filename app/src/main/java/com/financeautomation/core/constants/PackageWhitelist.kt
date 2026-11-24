@@ -112,6 +112,8 @@ object PackageWhitelist {
 
     private val disabledPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val userWatchedPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val touchedDisabled: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val touchedWatched: MutableSet<String> = ConcurrentHashMap.newKeySet()
     @Volatile
     private var preferencesRepository: PreferencesRepository? = null
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -123,7 +125,8 @@ object PackageWhitelist {
         }
     }
 
-    private val loadedSignal = kotlinx.coroutines.CompletableDeferred<Unit>()
+    @Volatile
+    private var loadedSignal = kotlinx.coroutines.CompletableDeferred<Unit>()
 
     /**
      * Waits until the disabled and user watched sets have been read, so the first whitelist decision after a cold start
@@ -144,13 +147,23 @@ object PackageWhitelist {
         preferencesRepository = prefs
         try {
             val disabled = prefs.getDisabledPackages()
-            disabledPackages.clear()
-            disabledPackages.addAll(disabled)
+            disabledPackages.removeIf { it !in touchedDisabled && it !in disabled }
+            for (pkg in disabled) {
+                if (pkg !in touchedDisabled) {
+                    disabledPackages.add(pkg)
+                }
+            }
 
             val watched = prefs.getUserWatchedPackages()
-            userWatchedPackages.clear()
-            userWatchedPackages.addAll(watched)
+            userWatchedPackages.removeIf { it !in touchedWatched && it !in watched }
+            for (pkg in watched) {
+                if (pkg !in touchedWatched) {
+                    userWatchedPackages.add(pkg)
+                }
+            }
         } finally {
+            touchedDisabled.clear()
+            touchedWatched.clear()
             // Complete even when the read failed, so capture continues with the defaults
             loadedSignal.complete(Unit)
         }
@@ -186,11 +199,15 @@ object PackageWhitelist {
     fun resetForTesting() {
         disabledPackages.clear()
         userWatchedPackages.clear()
+        touchedDisabled.clear()
+        touchedWatched.clear()
         preferencesRepository = null
+        loadedSignal = kotlinx.coroutines.CompletableDeferred()
     }
 
     fun setPackageEnabled(packageId: String, enabled: Boolean) {
         val trimmed = packageId.trim()
+        touchedDisabled.add(trimmed)
         if (enabled) {
             disabledPackages.remove(trimmed)
         } else {
@@ -248,13 +265,16 @@ object PackageWhitelist {
     fun addWatchedApp(packageId: String, displayName: String? = null) {
         val trimmed = packageId.trim()
         if (trimmed.isNotBlank() && isEligibleForWatch(trimmed, displayName)) {
+            touchedWatched.add(trimmed)
             userWatchedPackages.add(trimmed)
             persistWatched()
         }
     }
 
     fun removeWatchedApp(packageId: String) {
-        userWatchedPackages.remove(packageId.trim())
+        val trimmed = packageId.trim()
+        touchedWatched.add(trimmed)
+        userWatchedPackages.remove(trimmed)
         persistWatched()
     }
 
