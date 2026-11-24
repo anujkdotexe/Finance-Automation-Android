@@ -42,6 +42,10 @@ interface SubscriptionCycleDao {
     @Query("UPDATE subscription_cycles SET state = 'PAID', transactionId = :transactionId, updatedAt = :updatedAt WHERE id = :id")
     suspend fun markPaid(id: String, transactionId: String, updatedAt: Long)
 
+    /** A paid cycle whose transaction no longer exists is closed as skipped and loses its link. */
+    @Query("UPDATE subscription_cycles SET state = 'SKIPPED', transactionId = NULL, updatedAt = :updatedAt WHERE transactionId IN (:transactionIds)")
+    suspend fun releaseTransactions(transactionIds: List<String>, updatedAt: Long)
+
     @Query("DELETE FROM subscription_cycles WHERE subscriptionId = :subscriptionId")
     suspend fun deleteForSubscription(subscriptionId: String)
 }

@@ -183,4 +183,11 @@ interface TransactionRepository {
      * so they are appended to a newly provisioned or replaced workbook.
      */
     suspend fun requeueYearForNewWorkbook(year: Int)
+
+    /**
+     * Returns the number of entries removed from this device since the last call because they are no longer in the
+     * sheet (the count is then reset), and whether a pass held back a bulk removal ("many entries missing").
+     */
+    suspend fun takeSheetPruneNotice(): com.financeautomation.domain.model.SheetPruneNotice =
+        com.financeautomation.domain.model.SheetPruneNotice()
 }

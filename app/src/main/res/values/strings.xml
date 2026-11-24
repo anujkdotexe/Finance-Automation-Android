@@ -817,6 +817,9 @@
     <string name="settings_err_fresh_workbook_failed">Failed to create a fresh workbook: %1$s</string>
     <string name="settings_msg_sync_completed">Sync completed successfully</string>
     <string name="settings_msg_reconciled_all_months">Reconciled %1$d change(s) across all months</string>
+    <string name="sync_msg_entries_pruned">%1$d entries were removed because they are no longer in your sheet</string>
+    <string name="sync_msg_entry_pruned_one">1 entry was removed because it is no longer in your sheet</string>
+    <string name="sync_msg_many_missing">Many entries are missing from your sheet. Nothing was removed. Check the sheet, then sync again.</string>
     <string name="settings_msg_all_months_up_to_date">All months up to date (nothing changed)</string>
     <string name="settings_msg_config_mirrored">Configuration successfully mirrored to Google Sheets Config tab</string>
     <string name="settings_msg_config_restored">Restored configuration from Google Sheets Config tab</string>

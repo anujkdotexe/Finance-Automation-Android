@@ -41,6 +41,7 @@ import com.financeautomation.domain.model.LogCreditRequest
 import com.financeautomation.domain.model.LogPayableRequest
 import com.financeautomation.domain.model.LogRepaymentRequest
 import com.financeautomation.domain.model.NewRow
+import com.financeautomation.domain.model.ReconcileOutcome
 import com.financeautomation.domain.model.TableType
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.model.YearCloseRequest
@@ -108,7 +109,8 @@ class TransactionRepositoryImpl(
     private val subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator? = null,
     private val tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator? = null,
     private val subscriptionsSheetSyncCoordinatorProvider: (() -> com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator)? = null,
-    private val tripsSheetSyncCoordinatorProvider: (() -> com.financeautomation.data.remote.TripsSheetSyncCoordinator)? = null
+    private val tripsSheetSyncCoordinatorProvider: (() -> com.financeautomation.data.remote.TripsSheetSyncCoordinator)? = null,
+    private val subscriptionCycleDao: com.financeautomation.data.local.dao.SubscriptionCycleDao? = null
 ) : TransactionRepository {
 
     constructor(
@@ -133,7 +135,8 @@ class TransactionRepositoryImpl(
         modifiedTimeProvider: (suspend (String) -> Result<String?>)? = null,
         clock: () -> Long = System::currentTimeMillis,
         subscriptionsSheetSyncCoordinator: com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator? = null,
-        tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator? = null
+        tripsSheetSyncCoordinator: com.financeautomation.data.remote.TripsSheetSyncCoordinator? = null,
+        subscriptionCycleDao: com.financeautomation.data.local.dao.SubscriptionCycleDao? = null
     ) : this(
         transactionDao = transactionDao,
         syncQueueDao = syncQueueDao,
@@ -164,7 +167,8 @@ class TransactionRepositoryImpl(
         subscriptionsSheetSyncCoordinator = subscriptionsSheetSyncCoordinator,
         tripsSheetSyncCoordinator = tripsSheetSyncCoordinator,
         subscriptionsSheetSyncCoordinatorProvider = null,
-        tripsSheetSyncCoordinatorProvider = null
+        tripsSheetSyncCoordinatorProvider = null,
+        subscriptionCycleDao = subscriptionCycleDao
     )
 
     private fun resolveSubscriptionsSheetSyncCoordinator(): com.financeautomation.data.remote.SubscriptionsSheetSyncCoordinator? =
@@ -1798,14 +1802,29 @@ class TransactionRepositoryImpl(
         targetSpreadsheetId: String? = null,
         tabs: Set<String>? = null,
         allTabs: Boolean = false
-    ): Result<Int> = withContext(ioDispatcher) {
+    ): Result<Int> = when (val res = reconcileWithSheetOutcome(targetSpreadsheetId, tabs, allTabs)) {
+        is Result.Success -> Result.Success(res.data.reconciled)
+        is Result.Error -> Result.Error(res.exception)
+        is Result.Loading -> Result.Loading
+    }
+
+    /**
+     * The sheet is the source of truth and Room is a cache: this updates local rows from the sheet, imports sheet rows
+     * missing locally, rebuilds payables and removes synced local rows the sheet no longer holds (see
+     * [pruneMissingFromSheet]). The outcome carries how many entries were pruned.
+     */
+    suspend fun reconcileWithSheetOutcome(
+        targetSpreadsheetId: String? = null,
+        tabs: Set<String>? = null,
+        allTabs: Boolean = false
+    ): Result<ReconcileOutcome> = withContext(ioDispatcher) {
         try {
-            val sheets = googleSheetsClient ?: return@withContext Result.Success(0)
+            val sheets = googleSheetsClient ?: return@withContext Result.Success(ReconcileOutcome(0))
             val tDao = resolveTransactionDao()
             val pDao = resolvePayableDao()
 
             val spreadsheetId = targetSpreadsheetId ?: reconcileSpreadsheetId()
-                ?: return@withContext Result.Success(0)
+                ?: return@withContext Result.Success(ReconcileOutcome(0))
 
             try {
                 resolveSubscriptionsSheetSyncCoordinator()?.syncSubscriptionsTab(spreadsheetId)
@@ -1820,6 +1839,10 @@ class TransactionRepositoryImpl(
                 Diagnostics.record("TransactionRepository", "syncTripsTab: ${e.javaClass.simpleName}")
             }
 
+            // Only rows that were fully delivered before the read began can be judged missing: a row delivered while
+            // the read was running may simply be newer than the snapshot
+            val pruneCandidates = collectPruneCandidates()
+
             val snapRes = if (allTabs) {
                 sheets.readLedgerSnapshot(spreadsheetId)
             } else {
@@ -1831,6 +1854,10 @@ class TransactionRepositoryImpl(
             }
             val snapshot = (snapRes as Result.Success).data
             var reconciledCount = 0
+            // Ids of local rows the sheet holds (matched by uuid, or by tab and row for a sheet row without a uuid)
+            val seenLocalIds = mutableSetOf<String>()
+            var prunedCount = 0
+            var manyMissing = false
 
             val remotePayables = mutableListOf<PayableEntity>()
             val queuedIds = resolveSyncQueueDao().getAllQueueFlow().first().map { it.transactionId }.toSet()
@@ -1846,6 +1873,8 @@ class TransactionRepositoryImpl(
                         } else {
                             tDao.getByTabAndSheetRowIndex(month.tabName, sheetDebit.rowNumber)
                         }
+
+                        if (localTxn != null) seenLocalIds.add(localTxn.id)
 
                         // A change this device has not delivered yet is newer than the sheet: never overwrite it
                         if (localTxn != null) {
@@ -1986,7 +2015,16 @@ class TransactionRepositoryImpl(
                 }
             }
 
-            Result.Success(reconciledCount)
+            for (month in snapshot.monthTabs) {
+                for (sheetInflow in month.inflows) {
+                    sheetInflow.uuid?.takeIf { it.isNotBlank() }?.let { seenLocalIds.add(it) }
+                }
+            }
+            val prune = pruneMissingFromSheet(spreadsheetId, snapshot, seenLocalIds, pruneCandidates)
+            prunedCount = prune.pruned
+            manyMissing = prune.manyMissing
+
+            Result.Success(ReconcileOutcome(reconciledCount, prunedCount, manyMissing))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             com.financeautomation.core.utils.Diagnostics.record(
@@ -1995,6 +2033,141 @@ class TransactionRepositoryImpl(
             )
             Result.Error(e)
         }
+    }
+
+    private class PruneCandidates(
+        val transactions: Map<String, TransactionEntity>,
+        val inflows: Map<String, InflowEntity>
+    )
+
+    private class PruneResult(val pruned: Int, val manyMissing: Boolean)
+
+    /** True for a row the sheet has acknowledged: delivered, confirmed, with a sheet row, and no pending change. */
+    private fun isDeliveredAndSettled(t: TransactionEntity): Boolean {
+        if (t.sheetRowIndex == null || t.reviewState != ReviewState.CONFIRMED.name) return false
+        return t.syncState == SyncState.SYNCED.name ||
+            (t.syncState == SyncState.VOID.name && t.status.equals(TransactionStatus.VOID.value, ignoreCase = true))
+    }
+
+    /**
+     * Local rows that could be judged missing from the sheet: fully synced and with nothing in the sync queue in any
+     * state. Taken before the sheet is read, so a row delivered while the read runs is never a candidate.
+     */
+    private suspend fun collectPruneCandidates(): PruneCandidates {
+        val queued = resolveSyncQueueDao().getAllQueueFlow().first().map { it.transactionId }.toSet()
+        val txns = resolveTransactionDao().getTransactionsFlow().first()
+            .filter { it.id !in queued && isDeliveredAndSettled(it) }
+            .associateBy { it.id }
+        val inflows = resolveInflowDao()?.getAllInflows()?.first().orEmpty()
+            .filter {
+                it.id !in queued &&
+                    (it.status.equals("CONFIRMED", ignoreCase = true) || it.status.equals("VOID", ignoreCase = true))
+            }
+            .associateBy { it.id }
+        return PruneCandidates(txns, inflows)
+    }
+
+    private fun tabNameOf(timestamp: Long): String =
+        Instant.ofEpochMilli(timestamp).atZone(sheetTimeZone).format(DateTimeFormatter.ofPattern("MMMyy", Locale.US)).lowercase()
+
+    /**
+     * Removes synced local rows (expenses and income) that the sheet no longer holds, after a read that succeeded for
+     * every tab asked for. Nothing is removed when:
+     * - a workbook replacement is still being requeued, or the workbook is not one that already acknowledged this
+     *   device's rows (the confirmed workbook marker differs, or there is none and no local row was found in it);
+     * - the row is queued, pending, failed, in review or edited since the read began;
+     * - the row belongs to a month tab that was not part of the read.
+     * Safety brake: more than half of the synced rows and more than [PRUNE_BRAKE_MIN_ROWS] missing at once is held
+     * back and flagged instead. Payables rebuild from the sheet in the same reconcile; people balances and trip
+     * totals are derived from the remaining rows; a paid subscription cycle that pointed at a removed row is closed.
+     */
+    private suspend fun pruneMissingFromSheet(
+        spreadsheetId: String,
+        snapshot: com.financeautomation.data.remote.LedgerWorkbookSnapshot,
+        seenLocalIds: Set<String>,
+        candidates: PruneCandidates
+    ): PruneResult {
+        val prefs = preferencesRepository ?: return PruneResult(0, false)
+        val confirmed = prefs.getPreference(PreferencesRepository.KEY_LEDGER_CONFIRMED_WORKBOOK_ID)
+        val requeuePending = !prefs.getPreference(PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR).isNullOrBlank()
+        val matched = candidates.transactions.keys.count { it in seenLocalIds } +
+            candidates.inflows.keys.count { it in seenLocalIds }
+
+        val allowed = !requeuePending &&
+            (confirmed == spreadsheetId || (confirmed.isNullOrBlank() && matched > 0))
+        // A workbook that holds some of our rows has acknowledged them; from the next pass it may be pruned against
+        if (!requeuePending && matched > 0 && confirmed != spreadsheetId) {
+            prefs.setPreference(PreferencesRepository.KEY_LEDGER_CONFIRMED_WORKBOOK_ID, spreadsheetId, isDirty = false)
+        }
+        if (!allowed) return PruneResult(0, false)
+
+        val readTabs = snapshot.monthTabs.map { it.tabName.lowercase() }.toSet()
+        val missingTxns = candidates.transactions.values
+            .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
+        val missingInflows = candidates.inflows.values
+            .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
+        val missing = missingTxns.size + missingInflows.size
+        val syncedTotal = candidates.transactions.size + candidates.inflows.size
+
+        if (missing == 0) {
+            prefs.setPreference(PreferencesRepository.KEY_SHEET_MANY_MISSING_FLAG, null, isDirty = false)
+            return PruneResult(0, false)
+        }
+        if (missing * 2 > syncedTotal && missing > PRUNE_BRAKE_MIN_ROWS) {
+            Diagnostics.record("TransactionRepository", "SHEET_PRUNE_HELD_BACK missing=$missing synced=$syncedTotal")
+            prefs.setPreference(PreferencesRepository.KEY_SHEET_MANY_MISSING_FLAG, "1", isDirty = false)
+            return PruneResult(0, true)
+        }
+
+        val tDao = resolveTransactionDao()
+        val qDao = resolveSyncQueueDao()
+        val iDao = resolveInflowDao()
+        val removedTxnIds = mutableListOf<String>()
+        val removedInflowIds = mutableListOf<String>()
+        val cycleDao = subscriptionCycleDao ?: databaseProvider?.invoke()?.subscriptionCycleDao()
+        runInDbTransaction {
+            val queuedNow = qDao.getAllQueueFlow().first().map { it.transactionId }.toSet()
+            for (candidate in missingTxns) {
+                val current = tDao.getById(candidate.id) ?: continue
+                // Changed or queued since the read began: it is no longer a settled row
+                if (current != candidate || current.id in queuedNow) continue
+                tDao.deleteById(current.id)
+                qDao.deleteByTransactionId(current.id)
+                removedTxnIds.add(current.id)
+            }
+            if (iDao != null) {
+                for (candidate in missingInflows) {
+                    val current = iDao.getById(candidate.id) ?: continue
+                    if (current != candidate || current.id in queuedNow) continue
+                    iDao.deleteById(current.id)
+                    qDao.deleteByTransactionId(current.id)
+                    removedInflowIds.add(current.id)
+                }
+            }
+            if (cycleDao != null && removedTxnIds.isNotEmpty()) {
+                removedTxnIds.chunked(SQLITE_IN_CHUNK).forEach { cycleDao.releaseTransactions(it, clock()) }
+            }
+        }
+        removedInflowIds.forEach { prefs.setPreference(SettledInflowMarker.key(it), null, isDirty = false) }
+
+        val pruned = removedTxnIds.size + removedInflowIds.size
+        prefs.setPreference(PreferencesRepository.KEY_SHEET_MANY_MISSING_FLAG, null, isDirty = false)
+        if (pruned > 0) {
+            Diagnostics.record("TransactionRepository", "SHEET_PRUNE removed=$pruned")
+            val pending = prefs.getPreference(PreferencesRepository.KEY_SHEET_PRUNED_PENDING_COUNT)?.toIntOrNull() ?: 0
+            prefs.setPreference(PreferencesRepository.KEY_SHEET_PRUNED_PENDING_COUNT, (pending + pruned).toString(), isDirty = false)
+        }
+        return PruneResult(pruned, false)
+    }
+
+    override suspend fun takeSheetPruneNotice(): com.financeautomation.domain.model.SheetPruneNotice = withContext(ioDispatcher) {
+        val prefs = preferencesRepository ?: return@withContext com.financeautomation.domain.model.SheetPruneNotice()
+        val pending = prefs.getPreference(PreferencesRepository.KEY_SHEET_PRUNED_PENDING_COUNT)?.toIntOrNull() ?: 0
+        if (pending > 0) prefs.setPreference(PreferencesRepository.KEY_SHEET_PRUNED_PENDING_COUNT, null, isDirty = false)
+        com.financeautomation.domain.model.SheetPruneNotice(
+            pruned = pending,
+            manyMissing = prefs.getPreference(PreferencesRepository.KEY_SHEET_MANY_MISSING_FLAG) == "1"
+        )
     }
 
     private suspend fun applyPlan(
@@ -2189,6 +2362,8 @@ class TransactionRepositoryImpl(
     companion object {
         private val MONTH_TAB_PATTERN = Regex("^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[0-9]{2}$", RegexOption.IGNORE_CASE)
         const val SQLITE_IN_CHUNK = 500
+        /** A bulk removal of more than this many rows (and over half the synced rows) is held back. */
+        const val PRUNE_BRAKE_MIN_ROWS = 20
         const val MAX_SYNC_RETRIES: Int = 8
         private const val RECONCILE_KEY = "reconcile"
         private const val CHECK_ALL_MONTHS_KEY = "check_all_months"

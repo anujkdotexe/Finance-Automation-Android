@@ -630,9 +630,10 @@ class DashboardViewModel(
                 when (val res = transactionRepository.syncPendingTransactions(userInitiated = true)) {
                     is Result.Success -> {
                         val count = res.data
+                        val pruneText = SheetPruneMessage.text(transactionRepository.takeSheetPruneNotice())
                         _uiState.update {
                             it.copy(
-                                syncMessage = UiText.res(R.string.dashboard_msg_synced_sheets, count)
+                                syncMessage = pruneText ?: UiText.res(R.string.dashboard_msg_synced_sheets, count)
                             )
                         }
                     }

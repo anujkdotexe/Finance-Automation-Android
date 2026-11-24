@@ -19,7 +19,8 @@ import java.lang.reflect.Proxy
  */
 class SyncHarness(
     tabs: List<String> = listOf(ScriptedSheetsServer.currentTab()),
-    resolverFactory: ((PreferencesRepository, GoogleSheetsClient) -> WorkbookResolver)? = null
+    resolverFactory: ((PreferencesRepository, GoogleSheetsClient) -> WorkbookResolver)? = null,
+    cycleDao: com.financeautomation.data.local.dao.SubscriptionCycleDao? = null
 ) {
     val tDao = InMemoryTransactionDao()
     val qDao = InMemoryQueueDao()
@@ -89,7 +90,8 @@ class SyncHarness(
         ioDispatcher = Dispatchers.Unconfined,
         readGate = gate,
         modifiedTimeProvider = { _ -> modifiedTime?.let { com.financeautomation.core.model.Result.Success<String?>(it) } ?: com.financeautomation.core.model.Result.Success<String?>(null) },
-        clock = { now }
+        clock = { now },
+        subscriptionCycleDao = cycleDao
     )
 
     fun expense(id: String, merchant: String = "Tea", amount: Double = 40.0, ageMillis: Long = 60_000L) = Transaction(
