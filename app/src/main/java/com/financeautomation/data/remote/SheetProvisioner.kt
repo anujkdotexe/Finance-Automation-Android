@@ -951,7 +951,7 @@ object SheetProvisioner {
         requests.add(outerBordersRequest(dashboardSheetId, startRow = 26, endRow = 27, startCol = 7, endCol = 8))
 
         // Row 27: Dynamic Two-Stage QUERY Formulas
-        val theyOweMeQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
+        val theyOweMeQuery = DashboardFormulaBuilder.buildTheyOweMeQueryFormula(year)
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -966,7 +966,7 @@ object SheetProvisioner {
             )
         )
 
-        val iOwePeopleQuery = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+        val iOwePeopleQuery = DashboardFormulaBuilder.buildIOwePeopleQueryFormula(year)
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -2341,7 +2341,7 @@ object SheetProvisioner {
         year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): String {
         val yy = (year % 100).toString().padStart(2, '0')
-        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!G4:G"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "Subscriptions", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!G4:G"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "Subscriptions", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "*" & A$row1BasedIndex & "*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Carried*"), 0)"""
     }
 
     fun buildPaidThisYearFormula(year: Int, row1BasedIndex: Int): String {

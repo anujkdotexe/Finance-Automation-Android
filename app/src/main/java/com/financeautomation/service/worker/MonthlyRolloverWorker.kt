@@ -58,12 +58,10 @@ class MonthlyRolloverWorker(
                 }
             }
             val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
-            // Days 1 to 3: catch debts logged after the last run of the month before. Carry is idempotent per row.
-            val (targetTab, sourceTab) = when {
-                now.dayOfMonth >= 25 -> now.plusMonths(1).format(formatter) to null
-                now.dayOfMonth <= 3 -> now.format(formatter) to now.minusMonths(1).format(formatter)
-                else -> null to null
-            }
+            // Debts move only AFTER the new month starts (Asia/Kolkata). If the phone was off on the 1st,
+            // move them at the next chance on any later day of the new month. Idempotent per row.
+            val targetTab = now.format(formatter)
+            val sourceTab = now.minusMonths(1).format(formatter)
             if (targetTab != null) {
                 val nextMonthTab = targetTab
 

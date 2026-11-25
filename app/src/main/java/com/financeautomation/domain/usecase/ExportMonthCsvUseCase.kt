@@ -47,7 +47,7 @@ class ExportMonthCsvUseCase(
         val end = ym.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
 
         val expenseRows = transactions
-            .filter { it.timestamp in start until end && it.status != TransactionStatus.VOID }
+            .filter { it.timestamp in start until end && it.status != TransactionStatus.VOID && !CarriedCopies.isCopy(it) }
             .sortedBy { it.timestamp }
         val inflowRows = inflows
             .filter { it.timestamp in start until end && !it.status.equals("VOID", ignoreCase = true) }

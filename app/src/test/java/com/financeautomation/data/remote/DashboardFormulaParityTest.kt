@@ -91,7 +91,7 @@ class DashboardFormulaParityTest {
 
     @Test
     fun testCategorySpendFormulaUsesTheLiveSpacing() {
-        val expected = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), Y6, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I")), 0)"""
+        val expected = """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), Y6, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Carried*"), 0)"""
         assertEquals(expected, DashboardFormulaBuilder.buildCategorySpendFormula(6))
     }
 

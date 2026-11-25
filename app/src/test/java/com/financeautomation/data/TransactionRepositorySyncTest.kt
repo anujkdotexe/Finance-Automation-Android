@@ -1272,12 +1272,14 @@ class TransactionRepositorySyncTest {
         val mock = CountingSheetsMock()
         val sheets = mock.createClient()
 
+        val testClock: () -> Long = { 1796120000000L } // Dec 1, 2026 IST
         val executor = AccountingSyncExecutor(
             googleSheetsClient = sheets,
             googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
             syncQueueDao = qDao,
             lineageDao = lineageDao,
-            transactionDao = tDao
+            transactionDao = tDao,
+            clock = testClock
         )
 
         val repo = TransactionRepositoryImpl(
@@ -1287,6 +1289,7 @@ class TransactionRepositorySyncTest {
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
             accountingSyncExecutor = executor,
+            clock = testClock,
             ioDispatcher = Dispatchers.IO
         )
 
@@ -1367,12 +1370,14 @@ class TransactionRepositorySyncTest {
         val mock = CountingSheetsMock()
         val sheets = mock.createClient()
 
+        val testClock: () -> Long = { 1796120000000L } // Dec 1, 2026 IST
         val executor = AccountingSyncExecutor(
             googleSheetsClient = sheets,
             googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
             syncQueueDao = qDao,
             lineageDao = lineageDao,
-            transactionDao = tDao
+            transactionDao = tDao,
+            clock = testClock
         )
 
         val repo = TransactionRepositoryImpl(
@@ -1382,6 +1387,7 @@ class TransactionRepositorySyncTest {
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
             accountingSyncExecutor = executor,
+            clock = testClock,
             ioDispatcher = Dispatchers.IO
         )
 
@@ -1568,12 +1574,14 @@ class TransactionRepositorySyncTest {
         val mock = CountingSheetsMock()
         val sheets = mock.createClient()
 
+        val testClock: () -> Long = { 1796120000000L } // Dec 1, 2026 IST
         val executor = AccountingSyncExecutor(
             googleSheetsClient = sheets,
             googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
             syncQueueDao = qDao,
             lineageDao = lineageDao,
-            transactionDao = tDao
+            transactionDao = tDao,
+            clock = testClock
         )
 
         val repo = TransactionRepositoryImpl(
@@ -1583,6 +1591,7 @@ class TransactionRepositorySyncTest {
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
             accountingSyncExecutor = executor,
+            clock = testClock,
             ioDispatcher = Dispatchers.IO
         )
 
