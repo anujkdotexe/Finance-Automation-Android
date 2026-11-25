@@ -164,7 +164,8 @@ class CarryForwardUseCase {
                     debit.companions,
                     0.0,
                     AccountingUtils.round2(debit.owed),
-                    "Pending"
+                    "Pending",
+                    ""
                 )
 
                 appends.add(NewRow(TableType.DEBIT, targetTab, newUuid, newCells))

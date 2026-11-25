@@ -3,6 +3,7 @@ package com.financeautomation.data.remote
 import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PayableDao
@@ -655,8 +656,18 @@ open class AccountingSyncExecutor(
             }
             val columnCache = mutableMapOf<Triple<String, String, String>, UuidColumn>()
 
+            val dateCols: Map<String, Int> = mapOf(
+                "A" to SheetSchemaConstants.COL_INDEX_DEBIT_DATE,
+                "N" to SheetSchemaConstants.COL_INDEX_INFLOW_DATE,
+                "W" to SheetSchemaConstants.COL_INDEX_PAYABLE_DATE_INCURRED,
+                "AB" to SheetSchemaConstants.COL_INDEX_PAYABLE_DATE_REPAID
+            )
+
             for ((targetId, edits) in editsByTarget) {
                 val rangesWithValues = LinkedHashMap<String, List<List<Any?>>>()
+                val formatReqs = mutableListOf<Map<String, Any?>>()
+                var tabIdsMap: Map<String, Int>? = null
+
                 for (edit in edits) {
                     val expectedUuid = edit.uuid?.takeIf { it.isNotBlank() }
                         ?: settledUuidByRow[Pair(edit.tab, edit.row)]?.takeIf { isDebitColumn(edit.column) }
@@ -680,9 +691,38 @@ open class AccountingSyncExecutor(
                         found ?: return Result.Error(IllegalStateException("Sheet row moved or removed in ${edit.tab}; edit not applied"))
                     }
                     rangesWithValues["'${edit.tab}'!${edit.column}$actualRow"] = listOf(listOf(edit.value))
+
+                    val colIdx = dateCols[edit.column.uppercase()]
+                    if (colIdx != null && actualRow > 0) {
+                        if (tabIdsMap == null) {
+                            val tabsRes = googleSheetsClient.getSheetTabsWithIds(targetId)
+                            tabIdsMap = if (tabsRes is Result.Success) tabsRes.data else emptyMap()
+                        }
+                        val tabSheetId = tabIdsMap[edit.tab]
+                        if (tabSheetId != null) {
+                            formatReqs.add(
+                                SheetProvisioner.createNumberFormatRequest(
+                                    sheetId = tabSheetId,
+                                    startCol = colIdx,
+                                    endCol = colIdx + 1,
+                                    formatType = "DATE",
+                                    pattern = "dd/mm/yyyy",
+                                    align = "CENTER",
+                                    startRow = actualRow - 1,
+                                    endRow = actualRow
+                                )
+                            )
+                        }
+                    }
                 }
                 val editRes = googleSheetsClient.batchUpdateValues(targetId, rangesWithValues)
                 if (editRes is Result.Error) return Result.Error(editRes.exception)
+                if (formatReqs.isNotEmpty()) {
+                    val formatRes = googleSheetsClient.batchUpdate(targetId, formatReqs)
+                    if (formatRes is Result.Error) {
+                        Diagnostics.record("AccountingSyncExecutor", "Format cell date error: ${formatRes.exception.message}")
+                    }
+                }
             }
         }
 

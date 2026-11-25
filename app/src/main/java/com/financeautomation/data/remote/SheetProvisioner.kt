@@ -926,6 +926,19 @@ object SheetProvisioner {
             )
         }
 
+        // Explicitly clear leftover "Status" header at L26 (rowIndex 25, colIndex 11) from older 5-column layout
+        requests.add(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 25,
+                colIndex = 11,
+                value = mapOf("stringValue" to ""),
+                format = mapOf(
+                    "backgroundColor" to whiteColor
+                )
+            )
+        )
+
         // Thin borders as in the live workbook: banners, the header row (A26:L26, no right edge on L26) and the query cells
         requests.add(outerBordersRequest(dashboardSheetId, startRow = 23, endRow = 24, startCol = 0, endCol = 12))
         requests.add(outerBordersRequest(dashboardSheetId, startRow = 24, endRow = 25, startCol = 0, endCol = 6))
@@ -2238,6 +2251,20 @@ object SheetProvisioner {
             )
         )
 
+        // 7. Explicit DATE format on Column AB (Date Repaid, index 27) data cells
+        requests.add(
+            createNumberFormatRequest(
+                sheetId = sheetId,
+                startCol = SheetSchemaConstants.COL_INDEX_PAYABLE_DATE_REPAID,
+                endCol = SheetSchemaConstants.COL_INDEX_PAYABLE_DATE_REPAID + 1,
+                formatType = "DATE",
+                pattern = "dd/mm/yyyy",
+                align = "CENTER",
+                startRow = 3,
+                endRow = rowCount
+            )
+        )
+
         return requests
     }
 
@@ -2304,20 +2331,21 @@ object SheetProvisioner {
         )
     }
 
-    private fun createNumberFormatRequest(
+    fun createNumberFormatRequest(
         sheetId: Int,
         startCol: Int,
         endCol: Int,
         formatType: String,
         pattern: String,
         align: String,
+        startRow: Int = 3,
         endRow: Int = 1000
     ): Map<String, Any?> {
         return mapOf(
             "repeatCell" to mapOf(
                 "range" to mapOf(
                     "sheetId" to sheetId,
-                    "startRowIndex" to 3,
+                    "startRowIndex" to startRow,
                     "endRowIndex" to endRow,
                     "startColumnIndex" to startCol,
                     "endColumnIndex" to endCol
