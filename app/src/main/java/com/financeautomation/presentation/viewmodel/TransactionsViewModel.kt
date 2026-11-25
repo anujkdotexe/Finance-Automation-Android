@@ -669,6 +669,13 @@ class TransactionsViewModel(
     fun consumeLastVoidBlockReason(): com.financeautomation.domain.model.VoidDecision.BlockReason? =
         transactionRepository.consumeLastVoidBlockReason()
 
+    /** True once when the last void also voided a debt; restoring the expense alone is then not offered. */
+    fun consumeLastVoidIncludedDebt(): Boolean = transactionRepository.consumeLastVoidIncludedDebt()
+
+    /** The reason of a void the sheet refused during sync, returned once. */
+    suspend fun takeVoidBlockedNotice(): com.financeautomation.domain.model.VoidDecision.BlockReason? =
+        transactionRepository.takeVoidBlockedNotice()
+
     fun undoVoid(onComplete: ((Boolean) -> Unit)? = null) {
         val txn = lastVoidedTransaction ?: run {
             onComplete?.invoke(false)

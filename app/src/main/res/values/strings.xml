@@ -1115,9 +1115,10 @@
     <string name="confirm_void_delete_sheet_row">Also delete this entry from the sheet</string>
     <string name="void_linked_debt_unchanged">Linked debt was left unchanged.</string>
     <string name="txns_voided_with_debt_unchanged_msg">Voided %1$s. Linked debt was left unchanged.</string>
-    <string name="void_blocked_debt_repaid">Cannot void this expense because the linked debt was already partly or fully repaid.</string>
+    <string name="void_blocked_debt_repaid">Cannot void this expense because the linked debt was already partly or fully repaid, or offset against what your friend owed.</string>
     <string name="void_blocked_debt_offset">Cannot void this expense because the linked debt was offset against what your friend owed.</string>
-    <string name="void_blocked_ambiguous">Cannot void this expense because multiple matching debts exist and cannot be identified safely.</string>
+    <string name="void_blocked_ambiguous">Cannot void this expense because a debt that may belong to it cannot be identified safely.</string>
+    <string name="void_blocked_debt_carried">Cannot void this expense because the linked debt was carried forward to a later month and cannot be voided together with it.</string>
     <string name="void_blocked_sheet_error">Cannot void this expense because the sheet could not be verified. Please retry.</string>
     <string name="confirm_sign_out_title">Sign out?</string>
     <string name="confirm_sign_out_message">Are you sure you want to sign out? You will need to link your Google account again to sync.</string>

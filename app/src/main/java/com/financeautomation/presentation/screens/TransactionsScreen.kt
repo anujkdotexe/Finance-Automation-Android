@@ -53,6 +53,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,6 +94,7 @@ import com.financeautomation.presentation.components.OutlinedButton
 import com.financeautomation.presentation.components.StatusChip
 import com.financeautomation.presentation.components.SyncStatusLine
 import com.financeautomation.presentation.components.TransactionRow
+import com.financeautomation.presentation.components.VoidDialogUtils
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -135,6 +137,16 @@ fun TransactionsScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // A void the sheet refused during sync puts the entry back, which changes the list; say why
+    LaunchedEffect(state.groupedTransactions) {
+        viewModel.takeVoidBlockedNotice()?.let { reason ->
+            snackbarHostState.showSnackbar(
+                message = context.getString(VoidDialogUtils.blockMessageResId(reason)),
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface,
@@ -165,27 +177,23 @@ fun TransactionsScreen(
                 onNavigateToSync = onNavigateToSync,
                 onNavigateToNeedsReview = onNavigateToNeedsReview,
                 onVoidTransaction = { targetTxn ->
-                    viewModel.voidTransaction(targetTxn) {
+                    viewModel.voidTransaction(targetTxn) { outcome ->
                         coroutineScope.launch {
                             val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
                             val blockReason = viewModel.consumeLastVoidBlockReason()
                             if (blockReason != null) {
-                                val blockMsg = when (blockReason) {
-                                    com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_PARTIALLY_OR_FULLY_REPAID ->
-                                        context.getString(R.string.void_blocked_debt_repaid)
-                                    com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_OFFSET ->
-                                        context.getString(R.string.void_blocked_debt_offset)
-                                    com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH ->
-                                        context.getString(R.string.void_blocked_ambiguous)
-                                    com.financeautomation.domain.model.VoidDecision.BlockReason.SHEET_READ_FAILED ->
-                                        context.getString(R.string.void_blocked_sheet_error)
-                                }
-                                snackbarHostState.showSnackbar(message = blockMsg, duration = SnackbarDuration.Short)
+                                snackbarHostState.showSnackbar(
+                                    message = context.getString(VoidDialogUtils.blockMessageResId(blockReason)),
+                                    duration = SnackbarDuration.Long
+                                )
+                            } else if (outcome is com.financeautomation.core.model.Result.Error) {
+                                snackbarHostState.showSnackbar(context.getString(R.string.err_void_failed_generic))
                             } else {
-                                val msg = context.getString(R.string.txns_voided_named_msg, cleanName)
+                                // Undo restores the expense only, so it is not offered once a debt was voided with it
+                                val debtVoided = viewModel.consumeLastVoidIncludedDebt()
                                 val result = snackbarHostState.showSnackbar(
-                                    message = msg,
-                                    actionLabel = context.getString(R.string.action_undo),
+                                    message = context.getString(R.string.txns_voided_named_msg, cleanName),
+                                    actionLabel = if (debtVoided) null else context.getString(R.string.action_undo),
                                     duration = SnackbarDuration.Short
                                 )
                                 if (result == SnackbarResult.ActionPerformed) {

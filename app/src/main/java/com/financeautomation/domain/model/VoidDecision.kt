@@ -27,6 +27,7 @@ sealed interface VoidDecision {
         DEBT_PARTIALLY_OR_FULLY_REPAID,
         DEBT_OFFSET,
         AMBIGUOUS_DEBT_MATCH,
+        DEBT_CARRIED_FORWARD,
         SHEET_READ_FAILED
     }
 }

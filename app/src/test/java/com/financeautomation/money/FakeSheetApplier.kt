@@ -42,6 +42,9 @@ class FakeSheetApplier(
 
     var forceFindRowError: Boolean = false
 
+    /** When set, every value write and clear answers with this HTTP status and changes nothing. */
+    var forceValueWriteStatus: Int? = null
+
     private val tokenProvider = object : TokenProvider {
         override fun getAccessToken(): String = "fake_test_token"
         override fun refreshAccessToken(): String = "fake_test_token"
@@ -164,6 +167,13 @@ class FakeSheetApplier(
 
         if (forceFindRowError && method == "GET" && (url.contains("AF") || url.contains("AE"))) {
             return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
+        }
+
+        if (forceValueWriteStatus != null && method == "POST" &&
+            (url.contains("values:batchUpdate") || url.contains("values:batchClear"))
+        ) {
+            val status = forceValueWriteStatus!!
+            return status to """{"error":{"code":$status,"message":"Simulated write error"}}"""
         }
 
         return when {

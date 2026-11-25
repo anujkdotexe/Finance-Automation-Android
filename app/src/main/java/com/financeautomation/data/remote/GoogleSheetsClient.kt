@@ -40,6 +40,7 @@ private val DEFAULT_SHEET_ZONE_ID: ZoneId = ZoneId.of("Asia/Kolkata")
 private val ROW_INDEX_REGEX = Regex("""[A-Za-z]+(\d+)""")
 /** Marker key set when a batchGet response could be matched to the request by position. */
 private const val POSITIONAL_KEY = "__positional"
+private const val INCOMPLETE_KEY = "__incomplete"
 
 private val MONTH_TAB_REGEX = Regex("""^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{2})$""", RegexOption.IGNORE_CASE)
 
@@ -2554,7 +2555,7 @@ open class GoogleSheetsClient(
                             ?: byName.entries.firstOrNull { (k, _) ->
                                 k.contains(tab, ignoreCase = true) && k.contains(col.substringBefore(":"), ignoreCase = true)
                             }?.value
-                        if (rows != null) byPosition["$tab|$col"] = rows
+                        if (rows != null) byPosition["$tab|$col"] = rows else byPosition[INCOMPLETE_KEY] = emptyList()
                     }
                 }
                 return Result.Success(byPosition)
@@ -2721,7 +2722,9 @@ open class GoogleSheetsClient(
                 )
             }
 
-            Result.Success(LedgerWorkbookSnapshot(spreadsheetId, monthSnapshots))
+            Result.Success(
+                LedgerWorkbookSnapshot(spreadsheetId, monthSnapshots, isComplete = !valuesMap.containsKey(INCOMPLETE_KEY))
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

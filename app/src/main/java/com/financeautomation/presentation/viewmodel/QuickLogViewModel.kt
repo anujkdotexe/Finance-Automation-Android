@@ -516,16 +516,7 @@ class QuickLogViewModel(
                     is Result.Error -> {
                         val throwable = res.throwable
                         if (throwable is com.financeautomation.domain.model.VoidBlockedException) {
-                            val msgRes = when (throwable.reason) {
-                                com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_PARTIALLY_OR_FULLY_REPAID ->
-                                    R.string.void_blocked_debt_repaid
-                                com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_OFFSET ->
-                                    R.string.void_blocked_debt_offset
-                                com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH ->
-                                    R.string.void_blocked_ambiguous
-                                com.financeautomation.domain.model.VoidDecision.BlockReason.SHEET_READ_FAILED ->
-                                    R.string.void_blocked_sheet_error
-                            }
+                            val msgRes = com.financeautomation.presentation.components.VoidDialogUtils.blockMessageResId(throwable.reason)
                             _uiState.update { it.copy(isSaving = false, errorMessage = UiText.StringResource(msgRes)) }
                         } else {
                             Diagnostics.record("QuickLogViewModel", "void_error: ${SyncErrorKind.safeCode("quicklog void", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")

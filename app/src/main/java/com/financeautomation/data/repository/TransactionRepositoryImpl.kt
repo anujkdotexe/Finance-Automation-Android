@@ -266,12 +266,6 @@ class TransactionRepositoryImpl(
         return Result.Success(null)
     }
 
-    sealed class LinkedPayableMatch {
-        data class Exact(val payable: PayableEntity) : LinkedPayableMatch()
-        object None : LinkedPayableMatch()
-        data class Ambiguous(val count: Int) : LinkedPayableMatch()
-    }
-
     private fun PayableEntity.toCandidate(): com.financeautomation.domain.usecase.PayableCandidate =
         com.financeautomation.domain.usecase.PayableCandidate(
             uuid = uuid,
@@ -285,52 +279,393 @@ class TransactionRepositoryImpl(
             sheetRowIndex = sheetRowIndex
         )
 
-    private suspend fun findLinkedPayable(
-        id: String,
-        dateSerial: Int,
-        timeSerial: Double,
-        merchant: String,
-        account: String = ""
-    ): LinkedPayableMatch {
-        val pDao = resolvePayableDao() ?: return LinkedPayableMatch.None
-        val directId = AccountingUtils.linkedPayableIdForExpense(id)
-        if (directId != null) {
-            val exact = pDao.getAll().firstOrNull { it.uuid == directId }
-            if (exact != null) return LinkedPayableMatch.Exact(exact)
-        }
-        val allPayables = pDao.getAll()
-        val exactBySameId = allPayables.firstOrNull { it.uuid == id }
-        if (exactBySameId != null) return LinkedPayableMatch.Exact(exactBySameId)
-
-        val candidates = allPayables.filter {
-            AccountingUtils.legacyPayableAgreesWithExpense(
-                dateIncurredSerial = it.dateIncurredSerial,
-                timeSerial = it.timeSerial,
-                paidBy = it.paidBy,
-                whatFor = it.whatFor,
-                txDateSerial = dateSerial,
-                txTimeSerial = timeSerial,
-                txMerchant = merchant,
-                txAccount = account
-            )
-        }
-        return when (candidates.size) {
-            1 -> LinkedPayableMatch.Exact(candidates.first())
-            0 -> LinkedPayableMatch.None
-            else -> LinkedPayableMatch.Ambiguous(candidates.size)
+    /** The queued "Friend paid for me" delivery of an expense, matched by the ids in the request, never by text. */
+    private fun queuedPayableFor(expenseId: String, queue: List<SyncQueueEntity>): SyncQueueEntity? {
+        val linkedId = AccountingUtils.linkedPayableIdForExpense(expenseId)
+        return queue.firstOrNull { item ->
+            item.operationType == SyncQueueEntity.OP_LOG_PAYABLE && (
+                item.transactionId == linkedId ||
+                    runCatching {
+                        AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson).transactionId
+                    }.getOrNull() == expenseId
+                )
         }
     }
 
-    private suspend fun findLinkedPayable(txn: TransactionEntity): LinkedPayableMatch =
-        findLinkedPayable(txn.id, txn.dateSerial, txn.timeSerial, txn.merchant, txn.account)
+    /** True when the stored plan of a friend paid delivery offsets part or all of the debt. */
+    private fun deliveryNetsDebt(item: SyncQueueEntity, expenseTotal: Double): Boolean {
+        val planJson = item.planJson ?: return false
+        val cells = AccountingPlanJsonAdapter.fromJson(planJson).appends
+            .firstOrNull { it.table == TableType.PAYABLE }?.cells ?: return false
+        val amount = cells.getOrNull(4)?.toString()?.toDoubleOrNull()
+        val status = cells.getOrNull(6)?.toString().orEmpty()
+        return status.equals("Repaid", ignoreCase = true) || (amount != null && amount < expenseTotal - 0.01)
+    }
 
-    private suspend fun findLinkedPayable(txn: Transaction): LinkedPayableMatch =
-        findLinkedPayable(txn.id, txn.dateSerial, txn.timeSerial, txn.merchant, txn.account)
+    /** A debt as the sheet holds it now. */
+    private class SheetDebt(
+        val candidate: com.financeautomation.domain.usecase.PayableCandidate,
+        val tab: String,
+        val row: Int,
+        val isV1: Boolean
+    )
 
-    private fun isUntouchedDebt(debt: PayableEntity, expenseTotal: Double): Boolean {
-        val isPending = debt.repaymentStatus.equals("Pending", ignoreCase = true)
-        val amountMatches = kotlin.math.abs(debt.amountIOwe - expenseTotal) < 0.01
-        return isPending && amountMatches
+    private sealed interface VoidDelivery {
+        /** The sheet now agrees with the void. [debtIds] are the local debts that follow the expense. */
+        class Done(val wrote: Boolean, val debtIds: Set<String>, val row: Int?) : VoidDelivery
+        class Blocked(
+            val reason: com.financeautomation.domain.model.VoidDecision.BlockReason,
+            val debt: SheetDebt?
+        ) : VoidDelivery
+        class Failed(val error: Throwable) : VoidDelivery
+    }
+
+    private class SheetStepFailed(val error: Throwable) : Exception()
+
+    /** Any sheet call of a void that does not succeed ends the attempt before anything else happens. */
+    private fun <T> Result<T>.orFail(): T = when (this) {
+        is Result.Success -> this.data
+        is Result.Error -> throw SheetStepFailed(this.exception)
+        is Result.Loading -> throw SheetStepFailed(java.io.IOException("Sheet call did not finish"))
+    }
+
+    private fun com.financeautomation.data.remote.LedgerPayableRow.toCandidate(
+        tab: String
+    ) = com.financeautomation.domain.usecase.PayableCandidate(
+        uuid = uuid.orEmpty(),
+        paidBy = paidBy,
+        whatFor = whatFor,
+        amountIOwe = amountIOwe,
+        repaymentStatus = repaymentStatus,
+        dateIncurredSerial = dateIncurredSerial,
+        timeSerial = timeSerial,
+        tabName = tab,
+        sheetRowIndex = rowNumber
+    )
+
+    private suspend fun payableRowIsV1(
+        sheets: GoogleSheetsClient,
+        spreadsheetId: String,
+        tab: String,
+        row: Int,
+        uuid: String
+    ): Boolean = if (uuid.isNotBlank()) {
+        sheets.getCellString(spreadsheetId, tab, "${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1}$row").orFail()
+            .equals(uuid, ignoreCase = true)
+    } else {
+        !sheets.getCellString(spreadsheetId, tab, "L3").orFail().equals("Note", ignoreCase = true)
+    }
+
+    private suspend fun readSheetDebt(
+        sheets: GoogleSheetsClient,
+        spreadsheetId: String,
+        tab: String,
+        row: Int,
+        uuid: String
+    ): SheetDebt {
+        val isV1 = payableRowIsV1(sheets, spreadsheetId, tab, row, uuid)
+        val range = if (isV1) "'$tab'!V$row:AB$row" else "'$tab'!W$row:AC$row"
+        val cells = sheets.getRangeValuesRaw(spreadsheetId, range).orFail().firstOrNull().orEmpty()
+        fun text(index: Int) = cells.getOrNull(index)?.toString().orEmpty()
+        fun number(index: Int) = text(index).replace(",", "").toDoubleOrNull()
+        val candidate = com.financeautomation.domain.usecase.PayableCandidate(
+            uuid = uuid,
+            paidBy = text(2),
+            whatFor = text(3),
+            amountIOwe = number(4) ?: 0.0,
+            repaymentStatus = text(6),
+            dateIncurredSerial = number(0)?.toInt(),
+            timeSerial = number(1),
+            tabName = tab,
+            sheetRowIndex = row
+        )
+        return SheetDebt(candidate, tab, row, isV1)
+    }
+
+    /**
+     * Delivers one expense void. The sheet is the source of truth: the rows are found by id on every attempt, the
+     * all or nothing decision is made again from what the sheet holds now, and any failed or partial read ends the
+     * attempt with nothing written.
+     */
+    private suspend fun deliverVoid(
+        sheets: GoogleSheetsClient,
+        spreadsheetId: String,
+        tabName: String,
+        txn: Transaction,
+        req: com.financeautomation.domain.model.VoidExpenseRequest
+    ): VoidDelivery = try {
+        checkAndWriteVoid(sheets, spreadsheetId, tabName, txn, req)
+    } catch (e: SheetStepFailed) {
+        VoidDelivery.Failed(e.error)
+    }
+
+    private suspend fun checkAndWriteVoid(
+        sheets: GoogleSheetsClient,
+        spreadsheetId: String,
+        tabName: String,
+        txn: Transaction,
+        req: com.financeautomation.domain.model.VoidExpenseRequest
+    ): VoidDelivery {
+        // 1. Where the expense row is now
+        var voidTab = tabName
+        var targetRow: Int? = null
+        val cachedRow = txn.sheetRowIndex
+        if (cachedRow != null && cachedRow >= 4) {
+            for (column in listOf(SheetSchemaConstants.COL_LETTER_DEBIT_UUID, SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1)) {
+                if (sheets.getCellString(spreadsheetId, tabName, "$column$cachedRow").orFail().equals(txn.id, ignoreCase = true)) {
+                    targetRow = cachedRow
+                    break
+                }
+            }
+        }
+        if (targetRow == null) targetRow = findDebitRow(spreadsheetId, tabName, txn.id).orFail()
+        if (targetRow == null) {
+            // Not in the computed month tab: the date may have been edited across a month. Look in every month tab.
+            val tabs = sheets.getSheetTabsWithIds(spreadsheetId).orFail().keys
+            for (other in tabs.filter { it != tabName && MONTH_TAB_PATTERN.matches(it) }) {
+                val found = findDebitRow(spreadsheetId, other, txn.id).orFail()
+                if (found != null) {
+                    voidTab = other
+                    targetRow = found
+                    break
+                }
+            }
+        }
+        val debitIsV1 = targetRow != null &&
+            sheets.getCellString(spreadsheetId, voidTab, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$targetRow")
+                .orFail().equals(txn.id, ignoreCase = true)
+
+        // 2. What that tab holds now. A friend paid expense and its debt are written to the same tab.
+        val snapshot = sheets.readLedgerSnapshot(spreadsheetId) { it.equals(voidTab, ignoreCase = true) }.orFail()
+        if (!snapshot.isComplete) {
+            return VoidDelivery.Failed(java.io.IOException("The sheet read was incomplete; the void was not applied"))
+        }
+        val month = snapshot.monthTabs.firstOrNull { it.tabName.equals(voidTab, ignoreCase = true) }
+        val sheetDebit = month?.debits?.firstOrNull { it.uuid.equals(txn.id, ignoreCase = true) }
+        val expenseTotal = sheetDebit?.totalAmount?.takeIf { it > 0.0 }
+            ?: req.prior?.totalAmount?.takeIf { it > 0.0 }
+            ?: txn.totalAmount
+
+        // 3. The debt: by its id first, then the rows of the tab
+        var exact: SheetDebt? = null
+        val linkedIds = listOfNotNull(req.linkedPayableId, AccountingUtils.linkedPayableIdForExpense(txn.id)).distinct()
+        for (payId in linkedIds) {
+            val inTab = month?.payables?.firstOrNull { it.uuid.equals(payId, ignoreCase = true) }
+            if (inTab != null) {
+                val isV1 = payableRowIsV1(sheets, spreadsheetId, voidTab, inTab.rowNumber, payId)
+                exact = SheetDebt(inTab.toCandidate(voidTab), voidTab, inTab.rowNumber, isV1)
+                break
+            }
+            // Other tabs are searched only for a debt this device saw for the expense when the void was asked for
+            if (payId == req.linkedPayableId) {
+                val found = findPayableRowAndTab(spreadsheetId, voidTab, payId).orFail()
+                if (found != null) {
+                    exact = readSheetDebt(sheets, spreadsheetId, found.first, found.second, payId)
+                    break
+                }
+            }
+        }
+        val tabDebts = month?.payables.orEmpty()
+        val decision = com.financeautomation.domain.usecase.VoidDecisionEngine.decide(
+            expenseTotal = expenseTotal,
+            expenseId = txn.id,
+            merchant = (sheetDebit?.description?.takeIf { it.isNotBlank() }
+                ?: req.prior?.merchant?.takeIf { it.isNotBlank() }
+                ?: txn.merchant).removePrefix("[Void] "),
+            account = sheetDebit?.account?.takeIf { it.isNotBlank() } ?: txn.account,
+            dateSerial = sheetDebit?.dateSerial ?: txn.dateSerial,
+            timeSerial = sheetDebit?.timeSerial ?: txn.timeSerial,
+            exactLinkedPayable = exact?.candidate,
+            allPayableCandidates = tabDebts.map { it.toCandidate(voidTab) },
+            category = sheetDebit?.category?.takeIf { it.isNotBlank() } ?: txn.category
+        )
+        if (decision is com.financeautomation.domain.model.VoidDecision.Block) {
+            return VoidDelivery.Blocked(decision.reason, exact)
+        }
+        val debtToVoid: SheetDebt? = if (decision is com.financeautomation.domain.model.VoidDecision.VoidBoth) {
+            exact ?: tabDebts.first { it.rowNumber == decision.sheetRowIndex }.let { row ->
+                val isV1 = payableRowIsV1(sheets, spreadsheetId, voidTab, row.rowNumber, row.uuid.orEmpty())
+                SheetDebt(row.toCandidate(voidTab), voidTab, row.rowNumber, isV1)
+            }
+        } else {
+            null
+        }
+        // The decision did not block, so any debt noted for this expense is voided now, already void or gone
+        val localDebtIds = listOfNotNull(req.linkedPayableId, exact?.candidate?.uuid, debtToVoid?.candidate?.uuid)
+            .filter { it.isNotBlank() }.toSet()
+
+        // 4. One write call, so the expense and its debt change together or not at all
+        val wrote: Boolean
+        if (req.deleteSheetRow) {
+            val ranges = mutableListOf<String>()
+            if (targetRow != null) {
+                ranges.add(if (debitIsV1) "'$voidTab'!A$targetRow:K$targetRow" else "'$voidTab'!A$targetRow:L$targetRow")
+                val idColumn = if (debitIsV1) SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1 else SheetSchemaConstants.COL_LETTER_DEBIT_UUID
+                ranges.add("'$voidTab'!$idColumn$targetRow")
+            }
+            if (debtToVoid != null) {
+                val tab = debtToVoid.tab
+                val row = debtToVoid.row
+                ranges.add(if (debtToVoid.isV1) "'$tab'!V$row:AB$row" else "'$tab'!W$row:AC$row")
+                val idColumn = if (debtToVoid.isV1) SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1 else SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
+                ranges.add("'$tab'!$idColumn$row")
+            }
+            wrote = ranges.isNotEmpty()
+            if (wrote) sheets.batchClearValues(spreadsheetId, ranges).orFail()
+        } else {
+            val edits = mutableListOf<CellEdit>()
+            if (targetRow != null) {
+                val debit = LedgerDebit(
+                    tab = voidTab,
+                    row = targetRow,
+                    uuid = txn.id,
+                    dateSerial = txn.dateSerial,
+                    timeSerial = txn.timeSerial,
+                    account = txn.account,
+                    item = sheetDebit?.description?.takeIf { it.isNotBlank() } ?: txn.merchant,
+                    tripTag = txn.tripTag,
+                    category = txn.category,
+                    total = expenseTotal,
+                    companions = txn.companions,
+                    myShare = txn.myShare,
+                    owed = txn.owedToMe,
+                    status = txn.status.value
+                )
+                edits.addAll(voidTransactionUseCase.voidDebit(debit).edits)
+            }
+            if (debtToVoid != null) {
+                val whatFor = debtToVoid.candidate.whatFor.removePrefix("[Void] ").trim()
+                if (debtToVoid.isV1) {
+                    edits.add(CellEdit(tab = debtToVoid.tab, row = debtToVoid.row, column = "Y", value = "[Void] $whatFor"))
+                    edits.add(CellEdit(tab = debtToVoid.tab, row = debtToVoid.row, column = "Z", value = 0.0))
+                    edits.add(CellEdit(tab = debtToVoid.tab, row = debtToVoid.row, column = "AB", value = "Void"))
+                } else {
+                    val payable = LedgerPayable(
+                        tab = debtToVoid.tab,
+                        row = debtToVoid.row,
+                        uuid = debtToVoid.candidate.uuid,
+                        dateIncurredSerial = debtToVoid.candidate.dateIncurredSerial,
+                        timeSerial = debtToVoid.candidate.timeSerial,
+                        paidBy = debtToVoid.candidate.paidBy,
+                        whatFor = whatFor,
+                        amountOwed = debtToVoid.candidate.amountIOwe,
+                        dateRepaidSerial = null,
+                        status = debtToVoid.candidate.repaymentStatus
+                    )
+                    edits.addAll(voidTransactionUseCase.voidPayable(payable).edits)
+                }
+            }
+            wrote = edits.isNotEmpty()
+            if (wrote) {
+                val updates = edits.associate { "'${it.tab}'!${it.column}${it.row}" to listOf(listOf(it.value)) }
+                sheets.batchUpdateValues(spreadsheetId, updates).orFail()
+            }
+        }
+        return VoidDelivery.Done(wrote, localDebtIds, targetRow)
+    }
+
+    /** Brings the local entry and its debts in line with a void the sheet accepted, also after a restore. */
+    private suspend fun applyDeliveredVoid(
+        id: String,
+        req: com.financeautomation.domain.model.VoidExpenseRequest,
+        done: VoidDelivery.Done
+    ) {
+        val tDao = resolveTransactionDao()
+        val pDao = resolvePayableDao()
+        runInDbTransaction {
+            if (req.deleteSheetRow) {
+                tDao.deleteById(id)
+                done.debtIds.forEach { pDao?.deleteByUuid(it) }
+            } else {
+                val current = tDao.getById(id)
+                if (current != null) {
+                    tDao.voidTransaction(id, "[Void] ${current.merchant.removePrefix("[Void] ")}")
+                    tDao.updateSyncState(id, SyncState.VOID.name, done.row ?: current.sheetRowIndex)
+                }
+                done.debtIds.forEach { debtId ->
+                    val debt = pDao?.getByUuid(debtId)
+                    if (debt != null) {
+                        pDao?.upsert(
+                            debt.copy(
+                                repaymentStatus = "Void",
+                                amountIOwe = 0.0,
+                                whatFor = "[Void] ${debt.whatFor.removePrefix("[Void] ")}"
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /** Puts the entry and its debt back as they were before a void that will not reach the sheet. */
+    private suspend fun restoreBeforeVoid(id: String, req: com.financeautomation.domain.model.VoidExpenseRequest) {
+        val prior = req.prior ?: return
+        val tDao = resolveTransactionDao()
+        val pDao = resolvePayableDao()
+        runInDbTransaction {
+            val current = tDao.getById(id)
+            if (current != null) {
+                tDao.update(
+                    current.copy(
+                        totalAmount = prior.totalAmount,
+                        myShare = prior.myShare,
+                        owedToMe = prior.owedToMe,
+                        status = prior.status,
+                        merchant = prior.merchant,
+                        syncState = prior.syncState,
+                        reviewState = prior.reviewState
+                    )
+                )
+            }
+            val debt = prior.debtId?.let { pDao?.getByUuid(it) }
+            if (debt != null) {
+                pDao?.upsert(
+                    debt.copy(amountIOwe = prior.debtAmount, repaymentStatus = prior.debtStatus, whatFor = prior.debtWhatFor)
+                )
+            }
+        }
+    }
+
+    /** The sheet refused the void: the local rows go back, the debt takes the sheet's values, the user is told. */
+    private suspend fun undoBlockedVoid(
+        id: String,
+        req: com.financeautomation.domain.model.VoidExpenseRequest,
+        blocked: VoidDelivery.Blocked
+    ) {
+        restoreBeforeVoid(id, req)
+        val onSheet = blocked.debt?.candidate
+        if (onSheet != null) {
+            val pDao = resolvePayableDao()
+            val local = pDao?.getByUuid(onSheet.uuid)
+            if (local != null) {
+                pDao?.upsert(
+                    local.copy(
+                        amountIOwe = onSheet.amountIOwe,
+                        repaymentStatus = onSheet.repaymentStatus,
+                        whatFor = onSheet.whatFor
+                    )
+                )
+            }
+        }
+        preferencesRepository?.setPreference(PreferencesRepository.KEY_VOID_BLOCKED_NOTICE, blocked.reason.name, isDirty = false)
+        Diagnostics.record("VoidFriendPaid", "Void blocked at sync: reason=${blocked.reason.name}")
+    }
+
+    override suspend fun takeVoidBlockedNotice(): com.financeautomation.domain.model.VoidDecision.BlockReason? =
+        withContext(ioDispatcher) {
+            val saved = preferencesRepository?.getPreference(PreferencesRepository.KEY_VOID_BLOCKED_NOTICE)
+            if (saved.isNullOrBlank()) return@withContext null
+            preferencesRepository?.setPreference(PreferencesRepository.KEY_VOID_BLOCKED_NOTICE, null, isDirty = false)
+            com.financeautomation.domain.model.VoidDecision.BlockReason.entries.firstOrNull { it.name == saved }
+        }
+
+    private var lastVoidIncludedDebtHolder = false
+
+    override fun consumeLastVoidIncludedDebt(): Boolean {
+        val included = lastVoidIncludedDebtHolder
+        lastVoidIncludedDebtHolder = false
+        return included
     }
 
     private var lastVoidNoticeHolder: String? = null
@@ -926,19 +1261,33 @@ class TransactionRepositoryImpl(
                 "[Void] ${existing.merchant}"
             }
 
-            // Check if there is a linked OP_LOG_PAYABLE queue item for "Friend paid for me"
+            lastVoidIncludedDebtHolder = false
             val allQueued = qDao.getAllQueueFlow().first()
-            val linkedPayId = AccountingUtils.linkedPayableIdForExpense(id)
-            val queuedPayable = allQueued.firstOrNull {
-                it.operationType == SyncQueueEntity.OP_LOG_PAYABLE && (
-                    it.transactionId == linkedPayId ||
-                    (it.payloadJson != null && it.payloadJson.contains(id))
-                )
+            val previousVoids = allQueued.filter { it.operationType == SyncQueueEntity.OP_VOID && it.transactionId == id }
+            val waitingVoid = previousVoids.firstOrNull { it.status != SyncQueueEntity.STATUS_FAILED }
+            if (waitingVoid != null && existing.status.equals(TransactionStatus.VOID.value, ignoreCase = true)) {
+                // Already on its way, and decided then. Only a newly ticked delete box changes it.
+                val waiting = AccountingRequestJsonAdapter.voidExpenseRequestFromJson(waitingVoid.payloadJson)
+                if (deleteSheetRow && !waiting.deleteSheetRow) {
+                    qDao.deleteById(waitingVoid.id)
+                    qDao.insert(
+                        SyncQueueEntity(
+                            transactionId = id,
+                            operationType = SyncQueueEntity.OP_VOID,
+                            payloadJson = AccountingRequestJsonAdapter.voidExpenseRequestToJson(waiting.copy(deleteSheetRow = true))
+                        )
+                    )
+                }
+                requestSync()
+                return Result.Success(Unit)
             }
+
+            val linkedPayId = AccountingUtils.linkedPayableIdForExpense(id)
+            val queuedPayable = queuedPayableFor(id, allQueued)
             val pDao = resolvePayableDao()
             val allPayables = pDao?.getAll() ?: emptyList()
-            val exactLinked = if (linkedPayId != null) allPayables.firstOrNull { it.uuid == linkedPayId }?.toCandidate() else null
-            val allCandidates = allPayables.map { it.toCandidate() }
+            val exactLinked = (allPayables.firstOrNull { it.uuid == linkedPayId }
+                ?: allPayables.firstOrNull { it.uuid == queuedPayable?.transactionId })?.toCandidate()
 
             val decision = com.financeautomation.domain.usecase.VoidDecisionEngine.decide(
                 expenseTotal = existing.totalAmount,
@@ -948,9 +1297,10 @@ class TransactionRepositoryImpl(
                 dateSerial = existing.dateSerial,
                 timeSerial = existing.timeSerial,
                 exactLinkedPayable = exactLinked,
-                allPayableCandidates = allCandidates,
-                hasQueuedPayableWithoutPlan = queuedPayable != null && queuedPayable.planJson == null,
-                hasQueuedPayableWithPlan = queuedPayable != null && queuedPayable.planJson != null
+                allPayableCandidates = allPayables.map { it.toCandidate() },
+                category = existing.category,
+                queuedPayableId = queuedPayable?.transactionId,
+                queuedDeliveryNets = queuedPayable != null && deliveryNetsDebt(queuedPayable, existing.totalAmount)
             )
 
             if (decision is com.financeautomation.domain.model.VoidDecision.Block) {
@@ -961,6 +1311,7 @@ class TransactionRepositoryImpl(
                 )
                 return Result.Error(com.financeautomation.domain.model.VoidBlockedException(decision.reason))
             }
+            lastVoidIncludedDebtHolder = decision is com.financeautomation.domain.model.VoidDecision.VoidBoth
 
             val hasPendingStandardInsert = existing.sheetRowIndex == null &&
                 allQueued.any {
@@ -997,7 +1348,24 @@ class TransactionRepositoryImpl(
             }
 
             var linkedUntouchedPayId: String? = null
+            val debtBefore = (decision as? com.financeautomation.domain.model.VoidDecision.VoidBoth)
+                ?.let { pDao?.getByUuid(it.payableId) }
+            val prior = com.financeautomation.domain.model.VoidPriorState(
+                totalAmount = existing.totalAmount,
+                myShare = existing.myShare,
+                owedToMe = existing.owedToMe,
+                status = existing.status,
+                merchant = existing.merchant,
+                syncState = existing.syncState,
+                reviewState = existing.reviewState,
+                debtId = debtBefore?.uuid,
+                debtAmount = debtBefore?.amountIOwe ?: 0.0,
+                debtStatus = debtBefore?.repaymentStatus.orEmpty(),
+                debtWhatFor = debtBefore?.whatFor.orEmpty()
+            )
             runInDbTransaction {
+                // A void that failed earlier is replaced by this one
+                previousVoids.forEach { qDao.deleteById(it.id) }
                 if (decision is com.financeautomation.domain.model.VoidDecision.VoidBoth) {
                     val debt = pDao?.getByUuid(decision.payableId)
                     linkedUntouchedPayId = decision.payableId
@@ -1017,7 +1385,8 @@ class TransactionRepositoryImpl(
                 val req = com.financeautomation.domain.model.VoidExpenseRequest(
                     id = id,
                     deleteSheetRow = deleteSheetRow,
-                    linkedPayableId = linkedUntouchedPayId
+                    linkedPayableId = linkedUntouchedPayId,
+                    prior = prior
                 )
                 val queueItem = SyncQueueEntity(
                     transactionId = id,
@@ -1102,6 +1471,11 @@ class TransactionRepositoryImpl(
                     if (isLoggedEntry && queued.isNotEmpty()) {
                         if (id.startsWith("pay_")) {
                             val qItem = queued.first()
+                            if (qItem.planJson != null) {
+                                val expenseId = AccountingRequestJsonAdapter.payableRequestFromJson(qItem.payloadJson).transactionId
+                                    ?: return@withSyncLock Result.Error(IllegalStateException("The linked expense is unknown"))
+                                return@withSyncLock voidTransactionLocked(expenseId)
+                            }
                             try {
                                 val payReq = AccountingRequestJsonAdapter.payableRequestFromJson(qItem.payloadJson)
                                 payReq.transactionId?.let { tid ->
@@ -1682,8 +2056,16 @@ class TransactionRepositoryImpl(
 
                 val txn = txnEntity.toDomain()
 
+                // A void must not run while the expense and debt it voids are still being delivered: it would find
+                // them missing or half written, and the delivery would then bring them back
+                if (item.operationType == SyncQueueEntity.OP_VOID &&
+                    queuedPayableFor(item.transactionId, syncQueueDao.getAllQueueFlow().first()) != null
+                ) {
+                    continue
+                }
+
                 // Skip unconfirmed transactions awaiting user review
-                if (txn.reviewState == ReviewState.NEEDS_REVIEW) {
+                if (txn.reviewState == ReviewState.NEEDS_REVIEW && item.operationType != SyncQueueEntity.OP_VOID) {
                     continue
                 }
 
@@ -1963,266 +2345,19 @@ class TransactionRepositoryImpl(
                     }
                     SyncQueueEntity.OP_VOID -> {
                         val voidReq = AccountingRequestJsonAdapter.voidExpenseRequestFromJson(item.payloadJson)
-                        val deleteSheetRow = voidReq.deleteSheetRow
-
-                        if (deleteSheetRow) {
-                            val cachedRow = txn.sheetRowIndex
-                            var targetRow: Int? = null
-
-                            if (cachedRow != null && cachedRow >= 4) {
-                                val cellUuidRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID}$cachedRow")
-                                if (cellUuidRes is Result.Success && cellUuidRes.data.equals(txn.id, ignoreCase = true)) {
-                                    targetRow = cachedRow
-                                } else {
-                                    val v1Res = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$cachedRow")
-                                    if (v1Res is Result.Success && v1Res.data.equals(txn.id, ignoreCase = true)) {
-                                        targetRow = cachedRow
-                                    }
-                                }
-                            }
-
-                            var voidTab = tabName
-                            if (targetRow == null) {
-                                val scanRes = findDebitRow(spreadsheetId, tabName, txn.id)
-                                if (scanRes is Result.Error) {
-                                    if (failItem(item, txn, scanRes.exception, st)) break else continue
-                                }
-                                targetRow = (scanRes as Result.Success).data
-                            }
-
-                            if (targetRow == null) {
-                                // Not in the computed month tab: the date may have been edited across a month. Look in every month tab.
-                                val tabsRes = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
-                                if (tabsRes is Result.Error) {
-                                    if (failItem(item, txn, tabsRes.exception, st)) break else continue
-                                }
-                                var failure: Throwable? = null
-                                for (other in (tabsRes as Result.Success).data.keys.filter { it != tabName && MONTH_TAB_PATTERN.matches(it) }) {
-                                    val r = findDebitRow(spreadsheetId, other, txn.id)
-                                    if (r is Result.Error) {
-                                        failure = r.exception
-                                        break
-                                    }
-                                    val found = (r as Result.Success).data
-                                    if (found != null) {
-                                        voidTab = other
-                                        targetRow = found
-                                        break
-                                    }
-                                }
-                                if (failure != null) {
-                                    if (failItem(item, txn, failure, st)) break else continue
-                                }
-                            }
-
-                            if (targetRow == null) {
-                                transactionDao.deleteById(txn.id)
+                        // A plan stored by an older build is not reused: its row numbers may point at other rows now
+                        when (val outcome = deliverVoid(googleSheetsClient, spreadsheetId, tabName, txn, voidReq)) {
+                            is VoidDelivery.Done -> {
+                                applyDeliveredVoid(txn.id, voidReq, outcome)
                                 syncQueueDao.delete(item)
-                                continue
+                                if (outcome.wrote) syncedCount++
                             }
-
-                            val isV1 = googleSheetsClient.getCellString(spreadsheetId, voidTab, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$targetRow")
-                                .let { it is Result.Success && it.data.equals(txn.id, ignoreCase = true) }
-                            val expenseRange = if (isV1) "'$voidTab'!A$targetRow:K$targetRow" else "'$voidTab'!A$targetRow:L$targetRow"
-                            val uuidRange = if (isV1) "'$voidTab'!${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$targetRow" else "'$voidTab'!${SheetSchemaConstants.COL_LETTER_DEBIT_UUID}$targetRow"
-                            val rangesToClear = mutableListOf(expenseRange, uuidRange)
-
-                            val pDao = resolvePayableDao()
-                            val targetPayId = voidReq.linkedPayableId ?: AccountingUtils.linkedPayableIdForExpense(txn.id)
-                            val linkedPayable = if (targetPayId != null) pDao?.getByUuid(targetPayId) else {
-                                val match = findLinkedPayable(txn)
-                                if (match is LinkedPayableMatch.Exact) match.payable else null
-                            }
-                            val effectivePayId = voidReq.linkedPayableId ?: linkedPayable?.uuid
-                            val shouldClearPayable = voidReq.linkedPayableId != null || (linkedPayable != null && isUntouchedDebt(linkedPayable, txn.totalAmount))
-                            if (shouldClearPayable && effectivePayId != null) {
-                                val prefTab = linkedPayable?.tabName.orEmpty()
-                                val payFindRes = findPayableRowAndTab(spreadsheetId, prefTab, effectivePayId)
-                                if (payFindRes is Result.Error) {
-                                    if (failItem(item, txn, payFindRes.exception, st)) break else continue
-                                }
-                                val foundPay = (payFindRes as Result.Success).data
-                                if (foundPay != null) {
-                                    val (pTab, pRow) = foundPay
-                                    val isPayV1 = googleSheetsClient.getCellString(spreadsheetId, pTab, "${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1}$pRow")
-                                        .let { it is Result.Success && it.data.equals(effectivePayId, ignoreCase = true) }
-                                    val payRange = if (isPayV1) "'$pTab'!V$pRow:AB$pRow" else "'$pTab'!W$pRow:AC$pRow"
-                                    val payUuidRange = if (isPayV1) "'$pTab'!${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1}$pRow" else "'$pTab'!${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID}$pRow"
-                                    rangesToClear.add(payRange)
-                                    rangesToClear.add(payUuidRange)
-                                }
-                            }
-
-                            val clearRes = googleSheetsClient.batchClearValues(spreadsheetId, rangesToClear)
-                            if (clearRes is Result.Success) {
-                                transactionDao.deleteById(txn.id)
-                                if (effectivePayId != null && shouldClearPayable) {
-                                    pDao?.deleteByUuid(effectivePayId)
-                                }
+                            is VoidDelivery.Blocked -> {
+                                undoBlockedVoid(txn.id, voidReq, outcome)
                                 syncQueueDao.delete(item)
-                                syncedCount++
-                            } else {
-                                val err = (clearRes as Result.Error).exception
-                                if (failItem(item, txn, err, st)) break else continue
                             }
-                        } else {
-                            val plan: AccountingPlan
-                            if (item.planJson != null) {
-                                plan = AccountingPlanJsonAdapter.fromJson(item.planJson)
-                            } else {
-                                val cachedRow = txn.sheetRowIndex
-                                var targetRow: Int? = null
-
-                                if (cachedRow != null && cachedRow >= 4) {
-                                    val cellUuidRes = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID}$cachedRow")
-                                    if (cellUuidRes is Result.Success && cellUuidRes.data.equals(txn.id, ignoreCase = true)) {
-                                        targetRow = cachedRow
-                                    } else {
-                                        val v1Res = googleSheetsClient.getCellString(spreadsheetId, tabName, "${SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1}$cachedRow")
-                                        if (v1Res is Result.Success && v1Res.data.equals(txn.id, ignoreCase = true)) {
-                                            targetRow = cachedRow
-                                        }
-                                    }
-                                }
-
-                                var voidTab = tabName
-                                if (targetRow == null) {
-                                    val scanRes = findDebitRow(spreadsheetId, tabName, txn.id)
-                                    if (scanRes is Result.Error) {
-                                        if (failItem(item, txn, scanRes.exception, st)) break else continue
-                                    }
-                                    targetRow = (scanRes as Result.Success).data
-                                }
-
-                                if (targetRow == null) {
-                                    // Not in the computed month tab: the date may have been edited across a month. Look in every month tab.
-                                    val tabsRes = googleSheetsClient.getSheetTabsWithIds(spreadsheetId)
-                                    if (tabsRes is Result.Error) {
-                                        if (failItem(item, txn, tabsRes.exception, st)) break else continue
-                                    }
-                                    var failure: Throwable? = null
-                                    for (other in (tabsRes as Result.Success).data.keys.filter { it != tabName && MONTH_TAB_PATTERN.matches(it) }) {
-                                        val r = findDebitRow(spreadsheetId, other, txn.id)
-                                        if (r is Result.Error) {
-                                            failure = r.exception
-                                            break
-                                        }
-                                        val found = (r as Result.Success).data
-                                        if (found != null) {
-                                            voidTab = other
-                                            targetRow = found
-                                            break
-                                        }
-                                    }
-                                    if (failure != null) {
-                                        if (failItem(item, txn, failure, st)) break else continue
-                                    }
-                                }
-
-                                if (targetRow == null) {
-                                    // Found in no month tab (for example the old workbook was replaced): there is nothing to void
-                                    transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
-                                    syncQueueDao.delete(item)
-                                    continue
-                                }
-
-                                val debit = LedgerDebit(
-                                    tab = voidTab,
-                                    row = targetRow,
-                                    uuid = txn.id,
-                                    dateSerial = txn.dateSerial,
-                                    timeSerial = txn.timeSerial,
-                                    account = txn.account,
-                                    item = txn.merchant,
-                                    tripTag = txn.tripTag,
-                                    category = txn.category,
-                                    total = txn.totalAmount,
-                                    companions = txn.companions,
-                                    myShare = txn.myShare,
-                                    owed = txn.owedToMe,
-                                    status = txn.status.value
-                                )
-                                val debitPlan = voidTransactionUseCase.voidDebit(debit)
-                                val allEdits = debitPlan.edits.toMutableList()
-
-                                val pDao = resolvePayableDao()
-                                val targetPayId = voidReq.linkedPayableId ?: AccountingUtils.linkedPayableIdForExpense(txn.id)
-                                val linkedPayable = if (targetPayId != null) pDao?.getByUuid(targetPayId) else {
-                                    val match = findLinkedPayable(txn)
-                                    if (match is LinkedPayableMatch.Exact) match.payable else null
-                                }
-                                val effectivePayId = voidReq.linkedPayableId ?: linkedPayable?.uuid
-                                val shouldVoidPayable = voidReq.linkedPayableId != null || (linkedPayable != null && isUntouchedDebt(linkedPayable, txn.totalAmount))
-                                if (shouldVoidPayable && effectivePayId != null) {
-                                    val prefTab = linkedPayable?.tabName.orEmpty()
-                                    val payFindRes = findPayableRowAndTab(spreadsheetId, prefTab, effectivePayId)
-                                    if (payFindRes is Result.Error) {
-                                        if (failItem(item, txn, payFindRes.exception, st)) break else continue
-                                    }
-                                    val foundPay = (payFindRes as Result.Success).data
-                                    if (foundPay != null) {
-                                        val (pTab, pRow) = foundPay
-                                        val isPayV1 = googleSheetsClient.getCellString(spreadsheetId, pTab, "${SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1}$pRow")
-                                            .let { it is Result.Success && it.data.equals(effectivePayId, ignoreCase = true) }
-                                        val rawWhat = linkedPayable?.whatFor ?: txn.merchant
-                                        val cleanWhat = rawWhat.removePrefix("[Void] ").trim()
-                                        val voidWhat = "[Void] $cleanWhat"
-                                        val payPlan = if (isPayV1) {
-                                            AccountingPlan(
-                                                edits = listOf(
-                                                    CellEdit(tab = pTab, row = pRow, column = "Y", value = voidWhat),
-                                                    CellEdit(tab = pTab, row = pRow, column = "Z", value = 0.0),
-                                                    CellEdit(tab = pTab, row = pRow, column = "AB", value = "Void")
-                                                ),
-                                                message = "Voided payable in $pTab row $pRow (V1)"
-                                            )
-                                        } else {
-                                            val lp = LedgerPayable(
-                                                tab = pTab,
-                                                row = pRow,
-                                                uuid = effectivePayId,
-                                                dateIncurredSerial = linkedPayable?.dateIncurredSerial ?: txn.dateSerial,
-                                                timeSerial = linkedPayable?.timeSerial ?: txn.timeSerial,
-                                                paidBy = linkedPayable?.paidBy ?: "",
-                                                whatFor = cleanWhat,
-                                                amountOwed = linkedPayable?.amountIOwe ?: txn.totalAmount,
-                                                dateRepaidSerial = linkedPayable?.dateRepaidSerial,
-                                                status = linkedPayable?.repaymentStatus ?: "Pending"
-                                            )
-                                            voidTransactionUseCase.voidPayable(lp)
-                                        }
-                                        allEdits.addAll(payPlan.edits)
-                                    }
-                                }
-
-                                plan = AccountingPlan(edits = allEdits, message = "Voided debit and linked payable")
-                                val planJson = AccountingPlanJsonAdapter.toJson(plan)
-                                syncQueueDao.updatePlanJson(item.id, planJson)
-                            }
-
-                            val applyRes = applyPlan(spreadsheetId, plan)
-                            if (applyRes is Result.Success) {
-                                transactionDao.updateSyncState(txn.id, SyncState.VOID.name, txn.sheetRowIndex)
-                                val pDao = resolvePayableDao()
-                                val targetPayId = voidReq.linkedPayableId ?: AccountingUtils.linkedPayableIdForExpense(txn.id)
-                                val linkedPayable = if (targetPayId != null) pDao?.getByUuid(targetPayId) else {
-                                    val match = findLinkedPayable(txn)
-                                    if (match is LinkedPayableMatch.Exact) match.payable else null
-                                }
-                                val effectivePayId = voidReq.linkedPayableId ?: linkedPayable?.uuid
-                                val shouldVoidPayable = voidReq.linkedPayableId != null || (linkedPayable != null && isUntouchedDebt(linkedPayable, txn.totalAmount))
-                                if (shouldVoidPayable && effectivePayId != null) {
-                                    val rawWhat = linkedPayable?.whatFor ?: txn.merchant
-                                    val voidWhat = if (rawWhat.startsWith("[Void] ")) rawWhat else "[Void] $rawWhat"
-                                    linkedPayable?.let {
-                                        pDao?.upsert(it.copy(repaymentStatus = "Void", amountIOwe = 0.0, whatFor = voidWhat))
-                                    }
-                                }
-                                syncQueueDao.delete(item)
-                                syncedCount++
-                            } else {
-                                val err = (applyRes as Result.Error).exception
-                                if (failItem(item, txn, err, st)) break else continue
+                            is VoidDelivery.Failed -> {
+                                if (failItem(item, txn, outcome.error, st)) break else continue
                             }
                         }
                     }
@@ -2676,7 +2811,7 @@ class TransactionRepositoryImpl(
         if (missingTxns.isNotEmpty() || missingInflows.isNotEmpty() || missingPayables.isNotEmpty()) {
             val sheets = googleSheetsClient ?: return PruneResult(0, false)
             val rest = sheets.readLedgerSnapshot(spreadsheetId) { it.lowercase() !in readTabs }
-            if (rest !is Result.Success) return PruneResult(0, false)
+            if (rest !is Result.Success || !rest.data.isComplete) return PruneResult(0, false)
             val elsewhere = rest.data.monthTabs.filter { it.tabName.lowercase() !in readTabs }.flatMap { month ->
                 month.debits.mapNotNull { it.uuid } + month.inflows.mapNotNull { it.uuid } +
                     month.payables.mapNotNull { it.uuid }
@@ -2895,14 +3030,23 @@ class TransactionRepositoryImpl(
         }
         val isMissingTab = err is com.financeautomation.data.remote.SheetNotFoundException ||
             err.message?.contains("unable to parse range", ignoreCase = true) == true
+        val stopRun: Boolean
         if (isTransportOrServerError(err) || isMissingTab) {
             st.transportFailure = true
             st.failedIds.add(item.transactionId)
             if (txn != null) markTransportFailure(item, txn, err) else handleItemTransportFailure(item, err)
-            return isRunWideFailure(err)
+            stopRun = isRunWideFailure(err)
+        } else {
+            markPermanentFailure(item, err)
+            stopRun = false
         }
-        markPermanentFailure(item, err)
-        return false
+        if (item.operationType == SyncQueueEntity.OP_VOID &&
+            qDao.getById(item.id)?.status == SyncQueueEntity.STATUS_FAILED
+        ) {
+            // Until a retry succeeds the sheet still shows the entry, so this device shows it too
+            restoreBeforeVoid(item.transactionId, AccountingRequestJsonAdapter.voidExpenseRequestFromJson(item.payloadJson))
+        }
+        return stopRun
     }
 
     /**

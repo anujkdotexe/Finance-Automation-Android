@@ -835,6 +835,211 @@ class VoidFriendPaidTest {
         assertTrue("OP_VOID must be queued after it", queueAfter.any { it.transactionId == txnId && it.operationType == SyncQueueEntity.OP_VOID })
     }
 
+    // === The decision is made again from the sheet before anything is written ===
+
+    private suspend fun deliveredFriendPaid(): Triple<String, String, Pair<Int, Int>> {
+        val payId = (repo.logFriendPaid("Riya", 500.0, "Dinner", nowMillis) as Result.Success).data
+        val txnId = AccountingUtils.linkedExpenseIdForPayable(payId)!!
+        repo.syncPendingTransactions(userInitiated = true)
+        fun rowOf(column: String, id: String) =
+            (4..40).first { fakeSheet.getCell(currentTab, it, column) == id }
+        val rows = rowOf(SheetSchemaConstants.COL_LETTER_DEBIT_UUID, txnId) to
+            rowOf(SheetSchemaConstants.COL_LETTER_PAYABLE_UUID, payId)
+        return Triple(txnId, payId, rows)
+    }
+
+    private fun sheetPart(row: Int, vararg columns: String) = columns.map { fakeSheet.getCell(currentTab, row, it) }
+
+    @Test
+    fun debtRepaidOnlyOnTheSheet_refusesTheWholeVoidAtSync_boxOffAndOn() = runBlocking {
+        for (deleteSheetRow in listOf(false, true)) {
+            setUp()
+            val (txnId, payId, rows) = deliveredFriendPaid()
+            // Repaid in part on the sheet; this device has not read it yet
+            setCell(currentTab, rows.second, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, 200.0)
+            val debitBefore = sheetPart(rows.first, "D", "G", "I", "K", SheetSchemaConstants.COL_LETTER_DEBIT_UUID)
+            val debtBefore = sheetPart(rows.second, "Z", "AA", "AC", SheetSchemaConstants.COL_LETTER_PAYABLE_UUID)
+
+            assertTrue(repo.voidTransaction(txnId, deleteSheetRow) is Result.Success)
+            repo.syncPendingTransactions(userInitiated = true)
+
+            assertEquals(debitBefore, sheetPart(rows.first, "D", "G", "I", "K", SheetSchemaConstants.COL_LETTER_DEBIT_UUID))
+            assertEquals(debtBefore, sheetPart(rows.second, "Z", "AA", "AC", SheetSchemaConstants.COL_LETTER_PAYABLE_UUID))
+            val local = tDao.getById(txnId)!!
+            assertEquals("Personal", local.status)
+            assertEquals(500.0, local.totalAmount, 0.001)
+            assertEquals(200.0, pDao.getByUuid(payId)!!.amountIOwe, 0.001)
+            assertTrue(qDao.getAllQueueFlow().first().none { it.operationType == SyncQueueEntity.OP_VOID })
+            assertEquals(
+                com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_PARTIALLY_OR_FULLY_REPAID,
+                repo.takeVoidBlockedNotice()
+            )
+            assertNull("the notice is shown once", repo.takeVoidBlockedNotice())
+        }
+    }
+
+    @Test
+    fun failedSheetRead_boxOff_failsTheItemAndWritesNothing() = runBlocking {
+        val (txnId, _, rows) = deliveredFriendPaid()
+        repo.voidTransaction(txnId, deleteSheetRow = false)
+        fakeSheet.forceFindRowError = true
+
+        assertTrue(repo.syncPendingTransactions(userInitiated = true) is Result.Error)
+
+        assertEquals("Dinner", fakeSheet.getCell(currentTab, rows.first, "D"))
+        assertEquals("Pending", fakeSheet.getCell(currentTab, rows.second, "AC"))
+        assertTrue(qDao.getAllPending().any { it.operationType == SyncQueueEntity.OP_VOID })
+    }
+
+    @Test
+    fun writeThatFailsForGood_putsTheLocalRowsBack_andARetryVoidsBoth() = runBlocking {
+        val (txnId, payId, rows) = deliveredFriendPaid()
+        repo.voidTransaction(txnId, deleteSheetRow = false)
+        fakeSheet.forceValueWriteStatus = 400
+
+        repo.syncPendingTransactions(userInitiated = true)
+
+        val failed = qDao.getAllQueueFlow().first().single { it.operationType == SyncQueueEntity.OP_VOID }
+        assertEquals(SyncQueueEntity.STATUS_FAILED, failed.status)
+        assertEquals("Personal", tDao.getById(txnId)!!.status)
+        assertEquals(500.0, tDao.getById(txnId)!!.totalAmount, 0.001)
+        assertEquals("Pending", pDao.getByUuid(payId)!!.repaymentStatus)
+        assertEquals(500.0, pDao.getByUuid(payId)!!.amountIOwe, 0.001)
+
+        fakeSheet.forceValueWriteStatus = null
+        qDao.resetQueueItem(failed.id)
+        repo.syncPendingTransactions(userInitiated = true)
+
+        assertEquals("Void", fakeSheet.getCell(currentTab, rows.first, "K"))
+        assertEquals("Void", fakeSheet.getCell(currentTab, rows.second, "AC"))
+        assertEquals("Void", tDao.getById(txnId)!!.status)
+        assertEquals("Void", pDao.getByUuid(payId)!!.repaymentStatus)
+    }
+
+    @Test
+    fun planStoredByAnEarlierAttemptNeverWritesToAnotherEntrysRow() = runBlocking {
+        val (txnId, _, rows) = deliveredFriendPaid()
+        val otherRow = rows.first + 7
+        setCell(currentTab, otherRow, "D", "Someone else")
+        setCell(currentTab, otherRow, SheetSchemaConstants.COL_LETTER_DEBIT_UUID, "txn_other_entry")
+        repo.voidTransaction(txnId, deleteSheetRow = false)
+        val item = qDao.getAllQueueFlow().first().single { it.operationType == SyncQueueEntity.OP_VOID }
+        qDao.updatePlanJson(
+            item.id,
+            com.financeautomation.data.remote.AccountingPlanJsonAdapter.toJson(
+                AccountingPlan(edits = listOf(CellEdit(currentTab, otherRow, "D", "[Void] Dinner")))
+            )
+        )
+
+        repo.syncPendingTransactions(userInitiated = true)
+
+        assertEquals("Someone else", fakeSheet.getCell(currentTab, otherRow, "D"))
+        assertEquals("Void", fakeSheet.getCell(currentTab, rows.first, "K"))
+    }
+
+    @Test
+    fun plannedDeliveryThatNetsTheDebt_blocksTheVoidAndKeepsTheQueue() = runBlocking {
+        val payId = (repo.logFriendPaid("Riya", 600.0, "Hotel", nowMillis) as Result.Success).data
+        val txnId = AccountingUtils.linkedExpenseIdForPayable(payId)!!
+        val item = qDao.getAllQueueFlow().first().single()
+        val netted = AccountingPlan(
+            appends = listOf(
+                com.financeautomation.domain.model.NewRow(
+                    com.financeautomation.domain.model.TableType.PAYABLE, currentTab, payId,
+                    listOf(fixedDateSerial, fixedTimeSerial, "Riya", "Hotel (Other)", 250.0, "", "Pending")
+                )
+            )
+        )
+        qDao.updatePlanJson(item.id, com.financeautomation.data.remote.AccountingPlanJsonAdapter.toJson(netted))
+
+        val result = repo.voidTransaction(txnId, deleteSheetRow = false)
+
+        assertEquals(
+            com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_OFFSET,
+            ((result as Result.Error).exception as com.financeautomation.domain.model.VoidBlockedException).reason
+        )
+        assertEquals("Personal", tDao.getById(txnId)!!.status)
+        assertEquals(listOf(SyncQueueEntity.OP_LOG_PAYABLE), qDao.getAllQueueFlow().first().map { it.operationType })
+    }
+
+    @Test
+    fun voidWaitsWhileTheDeliveryItVoidsIsUnfinished() = runBlocking {
+        val payId = (repo.logFriendPaid("Riya", 300.0, "Lunch", nowMillis) as Result.Success).data
+        val txnId = AccountingUtils.linkedExpenseIdForPayable(payId)!!
+        val item = qDao.getAllQueueFlow().first().single()
+        qDao.updatePlanJson(item.id, """{"edits":[],"message":"Planned"}""")
+        qDao.setStatusError(item.id, SyncQueueEntity.STATUS_FAILED, 999, "UNKNOWN", "stopped half way")
+        repo.voidTransaction(txnId, deleteSheetRow = false)
+
+        repo.syncPendingTransactions(userInitiated = true)
+
+        assertEquals(
+            listOf(SyncQueueEntity.OP_LOG_PAYABLE, SyncQueueEntity.OP_VOID),
+            qDao.getAllQueueFlow().first().sortedBy { it.id }.map { it.operationType }
+        )
+    }
+
+    @Test
+    fun undoOfAHalfDeliveredFriendPaidSaveKeepsTheDelivery() = runBlocking {
+        val payId = (repo.logFriendPaid("Riya", 300.0, "Lunch", nowMillis) as Result.Success).data
+        val item = qDao.getAllQueueFlow().first().single()
+        qDao.updatePlanJson(item.id, """{"edits":[],"message":"Planned"}""")
+
+        assertTrue(repo.undoRecentSave(payId) is Result.Success)
+
+        val queued = qDao.getAllQueueFlow().first().map { it.operationType }
+        assertTrue(queued.contains(SyncQueueEntity.OP_LOG_PAYABLE))
+        assertTrue(queued.contains(SyncQueueEntity.OP_VOID))
+    }
+
+    @Test
+    fun oldDebtThatDoesNotNameItsExpenseCreditor_blocksInsteadOfBeingLeftBehind() = runBlocking {
+        val txnId = "txn_old_free_text"
+        tDao.insert(TransactionEntity(
+            id = txnId, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Other", merchant = "Dinner", tripTag = "", category = "Other",
+            totalAmount = 500.0, companions = "Personal", myShare = 500.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 4
+        ))
+        pDao.upsert(PayableEntity(
+            uuid = "pay_unrelated_id", dateIncurredSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            paidBy = "Riya", whatFor = "Dinner (Other)", amountIOwe = 500.0, dateRepaidSerial = null,
+            repaymentStatus = "Pending", tabName = currentTab, sheetRowIndex = 4
+        ))
+
+        val result = repo.voidTransaction(txnId, deleteSheetRow = false)
+
+        assertEquals(
+            com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH,
+            ((result as Result.Error).exception as com.financeautomation.domain.model.VoidBlockedException).reason
+        )
+        assertTrue(qDao.getAllQueueFlow().first().isEmpty())
+    }
+
+    @Test
+    fun legacyMatchingHasNoPartialShortcuts_andKnowsTheNoDescriptionShape() {
+        fun match(merchant: String, account: String, paidBy: String, whatFor: String, category: String = "Other") =
+            AccountingUtils.matchLegacyPayable(
+                fixedDateSerial, fixedTimeSerial, paidBy, whatFor, fixedDateSerial, fixedTimeSerial,
+                merchant, account, category
+            )
+        // A creditor that is only part of the text ("Al" inside "Paid by Alice") does not agree
+        assertEquals(
+            AccountingUtils.LegacyDebtMatch.NONE,
+            match("Gift Paid by Alice", "HDFC", "Al", "Gift Paid by Alice")
+        )
+        assertEquals(
+            AccountingUtils.LegacyDebtMatch.NONE,
+            match("Cab (Riya)", "HDFC", "Riya", "Cab (Riya)")
+        )
+        // Logged without a description: the debt holds only the category
+        assertEquals(
+            AccountingUtils.LegacyDebtMatch.AGREES,
+            match("Paid by Riya", "Other", "Riya", "Food & Drink", "Food & Drink")
+        )
+    }
+
     // R5: Diagnostics never contains amounts, names or descriptions
     @Test
     fun r5_diagnostics_neverContainsAmountsNamesOrDescriptions() = runBlocking {

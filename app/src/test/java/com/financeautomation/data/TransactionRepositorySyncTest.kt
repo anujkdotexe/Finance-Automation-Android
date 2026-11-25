@@ -790,11 +790,24 @@ class TransactionRepositorySyncTest {
         qDao.insert(
             SyncQueueEntity(
                 transactionId = dinnerTxn.id,
-                operationType = SyncQueueEntity.OP_VOID, // Triggers applyPlan with planJson
-                payloadJson = dinnerTxn.id,
+                // A credit delivery applies its stored plan. A void no longer does: it reads the sheet again each time.
+                operationType = SyncQueueEntity.OP_LOG_CREDIT,
+                payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.creditRequestToJson(
+                    com.financeautomation.domain.model.LogCreditRequest(
+                        requestId = dinnerTxn.id,
+                        settler = "Charlie",
+                        amount = 175.0,
+                        account = "SBI",
+                        inflowType = "Friend settlement",
+                        reason = "Part payment",
+                        timestamp = 1794381000000L
+                    )
+                ),
                 planJson = planJson
             )
         )
+        // The stored plan's rows are found again by their ids before they are written (rows 4 down)
+        mock.serveIdColumns("Nov26", mapOf("AD" to listOf("", dinnerTxn.id, "", lunchTxn.id)))
 
         // Execute sync
         val syncRes = repo.syncPendingTransactions()

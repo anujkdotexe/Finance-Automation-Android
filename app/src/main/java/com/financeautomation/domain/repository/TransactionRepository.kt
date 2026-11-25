@@ -72,6 +72,12 @@ interface TransactionRepository {
      */
     fun consumeLastVoidBlockReason(): com.financeautomation.domain.model.VoidDecision.BlockReason? = null
 
+    /** True once if the last accepted void also voided a debt, so it must not be undone by restoring the expense alone. */
+    fun consumeLastVoidIncludedDebt(): Boolean = false
+
+    /** The reason of a void the sheet refused during sync and that was put back, returned once. */
+    suspend fun takeVoidBlockedNotice(): com.financeautomation.domain.model.VoidDecision.BlockReason? = null
+
     /**
      * Resolves a failed sync locally without writing to the sync queue.
      * When [voidIt] is true the transaction is marked Void (amounts kept) because it never reached the sheet;

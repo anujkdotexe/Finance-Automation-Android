@@ -301,6 +301,8 @@ interface PreferencesRepository {
         const val KEY_CARRY_DONE_MONTH: String = "key_carry_done_month"
         /** Year whose January carry, from the previous year's workbook, reached the sheet. Local to this device. */
         const val KEY_CARRY_YEAR_OPENED: String = "key_carry_year_opened"
+        /** Reason (enum name) of a void the sheet refused during sync, not yet shown to the user. */
+        const val KEY_VOID_BLOCKED_NOTICE: String = "key_void_blocked_notice"
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
         const val KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX: String = "last_workbook_verified_date_"

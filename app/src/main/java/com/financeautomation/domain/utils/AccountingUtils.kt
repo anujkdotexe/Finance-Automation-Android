@@ -218,14 +218,15 @@ object AccountingUtils {
     }
 
     /**
-     * Checks whether a candidate payable agrees with an expense for legacy matching.
-     * Both Creditor AND Description must strictly agree:
-     * 1. dateIncurredSerial == txDateSerial
-     * 2. timeSerial != null and abs(timeSerial - txTimeSerial) < 1.0 / 86400.0 (< 1 second)
-     * 3. Creditor agreement: non-empty creditor matches the expense creditor/account.
-     * 4. Description agreement: full description matches (no loose prefix or substring).
+     * How an old entry's debt, with an unrelated id, relates to an expense.
+     * AGREES: date, time within one second, description and creditor all agree.
+     * UNVERIFIED: date, time and description agree, and the expense (account "Other" or blank, free text) does not
+     * name a creditor at all. It could be this expense's debt, but cannot be identified safely.
+     * NONE: anything disagrees, or a value is empty.
      */
-    fun legacyPayableAgreesWithExpense(
+    enum class LegacyDebtMatch { AGREES, UNVERIFIED, NONE }
+
+    fun matchLegacyPayable(
         dateIncurredSerial: Int?,
         timeSerial: Double?,
         paidBy: String,
@@ -233,37 +234,37 @@ object AccountingUtils {
         txDateSerial: Int,
         txTimeSerial: Double,
         txMerchant: String,
-        txAccount: String = ""
-    ): Boolean {
-        if (dateIncurredSerial == null || dateIncurredSerial != txDateSerial) return false
-        if (timeSerial == null || kotlin.math.abs(timeSerial - txTimeSerial) >= LEGACY_TIME_SERIAL_TOLERANCE) return false
-
-        val cleanMerchant = txMerchant.removePrefix("[Void] ").trim()
-        val cleanWhatFor = whatFor.removePrefix("[Void] ").trim()
-        val cleanPaidBy = paidBy.trim()
-        val cleanAccount = txAccount.trim()
-
-        if (cleanPaidBy.isBlank() || cleanWhatFor.isBlank() || cleanMerchant.isBlank()) return false
-
-        // 1. Creditor agreement
-        val creditorAgrees = when {
-            cleanMerchant.startsWith("Paid by ", ignoreCase = true) -> {
-                val creditor = cleanMerchant.substring(8).trim()
-                eq(creditor, cleanPaidBy)
-            }
-            eq(cleanPaidBy, cleanAccount) -> true
-            cleanMerchant.endsWith("($cleanPaidBy)", ignoreCase = true) -> true
-            cleanMerchant.contains("Paid by $cleanPaidBy", ignoreCase = true) -> true
-            else -> false
+        txAccount: String = "",
+        txCategory: String = ""
+    ): LegacyDebtMatch {
+        if (dateIncurredSerial == null || dateIncurredSerial != txDateSerial) return LegacyDebtMatch.NONE
+        if (timeSerial == null || kotlin.math.abs(timeSerial - txTimeSerial) >= LEGACY_TIME_SERIAL_TOLERANCE) {
+            return LegacyDebtMatch.NONE
         }
-        if (!creditorAgrees) return false
 
-        // 2. Description agreement (exact or known standard suffix, never bare prefix like "Din" for "Dinner")
-        return eq(cleanWhatFor, cleanMerchant) ||
-            cleanWhatFor.equals("$cleanMerchant (Other)", ignoreCase = true) ||
-            cleanWhatFor.equals("$cleanMerchant (via Split)", ignoreCase = true) ||
-            cleanWhatFor.equals("$cleanMerchant ($cleanPaidBy)", ignoreCase = true) ||
-            (cleanWhatFor.equals("Paid by $cleanPaidBy", ignoreCase = true) && cleanMerchant.equals("Paid by $cleanPaidBy", ignoreCase = true))
+        val merchant = txMerchant.removePrefix("[Void] ").trim()
+        val what = whatFor.removePrefix("[Void] ").trim()
+        val creditor = paidBy.trim()
+        val account = txAccount.trim()
+        val category = txCategory.trim()
+        if (creditor.isBlank() || what.isBlank() || merchant.isBlank()) return LegacyDebtMatch.NONE
+
+        // Description: the whole text, or the text with a suffix the app writes. Never a prefix or a part of it.
+        val suffixes = listOf("Other", "via Split", creditor, category).filter { it.isNotBlank() }
+        val namesCreditor = eq(merchant, "Paid by $creditor")
+        val descriptionAgrees = eq(what, merchant) ||
+            suffixes.any { eq(what, "$merchant ($it)") } ||
+            // Logged without a description: the debt holds only the category
+            (namesCreditor && category.isNotBlank() && eq(what, category))
+        if (!descriptionAgrees) return LegacyDebtMatch.NONE
+
+        return when {
+            namesCreditor -> LegacyDebtMatch.AGREES
+            merchant.startsWith("Paid by ", ignoreCase = true) -> LegacyDebtMatch.NONE
+            eq(creditor, account) -> LegacyDebtMatch.AGREES
+            account.isBlank() || eq(account, "Other") -> LegacyDebtMatch.UNVERIFIED
+            else -> LegacyDebtMatch.NONE
+        }
     }
 }
 

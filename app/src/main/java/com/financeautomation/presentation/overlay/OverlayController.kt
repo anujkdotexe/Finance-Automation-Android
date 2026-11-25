@@ -303,7 +303,19 @@ class OverlayController(
                                                         transactionId = txnId,
                                                         onUndo = { id ->
                                                             mainScope.launch(ioDispatcher) {
-                                                                transactionRepository.undoRecentSave(id)
+                                                                val undo = transactionRepository.undoRecentSave(id)
+                                                                val blocked = (undo as? com.financeautomation.core.model.Result.Error)
+                                                                    ?.throwable as? com.financeautomation.domain.model.VoidBlockedException
+                                                                if (blocked != null) {
+                                                                    mainScope.launch {
+                                                                        resultPill.show(
+                                                                            appContext.getString(
+                                                                                com.financeautomation.presentation.components.VoidDialogUtils
+                                                                                    .blockMessageResId(blocked.reason)
+                                                                            )
+                                                                        )
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     )
