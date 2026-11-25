@@ -102,41 +102,42 @@ object DashboardFormulaBuilder {
         year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): String {
         val yy = (year % 100).toString().padStart(2, '0')
-        return """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNumber & "$yy" & "'!G4:G"), INDIRECT("'" & ${'$'}U$rowNumber & "$yy" & "'!D4:D"), "<>[Carried*"), 0)"""
+        return """=IFERROR(SUMIFS(INDIRECT("'" & ${'$'}U$rowNumber & "$yy" & "'!G4:G"), INDIRECT("'" & ${'$'}U$rowNumber & "$yy" & "'!D4:D"), "<>[Carried*", INDIRECT("'" & ${'$'}U$rowNumber & "$yy" & "'!D4:D"), "<>[Void]*"), 0)"""
     }
 
     /**
-     * Builds category spend SUMIF formula for category table row [rowNumber] (Z6 to Z15, referencing Y{rowNumber}).
+     * Builds category spend SUMIFS formula for category table row [rowNumber] (Z6 to Z15, referencing Y{rowNumber}).
+     * Excludes [Void] rows and [Carried* copies.
      */
     fun buildCategorySpendFormula(
         rowNumber: Int,
         year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): String {
         val yy = (year % 100).toString().padStart(2, '0')
-        return """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I")), 0)"""
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), Y$rowNumber, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Carried*"), 0)"""
     }
 
     /**
      * Category spend formula for the Insights table (Column V row [rowNum], referencing category in Column U).
-     * Excludes [Void] rows and trip-tagged rows (Column E blank).
+     * Excludes [Void] rows, [Carried* copies, and trip-tagged rows (Column E blank).
      */
     fun buildInsightCategorySpendFormula(
         rowNum: Int,
         year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): String {
         val yy = (year % 100).toString().padStart(2, '0')
-        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*"), 0)"""
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), U$rowNum, INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!E4:E"), "", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Carried*"), 0)"""
     }
 
     /**
      * Trips slice spend formula for the Insights table.
-     * Sums across tagged trip rows (Column E non-empty) excluding Void, Savings, Transfer.
+     * Sums across tagged trip rows (Column E non-empty) excluding Void, Carried copies, Savings, Transfer.
      */
     fun buildInsightTripSpendFormula(
         year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year
     ): String {
         val yy = (year % 100).toString().padStart(2, '0')
-        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Transfer"), 0)"""
+        return """=IFERROR(SUMIFS(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!I4:I"), INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!E4:E"), "?*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Void]*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!D4:D"), "<>[Carried*", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Savings", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!F4:F"), "<>Transfer"), 0)"""
     }
 
     /**
@@ -191,7 +192,7 @@ object DashboardFormulaBuilder {
     fun buildPaidThisYearFormula(year: Int, row1BasedIndex: Int): String {
         val tabs = monthTabsForYear(year)
         val terms = tabs.map { tab ->
-            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*", INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!D4:D"), "<>[Carried*"), 0)"""
         }
         return "=" + terms.joinToString(" + ")
     }
@@ -204,7 +205,7 @@ object DashboardFormulaBuilder {
     fun buildLastPaidDateFormula(year: Int, row1BasedIndex: Int): String {
         val tabs = monthTabsForYear(year)
         val innerTerms = tabs.joinToString(", ") { tab ->
-            """IFERROR(MAXIFS(INDIRECT("'$tab'!A4:A"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*"), 0)"""
+            """IFERROR(MAXIFS(INDIRECT("'$tab'!A4:A"), INDIRECT("'$tab'!F4:F"), "Subscriptions", INDIRECT("'$tab'!D4:D"), "*" & A$row1BasedIndex & "*", INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!D4:D"), "<>[Carried*"), 0)"""
         }
         return """=IFERROR(MAX($innerTerms), "")"""
     }
@@ -279,33 +280,51 @@ object DashboardFormulaBuilder {
     fun buildTripTotalPaidFormula(year: Int, row1BasedIndex: Int): String {
         val tabs = monthTabsForYear(year)
         val terms = tabs.map { tab ->
-            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!G4:G"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!D4:D"), "<>[Carried*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
         }
         return "=" + terms.joinToString(" + ")
     }
 
     /**
      * Builds the My Share formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
-     * Excludes [Void] rows, Savings, and Transfer by category text.
+     * Excludes [Void] rows, [Carried* copies, Savings, and Transfer by category text.
      */
     fun buildTripMyShareFormula(year: Int, row1BasedIndex: Int): String {
         val tabs = monthTabsForYear(year)
         val terms = tabs.map { tab ->
-            """IFERROR(SUMIFS(INDIRECT("'$tab'!I4:I"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!I4:I"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!D4:D"), "<>[Carried*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer", INDIRECT("'$tab'!F4:F"), "<>Refund"), 0)"""
         }
         return "=" + terms.joinToString(" + ")
     }
 
     /**
      * Builds the Owed To Me formula for row [row1BasedIndex] of the Trips tab across 12 month tabs of [year].
-     * Excludes [Void] rows, Savings, and Transfer by category text.
+     * Counts only rows with Status = 'Pending' (the amount that is open NOW), excluding [Void] rows, Savings, and Transfer.
      */
     fun buildTripOwedToMeFormula(year: Int, row1BasedIndex: Int): String {
         val tabs = monthTabsForYear(year)
         val terms = tabs.map { tab ->
-            """IFERROR(SUMIFS(INDIRECT("'$tab'!J4:J"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
+            """IFERROR(SUMIFS(INDIRECT("'$tab'!J4:J"), INDIRECT("'$tab'!E4:E"), A$row1BasedIndex, INDIRECT("'$tab'!K4:K"), "Pending", INDIRECT("'$tab'!D4:D"), "<>[Void]*", INDIRECT("'$tab'!F4:F"), "<>Savings", INDIRECT("'$tab'!F4:F"), "<>Transfer"), 0)"""
         }
         return "=" + terms.joinToString(" + ")
+    }
+
+    /**
+     * Builds the They Owe Me query formula for cell A27.
+     * Stacks current month and next month (if present), counting each open 'Pending' debt exactly once.
+     */
+    fun buildTheyOweMeQueryFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=IFERROR(QUERY(QUERY({INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"); INDIRECT("'" & TEXT(EDATE(TODAY(), 1), "mmm") & "$yy" & "'!A4:L")}, "SELECT Col8, Col7 - Col9, Col7 - Col9 - Col10, Col10, Col1 WHERE Col11 = 'Pending' AND Col10 > 0 AND Col8 != 'Personal' LABEL Col7 - Col9 '', Col7 - Col9 - Col10 ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), ""))"""
+    }
+
+    /**
+     * Builds the I Owe People query formula for cell H27.
+     * Stacks current month and next month (if present), counting each open 'Pending' or 'Partial' debt exactly once.
+     */
+    fun buildIOwePeopleQueryFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        return """=IFERROR(QUERY(QUERY({INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"); INDIRECT("'" & TEXT(EDATE(TODAY(), 1), "mmm") & "$yy" & "'!W4:AC")}, "SELECT Col3, Col5, Col1 WHERE (Col7 = 'Pending' OR Col7 = 'Partial') AND Col5 > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), ""))"""
     }
 
     /**
@@ -489,7 +508,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 0,  // Col A
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), "")"""
+                formula = buildTheyOweMeQueryFormula(year)
             )
         )
 
@@ -498,7 +517,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 26, // Row 27
                 colIndex = 7,  // Col H
-                formula = """=IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), "")"""
+                formula = buildIOwePeopleQueryFormula(year)
             )
         )
 

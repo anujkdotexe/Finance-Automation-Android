@@ -2161,10 +2161,10 @@ class TransactionRepositoryImpl(
         }
     }
 
-    /** The month tabs a routine reconcile reads: the current one and the one before, in Asia/Kolkata. */
+    /** The month tabs a routine reconcile reads: the previous one, the current one, and the next one (if carried early), in Asia/Kolkata. */
     private fun recentTabs(): Set<String> {
         val now = Instant.ofEpochMilli(clock()).atZone(sheetTimeZone)
-        return setOf(now, now.minusMonths(1)).map { it.format(DateTimeFormatter.ofPattern("MMMyy", Locale.US)) }.toSet()
+        return setOf(now.minusMonths(1), now, now.plusMonths(1)).map { it.format(DateTimeFormatter.ofPattern("MMMyy", Locale.US)) }.toSet()
     }
 
     /**

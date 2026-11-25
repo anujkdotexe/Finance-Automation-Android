@@ -65,7 +65,8 @@ open class AccountingSyncExecutor(
     private val nettingUseCase: NettingUseCase = NettingUseCase(),
     private val yearCloseUseCase: YearCloseUseCase = YearCloseUseCase(),
     private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
-    private val previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null
+    private val previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null,
+    private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
     constructor(
         googleSheetsClient: GoogleSheetsClient,
@@ -408,6 +409,17 @@ open class AccountingSyncExecutor(
             return Result.Error(tabEnsureRes.exception)
         }
 
+        // 1b. Guard: move debts only AFTER the new month starts in Asia/Kolkata.
+        // If targetTab is in a future month, the tab is ensured above, but debts stay open in the current month.
+        val targetKey = parseMonthKey(targetTab)
+        if (targetKey != null) {
+            val currentKolkata = java.time.Instant.ofEpochMilli(clock()).atZone(java.time.ZoneId.of("Asia/Kolkata"))
+            val currentKey = currentKolkata.year * 12 + (currentKolkata.monthValue - 1)
+            if (targetKey > currentKey) {
+                return Result.Success(Unit)
+            }
+        }
+
         // 2. Read snapshot of workbook
         val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
         if (snapRes is Result.Error) return Result.Error(snapRes.exception)
@@ -417,7 +429,6 @@ open class AccountingSyncExecutor(
         var sourceSnapshot: LedgerWorkbookSnapshot = snapshot
         var sourceSpreadsheetId: String = spreadsheetId
 
-        val targetKey = parseMonthKey(targetTab)
         val sourceKey = sourceTab?.let { parseMonthKey(it) }
 
         // If source tab is in the previous year (e.g. Dec26 -> Jan27), source snapshot must come from previous year's workbook
@@ -786,26 +797,28 @@ open class AccountingSyncExecutor(
         )
     }
 
-    fun parseMonthKey(tabName: String): Int? {
-        val match = MONTH_TAB_REGEX.find(tabName.trim()) ?: return null
-        val mmm = match.groupValues[1].lowercase(Locale.US)
-        val yy = match.groupValues[2].toIntOrNull() ?: return null
-        val monthIdx = when (mmm) {
-            "jan" -> 0
-            "feb" -> 1
-            "mar" -> 2
-            "apr" -> 3
-            "may" -> 4
-            "jun" -> 5
-            "jul" -> 6
-            "aug" -> 7
-            "sep" -> 8
-            "oct" -> 9
-            "nov" -> 10
-            "dec" -> 11
-            else -> return null
+    companion object {
+        fun parseMonthKey(tabName: String): Int? {
+            val match = MONTH_TAB_REGEX.find(tabName.trim()) ?: return null
+            val mmm = match.groupValues[1].lowercase(Locale.US)
+            val yy = match.groupValues[2].toIntOrNull() ?: return null
+            val monthIdx = when (mmm) {
+                "jan" -> 0
+                "feb" -> 1
+                "mar" -> 2
+                "apr" -> 3
+                "may" -> 4
+                "jun" -> 5
+                "jul" -> 6
+                "aug" -> 7
+                "sep" -> 8
+                "oct" -> 9
+                "nov" -> 10
+                "dec" -> 11
+                else -> return null
+            }
+            return (2000 + yy) * 12 + monthIdx
         }
-        return (2000 + yy) * 12 + monthIdx
     }
 
     fun findPrecedingTab(targetTab: String, availableTabs: List<String>): String? {
