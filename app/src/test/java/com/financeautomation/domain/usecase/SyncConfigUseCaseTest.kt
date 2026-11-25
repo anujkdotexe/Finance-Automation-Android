@@ -90,7 +90,9 @@ class SyncConfigUseCaseTest {
         }
         override suspend fun applyRemoteCompanion(name: String, isArchived: Boolean, updatedAt: Long, deleted: Boolean) {}
         override suspend fun applyRemoteTripTag(name: String, isActive: Boolean, isArchived: Boolean, updatedAt: Long, deleted: Boolean) {}
-        override suspend fun applyRemotePreference(key: String, value: String?, updatedAt: Long, deleted: Boolean) {}
+        override suspend fun applyRemotePreference(key: String, value: String?, updatedAt: Long, deleted: Boolean) {
+            applied.add("pref:$key")
+        }
         override suspend fun markAllLocalItemsDirty() {
             dirty.addAll(categories.values.map { it.id })
         }
@@ -134,6 +136,20 @@ class SyncConfigUseCaseTest {
     }
 
     private val newer = t0.plusSeconds(60).toString()
+
+    @Test
+    fun pullRestoresTheReminderTimeAndDismissedSuggestions() = runBlocking {
+        val h = harness()
+        val synced = listOf(
+            com.financeautomation.domain.repository.PreferencesRepository.KEY_SUBSCRIPTION_REMINDER_TIME,
+            com.financeautomation.domain.repository.PreferencesRepository.DISMISSED_RECURRING_KEY
+        )
+        for (key in synced + "app_lock_enabled") h.sheet.addRow("pref", key, "value", "", "", "", newer, "other", "")
+
+        h.useCase.pull("sheet")
+
+        assertEquals(synced.map { "pref:$it" }, h.gateway.applied.filter { it.startsWith("pref:") })
+    }
 
     /** Budget rows reach the gateway through applyRemoteBudget; this gateway records the amounts it was given. */
     @Test

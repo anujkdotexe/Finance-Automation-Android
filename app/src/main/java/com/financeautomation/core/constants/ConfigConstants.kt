@@ -71,9 +71,8 @@ object ConfigConstants {
         "key_default_account",
         "key_active_trip",
         "key_settle_delay_seconds",
-        "key_subscription_reminder_time",
-        "key_default_category",
-        "key_speed_dial_categories"
+        "subscription_reminder_time",
+        "dismissed_recurring"
     )
 
     fun isSyncedPref(key: String): Boolean {
