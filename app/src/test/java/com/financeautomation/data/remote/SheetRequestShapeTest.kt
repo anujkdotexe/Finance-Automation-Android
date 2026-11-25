@@ -309,7 +309,11 @@ class SheetRequestShapeTest {
             (valueMap?.get("userEnteredValue") as? Map<*, *>)?.get("stringValue") as? String
         }
 
-        assertEquals(listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date"), headers)
+        // L26 is written as an empty cell on purpose, to wipe the old header on workbooks that still show it
+        assertEquals(
+            listOf("Person", "Txn Count", "Amount I Owe (₹)", "Oldest Date"),
+            headers.filter { it.isNotEmpty() }
+        )
         assertFalse("I OWE PEOPLE table must not contain a Status header", headers.contains("Status"))
     }
 
