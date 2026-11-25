@@ -68,6 +68,11 @@ interface TransactionRepository {
     fun consumeLastVoidNotice(): String? = null
 
     /**
+     * Consumes the typed reason why the last void operation was blocked, if any.
+     */
+    fun consumeLastVoidBlockReason(): com.financeautomation.domain.model.VoidDecision.BlockReason? = null
+
+    /**
      * Resolves a failed sync locally without writing to the sync queue.
      * When [voidIt] is true the transaction is marked Void (amounts kept) because it never reached the sheet;
      * otherwise it is marked synced and confirmed.

@@ -71,6 +71,7 @@ class VoidFriendPaidTest {
 
     @Before
     fun setUp() {
+        com.financeautomation.core.utils.Diagnostics.clear()
         fakeSheet = FakeSheetApplier(mutableListOf(currentTab, "Config", "Subscriptions", "Trips"))
         sheets = fakeSheet.client()
         tDao = InMemoryTransactionDao()
@@ -328,8 +329,9 @@ class VoidFriendPaidTest {
 
         repo.voidTransaction(legacyTxnId, deleteSheetRow = false)
 
-        val notice = repo.consumeLastVoidNotice()
-        assertEquals("Linked debt was left unchanged.", notice)
+        // Under R1, zero candidates means it's an ordinary expense: voids without linked debt notice or block
+        assertNull("Ordinary expense with zero candidates must not have notice", repo.consumeLastVoidNotice())
+        assertNull("Ordinary expense with zero candidates is not blocked", repo.consumeLastVoidBlockReason())
     }
 
     // 6. Legacy unrelated IDs: 2 candidates touches no debt and tells user
@@ -359,10 +361,23 @@ class VoidFriendPaidTest {
 
         assertEquals(400.0, currentIOweTotal(), 0.001)
 
-        repo.voidTransaction(legacyTxnId, deleteSheetRow = false)
+        // 6. Ambiguous match: under ALL-OR-NOTHING rule, BLOCK the entire void
+        val blockRes = repo.voidTransaction(legacyTxnId, deleteSheetRow = false)
+        assertTrue("Void must be blocked when ambiguous matching candidates exist", blockRes is Result.Error)
+        val err = (blockRes as Result.Error).exception
+        assertTrue("Must be VoidBlockedException", err is com.financeautomation.domain.model.VoidBlockedException)
+        assertEquals(
+            com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH,
+            (err as com.financeautomation.domain.model.VoidBlockedException).reason
+        )
+        assertEquals(
+            com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH,
+            repo.consumeLastVoidBlockReason()
+        )
 
-        // Ambiguous match: touch NO debt
-        assertEquals("Linked debt was left unchanged.", repo.consumeLastVoidNotice())
+        // Change NOTHING: expense status not voided, debts not voided, queue has no OP_VOID
+        val txnAfter = tDao.getById(legacyTxnId)!!
+        assertFalse("Expense status must NOT be Void", txnAfter.status.equals("Void", ignoreCase = true))
         assertEquals(400.0, currentIOweTotal(), 0.001)
         val d1 = pDao.getAll().first { it.uuid == "pay_candidate_1" }
         val d2 = pDao.getAll().first { it.uuid == "pay_candidate_2" }
@@ -370,11 +385,12 @@ class VoidFriendPaidTest {
         assertEquals(200.0, d1.amountIOwe, 0.001)
         assertEquals("Pending", d2.repaymentStatus)
         assertEquals(200.0, d2.amountIOwe, 0.001)
+        assertTrue("Sync queue must remain empty", qDao.getAllQueueFlow().first().isEmpty())
     }
 
-    // 7. Netted, partly repaid and repaid debts unchanged with notice
+    // 7. Netted, partly repaid and repaid debts: ALL-OR-NOTHING blocks the void
     @Test
-    fun nettedPartlyRepaidAndRepaidDebts_remainUnchangedWithNotice() = runBlocking {
+    fun nettedPartlyRepaidAndRepaidDebts_allOrNothingBlocksVoid() = runBlocking {
         val suffix = "testnetted12"
         val txnId = "txn_$suffix"
         val payId = "pay_$suffix"
@@ -401,19 +417,34 @@ class VoidFriendPaidTest {
         setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, 200.0)
         setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, "Pending")
 
-        // Voiding such an expense must still work for the expense and tell user linked debt was left unchanged
-        repo.voidTransaction(txnId, deleteSheetRow = false)
-        repo.syncPendingTransactions(userInitiated = true)
+        // Under ALL-OR-NOTHING rule: BLOCK the whole void
+        val blockRes = repo.voidTransaction(txnId, deleteSheetRow = false)
+        assertTrue("Void must be blocked when debt is partly repaid or offset", blockRes is Result.Error)
+        val err = (blockRes as Result.Error).exception
+        assertTrue("Must be VoidBlockedException", err is com.financeautomation.domain.model.VoidBlockedException)
+        assertEquals(
+            com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_PARTIALLY_OR_FULLY_REPAID,
+            (err as com.financeautomation.domain.model.VoidBlockedException).reason
+        )
+        assertEquals(
+            com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_PARTIALLY_OR_FULLY_REPAID,
+            repo.consumeLastVoidBlockReason()
+        )
 
-        assertEquals("Linked debt was left unchanged.", repo.consumeLastVoidNotice())
+        // Expense remains completely unchanged
+        val t = tDao.getById(txnId)!!
+        assertFalse("Expense status must NOT be Void", t.status.equals("Void", ignoreCase = true))
 
-        // Debt remains completely unchanged
+        // Debt remains completely unchanged in Room and Sheet
         val keptDebt = pDao.getAll().first { it.uuid == payId }
         assertEquals("Pending", keptDebt.repaymentStatus)
         assertEquals(200.0, keptDebt.amountIOwe, 0.001)
 
         val sheetDebtAmount = fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE)
         assertEquals(200.0, (sheetDebtAmount as Number).toDouble(), 0.001)
+
+        // Queue has NO OP_VOID
+        assertTrue(qDao.getAllQueueFlow().first().none { it.operationType == SyncQueueEntity.OP_VOID })
     }
 
     // 8. Queued pending without plan: dropped from queue and voided locally
@@ -502,7 +533,8 @@ class VoidFriendPaidTest {
         repo.voidTransaction(txnId, deleteSheetRow = false)
 
         val queueAfter = qDao.getAllQueueFlow().first()
-        // Stored plan means delivery may have written to sheet: queues OP_VOID
+        // Stored plan means delivery may have written to sheet: keeps OP_LOG_PAYABLE and queues OP_VOID (R4)
+        assertTrue(queueAfter.any { it.transactionId == payId && it.operationType == SyncQueueEntity.OP_LOG_PAYABLE })
         assertTrue(queueAfter.any { it.transactionId == txnId && it.operationType == SyncQueueEntity.OP_VOID })
     }
 
@@ -645,5 +677,199 @@ class VoidFriendPaidTest {
         assertNull(fakeSheet.getCell(currentTab, 4, "Z"))
         assertNull(fakeSheet.getCell(currentTab, 4, "AB"))
         assertNull(fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1))
+    }
+
+    // === Reviewer Directive R1-R7 Dedicated Tests ===
+
+    // R1: Ordinary expense on account "Other" with no linked debt is NEVER blocked
+    @Test
+    fun r1_ordinaryExpenseOnAccountOther_isNeverBlocked() = runBlocking {
+        val txnId = "txn_ordinary_other_99"
+        val txn = TransactionEntity(
+            id = txnId, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Other", merchant = "Supermarket Grocery", tripTag = "", category = "Food & Drink",
+            totalAmount = 275.0, companions = "Personal", myShare = 275.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 4
+        )
+        tDao.insert(txn)
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_UUID, txnId)
+
+        val voidRes = repo.voidTransaction(txnId, deleteSheetRow = false)
+        assertTrue("Ordinary expense on Other must void successfully", voidRes is Result.Success)
+        assertNull("No block reason should exist", repo.consumeLastVoidBlockReason())
+
+        val tAfter = tDao.getById(txnId)!!
+        assertEquals("Void", tAfter.status)
+        assertTrue("Queue should contain OP_VOID for expense", qDao.getAllQueueFlow().first().any { it.transactionId == txnId && it.operationType == SyncQueueEntity.OP_VOID })
+    }
+
+    // R2: Near-miss creditor or description never matches candidate debt and voids expense alone
+    @Test
+    fun r2_nearMissCreditorOrDescription_neverMatchesCandidateDebt() = runBlocking {
+        // Case A: Near-miss creditor ("Alice" vs "Bob")
+        val txnIdA = "txn_near_miss_creditor_1"
+        val payIdA = "pay_unrelated_candidate_2"
+        tDao.insert(TransactionEntity(
+            id = txnIdA, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Other", merchant = "Paid by Alice", tripTag = "", category = "Other",
+            totalAmount = 300.0, companions = "Personal", myShare = 300.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 4
+        ))
+        pDao.upsert(PayableEntity(
+            uuid = payIdA, dateIncurredSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            paidBy = "Bob", whatFor = "Paid by Alice", amountIOwe = 300.0, dateRepaidSerial = null,
+            repaymentStatus = "Pending", tabName = currentTab, sheetRowIndex = 4
+        ))
+
+        val voidResA = repo.voidTransaction(txnIdA, deleteSheetRow = false)
+        assertTrue("Near-miss creditor expense must void as ordinary expense", voidResA is Result.Success)
+        val debtA = pDao.getAll().first { it.uuid == payIdA }
+        assertEquals("Bob's debt must remain untouched", "Pending", debtA.repaymentStatus)
+        assertEquals(300.0, debtA.amountIOwe, 0.001)
+
+        // Case B: Near-miss description ("Dinner" vs "Din" prefix)
+        val txnIdB = "txn_near_miss_desc_1"
+        val payIdB = "pay_unrelated_candidate_3"
+        tDao.insert(TransactionEntity(
+            id = txnIdB, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Alice", merchant = "Dinner", tripTag = "", category = "Food & Drink",
+            totalAmount = 180.0, companions = "Personal", myShare = 180.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 5
+        ))
+        pDao.upsert(PayableEntity(
+            uuid = payIdB, dateIncurredSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            paidBy = "Alice", whatFor = "Din", amountIOwe = 180.0, dateRepaidSerial = null,
+            repaymentStatus = "Pending", tabName = currentTab, sheetRowIndex = 5
+        ))
+
+        val voidResB = repo.voidTransaction(txnIdB, deleteSheetRow = false)
+        assertTrue("Near-miss description expense must void as ordinary expense", voidResB is Result.Success)
+        val debtB = pDao.getAll().first { it.uuid == payIdB }
+        assertEquals("Din debt must remain untouched", "Pending", debtB.repaymentStatus)
+        assertEquals(180.0, debtB.amountIOwe, 0.001)
+
+        // Case C: Empty creditor in candidate debt
+        val txnIdC = "txn_near_miss_empty_creditor_1"
+        val payIdC = "pay_unrelated_candidate_4"
+        tDao.insert(TransactionEntity(
+            id = txnIdC, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Other", merchant = "Movie", tripTag = "", category = "Other",
+            totalAmount = 200.0, companions = "Personal", myShare = 200.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 6
+        ))
+        pDao.upsert(PayableEntity(
+            uuid = payIdC, dateIncurredSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            paidBy = "", whatFor = "Movie", amountIOwe = 200.0, dateRepaidSerial = null,
+            repaymentStatus = "Pending", tabName = currentTab, sheetRowIndex = 6
+        ))
+
+        val voidResC = repo.voidTransaction(txnIdC, deleteSheetRow = false)
+        assertTrue("Empty creditor candidate does not match", voidResC is Result.Success)
+        val debtC = pDao.getAll().first { it.uuid == payIdC }
+        assertEquals("Empty creditor debt must remain untouched", "Pending", debtC.repaymentStatus)
+    }
+
+    // R3: findPayableRowAndTab read failure fails item for retry and changes nothing
+    @Test
+    fun r3_findPayableRowAndTab_onFailedRead_failsItemForRetryAndChangesNothing() = runBlocking {
+        val suffix = "r3failread12"
+        val txnId = "txn_$suffix"
+        val payId = "pay_$suffix"
+
+        tDao.insert(TransactionEntity(
+            id = txnId, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Other", merchant = "Dinner", tripTag = "", category = "Other",
+            totalAmount = 500.0, companions = "Personal", myShare = 500.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 4
+        ))
+        pDao.upsert(PayableEntity(
+            uuid = payId, dateIncurredSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            paidBy = "Riya", whatFor = "Dinner", amountIOwe = 500.0, dateRepaidSerial = null,
+            repaymentStatus = "Pending", tabName = currentTab, sheetRowIndex = 4
+        ))
+
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_DEBIT_UUID, txnId)
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID, payId)
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_WHAT_FOR, "Dinner")
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, 500.0)
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, "Pending")
+
+        // Void with box on (delete)
+        repo.voidTransaction(txnId, deleteSheetRow = true)
+
+        // Inject simulated sheet read failure on findRowByUuid for payable
+        fakeSheet.forceFindRowError = true
+
+        val syncRes = repo.syncPendingTransactions(userInitiated = true)
+        assertTrue("Sync must fail when payable read fails", syncRes is Result.Error)
+
+        // Item remains in queue for retry
+        val pendingQueue = qDao.getAllPending()
+        assertTrue("OP_VOID must remain in queue for retry", pendingQueue.any { it.transactionId == txnId && it.operationType == SyncQueueEntity.OP_VOID })
+
+        // Sheet row was NOT cleared
+        assertEquals("Dinner", fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_WHAT_FOR))
+        assertEquals(payId, fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID))
+    }
+
+    // R4: Delivery in progress with planJson is NOT dropped when voiding
+    @Test
+    fun r4_deliveryInProgressWithPlanJson_queuedPayableNotDropped() = runBlocking {
+        val logRes = repo.logFriendPaid("Riya", 600.0, "Hotel", nowMillis) as Result.Success
+        val payId = logRes.data
+        val txnId = AccountingUtils.linkedExpenseIdForPayable(payId)!!
+
+        val qItem = qDao.getAllQueueFlow().first().first { it.transactionId == payId }
+        qDao.updatePlanJson(qItem.id, """{"edits":[{"tab":"Nov26","row":4,"column":"W","value":"30/11/26"}],"message":"Hotel delivery"}""")
+
+        repo.voidTransaction(txnId, deleteSheetRow = false)
+
+        val queueAfter = qDao.getAllQueueFlow().first()
+        // OP_LOG_PAYABLE is preserved so half-applied delivery completes, and OP_VOID follows it
+        assertTrue("OP_LOG_PAYABLE with planJson must NOT be dropped", queueAfter.any { it.transactionId == payId && it.operationType == SyncQueueEntity.OP_LOG_PAYABLE })
+        assertTrue("OP_VOID must be queued after it", queueAfter.any { it.transactionId == txnId && it.operationType == SyncQueueEntity.OP_VOID })
+    }
+
+    // R5: Diagnostics never contains amounts, names or descriptions
+    @Test
+    fun r5_diagnostics_neverContainsAmountsNamesOrDescriptions() = runBlocking {
+        com.financeautomation.core.utils.Diagnostics.clear()
+        val suffix = "r5diagtest1"
+        val txnId = "txn_$suffix"
+        val payId = "pay_$suffix"
+
+        tDao.insert(TransactionEntity(
+            id = txnId, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Other", merchant = "Paid by PrivateFriendName", tripTag = "", category = "Other",
+            totalAmount = 888.0, companions = "Personal", myShare = 888.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 4
+        ))
+        pDao.upsert(PayableEntity(
+            uuid = payId, dateIncurredSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            paidBy = "PrivateFriendName", whatFor = "Paid by PrivateFriendName", amountIOwe = 444.0, dateRepaidSerial = null,
+            repaymentStatus = "Pending", tabName = currentTab, sheetRowIndex = 4
+        ))
+
+        // Void is blocked because debt was reduced (444 != 888)
+        val res = repo.voidTransaction(txnId, deleteSheetRow = false)
+        assertTrue("Void must be blocked", res is Result.Error)
+
+        val records = com.financeautomation.core.utils.Diagnostics.getRecords()
+        val voidLogs = records.filter { it.tag == "VoidFriendPaid" }
+        assertTrue("Must have recorded VoidFriendPaid diagnostic", voidLogs.isNotEmpty())
+
+        for (rec in voidLogs) {
+            val log = rec.reason
+            assertFalse("Diagnostics must NOT contain monetary amounts: $log", log.contains("888") || log.contains("444"))
+            assertFalse("Diagnostics must NOT contain person name: $log", log.contains("PrivateFriendName"))
+            assertFalse("Diagnostics must NOT contain merchant/description text: $log", log.contains("Paid by"))
+            assertTrue("Diagnostics must contain safe enum reason", log.contains("DEBT_PARTIALLY_OR_FULLY_REPAID"))
+        }
     }
 }

@@ -165,22 +165,33 @@ fun TransactionsScreen(
                 onNavigateToSync = onNavigateToSync,
                 onNavigateToNeedsReview = onNavigateToNeedsReview,
                 onVoidTransaction = { targetTxn ->
-                    viewModel.voidTransaction(targetTxn)
-                    coroutineScope.launch {
-                        val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
-                        val notice = viewModel.consumeVoidNotice()
-                        val msg = if (!notice.isNullOrBlank()) {
-                            context.getString(R.string.txns_voided_with_debt_unchanged_msg, cleanName)
-                        } else {
-                            context.getString(R.string.txns_voided_named_msg, cleanName)
-                        }
-                        val result = snackbarHostState.showSnackbar(
-                            message = msg,
-                            actionLabel = context.getString(R.string.action_undo),
-                            duration = SnackbarDuration.Short
-                        )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            viewModel.undoVoid()
+                    viewModel.voidTransaction(targetTxn) {
+                        coroutineScope.launch {
+                            val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
+                            val blockReason = viewModel.consumeLastVoidBlockReason()
+                            if (blockReason != null) {
+                                val blockMsg = when (blockReason) {
+                                    com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_PARTIALLY_OR_FULLY_REPAID ->
+                                        context.getString(R.string.void_blocked_debt_repaid)
+                                    com.financeautomation.domain.model.VoidDecision.BlockReason.DEBT_OFFSET ->
+                                        context.getString(R.string.void_blocked_debt_offset)
+                                    com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH ->
+                                        context.getString(R.string.void_blocked_ambiguous)
+                                    com.financeautomation.domain.model.VoidDecision.BlockReason.SHEET_READ_FAILED ->
+                                        context.getString(R.string.void_blocked_sheet_error)
+                                }
+                                snackbarHostState.showSnackbar(message = blockMsg, duration = SnackbarDuration.Short)
+                            } else {
+                                val msg = context.getString(R.string.txns_voided_named_msg, cleanName)
+                                val result = snackbarHostState.showSnackbar(
+                                    message = msg,
+                                    actionLabel = context.getString(R.string.action_undo),
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.undoVoid()
+                                }
+                            }
                         }
                     }
                 },

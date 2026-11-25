@@ -639,23 +639,35 @@ class TransactionsViewModel(
 
     fun consumeVoidNotice(): String? = transactionRepository.consumeLastVoidNotice()
 
-    fun voidTransaction(txn: Transaction, deleteSheetRow: Boolean = false, onComplete: ((Boolean) -> Unit)? = null) {
+    fun voidTransaction(
+        txn: Transaction,
+        deleteSheetRow: Boolean = false,
+        onComplete: ((Result<Unit>) -> Unit)? = null
+    ) {
         lastVoidedTransaction = txn
         viewModelScope.launch(ioDispatcher) {
             val result = transactionRepository.voidTransaction(txn.id, deleteSheetRow)
-            onComplete?.invoke(result is Result.Success)
+            onComplete?.invoke(result)
         }
     }
 
-    fun voidTransaction(txnId: String, deleteSheetRow: Boolean = false) {
+    fun voidTransaction(
+        txnId: String,
+        deleteSheetRow: Boolean = false,
+        onComplete: ((Result<Unit>) -> Unit)? = null
+    ) {
         val currentTxn = _uiState.value.groupedTransactions
             .flatMap { it.transactions }
             .firstOrNull { it.id == txnId }
         lastVoidedTransaction = currentTxn
         viewModelScope.launch(ioDispatcher) {
-            transactionRepository.voidTransaction(txnId, deleteSheetRow)
+            val result = transactionRepository.voidTransaction(txnId, deleteSheetRow)
+            onComplete?.invoke(result)
         }
     }
+
+    fun consumeLastVoidBlockReason(): com.financeautomation.domain.model.VoidDecision.BlockReason? =
+        transactionRepository.consumeLastVoidBlockReason()
 
     fun undoVoid(onComplete: ((Boolean) -> Unit)? = null) {
         val txn = lastVoidedTransaction ?: run {

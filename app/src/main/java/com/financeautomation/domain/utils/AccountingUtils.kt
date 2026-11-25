@@ -219,13 +219,11 @@ object AccountingUtils {
 
     /**
      * Checks whether a candidate payable agrees with an expense for legacy matching.
-     * Checks:
+     * Both Creditor AND Description must strictly agree:
      * 1. dateIncurredSerial == txDateSerial
      * 2. timeSerial != null and abs(timeSerial - txTimeSerial) < 1.0 / 86400.0 (< 1 second)
-     * 3. creditor and description agreement:
-     *    - If txMerchant starts with "Paid by " (case-insensitive), creditor matches payable.paidBy.
-     *    - Otherwise, description agrees (whatFor equals or starts with txMerchant, or contains txMerchant,
-     *      or txMerchant contains payable.paidBy).
+     * 3. Creditor agreement: non-empty creditor matches the expense creditor/account.
+     * 4. Description agreement: full description matches (no loose prefix or substring).
      */
     fun legacyPayableAgreesWithExpense(
         dateIncurredSerial: Int?,
@@ -234,7 +232,8 @@ object AccountingUtils {
         whatFor: String,
         txDateSerial: Int,
         txTimeSerial: Double,
-        txMerchant: String
+        txMerchant: String,
+        txAccount: String = ""
     ): Boolean {
         if (dateIncurredSerial == null || dateIncurredSerial != txDateSerial) return false
         if (timeSerial == null || kotlin.math.abs(timeSerial - txTimeSerial) >= LEGACY_TIME_SERIAL_TOLERANCE) return false
@@ -242,16 +241,29 @@ object AccountingUtils {
         val cleanMerchant = txMerchant.removePrefix("[Void] ").trim()
         val cleanWhatFor = whatFor.removePrefix("[Void] ").trim()
         val cleanPaidBy = paidBy.trim()
+        val cleanAccount = txAccount.trim()
 
-        if (cleanMerchant.startsWith("Paid by ", ignoreCase = true)) {
-            val creditor = cleanMerchant.substring(8).trim()
-            return eq(creditor, cleanPaidBy)
+        if (cleanPaidBy.isBlank() || cleanWhatFor.isBlank() || cleanMerchant.isBlank()) return false
+
+        // 1. Creditor agreement
+        val creditorAgrees = when {
+            cleanMerchant.startsWith("Paid by ", ignoreCase = true) -> {
+                val creditor = cleanMerchant.substring(8).trim()
+                eq(creditor, cleanPaidBy)
+            }
+            eq(cleanPaidBy, cleanAccount) -> true
+            cleanMerchant.endsWith("($cleanPaidBy)", ignoreCase = true) -> true
+            cleanMerchant.contains("Paid by $cleanPaidBy", ignoreCase = true) -> true
+            else -> false
         }
+        if (!creditorAgrees) return false
 
+        // 2. Description agreement (exact or known standard suffix, never bare prefix like "Din" for "Dinner")
         return eq(cleanWhatFor, cleanMerchant) ||
-            cleanWhatFor.startsWith("$cleanMerchant (", ignoreCase = true) ||
-            cleanWhatFor.startsWith(cleanMerchant, ignoreCase = true) ||
-            cleanMerchant.contains(cleanPaidBy, ignoreCase = true)
+            cleanWhatFor.equals("$cleanMerchant (Other)", ignoreCase = true) ||
+            cleanWhatFor.equals("$cleanMerchant (via Split)", ignoreCase = true) ||
+            cleanWhatFor.equals("$cleanMerchant ($cleanPaidBy)", ignoreCase = true) ||
+            (cleanWhatFor.equals("Paid by $cleanPaidBy", ignoreCase = true) && cleanMerchant.equals("Paid by $cleanPaidBy", ignoreCase = true))
     }
 }
 

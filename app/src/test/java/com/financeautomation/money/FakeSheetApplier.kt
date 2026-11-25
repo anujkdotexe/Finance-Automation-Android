@@ -40,6 +40,8 @@ class FakeSheetApplier(
         isLenient = true
     }
 
+    var forceFindRowError: Boolean = false
+
     private val tokenProvider = object : TokenProvider {
         override fun getAccessToken(): String = "fake_test_token"
         override fun refreshAccessToken(): String = "fake_test_token"
@@ -156,6 +158,10 @@ class FakeSheetApplier(
         val method = call.method
         val url = call.url
         val body = call.body
+
+        if (forceFindRowError && method == "GET" && (url.contains("AF") || url.contains("AE"))) {
+            return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
+        }
 
         return when {
             method == "GET" && url.contains("values:batchGet") -> {
