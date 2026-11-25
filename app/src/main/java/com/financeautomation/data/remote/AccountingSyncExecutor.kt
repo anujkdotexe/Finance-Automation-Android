@@ -710,8 +710,12 @@ open class AccountingSyncExecutor(
 
             for ((tab, rowNum) in allTargetTabRows) {
                 val settledRef = settledByTabAndRow[Pair(tab, rowNum)]?.firstOrNull()
-                val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
-                    ?: tDao.getByTabAndSheetRowIndex(tab, rowNum)
+                // The row's own id decides which local row this is. Tab and row number only serve a row without an
+                // id: the tab is derived from the date there, which is wrong for a carried copy.
+                val knownId = settledRef?.uuid?.takeIf { it.isNotBlank() }
+                    ?: editsByTabAndRow[Pair(tab, rowNum)].orEmpty()
+                        .firstOrNull { isDebitColumn(it.column) && !it.uuid.isNullOrBlank() }?.uuid
+                val existingTxn = if (knownId != null) tDao.getById(knownId) else tDao.getByTabAndSheetRowIndex(tab, rowNum)
 
                 if (existingTxn != null) {
                     var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn

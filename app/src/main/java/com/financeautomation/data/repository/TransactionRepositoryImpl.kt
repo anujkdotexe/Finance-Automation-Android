@@ -1688,7 +1688,17 @@ class TransactionRepositoryImpl(
                 }
 
                 val year = Instant.ofEpochMilli(txn.timestamp).atZone(sheetTimeZone).year
-                val spreadsheetId = if (workbookResolver != null) {
+                var carriedCopyHome: Pair<String, String>? = null
+                if (item.operationType != SyncQueueEntity.OP_INSERT) {
+                    val located = locateCarriedCopy(txn)
+                    if (located is Result.Error) {
+                        if (failItem(item, txn, located.exception, st)) break else continue
+                    }
+                    carriedCopyHome = (located as? Result.Success)?.data
+                }
+                val spreadsheetId = if (carriedCopyHome != null) {
+                    carriedCopyHome.first
+                } else if (workbookResolver != null) {
                     when (val resolveResult = workbookResolver.resolveForYear(year)) {
                         is Result.Success -> resolveResult.data
                         is Result.Error -> {
@@ -1710,7 +1720,7 @@ class TransactionRepositoryImpl(
                     break
                 }
 
-                val tabName = formatMonthTabName(txn.timestamp)
+                val tabName = carriedCopyHome?.second ?: formatMonthTabName(txn.timestamp)
 
                 // Cache tab list once per spreadsheet per sync run
                 var knownTabs = knownTabsBySpreadsheet[spreadsheetId]
@@ -2421,6 +2431,9 @@ class TransactionRepositoryImpl(
                             val effectiveUuid = if (!uuid.isNullOrBlank()) uuid else "sheet_${month.tabName}_${sheetDebit.rowNumber}"
                             val existingByEffective = tDao.getById(effectiveUuid)
                             if (existingByEffective != null) {
+                                // The sheet holds this row even when its date points at another month's tab (a carried
+                                // copy keeps the original date), so it must not be judged missing
+                                seenLocalIds.add(existingByEffective.id)
                                 tDao.update(
                                     existingByEffective.copy(
                                         totalAmount = sheetDebit.totalAmount,
@@ -2650,13 +2663,27 @@ class TransactionRepositoryImpl(
         if (!allowed) return PruneResult(0, false)
 
         val readTabs = snapshot.monthTabs.map { it.tabName.lowercase() }.toSet()
-        val missingTxns = candidates.transactions.values
+        var missingTxns = candidates.transactions.values
             .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
-        val missingInflows = candidates.inflows.values
+        var missingInflows = candidates.inflows.values
             .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
-        val missingPayables = candidates.unplacedPayables.values.filter { debt ->
+        var missingPayables = candidates.unplacedPayables.values.filter { debt ->
             val serial = debt.dateIncurredSerial
             serial != null && tabNameOfSerial(serial) in readTabs && debt.uuid !in sheetPayableIds
+        }
+        // A row's date does not say which tab holds it (a carried copy, or a date changed after delivery). Before
+        // anything is removed, the tabs left out of this read are checked; if they cannot be read, nothing is removed.
+        if (missingTxns.isNotEmpty() || missingInflows.isNotEmpty() || missingPayables.isNotEmpty()) {
+            val sheets = googleSheetsClient ?: return PruneResult(0, false)
+            val rest = sheets.readLedgerSnapshot(spreadsheetId) { it.lowercase() !in readTabs }
+            if (rest !is Result.Success) return PruneResult(0, false)
+            val elsewhere = rest.data.monthTabs.filter { it.tabName.lowercase() !in readTabs }.flatMap { month ->
+                month.debits.mapNotNull { it.uuid } + month.inflows.mapNotNull { it.uuid } +
+                    month.payables.mapNotNull { it.uuid }
+            }.toSet()
+            missingTxns = missingTxns.filter { it.id !in elsewhere }
+            missingInflows = missingInflows.filter { it.id !in elsewhere }
+            missingPayables = missingPayables.filter { it.uuid !in elsewhere }
         }
         val missing = missingTxns.size + missingInflows.size
         val syncedTotal = candidates.transactions.size + candidates.inflows.size
@@ -2909,6 +2936,35 @@ class TransactionRepositoryImpl(
         } else {
             qDao.setStatusError(item.id, SyncQueueEntity.STATUS_PENDING, newRetries, kind, detail)
         }
+    }
+
+    /**
+     * Where a carried copy dated before this year really is, as workbook id and tab. A copy keeps the original date,
+     * so after a year turns the year of its date can name the wrong workbook. Null for any other row, and when no
+     * workbook holds it. Reads only for such a copy; no workbook is created.
+     */
+    private suspend fun locateCarriedCopy(txn: Transaction): Result<Pair<String, String>?> {
+        val isCopy = txn.merchant.removePrefix("[Void] ").startsWith("[Carried from", ignoreCase = true)
+        val rowYear = Instant.ofEpochMilli(txn.timestamp).atZone(sheetTimeZone).year
+        val currentYear = Instant.ofEpochMilli(clock()).atZone(sheetTimeZone).year
+        val sheets = googleSheetsClient
+        if (!isCopy || rowYear >= currentYear || sheets == null) return Result.Success(null)
+        for (year in currentYear downTo rowYear) {
+            var id = preferencesRepository?.getSpreadsheetIdForYearSync(year)
+            if (id.isNullOrBlank()) {
+                val found = workbookResolver?.findExisting(year)
+                if (found is Result.Error) return Result.Error(found.exception)
+                id = (found as? Result.Success)?.data
+            }
+            if (id.isNullOrBlank()) continue
+            val snapshot = sheets.readLedgerSnapshot(id)
+            if (snapshot is Result.Error) return Result.Error(snapshot.exception)
+            val tab = (snapshot as Result.Success).data.monthTabs.firstOrNull { month ->
+                month.debits.any { it.uuid.equals(txn.id, ignoreCase = true) }
+            }?.tabName
+            if (tab != null) return Result.Success(id to tab)
+        }
+        return Result.Success(null)
     }
 
     private fun formatMonthTabName(timestamp: Long): String {
