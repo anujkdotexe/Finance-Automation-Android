@@ -115,8 +115,9 @@ class InMemoryInflowDao : InflowDao {
 class InMemoryPayableDao : PayableDao {
     val storage = ConcurrentHashMap<String, PayableEntity>()
     override fun observeAll(): Flow<List<PayableEntity>> = flowOf(storage.values.toList())
-    override fun observePending(): Flow<List<PayableEntity>> = flowOf(storage.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) })
-    override suspend fun getPending(): List<PayableEntity> = storage.values.filter { it.repaymentStatus.equals("pending", ignoreCase = true) }
+    private fun open(): List<PayableEntity> = storage.values.filter { it.repaymentStatus.lowercase() in setOf("pending", "partial") }
+    override fun observePending(): Flow<List<PayableEntity>> = flowOf(open())
+    override suspend fun getPending(): List<PayableEntity> = open()
     override suspend fun getAll(): List<PayableEntity> = storage.values.toList()
     override suspend fun getByUuid(uuid: String): PayableEntity? = storage[uuid]
     override suspend fun upsert(payable: PayableEntity) { storage[payable.uuid] = payable }
