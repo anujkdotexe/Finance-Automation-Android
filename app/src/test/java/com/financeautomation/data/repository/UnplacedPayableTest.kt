@@ -1,14 +1,20 @@
 package com.financeautomation.data.repository
 
 import com.financeautomation.core.model.Result
+import com.financeautomation.core.model.ReviewState
+import com.financeautomation.core.model.SyncState
+import com.financeautomation.core.model.TransactionStatus
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.domain.model.ReconcileOutcome
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.testutil.SyncHarness
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -176,5 +182,199 @@ class UnplacedPayableTest {
 
         assertTrue(h.repo.reconcileWithSheetOutcome() is Result.Error)
         assertNotNull(h.pDao.storage["pay_left"])
+    }
+
+    @Test
+    fun blankMonthWithEarlierMonthIncurredLogsDiagnostics() = runBlocking {
+        Diagnostics.clear()
+        val h = harness()
+        h.pDao.upsert(unplaced("pay_august_blank", incurred = augustNoon))
+        h.serve()
+
+        h.reconcile()
+
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue("must record DEBT_NOT_IN_SHEET_READ: $reasons", reasons.contains("DEBT_NOT_IN_SHEET_READ tabs=Nov26"))
+        assertTrue(
+            "must record DEBT_NOT_IN_SHEET with recorded=none incurred=Aug26 queued=no status=pending gate=open: $reasons",
+            reasons.contains("DEBT_NOT_IN_SHEET recorded=none incurred=Aug26 queued=no status=pending gate=open")
+        )
+    }
+
+    @Test
+    fun recordedMonthWhoseTabIsNotInWorkbookLogsDiagnostics() = runBlocking {
+        Diagnostics.clear()
+        val h = harness()
+        h.pDao.upsert(unplaced("pay_sep_recorded", incurred = augustNoon).copy(tabName = "Sep26"))
+        h.serve()
+
+        h.reconcile()
+
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue("must record DEBT_NOT_IN_SHEET_READ: $reasons", reasons.contains("DEBT_NOT_IN_SHEET_READ tabs=Nov26"))
+        assertTrue(
+            "must record DEBT_NOT_IN_SHEET with recorded=Sep26 incurred=Aug26: $reasons",
+            reasons.contains("DEBT_NOT_IN_SHEET recorded=Sep26 incurred=Aug26 queued=no status=pending gate=open")
+        )
+    }
+
+    @Test
+    fun queuedDebtLogsDiagnosticsWithQueuedYes() = runBlocking {
+        Diagnostics.clear()
+        val h = harness()
+        h.pDao.upsert(unplaced("pay_queued_item", incurred = augustNoon))
+        h.qDao.insert(
+            SyncQueueEntity(
+                transactionId = "pay_queued_item",
+                operationType = SyncQueueEntity.OP_LOG_PAYABLE,
+                payloadJson = "{}",
+                status = SyncQueueEntity.STATUS_PENDING
+            )
+        )
+        h.serve()
+
+        h.reconcile()
+
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue(
+            "must record queued=yes: $reasons",
+            reasons.contains("DEBT_NOT_IN_SHEET recorded=none incurred=Aug26 queued=yes status=pending gate=open")
+        )
+    }
+
+    @Test
+    fun unconfirmedWorkbookLogsDiagnosticsWithGateUnconfirmed() = runBlocking {
+        Diagnostics.clear()
+        val h = harness(confirmed = false)
+        h.pDao.upsert(unplaced("pay_unconfirmed_item", incurred = augustNoon))
+        h.serve()
+
+        h.reconcile()
+
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue(
+            "must record gate=unconfirmed: $reasons",
+            reasons.contains("DEBT_NOT_IN_SHEET recorded=none incurred=Aug26 queued=no status=pending gate=unconfirmed")
+        )
+    }
+
+    @Test
+    fun requeuePendingLogsDiagnosticsWithGateRequeue() = runBlocking {
+        Diagnostics.clear()
+        val h = harness()
+        h.preferences[PreferencesRepository.KEY_WORKBOOK_REQUEUE_PENDING_YEAR] = "2026"
+        h.pDao.upsert(unplaced("pay_requeue_item", incurred = augustNoon))
+        h.serve()
+
+        h.reconcile()
+
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue(
+            "must record gate=requeue: $reasons",
+            reasons.contains("DEBT_NOT_IN_SHEET recorded=none incurred=Aug26 queued=no status=pending gate=requeue")
+        )
+    }
+
+    @Test
+    fun debtTheSheetHoldsWritesNoDiagnosticLine() = runBlocking {
+        Diagnostics.clear()
+        val h = harness()
+        h.pDao.upsert(unplaced("pay_held_item"))
+        h.serve("pay_held_item" to 300.0)
+
+        h.reconcile()
+
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue(
+            "must write no DEBT_NOT_IN_SHEET lines when sheet holds debt: $reasons",
+            reasons.none { it.startsWith("DEBT_NOT_IN_SHEET") }
+        )
+    }
+
+    @Test
+    fun diagnosticsLinesContainNoInventedNameAmountOrUuid() = runBlocking {
+        Diagnostics.clear()
+        val h = harness()
+        val inventedUuid = "pay_secret_id_999"
+        val inventedPerson = "UniqueFriendNameXYZ"
+        val inventedAmount = 888.88
+        val inventedWhat = "SecretPrivateDinner"
+        h.pDao.upsert(
+            PayableEntity(
+                uuid = inventedUuid,
+                dateIncurredSerial = DateSerialUtils.toDateSerial(augustNoon),
+                timeSerial = 0.5,
+                paidBy = inventedPerson,
+                whatFor = inventedWhat,
+                amountIOwe = inventedAmount,
+                dateRepaidSerial = null,
+                repaymentStatus = "Partial",
+                tabName = "",
+                sheetRowIndex = null
+            )
+        )
+        h.serve()
+
+        h.reconcile()
+
+        val records = Diagnostics.getRecords()
+        val debtLines = records.map { it.reason }.filter { it.startsWith("DEBT_NOT_IN_SHEET") }
+        assertTrue("must have recorded at least one diagnostic line", debtLines.isNotEmpty())
+        for (line in debtLines) {
+            assertFalse("line must not contain uuid: $line", line.contains(inventedUuid))
+            assertFalse("line must not contain friend name: $line", line.contains(inventedPerson))
+            assertFalse("line must not contain amount: $line", line.contains("888"))
+            assertFalse("line must not contain description: $line", line.contains(inventedWhat))
+            assertFalse("line must not contain spreadsheet id: $line", line.contains("test_sheet_id"))
+        }
+        assertTrue("must reflect partial status: $debtLines", debtLines.any { it.contains("status=partial") })
+    }
+
+    @Test
+    fun removalCountsAreRightForPruneAndDebtSync() = runBlocking {
+        Diagnostics.clear()
+        val h = harness()
+
+        val txn = TransactionEntity(
+            id = "txn_prune_1",
+            timestamp = novemberNoon - 120_000L,
+            dateSerial = DateSerialUtils.toDateSerial(novemberNoon - 120_000L),
+            timeSerial = 0.5,
+            account = "Cash",
+            merchant = "Cafe",
+            category = "Food",
+            note = "",
+            totalAmount = 150.0,
+            myShare = 150.0,
+            owedToMe = 0.0,
+            companions = "Personal",
+            status = TransactionStatus.PERSONAL.value,
+            tripTag = "",
+            sheetRowIndex = 4,
+            syncState = SyncState.SYNCED.name,
+            reviewState = ReviewState.CONFIRMED.name
+        )
+        h.tDao.insert(txn)
+        h.pDao.upsert(unplaced("pay_unplaced_nov", incurred = novemberNoon - 60_000L))
+
+        h.serve()
+        h.reconcile()
+
+        val reasons = Diagnostics.getRecords().map { it.reason }
+        assertTrue(
+            "SHEET_PRUNE must report expenses=1 income=0 debts=1: $reasons",
+            reasons.contains("SHEET_PRUNE removed=2 expenses=1 income=0 debts=1")
+        )
+
+        Diagnostics.clear()
+        h.pDao.upsert(unplaced("pay_placed_nov").copy(tabName = "Nov26"))
+        h.serve()
+        h.reconcile()
+
+        val reasonsSync = Diagnostics.getRecords().map { it.reason }
+        assertTrue(
+            "SHEET_DEBT_SYNC must report removed=1: $reasonsSync",
+            reasonsSync.contains("SHEET_DEBT_SYNC removed=1")
+        )
     }
 }

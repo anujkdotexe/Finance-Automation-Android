@@ -2119,10 +2119,15 @@ class TransactionRepositoryImpl(
                     val localPayables = pDao.getAll()
                     // Only tabs that were read can tell us a payable is gone
                     val readTabNames = snapshot.monthTabs.map { it.tabName.lowercase() }.toSet()
+                    var debtSyncRemoved = 0
                     for (local in localPayables) {
                         if (local.tabName.lowercase() in readTabNames && !remoteUuids.contains(local.uuid)) {
                             pDao.deleteByUuid(local.uuid)
+                            debtSyncRemoved++
                         }
+                    }
+                    if (debtSyncRemoved > 0) {
+                        Diagnostics.record("TransactionRepository", "SHEET_DEBT_SYNC removed=$debtSyncRemoved")
                     }
                     if (remotePayables.isNotEmpty()) {
                         pDao.upsertAll(remotePayables)
@@ -2220,6 +2225,52 @@ class TransactionRepositoryImpl(
 
         val allowed = !requeuePending &&
             (confirmed == spreadsheetId || (confirmed.isNullOrBlank() && matched > 0))
+
+        val gate = when {
+            requeuePending -> "requeue"
+            allowed -> "open"
+            else -> "unconfirmed"
+        }
+
+        val sheetPayableIds = snapshot.monthTabs.flatMap { month -> month.payables.mapNotNull { it.uuid?.takeIf { u -> u.isNotBlank() } } }.toSet()
+        val pDao = resolvePayableDao()
+        if (pDao != null) {
+            val pendingDebts = pDao.getPending()
+            val notInSheet = pendingDebts.filter { it.uuid !in sheetPayableIds }
+            if (notInSheet.isNotEmpty()) {
+                val queuedNow = resolveSyncQueueDao().getAllQueueFlow().first().map { it.transactionId }.toSet()
+                var loggedDebtCount = 0
+                for (debt in notInSheet.take(10)) {
+                    val recorded = when {
+                        debt.tabName.isBlank() -> "none"
+                        THREE_LETTER_TWO_DIGIT_PATTERN.matches(debt.tabName) -> debt.tabName
+                        else -> "other"
+                    }
+                    val serial = debt.dateIncurredSerial
+                    val incurred = if (serial != null && serial > 0) {
+                        try {
+                            DateSerialUtils.fromDateSerial(serial).format(DateTimeFormatter.ofPattern("MMMyy", Locale.US))
+                        } catch (_: Exception) {
+                            "none"
+                        }
+                    } else {
+                        "none"
+                    }
+                    val queued = if (debt.uuid in queuedNow) "yes" else "no"
+                    val status = if (debt.repaymentStatus.equals("partial", ignoreCase = true)) "partial" else "pending"
+                    Diagnostics.record(
+                        "TransactionRepository",
+                        "DEBT_NOT_IN_SHEET recorded=$recorded incurred=$incurred queued=$queued status=$status gate=$gate"
+                    )
+                    loggedDebtCount++
+                }
+                if (loggedDebtCount > 0) {
+                    val readTabNames = snapshot.monthTabs.joinToString(",") { it.tabName }
+                    Diagnostics.record("TransactionRepository", "DEBT_NOT_IN_SHEET_READ tabs=$readTabNames")
+                }
+            }
+        }
+
         // A workbook that holds some of our rows has acknowledged them; from the next pass it may be pruned against
         if (!requeuePending && matched > 0 && confirmed != spreadsheetId) {
             prefs.setPreference(PreferencesRepository.KEY_LEDGER_CONFIRMED_WORKBOOK_ID, spreadsheetId, isDirty = false)
@@ -2231,7 +2282,6 @@ class TransactionRepositoryImpl(
             .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
         val missingInflows = candidates.inflows.values
             .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
-        val sheetPayableIds = snapshot.monthTabs.flatMap { month -> month.payables.mapNotNull { it.uuid } }.toSet()
         val missingPayables = candidates.unplacedPayables.values.filter { debt ->
             val serial = debt.dateIncurredSerial
             serial != null && tabNameOfSerial(serial) in readTabs && debt.uuid !in sheetPayableIds
@@ -2255,7 +2305,6 @@ class TransactionRepositoryImpl(
         val removedTxnIds = mutableListOf<String>()
         val removedInflowIds = mutableListOf<String>()
         var removedPayables = 0
-        val pDao = resolvePayableDao()
         val cycleDao = subscriptionCycleDao ?: databaseProvider?.invoke()?.subscriptionCycleDao()
         runInDbTransaction {
             val queuedNow = qDao.getAllQueueFlow().first().map { it.transactionId }.toSet()
@@ -2293,7 +2342,10 @@ class TransactionRepositoryImpl(
         val pruned = removedTxnIds.size + removedInflowIds.size + removedPayables
         prefs.setPreference(PreferencesRepository.KEY_SHEET_MANY_MISSING_FLAG, null, isDirty = false)
         if (pruned > 0) {
-            Diagnostics.record("TransactionRepository", "SHEET_PRUNE removed=$pruned")
+            Diagnostics.record(
+                "TransactionRepository",
+                "SHEET_PRUNE removed=$pruned expenses=${removedTxnIds.size} income=${removedInflowIds.size} debts=$removedPayables"
+            )
             val pending = prefs.getPreference(PreferencesRepository.KEY_SHEET_PRUNED_PENDING_COUNT)?.toIntOrNull() ?: 0
             prefs.setPreference(PreferencesRepository.KEY_SHEET_PRUNED_PENDING_COUNT, (pending + pruned).toString(), isDirty = false)
         }
@@ -2500,6 +2552,7 @@ class TransactionRepositoryImpl(
     }
 
     companion object {
+        private val THREE_LETTER_TWO_DIGIT_PATTERN = Regex("^[A-Za-z]{3}\\d{2}\$")
         private val MONTH_TAB_PATTERN = Regex("^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[0-9]{2}$", RegexOption.IGNORE_CASE)
         const val SQLITE_IN_CHUNK = 500
         /** A bulk removal of more than this many rows (and over half the synced rows) is held back. */
