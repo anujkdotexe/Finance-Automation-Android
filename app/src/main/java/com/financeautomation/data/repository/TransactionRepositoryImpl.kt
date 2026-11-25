@@ -731,9 +731,19 @@ class TransactionRepositoryImpl(
                 )
             }
 
+            val sortedOpenPayables = openPayables.sortedWith(
+                compareBy<PayableEntity> {
+                    if (!explicitRef.isNullOrBlank() && it.uuid == explicitRef) 0 else 1
+                }.thenBy {
+                    it.dateIncurredSerial ?: 0
+                }.thenBy {
+                    it.timeSerial ?: 0.0
+                }
+            )
+
             var remainingRepayment = amount
             val dateSerial = DateSerialUtils.toDateSerial(timestamp)
-            for (openPayable in openPayables) {
+            for (openPayable in sortedOpenPayables) {
                 if (remainingRepayment <= com.financeautomation.domain.utils.Tolerances.MONEY_LEFT) break
                 val repRes = nettingUseCase.applyRepaymentToPayable(
                     com.financeautomation.domain.model.LedgerPayable(
@@ -2620,6 +2630,9 @@ class TransactionRepositoryImpl(
                 val current = tDao.getById(candidate.id) ?: continue
                 // Changed or queued since the read began: it is no longer a settled row
                 if (current != candidate || current.id in queuedNow) continue
+                if (current.owedToMe > 0.0) {
+                    Diagnostics.record("TransactionRepository", "prune_receivable_removed amount=${current.owedToMe} dateSerial=${current.dateSerial}")
+                }
                 tDao.deleteById(current.id)
                 qDao.deleteByTransactionId(current.id)
                 removedTxnIds.add(current.id)
@@ -2637,6 +2650,7 @@ class TransactionRepositoryImpl(
                 for (candidate in missingPayables) {
                     val current = pDao.getByUuid(candidate.uuid) ?: continue
                     if (current != candidate || current.uuid in queuedNow) continue
+                    Diagnostics.record("TransactionRepository", "prune_debt_removed amount=${current.amountIOwe} dateSerial=${current.dateIncurredSerial}")
                     pDao.deleteByUuid(current.uuid)
                     removedPayables++
                 }
