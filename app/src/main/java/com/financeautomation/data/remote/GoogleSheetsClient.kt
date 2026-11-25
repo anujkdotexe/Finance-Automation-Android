@@ -396,8 +396,8 @@ open class GoogleSheetsClient(
             val resolvedKeyCol = keyCol ?: startCol
             val resolvedUuidCol = uuidCol ?: when (startCol) {
                 "A" -> if (tabName.equals("Config", ignoreCase = true)) null else SheetSchemaConstants.COL_LETTER_DEBIT_UUID
-                "M" -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID
-                "V" -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
+                "M", "N" -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID
+                "V", "W" -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID
                 else -> null
             }
 

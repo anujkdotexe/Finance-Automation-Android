@@ -174,8 +174,15 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch(ioDispatcher) {
-            preferencesRepository.getActiveTrip().collect { trip ->
-                _uiState.update { it.copy(activeTripTag = trip ?: "") }
+            val repo = tripTagRepository
+            if (repo != null) {
+                repo.getActiveTag().collect { activeTag ->
+                    _uiState.update { it.copy(activeTripTag = activeTag?.name ?: "") }
+                }
+            } else {
+                preferencesRepository.getActiveTrip().collect { trip ->
+                    _uiState.update { it.copy(activeTripTag = trip ?: "") }
+                }
             }
         }
         viewModelScope.launch(ioDispatcher) {
