@@ -63,6 +63,11 @@ interface TransactionRepository {
     suspend fun voidTransaction(id: String, deleteSheetRow: Boolean): Result<Unit> = voidTransaction(id)
 
     /**
+     * Consumes any user-facing notice generated during the last void operation (e.g. linked debt unchanged).
+     */
+    fun consumeLastVoidNotice(): String? = null
+
+    /**
      * Resolves a failed sync locally without writing to the sync queue.
      * When [voidIt] is true the transaction is marked Void (amounts kept) because it never reached the sheet;
      * otherwise it is marked synced and confirmed.

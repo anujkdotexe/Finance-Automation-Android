@@ -79,6 +79,7 @@ object AccountingRequestJsonAdapter {
         return buildJsonObject {
             put("id", JsonPrimitive(req.id))
             put("deleteSheetRow", JsonPrimitive(req.deleteSheetRow))
+            req.linkedPayableId?.let { put("linkedPayableId", JsonPrimitive(it)) }
         }.toString()
     }
 
@@ -86,14 +87,17 @@ object AccountingRequestJsonAdapter {
         val trimmed = payload.trim()
         if (trimmed.startsWith("{")) {
             val obj = json.parseToJsonElement(trimmed).jsonObject
+            val linkedPayId = obj["linkedPayableId"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
             return VoidExpenseRequest(
                 id = obj["id"]?.jsonPrimitive?.content.orEmpty(),
-                deleteSheetRow = obj["deleteSheetRow"]?.jsonPrimitive?.booleanOrNull ?: false
+                deleteSheetRow = obj["deleteSheetRow"]?.jsonPrimitive?.booleanOrNull ?: false,
+                linkedPayableId = linkedPayId
             )
         }
         return VoidExpenseRequest(
             id = trimmed,
-            deleteSheetRow = false
+            deleteSheetRow = false,
+            linkedPayableId = null
         )
     }
 

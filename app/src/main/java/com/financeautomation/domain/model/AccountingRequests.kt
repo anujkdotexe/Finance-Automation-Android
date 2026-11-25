@@ -16,7 +16,8 @@ data class VoidInflowRequest(
 
 data class VoidExpenseRequest(
     val id: String,
-    val deleteSheetRow: Boolean = false
+    val deleteSheetRow: Boolean = false,
+    val linkedPayableId: String? = null
 )
 
 data class LogCreditRequest(

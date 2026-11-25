@@ -168,8 +168,14 @@ fun TransactionsScreen(
                     viewModel.voidTransaction(targetTxn)
                     coroutineScope.launch {
                         val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
+                        val notice = viewModel.consumeVoidNotice()
+                        val msg = if (!notice.isNullOrBlank()) {
+                            context.getString(R.string.txns_voided_with_debt_unchanged_msg, cleanName)
+                        } else {
+                            context.getString(R.string.txns_voided_named_msg, cleanName)
+                        }
                         val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.txns_voided_named_msg, cleanName),
+                            message = msg,
                             actionLabel = context.getString(R.string.action_undo),
                             duration = SnackbarDuration.Short
                         )
@@ -870,7 +876,7 @@ fun IncomeDetailSheet(
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                     ) {
                         Text(
-                            text = stringResource(R.string.txn_void_entry_confirm),
+                            text = stringResource(if (deleteSheetRow) R.string.confirm_void_delete_message else R.string.txn_void_entry_confirm),
                             style = FinanceTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

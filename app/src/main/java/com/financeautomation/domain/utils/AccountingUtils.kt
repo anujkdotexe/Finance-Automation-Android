@@ -188,5 +188,70 @@ object AccountingUtils {
 
     fun isEqualSplit(debit: LedgerDebit): Boolean =
         isEqualSplit(debit.total, debit.myShare, debit.companions, debit.owed)
+
+    /**
+     * Tolerance for matching legacy entry timestamps: strictly under one second.
+     * 1 second in serial days = 1.0 / 86400.0 (~0.000011574)
+     */
+    const val LEGACY_TIME_SERIAL_TOLERANCE: Double = 1.0 / 86400.0
+
+    /**
+     * Derives the linked payable UUID for an expense UUID if they share a common suffix.
+     * e.g. "txn_abc123" -> "pay_abc123"
+     */
+    fun linkedPayableIdForExpense(expenseId: String): String? {
+        if (expenseId.startsWith("txn_")) {
+            return "pay_" + expenseId.removePrefix("txn_")
+        }
+        return null
+    }
+
+    /**
+     * Derives the linked expense UUID for a payable UUID if they share a common suffix.
+     * e.g. "pay_abc123" -> "txn_abc123"
+     */
+    fun linkedExpenseIdForPayable(payableId: String): String? {
+        if (payableId.startsWith("pay_")) {
+            return "txn_" + payableId.removePrefix("pay_")
+        }
+        return null
+    }
+
+    /**
+     * Checks whether a candidate payable agrees with an expense for legacy matching.
+     * Checks:
+     * 1. dateIncurredSerial == txDateSerial
+     * 2. timeSerial != null and abs(timeSerial - txTimeSerial) < 1.0 / 86400.0 (< 1 second)
+     * 3. creditor and description agreement:
+     *    - If txMerchant starts with "Paid by " (case-insensitive), creditor matches payable.paidBy.
+     *    - Otherwise, description agrees (whatFor equals or starts with txMerchant, or contains txMerchant,
+     *      or txMerchant contains payable.paidBy).
+     */
+    fun legacyPayableAgreesWithExpense(
+        dateIncurredSerial: Int?,
+        timeSerial: Double?,
+        paidBy: String,
+        whatFor: String,
+        txDateSerial: Int,
+        txTimeSerial: Double,
+        txMerchant: String
+    ): Boolean {
+        if (dateIncurredSerial == null || dateIncurredSerial != txDateSerial) return false
+        if (timeSerial == null || kotlin.math.abs(timeSerial - txTimeSerial) >= LEGACY_TIME_SERIAL_TOLERANCE) return false
+
+        val cleanMerchant = txMerchant.removePrefix("[Void] ").trim()
+        val cleanWhatFor = whatFor.removePrefix("[Void] ").trim()
+        val cleanPaidBy = paidBy.trim()
+
+        if (cleanMerchant.startsWith("Paid by ", ignoreCase = true)) {
+            val creditor = cleanMerchant.substring(8).trim()
+            return eq(creditor, cleanPaidBy)
+        }
+
+        return eq(cleanWhatFor, cleanMerchant) ||
+            cleanWhatFor.startsWith("$cleanMerchant (", ignoreCase = true) ||
+            cleanWhatFor.startsWith(cleanMerchant, ignoreCase = true) ||
+            cleanMerchant.contains(cleanPaidBy, ignoreCase = true)
+    }
 }
 

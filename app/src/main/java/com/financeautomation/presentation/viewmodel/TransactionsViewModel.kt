@@ -637,6 +637,8 @@ class TransactionsViewModel(
     var lastSavedTransactionId: String? = null
         private set
 
+    fun consumeVoidNotice(): String? = transactionRepository.consumeLastVoidNotice()
+
     fun voidTransaction(txn: Transaction, deleteSheetRow: Boolean = false, onComplete: ((Boolean) -> Unit)? = null) {
         lastVoidedTransaction = txn
         viewModelScope.launch(ioDispatcher) {
