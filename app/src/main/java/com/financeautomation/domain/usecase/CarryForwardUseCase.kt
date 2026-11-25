@@ -130,8 +130,7 @@ class CarryForwardUseCase {
         val carriedFrom = existingLineage.mapNotNull { it.carriedFromUuid }.map { it.trim().lowercase() }.toSet()
         val freeDebitCopies = targetDebits.toMutableList()
         val freePayableCopies = targetPayables.toMutableList()
-        fun hasLineage(uuid: String?, tab: String, row: Int): Boolean =
-            (uuid ?: "$tab!Row$row").trim().lowercase() in carriedFrom
+        fun hasLineage(sourceKey: String): Boolean = sourceKey.trim().lowercase() in carriedFrom
         fun claimDebitCopy(d: LedgerDebit): LedgerDebit? {
             val text = "$prefix ${CarriedCopies.stripPrefixes(d.item)}"
             val index = freeDebitCopies.indexOfFirst {
@@ -157,7 +156,9 @@ class CarryForwardUseCase {
 
         // 1. Rollover open debits (status == Pending and owed > 0)
         for (debit in sourceDebits) {
-            if (debit.status == "Pending" && debit.owed > 0.0 && !hasLineage(debit.uuid, debit.tab, debit.row)) {
+            if (debit.status == "Pending" && debit.owed > 0.0 &&
+                !hasLineage(debit.uuid ?: "${debit.tab}!Row${debit.row}")
+            ) {
                 val existingCopy = claimDebitCopy(debit)
                 if (existingCopy != null) {
                     edits.add(CellEdit(debit.tab, debit.row, "K", "Carried Fwd", debit.uuid))
@@ -199,7 +200,7 @@ class CarryForwardUseCase {
         // 2. Rollover open payables (status in (Pending, Partial) and amountOwed > 0)
         for (payable in sourcePayables) {
             if ((payable.status == "Pending" || payable.status == "Partial") && payable.amountOwed > 0.0 &&
-                !hasLineage(payable.uuid, payable.tab, payable.row)
+                !hasLineage(payable.uuid ?: "${payable.tab}!Row${payable.row}")
             ) {
                 val existingCopy = claimPayableCopy(payable)
                 if (existingCopy != null) {

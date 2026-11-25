@@ -1,5 +1,6 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.core.model.ReviewState
 import com.financeautomation.core.model.SyncState
 import com.financeautomation.core.utils.DateSerialUtils
 import com.financeautomation.data.local.entity.TransactionEntity
@@ -101,8 +102,10 @@ class RowOutsideItsDateTabTest {
         if (uuid != null) setCell(tab, row, 30, uuid)
     }
 
+    /** A row that was really delivered and confirmed, which is the only kind a reconcile may judge missing. */
     private fun synced(id: String, date: Long, item: String, row: Int) = TransactionEntity(
-        id = id, timestamp = date, dateSerial = DateSerialUtils.toDateSerial(date), timeSerial = 0.5,
+        reviewState = ReviewState.CONFIRMED.name,
+        id = id,timestamp = date, dateSerial = DateSerialUtils.toDateSerial(date), timeSerial = 0.5,
         account = "Cash", merchant = item, category = "Food & Drink", totalAmount = 500.0, myShare = 0.0,
         owedToMe = 500.0, companions = "Riya", status = "Pending", syncState = SyncState.SYNCED.name,
         sheetRowIndex = row

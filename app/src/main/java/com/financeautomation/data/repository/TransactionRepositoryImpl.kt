@@ -482,6 +482,13 @@ class TransactionRepositoryImpl(
         if (decision is com.financeautomation.domain.model.VoidDecision.Block) {
             return VoidDelivery.Blocked(decision.reason, exact)
         }
+        // A sheet row without an id (imported under a "sheet_" id) cannot be found to be voided. Voiding its debt
+        // alone would leave the expense live, so neither is touched.
+        if (targetRow == null && txn.id.startsWith("sheet_") &&
+            decision is com.financeautomation.domain.model.VoidDecision.VoidBoth
+        ) {
+            return VoidDelivery.Blocked(com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH, exact)
+        }
         val debtToVoid: SheetDebt? = if (decision is com.financeautomation.domain.model.VoidDecision.VoidBoth) {
             exact ?: tabDebts.first { it.rowNumber == decision.sheetRowIndex }.let { row ->
                 val isV1 = payableRowIsV1(sheets, spreadsheetId, voidTab, row.rowNumber, row.uuid.orEmpty())

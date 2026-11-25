@@ -1018,6 +1018,40 @@ class VoidFriendPaidTest {
     }
 
     @Test
+    fun expenseRowWithoutAnId_neverHasOnlyItsDebtVoided() = runBlocking {
+        val txnId = "sheet_${currentTab}_4"
+        tDao.insert(TransactionEntity(
+            id = txnId, timestamp = nowMillis, dateSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            account = "Other", merchant = "Paid by Alice", tripTag = "", category = "Other",
+            totalAmount = 400.0, companions = "Personal", myShare = 400.0, owedToMe = 0.0,
+            status = TransactionStatus.PERSONAL.value, sourcePackage = "", syncState = SyncState.SYNCED.name,
+            sheetRowIndex = 4
+        ))
+        pDao.upsert(PayableEntity(
+            uuid = "pay_of_idless_row", dateIncurredSerial = fixedDateSerial, timeSerial = fixedTimeSerial,
+            paidBy = "Alice", whatFor = "Paid by Alice", amountIOwe = 400.0, dateRepaidSerial = null,
+            repaymentStatus = "Pending", tabName = currentTab, sheetRowIndex = 4
+        ))
+        setCell(currentTab, 4, "D", "Paid by Alice")
+        setCell(currentTab, 4, "G", 400.0)
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_WHAT_FOR, "Paid by Alice")
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE, 400.0)
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, "Pending")
+        setCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_UUID, "pay_of_idless_row")
+
+        repo.voidTransaction(txnId, deleteSheetRow = false)
+        repo.syncPendingTransactions(userInitiated = true)
+
+        assertEquals("Paid by Alice", fakeSheet.getCell(currentTab, 4, "D"))
+        assertEquals("Pending", fakeSheet.getCell(currentTab, 4, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS))
+        assertEquals("Pending", pDao.getByUuid("pay_of_idless_row")!!.repaymentStatus)
+        assertEquals(
+            com.financeautomation.domain.model.VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH,
+            repo.takeVoidBlockedNotice()
+        )
+    }
+
+    @Test
     fun legacyMatchingHasNoPartialShortcuts_andKnowsTheNoDescriptionShape() {
         fun match(merchant: String, account: String, paidBy: String, whatFor: String, category: String = "Other") =
             AccountingUtils.matchLegacyPayable(

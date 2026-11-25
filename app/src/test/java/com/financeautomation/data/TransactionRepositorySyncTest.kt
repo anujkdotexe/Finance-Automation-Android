@@ -364,15 +364,14 @@ class TransactionRepositorySyncTest {
                 } else when {
                     // values:batchGet (readLedgerSnapshot)
                     method == "GET" && url.contains("values:batchGet") -> {
-                        customBatchGetResponse ?: """{"valueRanges":[
-                            {"range":"'Nov26'!L3:L3","majorDimension":"ROWS","values":[["Note"]]},
-                            {"range":"'Nov26'!A4:L","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
-                        ]}"""
+                        customBatchGetResponse ?: run {
+                            // Like the API: one value range for every range asked for, in order, also when it is blank
+                            val entries = request.url.queryParameterValues("ranges").joinToString(",") { range ->
+                                val values = if (range.orEmpty().endsWith("L3:L3")) """[["Note"]]""" else "[]"
+                                """{"range":"$range","majorDimension":"ROWS","values":$values}"""
+                            }
+                            """{"valueRanges":[$entries]}"""
+                        }
                     }
                     // Header check for L3 Note
                     method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3") || url.contains("!L3")) -> {
@@ -1491,6 +1490,12 @@ class TransactionRepositorySyncTest {
 
         // Queue item is cleared
         assertEquals(0, qDao.getAllPending(10).size)
+
+        // The void reached the sheet row that holds the expense, in one write
+        val voidWrite = mock.recordedBodies.single { it.contains("'Nov26'!K6") }
+        listOf("'Nov26'!D6", "'Nov26'!G6", "'Nov26'!I6", "'Nov26'!J6", "[Void] Coffee", "\"Void\"").forEach {
+            assertTrue("the void write must contain $it", voidWrite.contains(it))
+        }
 
         // Local DB remains void and synced
         val finalTxn = tDao.getById(txnId)
