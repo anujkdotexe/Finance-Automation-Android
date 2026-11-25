@@ -822,6 +822,66 @@ class TransactionRepositoryImpl(
         }
     }
 
+    /**
+     * One run per month is enough once it reached the sheet; the first three days run again to catch rows added late.
+     * When the year turned and January's carry never ran, it is queued first so the debts of the previous year's
+     * workbook are not left behind.
+     */
+    override suspend fun planMonthlyCarry(now: java.time.ZonedDateTime): List<Pair<String, String>> = withContext(ioDispatcher) {
+        val current = java.time.YearMonth.from(now)
+        val done = preferencesRepository?.getPreference(PreferencesRepository.KEY_CARRY_DONE_MONTH)
+            ?.let { saved -> runCatching { java.time.YearMonth.parse(saved) }.getOrNull() }
+        if (done != null && done >= current && now.dayOfMonth > 3) return@withContext emptyList()
+
+        val ownStep = carryStep(current)
+        if (current.monthValue == 1) {
+            // January's own carry reads the previous year's workbook; without one there is nothing to carry
+            return@withContext if (hasWorkbookForYear(current.year - 1)) listOf(ownStep) else emptyList()
+        }
+        val yearOpened = preferencesRepository?.getPreference(PreferencesRepository.KEY_CARRY_YEAR_OPENED)?.toIntOrNull()
+        if (yearOpened != current.year && hasWorkbookForYear(current.year - 1)) {
+            listOf(carryStep(java.time.YearMonth.of(current.year, 1)), ownStep)
+        } else {
+            listOf(ownStep)
+        }
+    }
+
+    private fun carryStep(target: java.time.YearMonth): Pair<String, String> {
+        val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
+        return target.atDay(1).format(formatter) to target.minusMonths(1).atDay(1).format(formatter)
+    }
+
+    /** True when a workbook of [year] is known or found, and also when the search itself failed (the carry retries). */
+    private suspend fun hasWorkbookForYear(year: Int): Boolean {
+        if (!preferencesRepository?.getSpreadsheetIdForYearSync(year).isNullOrBlank()) return true
+        return when (val found = workbookResolver?.findExisting(year)) {
+            is Result.Success -> !found.data.isNullOrBlank()
+            is Result.Error -> true
+            else -> false
+        }
+    }
+
+    /**
+     * Records a carry that reached the sheet. A carry into this month covers every earlier month. A carry into a past
+     * month leaves the open rows there, so that month is added to [deliveredMonths] and a catch-up follows.
+     */
+    private suspend fun noteCarryDelivered(item: SyncQueueEntity, deliveredMonths: MutableSet<java.time.YearMonth>) {
+        val req = AccountingRequestJsonAdapter.carryForwardRequestFromJson(item.payloadJson)
+        val key = com.financeautomation.data.remote.AccountingSyncExecutor.parseMonthKey(req.targetTab) ?: return
+        val target = java.time.YearMonth.of(key / 12, key % 12 + 1)
+        val current = java.time.YearMonth.from(Instant.ofEpochMilli(clock()).atZone(sheetTimeZone))
+        if (target > current) return // the executor moves nothing into a month that has not started
+        if (target.monthValue == 1) {
+            preferencesRepository?.setPreference(PreferencesRepository.KEY_CARRY_YEAR_OPENED, target.year.toString(), isDirty = false)
+        }
+        if (target == current) {
+            preferencesRepository?.setPreference(PreferencesRepository.KEY_CARRY_DONE_MONTH, current.toString(), isDirty = false)
+            deliveredMonths.removeAll { it.year == current.year || current.monthValue == 1 }
+        } else {
+            deliveredMonths.add(target)
+        }
+    }
+
     override suspend fun closeYear(year: Int): Result<Unit> = withContext(ioDispatcher) {
         try {
             val reqId = "yc_${UUID.randomUUID().toString().replace("-", "").take(12)}"
@@ -1602,6 +1662,9 @@ class TransactionRepositoryImpl(
                                 dao.getByUuid(payReq.requestId)?.let { dao.upsert(it.copy(tabName = opTabName)) }
                             }
                         }
+                        if (item.operationType == SyncQueueEntity.OP_CARRY_FORWARD) {
+                            noteCarryDelivered(item, deliveredMonths)
+                        }
                         syncQueueDao.deleteById(item.id)
                         syncedCount++
                     } else if (opResult is Result.Error) {
@@ -1689,10 +1752,11 @@ class TransactionRepositoryImpl(
                             operationType = SyncQueueEntity.OP_CARRY_FORWARD,
                             payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(cfReq)
                         )
-                        syncQueueDao.insert(cfQueueItem)
+                        val cfRowId = syncQueueDao.insert(cfQueueItem)
                         val cfRes = accountingSyncExecutor.executeCarryForward(cfQueueItem, spreadsheetId)
                         if (cfRes is Result.Success) {
-                            syncQueueDao.deleteById(cfQueueItem.id)
+                            noteCarryDelivered(cfQueueItem, deliveredMonths)
+                            syncQueueDao.deleteById(cfRowId)
                         }
                     }
                     knownTabs.add(tabName)
@@ -2745,25 +2809,19 @@ class TransactionRepositoryImpl(
     }
 
     /**
-     * A debt delivered to a month that is already over would stay there. Queue a carry for each month after it, up to
-     * the current one; carrying is idempotent per row, so repeating one is harmless.
+     * A debt delivered to a month that is already over would stay there. One carry into the current month moves the
+     * open rows of every earlier month of that workbook. A delivery into last year first needs January's carry, which
+     * is the one that reads the previous workbook. Carrying is idempotent per row, so repeating one is harmless.
      */
     private suspend fun enqueueCatchUpCarries(deliveredMonths: Set<java.time.YearMonth>) {
-        if (deliveredMonths.isEmpty()) return
         val current = java.time.YearMonth.from(Instant.ofEpochMilli(clock()).atZone(sheetTimeZone))
-        val formatter = DateTimeFormatter.ofPattern("MMMyy", Locale.US)
+        val past = deliveredMonths.filter { it < current && it.year >= current.year - 1 }
+        if (past.isEmpty()) return
         val wanted = linkedSetOf<Pair<String, String>>()
-        for (month in deliveredMonths.filter { it < current }) {
-            var source = month
-            var steps = 0
-            while (source < current && steps < 12) {
-                val target = source.plusMonths(1)
-                wanted.add(target.atDay(1).format(formatter) to source.atDay(1).format(formatter))
-                source = target
-                steps++
-            }
+        if (current.monthValue != 1 && past.any { it.year < current.year }) {
+            wanted.add(carryStep(java.time.YearMonth.of(current.year, 1)))
         }
-        if (wanted.isEmpty()) return
+        wanted.add(carryStep(current))
         val qDao = resolveSyncQueueDao()
         val waiting = qDao.getAllQueueFlow().first()
             .filter { it.operationType == SyncQueueEntity.OP_CARRY_FORWARD }

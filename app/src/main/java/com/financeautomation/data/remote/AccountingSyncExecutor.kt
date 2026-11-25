@@ -447,57 +447,66 @@ open class AccountingSyncExecutor(
             }
             val prevSnap = (prevSnapRes as Result.Success).data
             val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
-            val foundDecTab = if (sourceTab != null) {
-                prevSnap.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
-            } else {
-                prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
-                    ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
-            }
-            if (foundDecTab != null) {
-                sourceTab = foundDecTab.tabName
-                sourceSnapshot = prevSnap
-                sourceSpreadsheetId = prevSpreadsheetId
-            } else {
+            if (prevSnap.monthTabs.isEmpty()) {
                 return Result.Error(IllegalStateException("No source month tab found in previous year ($prevYear) workbook for carry forward"))
             }
+            sourceTab = prevSnap.monthTabs.find { it.tabName.equals(sourceTab ?: prevDecTab, ignoreCase = true) }?.tabName
+            sourceSnapshot = prevSnap
+            sourceSpreadsheetId = prevSpreadsheetId
         }
 
-        if (sourceTab == null) {
-            return Result.Error(IllegalStateException("Could not resolve source tab for carry forward into $targetTab"))
+        // Every month before the target can still hold open rows when carries were missed for one or more whole
+        // months, so each of them is a source, oldest first. This uses the snapshot already read.
+        val sourceMonths = sourceSnapshot.monthTabs
+            .filter { month ->
+                if (month.tabName.equals(targetTab, ignoreCase = true)) return@filter false
+                if (month.tabName.equals(sourceTab, ignoreCase = true)) return@filter true
+                val key = parseMonthKey(month.tabName)
+                targetKey != null && key != null && key < targetKey
+            }
+            .sortedBy { parseMonthKey(it.tabName) ?: 0 }
+
+        val existingLineage = resolveLineageDao().getAll().map { it.toDomain() }
+        val appends = mutableListOf<com.financeautomation.domain.model.NewRow>()
+        val edits = mutableListOf<com.financeautomation.domain.model.CellEdit>()
+        val newLineage = mutableListOf<com.financeautomation.domain.model.LineageRecord>()
+        for (sourceMonth in sourceMonths) {
+            // A copy of one of this month's rows can only sit in a later month, up to the target
+            val sourceMonthKey = parseMonthKey(sourceMonth.tabName) ?: 0
+            val copyMonths = (snapshot.monthTabs + sourceSnapshot.monthTabs)
+                .distinctBy { it.tabName.lowercase(Locale.US) }
+                .filter { month ->
+                    val key = parseMonthKey(month.tabName)
+                    key != null && key > sourceMonthKey && (targetKey == null || key <= targetKey)
+                }
+            val result = carryForwardUseCase(
+                targetTab = targetTab,
+                sourceTab = sourceMonth.tabName,
+                targetDebits = copyMonths.flatMap { m -> m.debits.map { it.toDomain(m.tabName) } },
+                targetPayables = copyMonths.flatMap { m -> m.payables.map { it.toDomain(m.tabName) } },
+                sourceDebits = sourceMonth.debits.map { it.toDomain(sourceMonth.tabName) },
+                sourcePayables = sourceMonth.payables.map { it.toDomain(sourceMonth.tabName) },
+                existingLineage = existingLineage
+            )
+            appends.addAll(result.plan.appends)
+            edits.addAll(result.plan.edits)
+            newLineage.addAll(result.lineageRecords)
         }
 
-        val targetMonth = snapshot.monthTabs.find { it.tabName.equals(targetTab, ignoreCase = true) }
-        val sourceMonth = sourceSnapshot.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
-
-        val targetDebits = targetMonth?.debits?.map { it.toDomain(targetTab) }.orEmpty()
-        val targetPayables = targetMonth?.payables?.map { it.toDomain(targetTab) }.orEmpty()
-        val sourceDebits = sourceMonth?.debits?.map { it.toDomain(sourceTab) }.orEmpty()
-        val sourcePayables = sourceMonth?.payables?.map { it.toDomain(sourceTab) }.orEmpty()
-
-        val rolloverResult = carryForwardUseCase(
-            targetTab = targetTab,
-            sourceTab = sourceTab,
-            targetDebits = targetDebits,
-            targetPayables = targetPayables,
-            sourceDebits = sourceDebits,
-            sourcePayables = sourcePayables,
-            existingLineage = resolveLineageDao().getAll().map { it.toDomain() }
-        )
-
-        if (rolloverResult.plan.appends.isEmpty() && rolloverResult.plan.edits.isEmpty()) {
+        if (appends.isEmpty() && edits.isEmpty()) {
             return Result.Success(Unit)
         }
 
         // Apply plan: appends to target, source status edits to source (or target) workbook
         val applyResult = applyAccountingPlan(
             spreadsheetId = spreadsheetId,
-            plan = rolloverResult.plan,
+            plan = AccountingPlan(edits = edits, appends = appends),
             sourceSpreadsheetId = sourceSpreadsheetId
         )
         if (applyResult is Result.Success) {
             // Persist lineage records into Room in one transaction
-            if (rolloverResult.lineageRecords.isNotEmpty()) {
-                resolveLineageDao().insertAll(rolloverResult.lineageRecords.map { LineageEntity.fromDomain(it) })
+            if (newLineage.isNotEmpty()) {
+                resolveLineageDao().insertAll(newLineage.map { LineageEntity.fromDomain(it) })
             }
         }
         return applyResult

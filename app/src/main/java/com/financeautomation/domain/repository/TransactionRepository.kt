@@ -180,6 +180,15 @@ interface TransactionRepository {
     ): Result<Unit>
 
     /**
+     * The carries a scheduled run on [now] still needs, as target and source tab pairs in the order to queue them.
+     * Empty when this month's carry already reached the sheet.
+     */
+    suspend fun planMonthlyCarry(now: java.time.ZonedDateTime): List<Pair<String, String>> {
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMyy", java.util.Locale.US)
+        return listOf(now.format(formatter) to now.minusMonths(1).format(formatter))
+    }
+
+    /**
      * Enqueues year-end closing statement and JSON backup creation.
      */
     suspend fun closeYear(year: Int): Result<Unit>

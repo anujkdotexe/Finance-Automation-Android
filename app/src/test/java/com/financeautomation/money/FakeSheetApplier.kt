@@ -133,6 +133,9 @@ class FakeSheetApplier(
         return GoogleSheetsClient(builder.addInterceptor(interceptor).build(), tokenProvider)
     }
 
+    /** Answers one request, for a test that routes several workbooks through one client. */
+    fun serve(request: Request): Response = respond(request)
+
     private fun bodyOf(request: Request): String {
         val b = request.body ?: return ""
         val buf = okio.Buffer()
