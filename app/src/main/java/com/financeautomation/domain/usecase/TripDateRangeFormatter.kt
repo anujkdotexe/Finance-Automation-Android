@@ -17,27 +17,39 @@ import java.util.Locale
  */
 object TripDateRangeFormatter {
 
-    fun format(transactions: List<Transaction>, isActive: Boolean): String {
-        if (transactions.isEmpty()) {
-            return if (isActive) "Active travel ledger" else "Past travel ledger"
-        }
-        val first = transactions.minOf { it.timestamp }
-        val last = transactions.maxOf { it.timestamp }
+    fun format(
+        transactions: List<Transaction>,
+        isActive: Boolean,
+        startDateEpochDay: Long? = null,
+        endDateEpochDay: Long? = null
+    ): String {
         val sdf = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
         val sdfShort = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
-        // Dates are always shown in the sheet zone, whatever the device zone is
-        val day1: LocalDate = Instant.ofEpochMilli(first).atZone(ZONE).toLocalDate()
-        val day2: LocalDate = Instant.ofEpochMilli(last).atZone(ZONE).toLocalDate()
+
+        val day1: LocalDate? = startDateEpochDay?.let { LocalDate.ofEpochDay(it) }
+            ?: transactions.minOfOrNull { it.timestamp }?.let {
+                Instant.ofEpochMilli(it).atZone(ZONE).toLocalDate()
+            }
+
+        val day2: LocalDate? = endDateEpochDay?.let { LocalDate.ofEpochDay(it) }
+            ?: transactions.maxOfOrNull { it.timestamp }?.let {
+                Instant.ofEpochMilli(it).atZone(ZONE).toLocalDate()
+            }
+
+        if (day1 == null) {
+            return if (isActive) "Active travel ledger" else "Past travel ledger"
+        }
 
         return if (isActive) {
             "Started ${sdf.format(day1)}"
         } else {
-            if (day1 == day2) {
+            val end = day2 ?: day1
+            if (day1 == end) {
                 sdf.format(day1)
-            } else if (day1.year == day2.year) {
-                "${sdfShort.format(day1)} - ${sdf.format(day2)}"
+            } else if (day1.year == end.year) {
+                "${sdfShort.format(day1)} - ${sdf.format(end)}"
             } else {
-                "${sdf.format(day1)} - ${sdf.format(day2)}"
+                "${sdf.format(day1)} - ${sdf.format(end)}"
             }
         }
     }
