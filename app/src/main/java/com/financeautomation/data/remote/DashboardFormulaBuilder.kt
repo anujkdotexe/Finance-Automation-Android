@@ -309,13 +309,57 @@ object DashboardFormulaBuilder {
         return "=" + terms.joinToString(" + ")
     }
 
+    /** Tab name expression of the current month in the workbook whose two digit year is [yy]. */
+    private fun currentMonthTabExpr(yy: String): String = """TEXT(TODAY(), "mmm") & "$yy""""
+
+    /**
+     * Tab name expression of the month after the current one. In December it takes the following year's suffix, so
+     * the January tab of the same year (a month that is long over) is never read as the next month. That tab belongs
+     * to another year's workbook, so here it is normally missing and counts as nothing.
+     */
+    private fun nextMonthTabExpr(year: Int): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        val nextYy = ((year + 1) % 100).toString().padStart(2, '0')
+        return """TEXT(EDATE(TODAY(), 1), "mmm") & IF(MONTH(TODAY()) = 12, "$nextYy", "$yy")"""
+    }
+
+    /**
+     * Owed To Me KPI (cell G5): rows with status exactly Pending in the current month tab plus the next one. Each tab
+     * has its own IFERROR so a missing next tab adds nothing. A debt carried early is counted once: the original is
+     * marked "Carried Fwd" and only its copy is Pending.
+     */
+    fun buildOwedToMeKpiFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        val terms = listOf(currentMonthTabExpr(yy), nextMonthTabExpr(year)).map { tab ->
+            """IFERROR(SUMIF(${tabRange(tab, "K4:K")}, "Pending", ${tabRange(tab, "J4:J")}), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
+    /** I Owe People KPI (cell J5): Pending plus Partial payables of the current month tab and the next one. */
+    fun buildIOweKpiFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
+        val yy = (year % 100).toString().padStart(2, '0')
+        val terms = listOf(currentMonthTabExpr(yy), nextMonthTabExpr(year)).map { tab ->
+            val status = tabRange(tab, "AC4:AC")
+            val amount = tabRange(tab, "AA4:AA")
+            """IFERROR(SUMIF($status, "Pending", $amount) + SUMIF($status, "Partial", $amount), 0)"""
+        }
+        return "=" + terms.joinToString(" + ")
+    }
+
     /**
      * Builds the They Owe Me query formula for cell A27.
-     * Stacks current month and next month (if present), counting each open 'Pending' debt exactly once.
+     * Stacks current month and next month (if present), counting each open 'Pending' debt exactly once. When the next
+     * tab is missing the stacked query is expected to error, and the outer IFERROR then reads the current tab alone.
      */
     fun buildTheyOweMeQueryFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
         val yy = (year % 100).toString().padStart(2, '0')
-        return """=IFERROR(QUERY(QUERY({INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"); INDIRECT("'" & TEXT(EDATE(TODAY(), 1), "mmm") & "$yy" & "'!A4:L")}, "SELECT Col8, Col7 - Col9, Col7 - Col9 - Col10, Col10, Col1 WHERE Col11 = 'Pending' AND Col10 > 0 AND Col8 != 'Personal' LABEL Col7 - Col9 '', Col7 - Col9 - Col10 ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!A4:L"), "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), "SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''", 0), ""))"""
+        val current = tabRange(currentMonthTabExpr(yy), "A4:L")
+        val next = tabRange(nextMonthTabExpr(year), "A4:L")
+        val group = """"SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''""""
+        val stacked = """QUERY(QUERY({$current; $next}, "SELECT Col8, Col7 - Col9, Col7 - Col9 - Col10, Col10, Col1 WHERE Col11 = 'Pending' AND Col10 > 0 AND Col8 != 'Personal' LABEL Col7 - Col9 '', Col7 - Col9 - Col10 ''", 0), $group, 0)"""
+        val single = """QUERY(QUERY($current, "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), $group, 0)"""
+        return """=IFERROR($stacked, IFERROR($single, ""))"""
     }
 
     /**
@@ -324,7 +368,12 @@ object DashboardFormulaBuilder {
      */
     fun buildIOwePeopleQueryFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
         val yy = (year % 100).toString().padStart(2, '0')
-        return """=IFERROR(QUERY(QUERY({INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"); INDIRECT("'" & TEXT(EDATE(TODAY(), 1), "mmm") & "$yy" & "'!W4:AC")}, "SELECT Col3, Col5, Col1 WHERE (Col7 = 'Pending' OR Col7 = 'Partial') AND Col5 > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), IFERROR(QUERY(QUERY(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!W4:AC"), "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), "SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''", 0), ""))"""
+        val current = tabRange(currentMonthTabExpr(yy), "W4:AC")
+        val next = tabRange(nextMonthTabExpr(year), "W4:AC")
+        val group = """"SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''""""
+        val stacked = """QUERY(QUERY({$current; $next}, "SELECT Col3, Col5, Col1 WHERE (Col7 = 'Pending' OR Col7 = 'Partial') AND Col5 > 0", 0), $group, 0)"""
+        val single = """QUERY(QUERY($current, "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), $group, 0)"""
+        return """=IFERROR($stacked, IFERROR($single, ""))"""
     }
 
     /**
@@ -365,7 +414,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4,
                 colIndex = 6, // Col G
-                formula = """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!K4:K"), "Pending", INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!J4:J")), 0)"""
+                formula = buildOwedToMeKpiFormula(year)
             )
         )
 
@@ -375,7 +424,7 @@ object DashboardFormulaBuilder {
                 sheetId = dashboardSheetId,
                 rowIndex = 4,
                 colIndex = 9, // Col J
-                formula = """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")), 0)"""
+                formula = buildIOweKpiFormula(year)
             )
         )
 
@@ -408,7 +457,7 @@ object DashboardFormulaBuilder {
                     sheetId = dashboardSheetId,
                     rowIndex = rowIndex,
                     colIndex = 21, // Col V
-                    formula = buildMonthlySummaryBurnFormula(row, excludedNames)
+                    formula = buildMonthlySummaryBurnFormula(row, excludedNames, year)
                 )
             )
             // Col W: Total Outflow (excluding [Carried*)
@@ -417,7 +466,7 @@ object DashboardFormulaBuilder {
                     sheetId = dashboardSheetId,
                     rowIndex = rowIndex,
                     colIndex = 22, // Col W
-                    formula = buildMonthlySummaryOutflowFormula(row)
+                    formula = buildMonthlySummaryOutflowFormula(row, year)
                 )
             )
         }
@@ -470,7 +519,7 @@ object DashboardFormulaBuilder {
                     mapOf(
                         "values" to listOf(
                             mapOf("userEnteredValue" to mapOf("stringValue" to cat.name)),
-                            mapOf("userEnteredValue" to mapOf("formulaValue" to buildCategorySpendFormula(rowNum)))
+                            mapOf("userEnteredValue" to mapOf("formulaValue" to buildCategorySpendFormula(rowNum, year)))
                         )
                     )
                 )

@@ -533,7 +533,7 @@ object SheetProvisioner {
             Pair(
                 6,
                 Triple(
-                    """=IFERROR(SUMIF(INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!K4:K"), "Pending", INDIRECT("'"&TEXT(TODAY(),"mmm")&"$yy"&"'!J4:J")), 0)""",
+                    DashboardFormulaBuilder.buildOwedToMeKpiFormula(year),
                     greenColor,
                     true
                 )
@@ -542,7 +542,7 @@ object SheetProvisioner {
             Pair(
                 9,
                 Triple(
-                    """=IFERROR(SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Pending", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")) + SUMIF(INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AC4:AC"), "Partial", INDIRECT("'" & TEXT(TODAY(), "mmm") & "$yy" & "'!AA4:AA")), 0)""",
+                    DashboardFormulaBuilder.buildIOweKpiFormula(year),
                     burnRedColor,
                     true
                 )
