@@ -1370,6 +1370,10 @@ class TransactionRepositoryImpl(
                                     dateRepaidSerial = if (outcome.fullyRepaid) outcome.dateSerial else null
                                 )
                             }
+                            // The sheet now holds the debt in this month, so later reads can keep it in step
+                            resolvePayableDao()?.let { dao ->
+                                dao.getByUuid(payReq.requestId)?.let { dao.upsert(it.copy(tabName = opTabName)) }
+                            }
                         }
                         syncQueueDao.deleteById(item.id)
                         syncedCount++
@@ -2148,7 +2152,9 @@ class TransactionRepositoryImpl(
 
     private class PruneCandidates(
         val transactions: Map<String, TransactionEntity>,
-        val inflows: Map<String, InflowEntity>
+        val inflows: Map<String, InflowEntity>,
+        /** Debts with no month recorded and nothing waiting to be sent. */
+        val unplacedPayables: Map<String, PayableEntity>
     )
 
     private class PruneResult(val pruned: Int, val manyMissing: Boolean)
@@ -2175,11 +2181,17 @@ class TransactionRepositoryImpl(
                     (it.status.equals("CONFIRMED", ignoreCase = true) || it.status.equals("VOID", ignoreCase = true))
             }
             .associateBy { it.id }
-        return PruneCandidates(txns, inflows)
+        val unplacedPayables = resolvePayableDao()?.getAll().orEmpty()
+            .filter { it.tabName.isBlank() && it.uuid !in queued }
+            .associateBy { it.uuid }
+        return PruneCandidates(txns, inflows, unplacedPayables)
     }
 
     private fun tabNameOf(timestamp: Long): String =
         Instant.ofEpochMilli(timestamp).atZone(sheetTimeZone).format(DateTimeFormatter.ofPattern("MMMyy", Locale.US)).lowercase()
+
+    private fun tabNameOfSerial(dateSerial: Int): String =
+        DateSerialUtils.fromDateSerial(dateSerial).format(DateTimeFormatter.ofPattern("MMMyy", Locale.US)).lowercase()
 
     /**
      * Removes synced local rows (expenses and income) that the sheet no longer holds, after a read that succeeded for
@@ -2191,6 +2203,8 @@ class TransactionRepositoryImpl(
      * Safety brake: more than half of the synced rows and more than [PRUNE_BRAKE_MIN_ROWS] missing at once is held
      * back and flagged instead. Payables rebuild from the sheet in the same reconcile; people balances and trip
      * totals are derived from the remaining rows; a paid subscription cycle that pointed at a removed row is closed.
+     * A debt with no month recorded is outside that rebuild: it is removed here when nothing is waiting to be sent,
+     * the month it was incurred was read, and no row read from the sheet carries its id.
      */
     private suspend fun pruneMissingFromSheet(
         spreadsheetId: String,
@@ -2217,10 +2231,15 @@ class TransactionRepositoryImpl(
             .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
         val missingInflows = candidates.inflows.values
             .filter { tabNameOf(it.timestamp) in readTabs && it.id !in seenLocalIds }
+        val sheetPayableIds = snapshot.monthTabs.flatMap { month -> month.payables.mapNotNull { it.uuid } }.toSet()
+        val missingPayables = candidates.unplacedPayables.values.filter { debt ->
+            val serial = debt.dateIncurredSerial
+            serial != null && tabNameOfSerial(serial) in readTabs && debt.uuid !in sheetPayableIds
+        }
         val missing = missingTxns.size + missingInflows.size
         val syncedTotal = candidates.transactions.size + candidates.inflows.size
 
-        if (missing == 0) {
+        if (missing == 0 && missingPayables.isEmpty()) {
             prefs.setPreference(PreferencesRepository.KEY_SHEET_MANY_MISSING_FLAG, null, isDirty = false)
             return PruneResult(0, false)
         }
@@ -2235,6 +2254,8 @@ class TransactionRepositoryImpl(
         val iDao = resolveInflowDao()
         val removedTxnIds = mutableListOf<String>()
         val removedInflowIds = mutableListOf<String>()
+        var removedPayables = 0
+        val pDao = resolvePayableDao()
         val cycleDao = subscriptionCycleDao ?: databaseProvider?.invoke()?.subscriptionCycleDao()
         runInDbTransaction {
             val queuedNow = qDao.getAllQueueFlow().first().map { it.transactionId }.toSet()
@@ -2255,13 +2276,21 @@ class TransactionRepositoryImpl(
                     removedInflowIds.add(current.id)
                 }
             }
+            if (pDao != null) {
+                for (candidate in missingPayables) {
+                    val current = pDao.getByUuid(candidate.uuid) ?: continue
+                    if (current != candidate || current.uuid in queuedNow) continue
+                    pDao.deleteByUuid(current.uuid)
+                    removedPayables++
+                }
+            }
             if (cycleDao != null && removedTxnIds.isNotEmpty()) {
                 removedTxnIds.chunked(SQLITE_IN_CHUNK).forEach { cycleDao.releaseTransactions(it, clock()) }
             }
         }
         removedInflowIds.forEach { prefs.setPreference(SettledInflowMarker.key(it), null, isDirty = false) }
 
-        val pruned = removedTxnIds.size + removedInflowIds.size
+        val pruned = removedTxnIds.size + removedInflowIds.size + removedPayables
         prefs.setPreference(PreferencesRepository.KEY_SHEET_MANY_MISSING_FLAG, null, isDirty = false)
         if (pruned > 0) {
             Diagnostics.record("TransactionRepository", "SHEET_PRUNE removed=$pruned")
