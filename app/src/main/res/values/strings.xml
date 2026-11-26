@@ -50,6 +50,9 @@
     <string name="health_status_format">Status: %s</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_discard_anyway">Discard anyway</string>
+    <string name="discard_partly_sent_title">Discard partly sent item?</string>
+    <string name="discard_partly_sent_message">Part of this entry may already be recorded in your Google Sheet. Discarding will stop future sync attempts, but will not undo changes already written to the sheet. Please check your sheet.</string>
     <string name="action_confirm">Confirm</string>
     <string name="action_void">Void</string>
     <string name="action_edit">Edit</string>
