@@ -12,6 +12,9 @@ import java.util.concurrent.TimeoutException
 class UnprovableReplayException :
     IllegalStateException("The sheet changed after this entry was first sent, so what was saved cannot be proven")
 
+/** A repayment that matches no open debt. The message names no one and states no amount. */
+class NoOpenDebtException : IllegalStateException("No open debt was found for this repayment")
+
 /** A carried copy that no longer matches its still open original, so what is owed cannot be proven. */
 class CarryConflictException :
     IllegalStateException("A carried copy no longer matches its open original, so nothing was carried")
@@ -26,6 +29,7 @@ enum class SyncErrorKind {
     CARRY_CONFLICT,
     EDIT_CARRIED,
     EDIT_SHEET_CHANGED,
+    NO_OPEN_DEBT,
     UNKNOWN;
 
     fun plainMessage(): String = when (this) {
@@ -40,6 +44,8 @@ enum class SyncErrorKind {
             "row Carried Fwd, then retry."
         EDIT_CARRIED -> "Edit not saved: this debt was carried forward. The phone shows the sheet's values."
         EDIT_SHEET_CHANGED -> "Edit not saved: this entry changed in the sheet. The phone shows the sheet's values."
+        NO_OPEN_DEBT -> "No open debt in the sheet for this repayment, so nothing was written. Check the sheet, " +
+            "then retry or discard this item."
         UNKNOWN -> "Something went wrong. Tap Details."
     }
 
@@ -59,6 +65,7 @@ enum class SyncErrorKind {
             if (throwable == null) return UNKNOWN
             if (throwable is UnprovableReplayException) return PARTLY_SENT
             if (throwable is CarryConflictException) return CARRY_CONFLICT
+            if (throwable is NoOpenDebtException) return NO_OPEN_DEBT
             if (throwable is EditBlockedException) {
                 return if (throwable.reason == EditBlockReason.DEBT_CARRIED) EDIT_CARRIED else EDIT_SHEET_CHANGED
             }

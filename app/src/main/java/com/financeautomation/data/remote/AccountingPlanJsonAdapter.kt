@@ -41,6 +41,7 @@ object AccountingPlanJsonAdapter {
             put("excess", JsonPrimitive(plan.excess))
             put("unmatched", JsonPrimitive(plan.unmatched))
             put("message", JsonPrimitive(plan.message))
+            plan.workbookId?.let { put("workbook", JsonPrimitive(it)) }
 
             put("edits", buildJsonArray {
                 plan.edits.forEach { edit ->
@@ -158,7 +159,8 @@ object AccountingPlanJsonAdapter {
             settled = settled,
             excess = excess,
             unmatched = unmatched,
-            message = message
+            message = message,
+            workbookId = root["workbook"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
         )
     }
 }

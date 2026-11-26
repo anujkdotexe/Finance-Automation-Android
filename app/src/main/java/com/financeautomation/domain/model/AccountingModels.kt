@@ -100,7 +100,9 @@ data class AccountingPlan(
     val settled: List<SettledRef> = emptyList(),
     val excess: Double = 0.0,
     val unmatched: Boolean = false,
-    val message: String = ""
+    val message: String = "",
+    /** The workbook the rows are in, when that is not the workbook of the entry's own date. Kept on this device. */
+    val workbookId: String? = null
 )
 
 /**
