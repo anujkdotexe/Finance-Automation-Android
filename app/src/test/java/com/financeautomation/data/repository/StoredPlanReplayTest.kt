@@ -229,6 +229,13 @@ class StoredPlanReplayTest {
         assertFinished()
     }
 
+    private fun splitWithAsha() = Transaction(
+        id = "txn_split_nov", timestamp = now - 3_600_000L, dateSerial = DateSerialUtils.toDateSerial(now),
+        timeSerial = 0.4, account = "Cash", merchant = "Lunch", category = "Food & Drink", totalAmount = 300.0,
+        companions = "Asha", myShare = 100.0, owedToMe = 200.0, status = TransactionStatus.PENDING,
+        reviewState = ReviewState.CONFIRMED, syncState = SyncState.PENDING
+    )
+
     // ---- The other operations that save a plan
 
     @Test
@@ -268,12 +275,7 @@ class StoredPlanReplayTest {
     @Test
     fun aSplitExpenseStoppedBeforeItsOffsetOffsetsTheCarriedCopyOfTheDebt() = runBlocking {
         seedIOwe("Asha", 300.0)
-        val expense = Transaction(
-            id = "txn_split_nov", timestamp = now - 3_600_000L, dateSerial = DateSerialUtils.toDateSerial(now),
-            timeSerial = 0.4, account = "Cash", merchant = "Lunch", category = "Food & Drink", totalAmount = 300.0,
-            companions = "Asha", myShare = 100.0, owedToMe = 200.0, status = TransactionStatus.PENDING,
-            reviewState = ReviewState.CONFIRMED, syncState = SyncState.PENDING
-        )
+        val expense = splitWithAsha()
         phone.repo.insertTransaction(expense)
         // The first write adds the expense row, the second one offsets what the user owes Asha
         sheet.failValueWrite(2, applied = false)
@@ -285,6 +287,148 @@ class StoredPlanReplayTest {
         assertEquals("Carried Fwd", text("Oct26", 4, "AC"))
         assertEquals(listOf("Nov26 100.0"), openIOwe())
         assertEquals(1, rows("Nov26").count { text("Nov26", it, "AD") == expense.id })
+        assertFinished()
+    }
+
+    // ---- Amounts that read as written prove nothing about rows that were never added
+
+    /** A settlement of the whole debt saves its plan and stops before the income row is sent. */
+    private suspend fun settlementStoppedBeforeItsIncomeRow() {
+        seedOwedToMe("Asha", 600.0)
+        phone.repo.logCredit("Asha", 600.0, emptyList(), "Cash", "Friend settlement", "All of it", now)
+        sheet.failValueWrite(1, applied = false)
+        phone.sync()
+        assertTrue(sheet.faultWasHit())
+    }
+
+    /** Something else then clears the same debt. */
+    private fun clearedByHand() {
+        put("Oct26", 4, "J", 0.0)
+        put("Oct26", 4, "K", "Settled")
+    }
+
+    private fun incomeRows(): Int = rows("Nov26").count { text("Nov26", it, "T").isNotBlank() }
+
+    @Test
+    fun aSettlementWhoseIncomeRowWasNeverSentIsNotTakenAsWritten() = runBlocking {
+        settlementStoppedBeforeItsIncomeRow()
+        clearedByHand()
+        val before = wholeSheet()
+
+        phone.sync()
+
+        assertRefusedAsPartlySent(before)
+    }
+
+    @Test
+    fun aNettingExpenseThatWasNeverSentIsNotMarkedDelivered() = runBlocking {
+        seedIOwe("Asha", 300.0)
+        val expense = splitWithAsha()
+        phone.repo.insertTransaction(expense)
+        sheet.failValueWrite(1, applied = false)
+        phone.sync()
+        assertTrue(sheet.faultWasHit())
+        // Something else brings the debt to the amount the offset would have left
+        put("Oct26", 4, "AA", 100.0)
+        put("Oct26", 4, "AC", "Partial")
+        val before = wholeSheet()
+
+        phone.sync()
+
+        assertRefusedAsPartlySent(before)
+        assertTrue(phone.tDao.rows.getValue(expense.id).syncState != SyncState.SYNCED.name)
+    }
+
+    @Test
+    fun anIdReadThatFailsIsRetriedNotJudged() = runBlocking {
+        settlementStoppedBeforeItsIncomeRow()
+        clearedByHand()
+        sheet.failSingleRangeReads = true
+
+        phone.sync()
+
+        assertEquals(SyncQueueEntity.STATUS_PENDING, phone.queue().single().status)
+
+        sheet.failSingleRangeReads = false
+        phone.sync()
+
+        assertEquals(SyncErrorKind.PARTLY_SENT.name, phone.queue().single().lastErrorKind)
+    }
+
+    /** The whole settlement reaches the sheet and only the last reply is lost. */
+    private suspend fun settlementWithItsLastReplyLost() {
+        seedOwedToMe("Asha", 600.0)
+        phone.repo.logCredit("Asha", 600.0, emptyList(), "Cash", "Friend settlement", "All of it", now)
+        sheet.failValueWrite(2, applied = true)
+        phone.sync()
+        assertTrue(sheet.faultWasHit())
+    }
+
+    @Test
+    fun aSettlementThatFullyArrivedIsFinishedOnce() = runBlocking {
+        settlementWithItsLastReplyLost()
+
+        phone.sync()
+
+        assertEquals(1, incomeRows())
+        assertFinished()
+    }
+
+    @Test
+    fun anIncomeRowFoundOnlyInTheOlderIdColumnStillCounts() = runBlocking {
+        settlementWithItsLastReplyLost()
+        val row = rows("Nov26").single { text("Nov26", it, "AE").isNotBlank() }
+        put("Nov26", row, "AD", text("Nov26", row, "AE"))
+        put("Nov26", row, "AE", "")
+
+        phone.sync()
+
+        assertEquals(1, incomeRows())
+        assertFinished()
+    }
+
+    /** Cuts the row an overpayment added out of November and pastes it into October. */
+    private fun moveTheExcessRowToOctober(): String {
+        val from = rows("Nov26").single { text("Nov26", it, "AD").isNotBlank() }
+        val id = text("Nov26", from, "AD")
+        (1..column("AD")).forEach { index ->
+            sheet.getCell("Nov26", from, index)?.let { value ->
+                sheet.setCell("Oct26", 8, index, value)
+                sheet.setCell("Nov26", from, index, "")
+            }
+        }
+        return id
+    }
+
+    private fun rowsWithId(id: String): Int =
+        listOf("Oct26", "Nov26").sumOf { tab -> rows(tab).count { text(tab, it, "AD") == id } }
+
+    @Test
+    fun aDeliveredEntryWhoseNewRowWasMovedIsStillFinished() = runBlocking {
+        seedIOwe("Riya", 500.0)
+        phone.repo.logRepayment("Riya", 600.0, null, now)
+        sheet.failValueWrite(2, applied = true)
+        phone.sync()
+        val id = moveTheExcessRowToOctober()
+
+        phone.sync()
+
+        assertEquals(1, rowsWithId(id))
+        assertFinished()
+    }
+
+    @Test
+    fun aNewRowMovedBeforeTheRestWasSentIsNotAddedAgain() = runBlocking {
+        seedIOwe("Riya", 500.0)
+        phone.repo.logRepayment("Riya", 600.0, null, now)
+        sheet.failValueWrite(2, applied = false)
+        phone.sync()
+        val id = moveTheExcessRowToOctober()
+
+        phone.sync()
+
+        assertEquals(1, rowsWithId(id))
+        assertEquals(0.0, amount("Oct26", 4, "AA"), 0.001)
         assertFinished()
     }
 

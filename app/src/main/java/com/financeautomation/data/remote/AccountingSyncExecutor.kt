@@ -499,6 +499,13 @@ open class AccountingSyncExecutor(
             StoredPlanReplay.Outcome.Unprovable ->
                 Result.Error(com.financeautomation.core.utils.UnprovableReplayException())
             is StoredPlanReplay.Outcome.AlreadyWritten -> {
+                // The new rows are sent before the edits. Amounts that read as written prove nothing about them:
+                // something else may have set the same amounts before this entry's own rows were ever sent.
+                val added = allAppendsOnSheet(targetId, snapshot, plan.appends)
+                if (added is Result.Error) return Result.Error(added.exception)
+                if (!(added as Result.Success).data) {
+                    return Result.Error(com.financeautomation.core.utils.UnprovableReplayException())
+                }
                 applyPlanToLocalDatabase(outcome.local)
                 alignLocalAfterReplay(snapshot, outcome.local, emptyList())
                 Result.Success(Unit)
@@ -508,11 +515,60 @@ open class AccountingSyncExecutor(
                     // Saved before the write: if the reply is lost, the next attempt must look at the rows written now
                     resolveSyncQueueDao().updatePlanJson(itemId, AccountingPlanJsonAdapter.toJson(outcome.plan))
                 }
-                val written = applyAccountingPlan(targetId, outcome.plan)
+                // A row that has since been moved to another month is not added a second time
+                val unsent = outcome.plan.appends.filterNot { isInSnapshot(snapshot, it) }
+                val written = applyAccountingPlan(targetId, outcome.plan.copy(appends = unsent))
                 if (written is Result.Success) alignLocalAfterReplay(snapshot, outcome.plan, outcome.movedFrom)
                 written
             }
         }
+    }
+
+    /** Whether the row an append adds is in any month tab that was read, wherever it has been moved or sorted to. */
+    private fun isInSnapshot(snapshot: LedgerWorkbookSnapshot, append: com.financeautomation.domain.model.NewRow): Boolean =
+        snapshot.monthTabs.any { month ->
+            val ids = when (append.table) {
+                TableType.DEBIT -> month.debits.map { it.uuid }
+                TableType.INFLOW -> month.inflows.map { it.uuid }
+                TableType.PAYABLE -> month.payables.map { it.uuid }
+            }
+            ids.any { it != null && it.equals(append.uuid, ignoreCase = true) }
+        }
+
+    /**
+     * True only when every row the plan adds is on the sheet. One that the snapshot does not show is looked for in
+     * both id columns of its own tab. An error means the ids could not be read, which says nothing either way.
+     */
+    private suspend fun allAppendsOnSheet(
+        spreadsheetId: String,
+        snapshot: LedgerWorkbookSnapshot,
+        appends: List<com.financeautomation.domain.model.NewRow>
+    ): Result<Boolean> {
+        for (append in appends) {
+            if (isInSnapshot(snapshot, append)) continue
+            val (column, olderColumn) = when (append.table) {
+                TableType.DEBIT -> SheetSchemaConstants.COL_LETTER_DEBIT_UUID to SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1
+                TableType.INFLOW -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID to SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1
+                TableType.PAYABLE -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID to SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1
+            }
+            var found = googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, column, append.uuid)
+            // A tab of the older layout can end before the newer id column
+            val columnIsBeyondTheTab = found is Result.Error &&
+                found.exception.message?.contains("exceeds grid limits", ignoreCase = true) == true
+            if (columnIsBeyondTheTab || (found is Result.Success && found.data == null)) {
+                found = googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, olderColumn, append.uuid)
+            }
+            if (found is Result.Error) {
+                val error = found.exception
+                // A reply that cannot be parsed is an incomplete read, to be tried again
+                return Result.Error(
+                    if (error is MalformedResponseException) java.io.IOException("The id read was incomplete", error)
+                    else error
+                )
+            }
+            if ((found as Result.Success).data == null) return Result.Success(false)
+        }
+        return Result.Success(true)
     }
 
     private fun LedgerDebitRow.toChainRow(tab: String) = ChainRow(

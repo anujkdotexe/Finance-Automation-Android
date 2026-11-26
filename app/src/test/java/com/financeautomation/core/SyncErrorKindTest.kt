@@ -20,7 +20,7 @@ class SyncErrorKindTest {
         assertEquals("Google had a problem. This will retry on its own.", SyncErrorKind.SERVER_BUSY.plainMessage())
         assertEquals("The sheet was changed. Open Sync and Backup to repair.", SyncErrorKind.SHEET_CHANGED.plainMessage())
         assertEquals(
-            "Partly sent, then the sheet changed. Nothing more was written. Check this debt in the sheet, then discard this item and enter only what is missing.",
+            "The sheet changed after this was first sent, so what was saved cannot be confirmed. Nothing more was written. Check the sheet, then discard this item and enter only what is missing.",
             SyncErrorKind.PARTLY_SENT.plainMessage()
         )
         assertEquals(

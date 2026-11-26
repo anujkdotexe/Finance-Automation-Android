@@ -42,6 +42,9 @@ class FakeSheetApplier(
 
     var forceFindRowError: Boolean = false
 
+    /** When true, every read of a single range fails; reads of many ranges at once still work. */
+    var failSingleRangeReads: Boolean = false
+
     /** When true, cell formatting requests fail and change nothing. */
     var failFormatting: Boolean = false
 
@@ -187,6 +190,10 @@ class FakeSheetApplier(
         val body = call.body
 
         if (forceFindRowError && method == "GET" && (url.contains("AF") || url.contains("AE"))) {
+            return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
+        }
+
+        if (failSingleRangeReads && method == "GET" && url.contains("/values/")) {
             return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
         }
 

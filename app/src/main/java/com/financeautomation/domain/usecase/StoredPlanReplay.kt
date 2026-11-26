@@ -33,7 +33,8 @@ object StoredPlanReplay {
 
         /**
          * The edits are already on the sheet, so nothing is written again. [local] is the part of the plan this device
-         * may still apply to itself: it never sets the status of a row that has since been carried.
+         * may still apply to itself: it never sets the status of a row that has since been carried. This judges the
+         * edits only; the caller must still find every row the plan adds before treating the entry as delivered.
          */
         data class AlreadyWritten(val local: AccountingPlan) : Outcome
 

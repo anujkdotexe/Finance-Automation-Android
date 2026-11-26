@@ -38,8 +38,8 @@ enum class SyncErrorKind {
         NO_NETWORK -> "No internet. This will sync when you are back online."
         SERVER_BUSY -> "Google had a problem. This will retry on its own."
         SHEET_CHANGED -> "The sheet was changed. Open Sync and Backup to repair."
-        PARTLY_SENT -> "Partly sent, then the sheet changed. Nothing more was written. Check this debt in the sheet, " +
-            "then discard this item and enter only what is missing."
+        PARTLY_SENT -> "The sheet changed after this was first sent, so what was saved cannot be confirmed. Nothing " +
+            "more was written. Check the sheet, then discard this item and enter only what is missing."
         CARRY_CONFLICT -> "A carried debt does not match its old row. In the sheet, correct the copy or mark the old " +
             "row Carried Fwd, then retry."
         EDIT_CARRIED -> "Edit not saved: this debt was carried forward. The phone shows the sheet's values."

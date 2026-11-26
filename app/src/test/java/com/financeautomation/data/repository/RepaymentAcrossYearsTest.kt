@@ -188,6 +188,20 @@ class RepaymentAcrossYearsTest {
         assertTrue(queue().isEmpty())
     }
 
+    @Test
+    fun aNewYearRepaymentThatFullyArrivedIsFinishedOnce() = runBlocking {
+        carriedIntoTheNewYear()
+        repo.logRepayment("Riya", 600.0, null, paid)
+        new.failValueWrite(2, applied = true)
+        sync()
+        assertTrue(new.faultWasHit())
+
+        sync()
+
+        assertEquals(1, excessRows())
+        assertTrue(queue().isEmpty())
+    }
+
     private suspend fun assertNoOpenDebt() {
         val item = queue().single { it.operationType == SyncQueueEntity.OP_LOG_REPAYMENT }
         assertEquals(SyncQueueEntity.STATUS_FAILED, item.status)
