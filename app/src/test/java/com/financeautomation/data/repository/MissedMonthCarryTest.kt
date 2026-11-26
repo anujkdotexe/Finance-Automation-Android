@@ -1,5 +1,6 @@
 package com.financeautomation.data.repository
 
+import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.remote.AccountingSyncExecutor
 import com.financeautomation.data.remote.GoogleDriveClient
 import com.financeautomation.data.remote.GoogleSheetsClient
@@ -68,11 +69,25 @@ class MissedMonthCarryTest {
         private val sheets = GoogleSheetsClient(http, tokens)
         private val tDao = InMemoryTransactionDao()
         private val lDao = InMemoryLineageDao()
+        val pDao = InMemoryPayableDao()
+
+        /** A local debt as a reconcile of its month would have left it. */
+        suspend fun cacheDebt(uuid: String, whatFor: String, amount: Double, tab: String) {
+            pDao.upsert(
+                PayableEntity(
+                    uuid = uuid, dateIncurredSerial = 46240, timeSerial = 0.5, paidBy = "Asha", whatFor = whatFor,
+                    amountIOwe = amount, dateRepaidSerial = null, repaymentStatus = "Pending", tabName = tab,
+                    sheetRowIndex = 4
+                )
+            )
+        }
+
+        suspend fun iOwe(): Double = pDao.getPending().sumOf { it.amountIOwe }
 
         val repo = TransactionRepositoryImpl(
             transactionDao = tDao,
             syncQueueDao = qDao,
-            payableDao = InMemoryPayableDao(),
+            payableDao = pDao,
             inflowDao = InMemoryInflowDao(),
             lineageDao = lDao,
             googleSheetsClient = sheets,
@@ -83,6 +98,7 @@ class MissedMonthCarryTest {
                 syncQueueDao = qDao,
                 lineageDao = lDao,
                 transactionDao = tDao,
+                payableDao = pDao,
                 previousWorkbookIdProvider = { year -> ids[year] },
                 clock = { now.toInstant().toEpochMilli() }
             ),
@@ -220,6 +236,77 @@ class MissedMonthCarryTest {
         val callsBefore = h.calls()
         h.runWorker()
         assertEquals(callsBefore, h.calls())
+    }
+
+    @Test
+    fun carryingSeveralMissedMonthsLeavesEachLocalDebtCountedOnce() = runBlocking {
+        val sheet = FakeSheetApplier(mutableListOf("Aug26", "Sep26", "Nov26"))
+        sheet.seedPayable("Aug26", 4, "pay_aug", "Tickets", 300.0)
+        sheet.seedPayable("Sep26", 4, "pay_sep", "Hotel", 200.0)
+        val h = Harness(at(2026, 11, 20), mapOf(2026 to sheet))
+        h.cacheDebt("pay_aug", "Tickets", 300.0, "Aug26")
+        h.cacheDebt("pay_sep", "Hotel", 200.0, "Sep26")
+
+        h.runWorker()
+
+        assertEquals("Carried Fwd", h.pDao.getByUuid("pay_aug")!!.repaymentStatus)
+        assertEquals("Carried Fwd", h.pDao.getByUuid("pay_sep")!!.repaymentStatus)
+        assertEquals(500.0, h.iOwe(), 0.001)
+        assertEquals(
+            setOf("[Carried from Aug26] Tickets", "[Carried from Sep26] Hotel"),
+            h.pDao.getPending().map { it.whatFor }.toSet()
+        )
+    }
+
+    @Test
+    fun carryingDecemberIntoJanuaryMarksTheLocalDebtOfLastYear() = runBlocking {
+        val previous = FakeSheetApplier(mutableListOf("Dec26"))
+        previous.seedPayable("Dec26", 4, "pay_dec", "Tickets", 300.0)
+        val current = FakeSheetApplier(mutableListOf("Jan27"))
+        val h = Harness(at(2027, 1, 5), mapOf(2026 to previous, 2027 to current))
+        h.cacheDebt("pay_dec", "Tickets", 300.0, "Dec26")
+
+        h.runWorker()
+
+        assertEquals("Carried Fwd", h.pDao.getByUuid("pay_dec")!!.repaymentStatus)
+        assertEquals(300.0, h.iOwe(), 0.001)
+        assertEquals(listOf("[Carried from Dec26] Tickets"), h.pDao.getPending().map { it.whatFor })
+    }
+
+    @Test
+    fun aRetryThatFindsTheCopyAlsoMarksTheLocalDebt() = runBlocking {
+        val sheet = FakeSheetApplier(mutableListOf("Oct26", "Nov26"))
+        sheet.seedPayable("Oct26", 4, "pay_oct", "Tickets", 300.0)
+        sheet.seedPayable("Nov26", 4, "pay_copy", "[Carried from Oct26] Tickets", 300.0)
+        val h = Harness(at(2026, 11, 3), mapOf(2026 to sheet))
+        h.cacheDebt("pay_oct", "Tickets", 300.0, "Oct26")
+
+        h.runWorker()
+
+        assertEquals("Carried Fwd", h.pDao.getByUuid("pay_oct")!!.repaymentStatus)
+        assertEquals(300.0, h.iOwe(), 0.001)
+        assertEquals(listOf("pay_copy"), h.pDao.getPending().map { it.uuid })
+    }
+
+    @Test
+    fun aDeviceLeftWithTheSourceStillOpenIsRepairedByTheNextCarry() = runBlocking {
+        // The sheet was carried long ago; this device still holds the old row as open and never saw the copy
+        val sheet = FakeSheetApplier(mutableListOf("Aug26", "Sep26", "Nov26"))
+        sheet.seedPayable("Aug26", 4, "pay_aug", "Tickets", 300.0)
+        sheet.setCell("Aug26", 4, columnNumber("AC"), "Carried Fwd")
+        sheet.seedPayable("Nov26", 4, "pay_copy", "[Carried from Aug26] Tickets", 300.0)
+        val h = Harness(at(2026, 11, 20), mapOf(2026 to sheet))
+        h.cacheDebt("pay_aug", "Tickets", 300.0, "Aug26")
+        h.cacheDebt("pay_not_on_sheet", "Something else", 50.0, "Aug26")
+
+        h.runWorker()
+
+        assertEquals("Carried Fwd", h.pDao.getByUuid("pay_aug")!!.repaymentStatus)
+        assertEquals(
+            "a debt without proof on the sheet is left alone",
+            "Pending", h.pDao.getByUuid("pay_not_on_sheet")!!.repaymentStatus
+        )
+        assertEquals(setOf("pay_copy", "pay_not_on_sheet"), h.pDao.getPending().map { it.uuid }.toSet())
     }
 
     @Test

@@ -494,7 +494,10 @@ open class AccountingSyncExecutor(
             newLineage.addAll(result.lineageRecords)
         }
 
+        val sheetMonths = snapshot.monthTabs +
+            (if (sourceSnapshot !== snapshot) sourceSnapshot.monthTabs else emptyList())
         if (appends.isEmpty() && edits.isEmpty()) {
+            syncCarriedPayables(sheetMonths, emptyList(), emptyList())
             return Result.Success(Unit)
         }
 
@@ -509,8 +512,86 @@ open class AccountingSyncExecutor(
             if (newLineage.isNotEmpty()) {
                 resolveLineageDao().insertAll(newLineage.map { LineageEntity.fromDomain(it) })
             }
+            syncCarriedPayables(sheetMonths, appends, edits)
         }
         return applyResult
+    }
+
+    /**
+     * Brings the local debts in line with a carry. A local debt that is still open, but whose own sheet row (same id)
+     * says "Carried Fwd" or was just marked so, becomes "Carried Fwd", and the open copies the sheet holds, or just
+     * received, are added when this device does not have them. Rows are matched by id only, and the evidence is what
+     * the sheet says, so this also repairs debts an earlier build left open next to their copies.
+     */
+    private suspend fun syncCarriedPayables(
+        sheetMonths: List<MonthTabSnapshot>,
+        appends: List<com.financeautomation.domain.model.NewRow>,
+        edits: List<com.financeautomation.domain.model.CellEdit>
+    ) {
+        try {
+            val pDao = resolvePayableDao() ?: return
+            fun key(uuid: String) = uuid.trim().lowercase()
+            val carried = mutableSetOf<String>()
+            sheetMonths.forEach { month ->
+                month.payables.filter { it.repaymentStatus.equals("Carried Fwd", ignoreCase = true) }
+                    .forEach { row -> row.uuid?.let { carried.add(key(it)) } }
+            }
+            edits.filter { it.column == SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS && it.value == "Carried Fwd" }
+                .forEach { edit -> edit.uuid?.let { carried.add(key(it)) } }
+
+            val local = pDao.getAll().associateBy { key(it.uuid) }
+            local.values.filter { debt ->
+                key(debt.uuid) in carried && (
+                    debt.repaymentStatus.equals("Pending", ignoreCase = true) ||
+                        debt.repaymentStatus.equals("Partial", ignoreCase = true)
+                    )
+            }.forEach { pDao.upsert(it.copy(repaymentStatus = "Carried Fwd")) }
+
+            sheetMonths.forEach { month ->
+                month.payables.forEach { row ->
+                    val uuid = row.uuid
+                    val open = row.repaymentStatus.equals("Pending", ignoreCase = true) ||
+                        row.repaymentStatus.equals("Partial", ignoreCase = true)
+                    if (open && !uuid.isNullOrBlank() && key(uuid) !in local && key(uuid) !in carried &&
+                        row.whatFor.startsWith("[Carried from", ignoreCase = true)
+                    ) {
+                        pDao.upsert(
+                            com.financeautomation.data.local.entity.PayableEntity(
+                                uuid = uuid,
+                                dateIncurredSerial = row.dateIncurredSerial,
+                                timeSerial = row.timeSerial,
+                                paidBy = row.paidBy,
+                                whatFor = row.whatFor,
+                                amountIOwe = row.amountIOwe,
+                                dateRepaidSerial = row.dateRepaidSerial,
+                                repaymentStatus = row.repaymentStatus,
+                                tabName = month.tabName,
+                                sheetRowIndex = row.rowNumber
+                            )
+                        )
+                    }
+                }
+            }
+            appends.filter { it.table == TableType.PAYABLE && key(it.uuid) !in local }.forEach { append ->
+                pDao.upsert(
+                    com.financeautomation.data.local.entity.PayableEntity(
+                        uuid = append.uuid,
+                        dateIncurredSerial = (append.cells.getOrNull(0) as? Number)?.toInt(),
+                        timeSerial = (append.cells.getOrNull(1) as? Number)?.toDouble(),
+                        paidBy = append.cells.getOrNull(2)?.toString().orEmpty(),
+                        whatFor = append.cells.getOrNull(3)?.toString().orEmpty(),
+                        amountIOwe = (append.cells.getOrNull(4) as? Number)?.toDouble() ?: 0.0,
+                        dateRepaidSerial = null,
+                        repaymentStatus = "Pending",
+                        tabName = append.tab,
+                        sheetRowIndex = null
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Diagnostics.record("AccountingSyncExecutor", "syncCarriedPayables failed: ${e.javaClass.simpleName}")
+        }
     }
 
     suspend fun executeYearClose(
