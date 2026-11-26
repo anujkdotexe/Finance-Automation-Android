@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108" role="img" aria-label="Finance Automation logo">
+  <rect width="108" height="108" rx="26" fill="#006874"/>
+  <g transform="translate(54 54) scale(1.25) translate(-54 -54)" fill="none" stroke-width="5.55" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32.38 33.32 L64.34 33.32" stroke="#FFFFFF"/>
+    <path d="M32.38 43.66 L64.34 43.66" stroke="#FFFFFF"/>
+    <path d="M34.26 33.32 L49.30 33.32 C63.40 33.32 63.40 54.00 49.30 54.00 L36.14 54.00" stroke="#FFFFFF"/>
+    <path d="M36.14 54.00 L53.06 74.68" stroke="#FFFFFF"/>
+    <path d="M53.06 74.68 L75.62 42.72" stroke="#72D6E4"/>
+  </g>
+</svg>

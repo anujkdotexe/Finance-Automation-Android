@@ -94,6 +94,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--primary); outli
 }
 .site-header .wrap { display: flex; align-items: center; justify-content: space-between; min-height: 60px; gap: 12px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); text-decoration: none; }
+.brand-logo { width: 30px; height: 30px; border-radius: 8px; display: block; }
 .brand-mark {
   width: 28px; height: 28px; border-radius: 8px;
   background: var(--primary-container); color: var(--on-primary-container);
