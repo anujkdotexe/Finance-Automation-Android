@@ -34,8 +34,9 @@ object StoredPlanReplay {
         /**
          * The edits are already on the sheet, so nothing is written again. [local] is the part of the plan this device
          * may still apply to itself: it never sets the status of a row that has since been carried.
+         * [movedFrom] are the rows those debts were carried from so local copies can be marked Carried Fwd.
          */
-        data class AlreadyWritten(val local: AccountingPlan) : Outcome
+        data class AlreadyWritten(val local: AccountingPlan, val movedFrom: List<ChainRow> = emptyList()) : Outcome
 
         /** What was saved cannot be proven. Nothing may be written. */
         data object Unprovable : Outcome
@@ -95,14 +96,16 @@ object StoredPlanReplay {
         if (targets.any { it.state == RowState.WRITTEN }) {
             // One call writes every edit, so a mix of written and unwritten rows was changed by something else
             if (targets.any { it.state == RowState.NOT_WRITTEN || it.state == RowState.MOVED }) return Outcome.Unprovable
-            val carried = targets.filter { it.current?.status.equals(CARRIED, ignoreCase = true) }
-                .flatMap { it.edits }.toSet()
+            val carriedTargets = targets.filter { it.current?.status.equals(CARRIED, ignoreCase = true) }
+            val carried = carriedTargets.flatMap { it.edits }.toSet()
+            val movedFrom = carriedTargets.mapNotNull { it.current }
             return Outcome.AlreadyWritten(
                 plan.copy(
                     appends = emptyList(),
                     edits = plan.edits.filterNot { it in carried && isStatusColumn(it.column) },
                     settled = plan.settled.filterNot { ref -> carried.any { it.tab == ref.tab && it.row == ref.row } }
-                )
+                ),
+                movedFrom = movedFrom
             )
         }
 

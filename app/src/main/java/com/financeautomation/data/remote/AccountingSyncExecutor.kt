@@ -490,7 +490,7 @@ open class AccountingSyncExecutor(
                 Result.Error(com.financeautomation.core.utils.UnprovableReplayException())
             is StoredPlanReplay.Outcome.AlreadyWritten -> {
                 applyPlanToLocalDatabase(outcome.local)
-                alignLocalAfterReplay(snapshot, outcome.local, emptyList())
+                alignLocalAfterReplay(snapshot, outcome.local, outcome.movedFrom)
                 Result.Success(Unit)
             }
             is StoredPlanReplay.Outcome.Send -> {
@@ -520,7 +520,7 @@ open class AccountingSyncExecutor(
      * Keeps the device in step with what a replay found or wrote, also when a carry made elsewhere moved the debts.
      * [snapshot] is the sheet as read before the replay wrote [written].
      */
-    private suspend fun alignLocalAfterReplay(
+    internal suspend fun alignLocalAfterReplay(
         snapshot: LedgerWorkbookSnapshot,
         written: AccountingPlan,
         movedFrom: List<ChainRow>

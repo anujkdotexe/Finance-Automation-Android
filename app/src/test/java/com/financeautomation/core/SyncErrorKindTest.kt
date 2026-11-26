@@ -19,6 +19,14 @@ class SyncErrorKindTest {
         assertEquals("No internet. This will sync when you are back online.", SyncErrorKind.NO_NETWORK.plainMessage())
         assertEquals("Google had a problem. This will retry on its own.", SyncErrorKind.SERVER_BUSY.plainMessage())
         assertEquals("The sheet was changed. Open Sync and Backup to repair.", SyncErrorKind.SHEET_CHANGED.plainMessage())
+        assertEquals(
+            "Partly sent, then the sheet changed. Nothing more was written. Check this debt in the sheet, then discard this item and enter only what is missing.",
+            SyncErrorKind.PARTLY_SENT.plainMessage()
+        )
+        assertEquals(
+            "A carried debt does not match its old row. In the sheet, correct the copy or mark the old row Carried Fwd, then retry.",
+            SyncErrorKind.CARRY_CONFLICT.plainMessage()
+        )
         assertEquals("Something went wrong. Tap Details.", SyncErrorKind.UNKNOWN.plainMessage())
     }
 
@@ -51,6 +59,10 @@ class SyncErrorKindTest {
         // Sheet changed
         assertEquals(SyncErrorKind.SHEET_CHANGED, SyncErrorKind.fromThrowable(IllegalStateException("Sheet changed: header mismatch")))
         assertEquals(SyncErrorKind.SHEET_CHANGED, SyncErrorKind.fromThrowable(IllegalStateException("Tab missing from spreadsheet")))
+
+        // Partly sent and Carry conflict
+        assertEquals(SyncErrorKind.PARTLY_SENT, SyncErrorKind.fromThrowable(com.financeautomation.core.utils.UnprovableReplayException()))
+        assertEquals(SyncErrorKind.CARRY_CONFLICT, SyncErrorKind.fromThrowable(com.financeautomation.core.utils.CarryConflictException()))
 
         // Unknown
         assertEquals(SyncErrorKind.UNKNOWN, SyncErrorKind.fromThrowable(IllegalArgumentException("Some unknown error")))

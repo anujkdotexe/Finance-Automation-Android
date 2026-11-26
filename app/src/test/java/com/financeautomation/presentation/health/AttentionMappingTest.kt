@@ -72,6 +72,8 @@ class AttentionMappingTest {
         assertEquals(AttentionIssue.TOKEN_EXPIRED, issueFor(SyncErrorKind.AUTH_EXPIRED))
         assertEquals(AttentionIssue.RATE_LIMITED, issueFor(SyncErrorKind.RATE_LIMITED))
         assertEquals(AttentionIssue.WORKBOOK, issueFor(SyncErrorKind.SHEET_CHANGED))
+        assertEquals(AttentionIssue.SYNC_FAILING, issueFor(SyncErrorKind.PARTLY_SENT))
+        assertEquals(AttentionIssue.SYNC_FAILING, issueFor(SyncErrorKind.CARRY_CONFLICT))
         for (k in SyncErrorKind.values()) assertNotNull(k.name, issueFor(k))
     }
 
