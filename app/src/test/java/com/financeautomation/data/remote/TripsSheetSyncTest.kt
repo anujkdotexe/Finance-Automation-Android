@@ -295,8 +295,8 @@ class TripsSheetSyncTest {
     }
 
     @Test
-    fun testStage3b_healsExistingTripWithShiftedStartDate() = runBlocking {
-        // An existing trip whose startDateEpochDay was mistakenly set to 21 Nov (UTC bug)
+    fun testStage3b_keepsAStartDateOneDayBeforeAnEarlyMorningFirstExpense() = runBlocking {
+        // 21 Nov could be a chosen date or a time zone slip; the two look the same, so the date is kept
         val shiftedTrip = TripTag(
             id = "trip_utc_bug",
             name = "Goa",
@@ -327,6 +327,67 @@ class TripsSheetSyncTest {
             status = com.financeautomation.core.model.TransactionStatus.PERSONAL
         )
 
+        val res = coordinatorWithExpense(tx).mirrorToSheet("sheet_123")
+        assertTrue(res is Result.Success)
+
+        val kept = fakeTripRepository.getTagById("trip_utc_bug")
+        assertNotNull(kept)
+        assertEquals(LocalDate.of(2026, 11, 21).toEpochDay(), kept!!.startDateEpochDay)
+    }
+
+    private fun tripExpense(day: Int) = com.financeautomation.domain.model.Transaction(
+        id = "tx_goa_$day",
+        timestamp = java.time.ZonedDateTime.of(2026, 11, day, 12, 0, 0, 0, java.time.ZoneId.of("Asia/Kolkata"))
+            .toInstant().toEpochMilli(),
+        dateSerial = 46348,
+        timeSerial = 0.5,
+        totalAmount = 500.0,
+        myShare = 500.0,
+        owedToMe = 0.0,
+        merchant = "Cafe",
+        category = "Food & Drink",
+        account = "UPI",
+        tripTag = "Goa",
+        companions = "Personal",
+        status = com.financeautomation.core.model.TransactionStatus.PERSONAL
+    )
+
+    private fun endedTrip(startDay: Long?) = TripTag(
+        id = "trip_goa",
+        name = "Goa",
+        isActive = false,
+        isArchived = false,
+        startDateEpochDay = startDay,
+        endDateEpochDay = LocalDate.of(2026, 11, 23).toEpochDay(),
+        createdAt = 1000L,
+        updatedAt = 1000L
+    )
+
+    @Test
+    fun mirroringKeepsAChosenStartDateLongBeforeTheFirstExpense() = runBlocking {
+        val chosen = LocalDate.of(2026, 11, 1).toEpochDay()
+        fakeTripRepository.upsertTripTag(endedTrip(chosen))
+
+        coordinatorWithExpense(tripExpense(20)).mirrorToSheet("sheet_123")
+
+        assertEquals(chosen, fakeTripRepository.getTagById("trip_goa")!!.startDateEpochDay)
+    }
+
+    @Test
+    fun mirroringFillsAMissingStartDateAndRemembersTheRowAsWritten() = runBlocking {
+        fakeTripRepository.upsertTripTag(endedTrip(null))
+
+        coordinatorWithExpense(tripExpense(20)).mirrorToSheet("sheet_123")
+
+        val firstExpenseDay = LocalDate.of(2026, 11, 20).toEpochDay()
+        assertEquals(firstExpenseDay, fakeTripRepository.getTagById("trip_goa")!!.startDateEpochDay)
+        assertEquals(
+            "Goa|false|$firstExpenseDay|${LocalDate.of(2026, 11, 23).toEpochDay()}",
+            fakePrefsRepository.getPreference(TripsSheetSyncCoordinator.PREFIX_TRIP_BASE_HASH + "trip_goa")
+        )
+    }
+
+    private fun coordinatorWithExpense(tx: com.financeautomation.domain.model.Transaction): TripsSheetSyncCoordinator {
         val fakeTxRepo = object : com.financeautomation.domain.repository.TransactionRepository {
             override fun getTransactions(): Flow<List<com.financeautomation.domain.model.Transaction>> = flowOf(listOf(tx))
             override fun getNeedsReview(): Flow<List<com.financeautomation.domain.model.Transaction>> = flowOf(emptyList())
@@ -360,20 +421,12 @@ class TripsSheetSyncTest {
             override suspend fun requeueYearForNewWorkbook(year: Int) {}
         }
 
-        val testCoordinator = TripsSheetSyncCoordinator(
+        return TripsSheetSyncCoordinator(
             googleSheetsClient = fakeSheetsClient,
             tripTagRepository = fakeTripRepository,
             preferencesRepository = fakePrefsRepository,
             transactionRepository = fakeTxRepo
         )
-
-        val res = testCoordinator.mirrorToSheet("sheet_123")
-        assertTrue(res is Result.Success)
-
-        val healed = fakeTripRepository.getTagById("trip_utc_bug")
-        assertNotNull(healed)
-        val expectedDay = LocalDate.of(2026, 11, 22).toEpochDay()
-        assertEquals("Shifted start date must be healed to match earliest transaction in Asia/Kolkata", expectedDay, healed!!.startDateEpochDay)
     }
 
     private class FakeTripsGoogleSheetsClient : GoogleSheetsClient(

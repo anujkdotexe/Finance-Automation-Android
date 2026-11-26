@@ -315,21 +315,16 @@ open class TripsSheetSyncCoordinator(
                         it.status != com.financeautomation.core.model.TransactionStatus.VOID &&
                             it.tripTag.trim().equals(trip.name.trim(), ignoreCase = true)
                     }
-                    if (tripTxs.isNotEmpty()) {
-                        val minTxEpochDay = tripTxs.minOf {
+                    // A start date that is set is the user's choice and stays, also when it is before the first
+                    // expense: a date off by one day cannot be told apart from a chosen one. Only a missing date
+                    // is filled.
+                    if (trip.startDateEpochDay == null && tripTxs.isNotEmpty()) {
+                        val firstExpenseDay = tripTxs.minOf {
                             com.financeautomation.core.utils.DateSerialUtils.toLocalDate(it.timestamp).toEpochDay()
                         }
-                        if (trip.startDateEpochDay != null && trip.startDateEpochDay < minTxEpochDay) {
-                            val healed = trip.copy(startDateEpochDay = minTxEpochDay)
-                            tripTagRepository.upsertTripTag(healed)
-                            healed
-                        } else if (trip.startDateEpochDay == null) {
-                            val healed = trip.copy(startDateEpochDay = minTxEpochDay)
-                            tripTagRepository.upsertTripTag(healed)
-                            healed
-                        } else {
-                            trip
-                        }
+                        val filled = trip.copy(startDateEpochDay = firstExpenseDay)
+                        tripTagRepository.upsertTripTag(filled)
+                        filled
                     } else {
                         trip
                     }
@@ -340,7 +335,8 @@ open class TripsSheetSyncCoordinator(
 
             val res = googleSheetsClient.writeTripsTab(spreadsheetId, effectiveTrips, repaidMap, topCategoryMap)
             if (res is Result.Success) {
-                for (trip in allTrips) {
+                // From the rows as written, or the next pull would read its own write as a sheet edit
+                for (trip in effectiveTrips) {
                     saveBaseHash(trip.id, computeTripTagHash(trip))
                 }
             }
