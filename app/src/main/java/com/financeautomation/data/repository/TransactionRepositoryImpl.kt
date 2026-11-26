@@ -1053,7 +1053,7 @@ class TransactionRepositoryImpl(
             if (isFuture(transaction.timestamp, nowMillis = clock())) return@withSyncLock Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
-            val existing = tDao.getById(transaction.id)
+            val existing = runCatching { tDao.getById(transaction.id) }.getOrNull()
             if (existing != null && existing.status.equals("Carried Fwd", ignoreCase = true)) {
                 val amountChanged = kotlin.math.abs(transaction.totalAmount - existing.totalAmount) >= 0.01
                 val splitChanged = kotlin.math.abs(transaction.myShare - existing.myShare) >= 0.01
