@@ -145,11 +145,11 @@ class Stage1WrongTotalsTest {
     fun testTheyOweMeAndIOwePeopleFormulas_stackCurrentAndNextMonthWithFallback() {
         val theyOweMe = DashboardFormulaBuilder.buildTheyOweMeQueryFormula(year = 2026)
         assertTrue("They Owe Me must query Col11 = 'Pending'", theyOweMe.contains("Col11 = 'Pending'"))
-        assertTrue("They Owe Me must reference next month via EDATE", theyOweMe.contains("EDATE(TODAY(), 1)"))
+        assertTrue("They Owe Me must read the earlier and later month tabs", theyOweMe.contains("'Jan26'!A4:L") && theyOweMe.contains("'Dec26'!A4:L"))
 
         val iOwePeople = DashboardFormulaBuilder.buildIOwePeopleQueryFormula(year = 2026)
         assertTrue("I Owe People must query Col7 = 'Pending' OR Col7 = 'Partial'", iOwePeople.contains("Col7 = 'Pending' OR Col7 = 'Partial'"))
-        assertTrue("I Owe People must reference next month via EDATE", iOwePeople.contains("EDATE(TODAY(), 1)"))
+        assertTrue("I Owe People must read the earlier and later month tabs", iOwePeople.contains("'Jan26'!W4:AC") && iOwePeople.contains("'Dec26'!W4:AC"))
     }
 
     // =========================================================================

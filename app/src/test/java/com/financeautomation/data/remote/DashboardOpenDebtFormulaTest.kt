@@ -16,7 +16,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,47 +33,84 @@ class DashboardOpenDebtFormulaTest {
         (26 to 7) to DashboardFormulaBuilder.buildIOwePeopleQueryFormula(year)
     )
 
-    private val currentTab = """TEXT(TODAY(), "mmm") & "26""""
-    private val nextTab = """TEXT(EDATE(TODAY(), 1), "mmm") & IF(MONTH(TODAY()) = 12, "27", "26")"""
+    /** One row of a month tab: its status and the amount in the column the tile sums. */
+    private data class Debt(val status: String, val amount: Double)
 
-    @Test
-    fun owedToMeKpiAddsTheNextMonthTabWithItsOwnFallback() {
-        val formula = DashboardFormulaBuilder.buildOwedToMeKpiFormula(2026)
-        fun term(tab: String) =
-            """IFERROR(SUMIF(INDIRECT("'" & $tab & "'!K4:K"), "Pending", INDIRECT("'" & $tab & "'!J4:J")), 0)"""
-        assertEquals("=" + term(currentTab) + " + " + term(nextTab), formula)
-    }
+    private val receivableTerm = Regex(
+        """IFERROR\(SUMIF\(INDIRECT\("'(\w+)'!K4:K"\), "Pending", INDIRECT\("'\1'!J4:J"\)\), 0\)"""
+    )
+    private val payableTerm = Regex(
+        """IFERROR\(SUMIF\(INDIRECT\("'(\w+)'!AC4:AC"\), "Pending", INDIRECT\("'\1'!AA4:AA"\)\) \+ """ +
+            """SUMIF\(INDIRECT\("'\1'!AC4:AC"\), "Partial", INDIRECT\("'\1'!AA4:AA"\)\), 0\)"""
+    )
 
-    @Test
-    fun iOweKpiCountsPendingAndPartialInBothTabsWithSeparateFallbacks() {
-        val formula = DashboardFormulaBuilder.buildIOweKpiFormula(2026)
-        fun term(tab: String): String {
-            val status = """INDIRECT("'" & $tab & "'!AC4:AC")"""
-            val amount = """INDIRECT("'" & $tab & "'!AA4:AA")"""
-            return """IFERROR(SUMIF($status, "Pending", $amount) + SUMIF($status, "Partial", $amount), 0)"""
-        }
-        assertEquals("=" + term(currentTab) + " + " + term(nextTab), formula)
-    }
-
-    @Test
-    fun inDecemberNoOpenDebtFormulaReadsTheJanuaryTabOfTheSameYear() {
-        expected(2026).values.forEach { formula ->
-            assertTrue(formula.contains(nextTab))
-            assertFalse(
-                "an unconditional same year suffix would read the January that is already over",
-                formula.contains("""TEXT(EDATE(TODAY(), 1), "mmm") & "26"""")
-            )
+    /**
+     * Computes a tile formula over [workbook]. Only the one shape the tiles use is understood, and the whole formula
+     * must be made of it, so anything else fails the test. A tab that is not in the workbook contributes nothing,
+     * which is what IFERROR does with it.
+     */
+    private fun evaluate(formula: String, term: Regex, workbook: Map<String, List<Debt>>, counted: Set<String>): Double {
+        val terms = term.findAll(formula).toList()
+        assertEquals("the formula must consist of known terms only", "=" + terms.joinToString(" + ") { it.value }, formula)
+        return terms.sumOf { match ->
+            workbook[match.groupValues[1]].orEmpty().filter { it.status in counted }.sumOf { it.amount }
         }
     }
 
     @Test
-    fun theSettlementTablesFallBackToTheCurrentTabAlone() {
+    fun owedToMeCountsDebtsStillInEarlierMonthsAndACarriedPairOnce() {
+        val workbook = mapOf(
+            "Sep26" to listOf(Debt("Pending", 100.0)),
+            "Oct26" to listOf(Debt("Carried Fwd", 50.0), Debt("Pending", 20.0), Debt("Settled", 7.0)),
+            "Nov26" to listOf(Debt("Pending", 50.0))
+        )
+
+        val total = evaluate(DashboardFormulaBuilder.buildOwedToMeKpiFormula(2026), receivableTerm, workbook, setOf("Pending"))
+
+        assertEquals(170.0, total, 0.001)
+    }
+
+    @Test
+    fun iOweCountsPendingAndPartialInEveryMonthTabOfTheWorkbook() {
+        val workbook = mapOf(
+            "Jan26" to listOf(Debt("Carried Fwd", 900.0)),
+            "Mar26" to listOf(Debt("Partial", 40.0)),
+            "Dec26" to listOf(Debt("Pending", 900.0))
+        )
+
+        val total = evaluate(
+            DashboardFormulaBuilder.buildIOweKpiFormula(2026), payableTerm, workbook, setOf("Pending", "Partial")
+        )
+
+        assertEquals(940.0, total, 0.001)
+    }
+
+    @Test
+    fun aNewYearsWorkbookReadsOnlyItsOwnMonthTabs() {
+        val workbook = mapOf(
+            "Dec26" to listOf(Debt("Pending", 500.0)),
+            "Jan27" to listOf(Debt("Pending", 30.0))
+        )
+
+        val total = evaluate(DashboardFormulaBuilder.buildOwedToMeKpiFormula(2027), receivableTerm, workbook, setOf("Pending"))
+
+        assertEquals(30.0, total, 0.001)
+    }
+
+    @Test
+    fun theSettlementTablesStackEveryMonthWithItsOwnSameWidthFallbackRow() {
         listOf(
-            DashboardFormulaBuilder.buildTheyOweMeQueryFormula(2026) to "A4:L",
-            DashboardFormulaBuilder.buildIOwePeopleQueryFormula(2026) to "W4:AC"
-        ).forEach { (formula, columns) ->
-            assertTrue(formula.startsWith("""=IFERROR(QUERY(QUERY({INDIRECT("'" & $currentTab & "'!$columns"); """))
-            assertTrue(formula.contains(""", IFERROR(QUERY(QUERY(INDIRECT("'" & $currentTab & "'!$columns"), """))
+            Triple(DashboardFormulaBuilder.buildTheyOweMeQueryFormula(2026), "A4:L", 12),
+            Triple(DashboardFormulaBuilder.buildIOwePeopleQueryFormula(2026), "W4:AC", 7)
+        ).forEach { (formula, columns, width) ->
+            val blocks = Regex("""IFERROR\(INDIRECT\("'(\w+)'!$columns"\), \{(.*?)\}\)""").findAll(formula).toList()
+            assertEquals(DashboardFormulaBuilder.monthTabsForYear(2026), blocks.map { it.groupValues[1] })
+            blocks.forEach { block ->
+                val values = block.groupValues[2].replace(Regex("""DATE\([^)]*\)"""), "DATE").split(", ")
+                assertEquals("a fallback row of another width breaks the whole stack", width, values.size)
+            }
+            assertTrue(formula.startsWith("=ARRAYFORMULA(IFERROR(QUERY(QUERY({"))
+            assertTrue("a single cell formula must stay far below the 50000 character limit", formula.length < 10000)
         }
     }
 

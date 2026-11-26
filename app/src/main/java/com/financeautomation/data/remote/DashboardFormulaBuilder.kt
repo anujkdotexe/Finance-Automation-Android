@@ -313,67 +313,65 @@ object DashboardFormulaBuilder {
     private fun currentMonthTabExpr(yy: String): String = """TEXT(TODAY(), "mmm") & "$yy""""
 
     /**
-     * Tab name expression of the month after the current one. In December it takes the following year's suffix, so
-     * the January tab of the same year (a month that is long over) is never read as the next month. That tab belongs
-     * to another year's workbook, so here it is normally missing and counts as nothing.
-     */
-    private fun nextMonthTabExpr(year: Int): String {
-        val yy = (year % 100).toString().padStart(2, '0')
-        val nextYy = ((year + 1) % 100).toString().padStart(2, '0')
-        return """TEXT(EDATE(TODAY(), 1), "mmm") & IF(MONTH(TODAY()) = 12, "$nextYy", "$yy")"""
-    }
-
-    /**
-     * Owed To Me KPI (cell G5): rows with status exactly Pending in the current month tab plus the next one. Each tab
-     * has its own IFERROR so a missing next tab adds nothing. A debt carried early is counted once: the original is
-     * marked "Carried Fwd" and only its copy is Pending.
+     * Owed To Me KPI (cell G5): rows with status exactly Pending in every month tab of the workbook's year, each
+     * with its own IFERROR so a tab that does not exist adds nothing. An open debt is Pending in one place only: once
+     * carried, the original says "Carried Fwd" and the copy is the Pending one. Debts of an earlier month therefore
+     * stay counted until they are carried. Another year's debts live in another workbook and are not read.
      */
     fun buildOwedToMeKpiFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
-        val yy = (year % 100).toString().padStart(2, '0')
-        val terms = listOf(currentMonthTabExpr(yy), nextMonthTabExpr(year)).map { tab ->
-            """IFERROR(SUMIF(${tabRange(tab, "K4:K")}, "Pending", ${tabRange(tab, "J4:J")}), 0)"""
+        val terms = monthTabsForYear(year).map { tab ->
+            """IFERROR(SUMIF(INDIRECT("'$tab'!K4:K"), "Pending", INDIRECT("'$tab'!J4:J")), 0)"""
         }
         return "=" + terms.joinToString(" + ")
     }
 
-    /** I Owe People KPI (cell J5): Pending plus Partial payables of the current month tab and the next one. */
+    /** I Owe People KPI (cell J5): Pending plus Partial payables of every month tab of the workbook's year. */
     fun buildIOweKpiFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
-        val yy = (year % 100).toString().padStart(2, '0')
-        val terms = listOf(currentMonthTabExpr(yy), nextMonthTabExpr(year)).map { tab ->
-            val status = tabRange(tab, "AC4:AC")
-            val amount = tabRange(tab, "AA4:AA")
+        val terms = monthTabsForYear(year).map { tab ->
+            val status = """INDIRECT("'$tab'!AC4:AC")"""
+            val amount = """INDIRECT("'$tab'!AA4:AA")"""
             """IFERROR(SUMIF($status, "Pending", $amount) + SUMIF($status, "Partial", $amount), 0)"""
         }
         return "=" + terms.joinToString(" + ")
     }
 
     /**
-     * Builds the They Owe Me query formula for cell A27.
-     * Stacks current month and next month (if present), counting each open 'Pending' debt exactly once. When the next
-     * tab is missing the stacked query is expected to error, and the outer IFERROR then reads the current tab alone.
+     * The month tabs of [year] stacked into one range, oldest first. A tab that does not exist becomes the single
+     * [blankRow], whose values have the column types of a real row (QUERY drops values of a column's minority type).
+     */
+    private fun stackedMonthRanges(year: Int, columns: String, blankRow: String): String =
+        monthTabsForYear(year).joinToString("; ", prefix = "{", postfix = "}") { tab ->
+            """IFERROR(INDIRECT("'$tab'!$columns"), $blankRow)"""
+        }
+
+    /**
+     * Builds the They Owe Me query formula for cell A27: every open 'Pending' debt of the workbook's month tabs. If
+     * the stacked query errors, the current month alone is shown.
      */
     fun buildTheyOweMeQueryFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
         val yy = (year % 100).toString().padStart(2, '0')
+        val stack = stackedMonthRanges(
+            year, "A4:L", """{DATE(2000, 1, 1), 0, "", "", "", "", 0, "", 0, 0, "", ""}"""
+        )
         val current = tabRange(currentMonthTabExpr(yy), "A4:L")
-        val next = tabRange(nextMonthTabExpr(year), "A4:L")
         val group = """"SELECT Col1, SUM(Col2), SUM(Col3), SUM(Col4), MIN(Col5), COUNT(Col1) GROUP BY Col1 LABEL Col1 '', SUM(Col2) '', SUM(Col3) '', SUM(Col4) '', MIN(Col5) '', COUNT(Col1) ''""""
-        val stacked = """QUERY(QUERY({$current; $next}, "SELECT Col8, Col7 - Col9, Col7 - Col9 - Col10, Col10, Col1 WHERE Col11 = 'Pending' AND Col10 > 0 AND Col8 != 'Personal' LABEL Col7 - Col9 '', Col7 - Col9 - Col10 ''", 0), $group, 0)"""
+        val stacked = """QUERY(QUERY($stack, "SELECT Col8, Col7 - Col9, Col7 - Col9 - Col10, Col10, Col1 WHERE Col11 = 'Pending' AND Col10 > 0 AND Col8 != 'Personal' LABEL Col7 - Col9 '', Col7 - Col9 - Col10 ''", 0), $group, 0)"""
         val single = """QUERY(QUERY($current, "SELECT H, G - I, G - I - J, J, A WHERE K = 'Pending' AND J > 0 AND H != 'Personal' LABEL G - I '', G - I - J ''", 0), $group, 0)"""
-        return """=IFERROR($stacked, IFERROR($single, ""))"""
+        return """=ARRAYFORMULA(IFERROR($stacked, IFERROR($single, "")))"""
     }
 
     /**
-     * Builds the I Owe People query formula for cell H27.
-     * Stacks current month and next month (if present), counting each open 'Pending' or 'Partial' debt exactly once.
+     * Builds the I Owe People query formula for cell H27: every open 'Pending' or 'Partial' debt of the workbook's
+     * month tabs, with the same fallback as [buildTheyOweMeQueryFormula].
      */
     fun buildIOwePeopleQueryFormula(year: Int = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).year): String {
         val yy = (year % 100).toString().padStart(2, '0')
+        val stack = stackedMonthRanges(year, "W4:AC", """{DATE(2000, 1, 1), 0, "", "", 0, "", ""}""")
         val current = tabRange(currentMonthTabExpr(yy), "W4:AC")
-        val next = tabRange(nextMonthTabExpr(year), "W4:AC")
         val group = """"SELECT Col1, COUNT(Col1), SUM(Col2), MIN(Col3) GROUP BY Col1 LABEL Col1 '', COUNT(Col1) '', SUM(Col2) '', MIN(Col3) ''""""
-        val stacked = """QUERY(QUERY({$current; $next}, "SELECT Col3, Col5, Col1 WHERE (Col7 = 'Pending' OR Col7 = 'Partial') AND Col5 > 0", 0), $group, 0)"""
+        val stacked = """QUERY(QUERY($stack, "SELECT Col3, Col5, Col1 WHERE (Col7 = 'Pending' OR Col7 = 'Partial') AND Col5 > 0", 0), $group, 0)"""
         val single = """QUERY(QUERY($current, "SELECT Y, AA, W WHERE (AC = 'Pending' OR AC = 'Partial') AND AA > 0", 0), $group, 0)"""
-        return """=IFERROR($stacked, IFERROR($single, ""))"""
+        return """=ARRAYFORMULA(IFERROR($stacked, IFERROR($single, "")))"""
     }
 
     /**
