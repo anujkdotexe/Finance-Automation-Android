@@ -100,13 +100,35 @@ open class WorkbookResolver(
         forceValidateTabs: Boolean = false,
         createBackup: Boolean = false,
         archiveOlderBackups: Boolean = false
-    ): Result<String> = resolveForYearInternal(
-        year = year,
-        forceValidateTabs = forceValidateTabs,
-        createBackup = createBackup,
-        archiveOlderBackups = archiveOlderBackups,
-        onArchiveOutcome = null
-    )
+    ): Result<String> {
+        val resolved = resolveForYearInternal(
+            year = year,
+            forceValidateTabs = forceValidateTabs,
+            createBackup = createBackup,
+            archiveOlderBackups = archiveOlderBackups,
+            onArchiveOutcome = null
+        )
+        if (resolved is Result.Success) upgradeDashboardFormulas(resolved.data)
+        return resolved
+    }
+
+    private val lastFormulaUpgradeAttempt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * Gives an existing workbook the current Dashboard formulas, once. A failure never fails the resolve; it is
+     * tried again after a pause, so a sync does not spend its quota on it.
+     */
+    private suspend fun upgradeDashboardFormulas(spreadsheetId: String) {
+        val useCase = regenerateDashboardUseCase ?: return
+        val now = clock.millis()
+        val last = lastFormulaUpgradeAttempt[spreadsheetId]
+        if (last != null && now - last < FORMULA_UPGRADE_RETRY_MS) return
+        lastFormulaUpgradeAttempt[spreadsheetId] = now
+        val result = useCase.upgradeIfNeeded(spreadsheetId)
+        if (result is Result.Error) {
+            Diagnostics.record("WorkbookResolver", "formula_upgrade_failed: ${result.exception.javaClass.simpleName}")
+        }
+    }
 
     private suspend fun resolveForYearInternal(
         year: Int,
@@ -261,7 +283,7 @@ open class WorkbookResolver(
                                 if (e is CancellationException) throw e
                             }
                             preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
-                            regenerateDashboardUseCase?.invoke()
+                            regenerateDashboardUseCase?.invoke(candidateId)
                             return@withContext Result.Success(candidateId)
                         }
                         is Result.Error -> {
@@ -278,7 +300,7 @@ open class WorkbookResolver(
                                 } catch (e: Exception) {
                                     if (e is CancellationException) throw e
                                 }
-                                regenerateDashboardUseCase?.invoke()
+                                regenerateDashboardUseCase?.invoke(candidateId)
                                 return@withContext Result.Success(candidateId)
                             } else {
                                 return@withContext Result.Error(
@@ -293,7 +315,7 @@ open class WorkbookResolver(
                     }
                 } else {
                     preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
-                    regenerateDashboardUseCase?.invoke()
+                    regenerateDashboardUseCase?.invoke(candidateId)
                     return@withContext Result.Success(candidateId)
                 }
             }
@@ -333,7 +355,7 @@ open class WorkbookResolver(
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
                                     }
-                                    regenerateDashboardUseCase?.invoke()
+                                    regenerateDashboardUseCase?.invoke(foundId)
                                     return@withContext Result.Success(foundId)
                                 }
                                 is Result.Error -> {
@@ -350,7 +372,7 @@ open class WorkbookResolver(
                                         } catch (e: Exception) {
                                             if (e is CancellationException) throw e
                                         }
-                                        regenerateDashboardUseCase?.invoke()
+                                        regenerateDashboardUseCase?.invoke(foundId)
                                         return@withContext Result.Success(foundId)
                                     } else {
                                         // Transport or server error: keep the workbook id, skip dashboard regeneration, return recoverable error
@@ -365,7 +387,7 @@ open class WorkbookResolver(
                                 is Result.Loading -> {}
                             }
                         } else {
-                            regenerateDashboardUseCase?.invoke()
+                            regenerateDashboardUseCase?.invoke(foundId)
                         }
                         return@withContext Result.Success(foundId)
                     }
@@ -433,7 +455,7 @@ open class WorkbookResolver(
                 if (e is CancellationException) throw e
                 Diagnostics.record("WorkbookResolver", "mirrorTrips: ${e.javaClass.simpleName}")
             }
-            regenerateDashboardUseCase?.invoke()
+            regenerateDashboardUseCase?.invoke(newSpreadsheetId)
 
             Result.Success(newSpreadsheetId)
         }
@@ -514,7 +536,7 @@ open class WorkbookResolver(
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
             }
-            regenerateDashboardUseCase?.invoke()
+            regenerateDashboardUseCase?.invoke(newId)
 
             Result.Success(newId)
         }
@@ -614,6 +636,9 @@ open class WorkbookResolver(
     }
 
     companion object {
+        /** The pause before a failed Dashboard formula upgrade is tried again. */
+        const val FORMULA_UPGRADE_RETRY_MS: Long = 10 * 60 * 1000L
+
         /** The header row range of a month tab. The name is quoted because names like Nov26 look like cell references. */
         fun layoutRange(tabTitle: String): String = "'${tabTitle.replace("'", "''")}'!A3:AF3"
     }

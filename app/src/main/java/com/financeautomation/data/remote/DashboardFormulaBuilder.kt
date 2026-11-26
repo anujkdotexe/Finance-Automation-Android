@@ -602,6 +602,12 @@ object DashboardFormulaBuilder {
             )
         )
 
+        // 11. Insights band and the old header left at L26: provisioning writes both, so repair and upgrade must too
+        requests.addAll(
+            SheetProvisioner.buildInsightsBandRequests(dashboardSheetId, activeCategories.map { it.name }, year)
+        )
+        requests.addAll(SheetProvisioner.buildLegacyHeaderCleanupRequests(dashboardSheetId))
+
         return requests
     }
 

@@ -926,18 +926,7 @@ object SheetProvisioner {
             )
         }
 
-        // Explicitly clear leftover "Status" header at L26 (rowIndex 25, colIndex 11) from older 5-column layout
-        requests.add(
-            createCellRequest(
-                sheetId = dashboardSheetId,
-                rowIndex = 25,
-                colIndex = 11,
-                value = mapOf("stringValue" to ""),
-                format = mapOf(
-                    "backgroundColor" to whiteColor
-                )
-            )
-        )
+        requests.addAll(buildLegacyHeaderCleanupRequests(dashboardSheetId))
 
         // Thin borders as in the live workbook: banners, the header row (A26:L26, no right edge on L26) and the query cells
         requests.add(outerBordersRequest(dashboardSheetId, startRow = 23, endRow = 24, startCol = 0, endCol = 12))
@@ -1440,6 +1429,72 @@ object SheetProvisioner {
             )
         )
 
+        requests.addAll(buildInsightsBandRequests(dashboardSheetId, displayCategories, year))
+        val insightsCount = insightsSliceCategories(displayCategories).size + 1
+
+        // 14. Charts: Clustered Column Chart (A7, 520x266), Doughnut Chart (K7, 491x266), Insights Chart (A65, 520x266)
+        requests.addAll(
+            ChartManager.buildChartRequests(
+                dashboardSheetId = dashboardSheetId,
+                columnChartColorPrimary = hexToColorMap("1465BF"),
+                columnChartColorSecondary = hexToColorMap("90CAF8"),
+                categoryCount = categoryCount,
+                insightsItemCount = insightsCount
+            )
+        )
+
+        // 12. Dashboard Column Widths (matching iOS master reference)
+        val dashboardColWidths = listOf(
+            0 to 383, 1 to 68, 2 to 68, 3 to 68, 4 to 93, 5 to 68, 6 to 10, 7 to 104, 8 to 59,
+            9 to 71, 10 to 84, 11 to 68, 12 to 68, 13 to 68, 14 to 68, 15 to 68, 16 to 68, 17 to 68,
+            18 to 85, 19 to 20, 20 to 85, 21 to 98, 22 to 144, 23 to 96, 24 to 104, 25 to 85,
+            26 to 85, 27 to 85, 28 to 85
+        )
+        dashboardColWidths.forEach { (colIdx, px) ->
+            requests.add(
+                createUpdateDimensionPropertiesRequest(
+                    sheetId = dashboardSheetId,
+                    dimension = "COLUMNS",
+                    startIndex = colIdx,
+                    endIndex = colIdx + 1,
+                    pixelSize = px
+                )
+            )
+        }
+
+        // 13. Dashboard Row Heights (iOS reference values in points, converted to the pixels the API expects)
+        DASHBOARD_ROW_HEIGHT_POINTS.forEach { (startRow, endRowExclusive, points) ->
+            requests.add(
+                createUpdateDimensionPropertiesRequest(
+                    sheetId = dashboardSheetId,
+                    dimension = "ROWS",
+                    startIndex = startRow,
+                    endIndex = endRowExclusive,
+                    pixelSize = pointsToPixels(points)
+                )
+            )
+        }
+
+        return requests
+    }
+
+    /** The Insights slices that are categories: living burn only, and trips have a slice of their own. */
+    private fun insightsSliceCategories(displayCategories: List<String>): List<String> = displayCategories.filter {
+        !it.equals(CategoryConstants.CATEGORY_TRIP_TRAVEL, ignoreCase = true) &&
+            !it.equals(SheetSchemaConstants.SAVINGS_KEYWORD, ignoreCase = true) &&
+            !it.equals("Transfer", ignoreCase = true)
+    }
+
+    /**
+     * The Insights band of the Dashboard (rows 64 to 90): banner, headers, one slice per category, the trips slice
+     * and the refunds row. Labels, formulas and formats only. Used by provisioning, repair and the formula upgrade.
+     */
+    fun buildInsightsBandRequests(
+        dashboardSheetId: Int,
+        displayCategories: List<String>,
+        year: Int
+    ): List<Map<String, Any?>> {
+        val requests = mutableListOf<Map<String, Any?>>()
         // 13. Insights Band (Rows 64 to 90) - Single-Slice Trip Rule
         // Row 64 Banner (0-based 63)
         requests.add(
@@ -1499,12 +1554,7 @@ object SheetProvisioner {
             )
         )
 
-        // Non-trip living burn categories for insights slices (exclude Trip / Travel category since trip is its own slice, and exclude Savings and Transfer which are not living burn)
-        val insightsCategories = displayCategories.filter {
-            !it.equals(CategoryConstants.CATEGORY_TRIP_TRAVEL, ignoreCase = true) &&
-            !it.equals(SheetSchemaConstants.SAVINGS_KEYWORD, ignoreCase = true) &&
-            !it.equals("Transfer", ignoreCase = true)
-        }
+        val insightsCategories = insightsSliceCategories(displayCategories)
         // categories + 1 trip slice. Refunds are negative and a pie chart cannot plot a negative value,
         // so the refunds row is written below the chart range and is not charted.
         val insightsCount = insightsCategories.size + 1
@@ -1543,7 +1593,7 @@ object SheetProvisioner {
                 )
             )
             // Item Spend (Col V): Category spend where Column E is blank (non-trip) and not Void
-            val catNonTripFormula = DashboardFormulaBuilder.buildInsightCategorySpendFormula(rowNum)
+            val catNonTripFormula = DashboardFormulaBuilder.buildInsightCategorySpendFormula(rowNum, year)
             requests.add(
                 createCellRequest(
                     sheetId = dashboardSheetId,
@@ -1581,7 +1631,7 @@ object SheetProvisioner {
             )
         )
         // Trip Slice Spend: sum across tagged trip rows excluding Void, Savings, Transfer
-        val tripSliceFormula = DashboardFormulaBuilder.buildInsightTripSpendFormula()
+        val tripSliceFormula = DashboardFormulaBuilder.buildInsightTripSpendFormula(year)
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -1618,7 +1668,7 @@ object SheetProvisioner {
                 )
             )
         )
-        val refundsSliceFormula = DashboardFormulaBuilder.buildInsightRefundsFormula()
+        val refundsSliceFormula = DashboardFormulaBuilder.buildInsightRefundsFormula(year)
         requests.add(
             createCellRequest(
                 sheetId = dashboardSheetId,
@@ -1638,50 +1688,23 @@ object SheetProvisioner {
             )
         )
 
-        // 14. Charts: Clustered Column Chart (A7, 520x266), Doughnut Chart (K7, 491x266), Insights Chart (A65, 520x266)
-        requests.addAll(
-            ChartManager.buildChartRequests(
-                dashboardSheetId = dashboardSheetId,
-                columnChartColorPrimary = hexToColorMap("1465BF"),
-                columnChartColorSecondary = hexToColorMap("90CAF8"),
-                categoryCount = categoryCount,
-                insightsItemCount = insightsCount
-            )
-        )
-
-        // 12. Dashboard Column Widths (matching iOS master reference)
-        val dashboardColWidths = listOf(
-            0 to 383, 1 to 68, 2 to 68, 3 to 68, 4 to 93, 5 to 68, 6 to 10, 7 to 104, 8 to 59,
-            9 to 71, 10 to 84, 11 to 68, 12 to 68, 13 to 68, 14 to 68, 15 to 68, 16 to 68, 17 to 68,
-            18 to 85, 19 to 20, 20 to 85, 21 to 98, 22 to 144, 23 to 96, 24 to 104, 25 to 85,
-            26 to 85, 27 to 85, 28 to 85
-        )
-        dashboardColWidths.forEach { (colIdx, px) ->
-            requests.add(
-                createUpdateDimensionPropertiesRequest(
-                    sheetId = dashboardSheetId,
-                    dimension = "COLUMNS",
-                    startIndex = colIdx,
-                    endIndex = colIdx + 1,
-                    pixelSize = px
-                )
-            )
-        }
-
-        // 13. Dashboard Row Heights (iOS reference values in points, converted to the pixels the API expects)
-        DASHBOARD_ROW_HEIGHT_POINTS.forEach { (startRow, endRowExclusive, points) ->
-            requests.add(
-                createUpdateDimensionPropertiesRequest(
-                    sheetId = dashboardSheetId,
-                    dimension = "ROWS",
-                    startIndex = startRow,
-                    endIndex = endRowExclusive,
-                    pixelSize = pointsToPixels(points)
-                )
-            )
-        }
-
         return requests
+    }
+
+    /** Clears the leftover "Status" header at L26 (rowIndex 25, colIndex 11) of the older five column layout. */
+    fun buildLegacyHeaderCleanupRequests(dashboardSheetId: Int): List<Map<String, Any?>> {
+        // Explicitly clear leftover "Status" header at L26 (rowIndex 25, colIndex 11) from older 5-column layout
+        return listOf(
+            createCellRequest(
+                sheetId = dashboardSheetId,
+                rowIndex = 25,
+                colIndex = 11,
+                value = mapOf("stringValue" to ""),
+                format = mapOf(
+                    "backgroundColor" to whiteColor
+                )
+            )
+        )
     }
 
     /**

@@ -158,8 +158,9 @@ class DashboardOpenDebtFormulaTest {
         Json.parseToJsonElement(posted!!).jsonObject["requests"]!!.jsonArray.forEach { element ->
             val update = element.jsonObject["updateCells"]?.jsonObject ?: return@forEach
             val range = update["range"]!!.jsonObject
-            val formula = update["rows"]!!.jsonArray.first().jsonObject["values"]!!.jsonArray.first()
-                .jsonObject["userEnteredValue"]?.jsonObject?.get("formulaValue")?.jsonPrimitive?.content ?: return@forEach
+            val formula = update["rows"]?.jsonArray?.first()?.jsonObject?.get("values")?.jsonArray?.first()
+                ?.jsonObject?.get("userEnteredValue")?.jsonObject?.get("formulaValue")?.jsonPrimitive?.content
+                ?: return@forEach
             written[range["startRowIndex"]!!.jsonPrimitive.int to range["startColumnIndex"]!!.jsonPrimitive.int] = formula
         }
         expected(2025).forEach { (cell, formula) -> assertEquals("cell $cell", formula, written[cell]) }
