@@ -26,6 +26,8 @@ import com.financeautomation.domain.usecase.CarryForwardUseCase
 import com.financeautomation.domain.usecase.NettingUseCase
 import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
+import com.financeautomation.domain.usecase.ChainRow
+import com.financeautomation.domain.usecase.StoredPlanReplay
 import com.financeautomation.domain.usecase.VoidTransactionUseCase
 import com.financeautomation.domain.usecase.YearCloseUseCase
 import com.financeautomation.domain.utils.AccountingUtils
@@ -155,12 +157,14 @@ open class AccountingSyncExecutor(
                 allDebits = allDebits,
                 resolveCarriedFn = resolveCarriedFn
             ).withInflowUuid(item.transactionId)
+                .let { StoredPlanReplay.withExpectedValues(it, allDebits, emptyList()) }
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
             resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
-        return applyAccountingPlan(spreadsheetId, plan)
+        return if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
+        else applyAccountingPlan(spreadsheetId, plan)
     }
 
     /**
@@ -326,12 +330,16 @@ open class AccountingSyncExecutor(
                 )
             )
 
-            plan = AccountingPlan(
-                edits = nettingRes.edits,
-                appends = appends,
-                excess = 0.0,
-                unmatched = false,
-                message = "Payable logged (₹${nettingRes.offsetTotal} offset against existing debits)"
+            plan = StoredPlanReplay.withExpectedValues(
+                AccountingPlan(
+                    edits = nettingRes.edits,
+                    appends = appends,
+                    excess = 0.0,
+                    unmatched = false,
+                    message = "Payable logged (₹${nettingRes.offsetTotal} offset against existing debits)"
+                ),
+                allDebits,
+                emptyList()
             )
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
@@ -343,7 +351,8 @@ open class AccountingSyncExecutor(
             )
         }
 
-        val applyResult = applyAccountingPlan(spreadsheetId, plan)
+        val applyResult = if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
+        else applyAccountingPlan(spreadsheetId, plan)
         return when (applyResult) {
             is Result.Success -> Result.Success(outcome)
             is Result.Error -> Result.Error(applyResult.exception)
@@ -386,13 +395,127 @@ open class AccountingSyncExecutor(
                 resolveCarriedFn = resolveCarriedFn,
                 account = req.account,
                 note = req.note
-            )
+            ).let { StoredPlanReplay.withExpectedValues(it, emptyList(), allPayables) }
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
             resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
-        return applyAccountingPlan(spreadsheetId, plan)
+        return if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
+        else applyAccountingPlan(spreadsheetId, plan)
+    }
+
+    /**
+     * Sends a saved plan again, after checking it against the sheet. Whatever the earlier attempt reached, each
+     * change is applied once: edits already there are not written again, edits of a debt that has since been carried
+     * go to its live row, and when what was saved cannot be proven nothing is written at all. A row that says
+     * "Carried Fwd" is never set open again. Appended rows are found by their ids and are never added twice.
+     */
+    suspend fun replayStoredPlan(itemId: Long, spreadsheetId: String, plan: AccountingPlan): Result<Unit> {
+        // Without edits there is nothing another change could have moved
+        if (plan.edits.isEmpty()) return applyAccountingPlan(spreadsheetId, plan)
+
+        val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
+        if (snapRes is Result.Error) return Result.Error(snapRes.exception)
+        val snapshot = (snapRes as Result.Success).data
+        if (!snapshot.isComplete) {
+            return Result.Error(java.io.IOException("The sheet read was incomplete; the saved entry was not sent"))
+        }
+        val debits = snapshot.monthTabs.flatMap { month -> month.debits.map { it.toChainRow(month.tabName) } }
+        val payables = snapshot.monthTabs.flatMap { month -> month.payables.map { it.toChainRow(month.tabName) } }
+
+        return when (val outcome = StoredPlanReplay.check(plan, debits, payables)) {
+            StoredPlanReplay.Outcome.Unprovable ->
+                Result.Error(com.financeautomation.core.utils.UnprovableReplayException())
+            is StoredPlanReplay.Outcome.AlreadyWritten -> {
+                applyPlanToLocalDatabase(outcome.local)
+                alignLocalAfterReplay(snapshot, outcome.local, emptyList())
+                Result.Success(Unit)
+            }
+            is StoredPlanReplay.Outcome.Send -> {
+                if (outcome.movedFrom.isNotEmpty()) {
+                    // Saved before the write: if the reply is lost, the next attempt must look at the rows written now
+                    resolveSyncQueueDao().updatePlanJson(itemId, AccountingPlanJsonAdapter.toJson(outcome.plan))
+                }
+                val written = applyAccountingPlan(spreadsheetId, outcome.plan)
+                if (written is Result.Success) alignLocalAfterReplay(snapshot, outcome.plan, outcome.movedFrom)
+                written
+            }
+        }
+    }
+
+    private fun LedgerDebitRow.toChainRow(tab: String) = ChainRow(
+        uuid = uuid.orEmpty(), tab = tab, row = rowNumber, text = description, party = companions,
+        dateSerial = dateSerial, timeSerial = timeSerial, amount = owedToMe, status = status
+    )
+
+    private fun LedgerPayableRow.toChainRow(tab: String) = ChainRow(
+        uuid = uuid.orEmpty(), tab = tab, row = rowNumber, text = whatFor, party = paidBy,
+        dateSerial = dateIncurredSerial, timeSerial = timeSerial, amount = amountIOwe, status = repaymentStatus,
+        repaidDateSerial = dateRepaidSerial
+    )
+
+    /**
+     * Keeps the device in step with what a replay found or wrote, also when a carry made elsewhere moved the debts.
+     * [snapshot] is the sheet as read before the replay wrote [written].
+     */
+    private suspend fun alignLocalAfterReplay(
+        snapshot: LedgerWorkbookSnapshot,
+        written: AccountingPlan,
+        movedFrom: List<ChainRow>
+    ) {
+        try {
+            syncCarriedPayables(snapshot.monthTabs, emptyList(), emptyList())
+            val carriedDebits = (
+                movedFrom.map { it.uuid } +
+                    snapshot.monthTabs.flatMap { it.debits }
+                        .filter { it.status.equals("Carried Fwd", ignoreCase = true) }
+                        .mapNotNull { it.uuid }
+                        .filter { uuid -> written.edits.any { uuid.equals(it.uuid, ignoreCase = true) } }
+                ).filter { it.isNotBlank() }
+            val tDao = resolveTransactionDao()
+            carriedDebits.forEach { uuid ->
+                val local = tDao?.getById(uuid)
+                if (local != null && local.status.equals("Pending", ignoreCase = true)) {
+                    tDao?.update(local.copy(status = "Carried Fwd"))
+                }
+            }
+
+            val pDao = resolvePayableDao() ?: return
+            movedFrom.forEach { row ->
+                val local = pDao.getByUuid(row.uuid)
+                if (local != null && !local.repaymentStatus.equals("Carried Fwd", ignoreCase = true)) {
+                    pDao.upsert(local.copy(repaymentStatus = "Carried Fwd", amountIOwe = row.amount))
+                }
+            }
+            val onSheet = snapshot.monthTabs.flatMap { it.payables }
+            written.edits.filter { StoredPlanReplay.isPayableColumn(it.column) && !it.uuid.isNullOrBlank() }
+                .groupBy { it.uuid.orEmpty() }
+                .forEach { (uuid, edits) ->
+                    var debt = pDao.getByUuid(uuid) ?: return@forEach
+                    for (edit in edits) {
+                        debt = when (edit.column.uppercase()) {
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE ->
+                                debt.copy(amountIOwe = (edit.value as? Number)?.toDouble() ?: debt.amountIOwe)
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY ->
+                                debt.copy(paidBy = edit.value?.toString() ?: debt.paidBy)
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS ->
+                                debt.copy(repaymentStatus = edit.value?.toString() ?: debt.repaymentStatus)
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID ->
+                                debt.copy(dateRepaidSerial = (edit.value as? Number)?.toInt() ?: debt.dateRepaidSerial)
+                            else -> debt
+                        }
+                    }
+                    val carriedOnSheet = onSheet.any {
+                        uuid.equals(it.uuid, ignoreCase = true) &&
+                            it.repaymentStatus.equals("Carried Fwd", ignoreCase = true)
+                    }
+                    pDao.upsert(if (carriedOnSheet) debt.copy(repaymentStatus = "Carried Fwd") else debt)
+                }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Diagnostics.record("AccountingSyncExecutor", "alignLocalAfterReplay failed: ${e.javaClass.simpleName}")
+        }
     }
 
     suspend fun executeCarryForward(
@@ -489,6 +612,9 @@ open class AccountingSyncExecutor(
                 sourcePayables = sourceMonth.payables.map { it.toDomain(sourceMonth.tabName) },
                 existingLineage = existingLineage
             )
+            if (result.conflicts > 0) {
+                return Result.Error(com.financeautomation.core.utils.CarryConflictException())
+            }
             appends.addAll(result.plan.appends)
             edits.addAll(result.plan.edits)
             newLineage.addAll(result.lineageRecords)

@@ -2035,6 +2035,7 @@ class TransactionRepositoryImpl(
                 // Items that touch a transaction whose earlier item just failed wait for the next run to keep their order
                 if (item.transactionId in failedIds) continue
                 try {
+                    if (waitsForUnfinishedPlan(item)) continue
                     if (item.operationType == SyncQueueEntity.OP_CONFIG_PUSH) {
                     val configRes = syncConfigUseCase?.push()
                     val targetSheetId = reconcileSpreadsheetId() ?: preferencesRepository?.getSpreadsheetIdSync()
@@ -2227,7 +2228,10 @@ class TransactionRepositoryImpl(
                             payReq.transactionId?.let { tid ->
                                 transactionDao.updateSyncState(tid, SyncState.SYNCED.name)
                             }
-                            payableOutcome?.let { outcome ->
+                            // A debt already carried on (found by a late retry) keeps what the carry gave it
+                            val carriedSince = resolvePayableDao()?.getByUuid(payReq.requestId)?.repaymentStatus
+                                .equals("Carried Fwd", ignoreCase = true)
+                            payableOutcome?.takeUnless { carriedSince }?.let { outcome ->
                                 resolvePayableDao()?.updateAfterNetting(
                                     uuid = payReq.requestId,
                                     amountIOwe = outcome.netAmount,
@@ -2349,7 +2353,9 @@ class TransactionRepositoryImpl(
                             payloadJson = AccountingRequestJsonAdapter.carryForwardRequestToJson(cfReq)
                         )
                         val cfRowId = syncQueueDao.insert(cfQueueItem)
-                        val cfRes = accountingSyncExecutor.executeCarryForward(cfQueueItem, spreadsheetId)
+                        // The queued carry stays for later while an earlier entry is only partly sent
+                        val cfRes = if (waitsForUnfinishedPlan(cfQueueItem.copy(id = cfRowId))) null
+                        else accountingSyncExecutor.executeCarryForward(cfQueueItem, spreadsheetId)
                         if (cfRes is Result.Success) {
                             noteCarryDelivered(cfQueueItem, deliveredMonths)
                             syncQueueDao.deleteById(cfRowId)
@@ -2460,12 +2466,25 @@ class TransactionRepositoryImpl(
                             )
 
                             // Store plan before writing anything to guarantee idempotent retries
-                            val planJson = AccountingPlanJsonAdapter.toJson(plan)
+                            val planJson = AccountingPlanJsonAdapter.toJson(
+                                com.financeautomation.domain.usecase.StoredPlanReplay.withExpectedValues(
+                                    plan, emptyList(), openPayables
+                                )
+                            )
                             syncQueueDao.updatePlanJson(item.id, planJson)
                         }
 
+                        // A saved plan that changes existing debts is checked against the sheet before it is sent again.
                         // The uuid lookup above already showed the row is absent when the plan was just built
-                        val applyRes = applyPlan(spreadsheetId, plan, knownAbsent = if (item.planJson == null) setOf(txn.id) else emptySet())
+                        val applyRes: Result<Int?> = if (item.planJson != null && plan.edits.isNotEmpty()) {
+                            when (val replayed = accountingSyncExecutor.replayStoredPlan(item.id, spreadsheetId, plan)) {
+                                is Result.Success -> findDebitRow(spreadsheetId, tabName, txn.id)
+                                is Result.Error -> Result.Error(replayed.exception)
+                                is Result.Loading -> Result.Loading
+                            }
+                        } else {
+                            applyPlan(spreadsheetId, plan, knownAbsent = if (item.planJson == null) setOf(txn.id) else emptySet())
+                        }
                         if (applyRes is Result.Success) {
                             val rowIndex = applyRes.data ?: txn.sheetRowIndex
                             transactionDao.updateSyncState(txn.id, SyncState.SYNCED.name, rowIndex)
@@ -3208,6 +3227,41 @@ class TransactionRepositoryImpl(
             )
         }
         requestSync()
+    }
+
+    /**
+     * True when [item] would change debts while an earlier entry that changes debts has a saved plan not yet finished,
+     * whether it is waiting to retry or failed. Writing or carrying those debts first could make what the earlier
+     * entry already saved impossible to prove, so [item] waits until that entry is sent or discarded. Waiting costs
+     * no retry. Entries that change no debt never wait.
+     */
+    private suspend fun waitsForUnfinishedPlan(item: SyncQueueEntity): Boolean {
+        val changesDebts = when (item.operationType) {
+            SyncQueueEntity.OP_LOG_CREDIT,
+            SyncQueueEntity.OP_LOG_PAYABLE,
+            SyncQueueEntity.OP_LOG_REPAYMENT,
+            SyncQueueEntity.OP_CARRY_FORWARD -> true
+            SyncQueueEntity.OP_INSERT -> {
+                val companions = resolveTransactionDao().getById(item.transactionId)?.companions
+                AccountingUtils.tokens(companions).isNotEmpty() && !companions.equals("Personal", ignoreCase = true)
+            }
+            else -> false
+        }
+        if (!changesDebts) return false
+        return resolveSyncQueueDao().getAllQueueFlow().first().any { other ->
+            val earlier = other.createdAt < item.createdAt || (other.createdAt == item.createdAt && other.id < item.id)
+            earlier && holdsDebtPlan(other)
+        }
+    }
+
+    private fun holdsDebtPlan(item: SyncQueueEntity): Boolean {
+        val savesPlans = item.operationType == SyncQueueEntity.OP_LOG_CREDIT ||
+            item.operationType == SyncQueueEntity.OP_LOG_PAYABLE ||
+            item.operationType == SyncQueueEntity.OP_LOG_REPAYMENT ||
+            item.operationType == SyncQueueEntity.OP_INSERT
+        val planJson = item.planJson
+        if (!savesPlans || planJson == null) return false
+        return runCatching { AccountingPlanJsonAdapter.fromJson(planJson).edits.isNotEmpty() }.getOrDefault(false)
     }
 
     private class RunState {

@@ -6,12 +6,22 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeoutException
 
+/** A partly sent entry whose saved part cannot be proven from the sheet, so nothing more may be written. */
+class UnprovableReplayException :
+    IllegalStateException("The sheet changed after this entry was first sent, so what was saved cannot be proven")
+
+/** A carried copy that no longer matches its still open original, so what is owed cannot be proven. */
+class CarryConflictException :
+    IllegalStateException("A carried copy no longer matches its open original, so nothing was carried")
+
 enum class SyncErrorKind {
     RATE_LIMITED,
     AUTH_EXPIRED,
     NO_NETWORK,
     SERVER_BUSY,
     SHEET_CHANGED,
+    PARTLY_SENT,
+    CARRY_CONFLICT,
     UNKNOWN;
 
     fun plainMessage(): String = when (this) {
@@ -20,6 +30,10 @@ enum class SyncErrorKind {
         NO_NETWORK -> "No internet. This will sync when you are back online."
         SERVER_BUSY -> "Google had a problem. This will retry on its own."
         SHEET_CHANGED -> "The sheet was changed. Open Sync and Backup to repair."
+        PARTLY_SENT -> "Partly sent, then the sheet changed. Nothing more was written. Check this debt in the sheet, " +
+            "then discard this item and enter only what is missing."
+        CARRY_CONFLICT -> "A carried debt does not match its old row. In the sheet, correct the copy or mark the old " +
+            "row Carried Fwd, then retry."
         UNKNOWN -> "Something went wrong. Tap Details."
     }
 
@@ -37,6 +51,8 @@ enum class SyncErrorKind {
 
         fun fromThrowable(throwable: Throwable?): SyncErrorKind {
             if (throwable == null) return UNKNOWN
+            if (throwable is UnprovableReplayException) return PARTLY_SENT
+            if (throwable is CarryConflictException) return CARRY_CONFLICT
 
             val msg = throwable.message?.lowercase() ?: ""
 
