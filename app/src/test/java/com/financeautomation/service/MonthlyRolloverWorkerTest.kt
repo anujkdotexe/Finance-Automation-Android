@@ -22,8 +22,16 @@ class MonthlyRolloverWorkerTest {
         var carryForwardCalledWith: String? = null
         var carryForwardSourceTab: String? = null
         var carryForwardResult: Result<Unit> = Result.Success(Unit)
+        val carries = mutableListOf<Pair<String, String?>>()
+
+        /** Planning is the production repository's; only the queueing is recorded here. */
+        val planner = com.financeautomation.testutil.SyncHarness()
+
+        override suspend fun planMonthlyCarry(now: ZonedDateTime): List<Pair<String, String>> =
+            planner.repo.planMonthlyCarry(now)
 
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> {
+            carries.add(targetTab to sourceTab)
             carryForwardCalledWith = targetTab
             carryForwardSourceTab = sourceTab
             return carryForwardResult
@@ -48,6 +56,32 @@ class MonthlyRolloverWorkerTest {
     }
 
     private val kolkataZone = ZoneId.of("Asia/Kolkata")
+
+    @Test
+    fun aRunQueuesTheUnfinishedYearStepFirstAndThenThisMonth() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+
+        MonthlyRolloverWorker.executeRollover(
+            ZonedDateTime.of(2026, 11, 25, 9, 0, 0, 0, kolkataZone), repo, { Result.Success(1) }
+        )
+
+        assertEquals(listOf<Pair<String, String?>>("Jan26" to "Dec25", "Nov26" to "Oct26"), repo.carries)
+    }
+
+    @Test
+    fun onceThisMonthsCarryReachedTheSheetARunQueuesAndSyncsNothing() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        repo.planner.preferences[com.financeautomation.domain.repository.PreferencesRepository.KEY_CARRY_DONE_MONTH] = "2026-11"
+        var syncCalled = false
+
+        val result = MonthlyRolloverWorker.executeRollover(
+            ZonedDateTime.of(2026, 11, 25, 9, 0, 0, 0, kolkataZone), repo, { syncCalled = true; Result.Success(0) }
+        )
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertTrue(repo.carries.isEmpty())
+        assertFalse(syncCalled)
+    }
 
     @Test
     fun testDay25_doesNotCarryToNextMonth_carriesPreviousIntoCurrent() = runBlocking {

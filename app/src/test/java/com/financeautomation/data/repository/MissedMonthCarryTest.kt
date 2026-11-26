@@ -310,6 +310,22 @@ class MissedMonthCarryTest {
     }
 
     @Test
+    fun theExecutorMovesNothingIntoAMonthThatHasNotStarted() = runBlocking {
+        val sheet = FakeSheetApplier(mutableListOf("Nov26", "Dec26"))
+        sheet.seedDebit("Nov26", 4, "txn_nov", "Dinner", 500.0)
+        // The last evening of November in Asia/Kolkata
+        val h = Harness(ZonedDateTime.of(2026, 11, 30, 23, 59, 0, 0, zone), mapOf(2026 to sheet))
+
+        h.repo.carryForward("Dec26", "Nov26")
+        h.repo.syncPendingTransactions(userInitiated = true)
+
+        assertEquals(listOf("Nov26" to "Dinner"), sheet.openDebits())
+        assertEquals("Pending", sheet.getCell("Nov26", 4, "K"))
+        assertTrue(h.qDao.queue.isEmpty())
+        assertEquals(null, h.preferences[PreferencesRepository.KEY_CARRY_DONE_MONTH])
+    }
+
+    @Test
     fun aFirstYearUserGetsNoJanuaryCarryThatCouldOnlyFail() = runBlocking {
         val sheet = FakeSheetApplier(mutableListOf("Jan26"))
         val h = Harness(at(2026, 1, 5), mapOf(2026 to sheet))
