@@ -408,7 +408,8 @@ class QuickLogViewModel(
                         }
                         is Result.Error -> {
                             Diagnostics.record("QuickLogViewModel", "update_error: ${SyncErrorKind.safeCode("quicklog update", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
-                            val errMsg = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", res.throwable))
+                            val errMsg = EditBlockText.of(res.throwable)
+                                ?: UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", res.throwable))
                             _uiState.update { it.copy(isSaving = false, errorMessage = errMsg) }
                             withContext(mainDispatcher) { onError?.invoke(errMsg) }
                         }
@@ -514,8 +515,14 @@ class QuickLogViewModel(
                         onVoided()
                     }
                     is Result.Error -> {
-                        Diagnostics.record("QuickLogViewModel", "void_error: ${SyncErrorKind.safeCode("quicklog void", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
-                        _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog void", res.throwable))) }
+                        val throwable = res.throwable
+                        if (throwable is com.financeautomation.domain.model.VoidBlockedException) {
+                            val msgRes = com.financeautomation.presentation.components.VoidDialogUtils.blockMessageResId(throwable.reason)
+                            _uiState.update { it.copy(isSaving = false, errorMessage = UiText.StringResource(msgRes)) }
+                        } else {
+                            Diagnostics.record("QuickLogViewModel", "void_error: ${SyncErrorKind.safeCode("quicklog void", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
+                            _uiState.update { it.copy(isSaving = false, errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog void", res.throwable))) }
+                        }
                     }
                     is Result.Loading -> Unit
                 }

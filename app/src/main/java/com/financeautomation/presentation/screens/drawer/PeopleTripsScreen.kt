@@ -236,7 +236,7 @@ fun PeopleTripsScreen(
                     verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                 ) {
                     state.tripTags.forEach { trip ->
-                        val isActive = trip.isActive || trip.name.equals(state.activeTripTag, ignoreCase = true)
+                        val isActive = trip.isActive
                         val summary = summaryFor(trip.name)
                         TripCard(
                             tripName = trip.name,
@@ -245,14 +245,19 @@ fun PeopleTripsScreen(
                             peopleCount = summary.peopleCount,
                             totalSpend = formatRupees(summary.totalPaid),
                             costYou = formatRupees(summary.netExpenditure),
-                            dateRange = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(summary.transactions, isActive),
+                            dateRange = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(
+                                summary.transactions,
+                                isActive,
+                                trip.startDateEpochDay,
+                                trip.endDateEpochDay
+                            ),
                             onOpen = { openTripName = trip.name },
                             onEndTrip = { viewModel.onToggleTripTagActive(trip.id) },
                             onReactivateTrip = { viewModel.onToggleTripTagActive(trip.id) }
                         )
                     }
                 }
-            } else if (state.activeTripTag.isNotBlank()) {
+            } else if (state.activeTripTag.isNotBlank() && state.tripTags.isEmpty()) {
                 val summary = summaryFor(state.activeTripTag)
                 TripCard(
                     tripName = state.activeTripTag,
@@ -343,7 +348,7 @@ fun PeopleTripsScreen(
 
     openTripName?.let { name ->
         val tripTag = state.tripTags.firstOrNull { it.name.equals(name, ignoreCase = true) }
-        val isActive = tripTag?.isActive == true || name.equals(state.activeTripTag, ignoreCase = true)
+        val isActive = tripTag?.isActive == true
         TripDetailSheet(summary = summaryFor(name),
             isActive = isActive,
             onEndTrip = {

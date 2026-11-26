@@ -52,7 +52,8 @@ object LivingBurn {
     /** True when the transaction counts toward living burn inside [window]. */
     fun counts(txn: Transaction, window: LongRange, excludedNames: Set<String>): Boolean =
         txn.timestamp in window && txn.status != TransactionStatus.VOID &&
-            txn.reviewState != ReviewState.NEEDS_REVIEW && !isExcluded(txn.category, excludedNames)
+            txn.reviewState != ReviewState.NEEDS_REVIEW && !isExcluded(txn.category, excludedNames) &&
+            !CarriedCopies.isCopy(txn)
 
     /** Total living burn inside [window]. */
     fun total(

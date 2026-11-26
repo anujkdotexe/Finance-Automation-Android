@@ -327,6 +327,13 @@ class TransactionRepositorySyncTest {
             }
         }
 
+        /** Answers the read of the cells A to L of one expense row. */
+        fun serveRow(row: Int, cells: String) {
+            customGetHandler = { url ->
+                if (url.contains("A$row%3AL$row") || url.contains("A$row:L$row")) """{"values":[$cells]}""" else null
+            }
+        }
+
         val fakeTokenProvider = object : TokenProvider {
             override fun getAccessToken(): String = "test_token"
             override fun refreshAccessToken(): String = "test_token"
@@ -364,15 +371,14 @@ class TransactionRepositorySyncTest {
                 } else when {
                     // values:batchGet (readLedgerSnapshot)
                     method == "GET" && url.contains("values:batchGet") -> {
-                        customBatchGetResponse ?: """{"valueRanges":[
-                            {"range":"'Nov26'!L3:L3","majorDimension":"ROWS","values":[["Note"]]},
-                            {"range":"'Nov26'!A4:L","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AD4:AD","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!N4:U","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AE4:AE","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!W4:AC","majorDimension":"ROWS","values":[]},
-                            {"range":"'Nov26'!AF4:AF","majorDimension":"ROWS","values":[]}
-                        ]}"""
+                        customBatchGetResponse ?: run {
+                            // Like the API: one value range for every range asked for, in order, also when it is blank
+                            val entries = request.url.queryParameterValues("ranges").joinToString(",") { range ->
+                                val values = if (range.orEmpty().endsWith("L3:L3")) """[["Note"]]""" else "[]"
+                                """{"range":"$range","majorDimension":"ROWS","values":$values}"""
+                            }
+                            """{"valueRanges":[$entries]}"""
+                        }
                     }
                     // Header check for L3 Note
                     method == "GET" && (url.contains("L3%3AL3") || url.contains("L3:L3") || url.contains("!L3")) -> {
@@ -790,11 +796,24 @@ class TransactionRepositorySyncTest {
         qDao.insert(
             SyncQueueEntity(
                 transactionId = dinnerTxn.id,
-                operationType = SyncQueueEntity.OP_VOID, // Triggers applyPlan with planJson
-                payloadJson = dinnerTxn.id,
+                // A credit delivery applies its stored plan. A void no longer does: it reads the sheet again each time.
+                operationType = SyncQueueEntity.OP_LOG_CREDIT,
+                payloadJson = com.financeautomation.data.remote.AccountingRequestJsonAdapter.creditRequestToJson(
+                    com.financeautomation.domain.model.LogCreditRequest(
+                        requestId = dinnerTxn.id,
+                        settler = "Charlie",
+                        amount = 175.0,
+                        account = "SBI",
+                        inflowType = "Friend settlement",
+                        reason = "Part payment",
+                        timestamp = 1794381000000L
+                    )
+                ),
                 planJson = planJson
             )
         )
+        // The stored plan's rows are found again by their ids before they are written (rows 4 down)
+        mock.serveIdColumns("Nov26", mapOf("AD" to listOf("", dinnerTxn.id, "", lunchTxn.id)))
 
         // Execute sync
         val syncRes = repo.syncPendingTransactions()
@@ -1272,12 +1291,14 @@ class TransactionRepositorySyncTest {
         val mock = CountingSheetsMock()
         val sheets = mock.createClient()
 
+        val testClock: () -> Long = { 1796120000000L } // Dec 1, 2026 IST
         val executor = AccountingSyncExecutor(
             googleSheetsClient = sheets,
             googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
             syncQueueDao = qDao,
             lineageDao = lineageDao,
-            transactionDao = tDao
+            transactionDao = tDao,
+            clock = testClock
         )
 
         val repo = TransactionRepositoryImpl(
@@ -1287,6 +1308,7 @@ class TransactionRepositorySyncTest {
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
             accountingSyncExecutor = executor,
+            clock = testClock,
             ioDispatcher = Dispatchers.IO
         )
 
@@ -1367,12 +1389,14 @@ class TransactionRepositorySyncTest {
         val mock = CountingSheetsMock()
         val sheets = mock.createClient()
 
+        val testClock: () -> Long = { 1796120000000L } // Dec 1, 2026 IST
         val executor = AccountingSyncExecutor(
             googleSheetsClient = sheets,
             googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
             syncQueueDao = qDao,
             lineageDao = lineageDao,
-            transactionDao = tDao
+            transactionDao = tDao,
+            clock = testClock
         )
 
         val repo = TransactionRepositoryImpl(
@@ -1382,6 +1406,7 @@ class TransactionRepositorySyncTest {
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
             accountingSyncExecutor = executor,
+            clock = testClock,
             ioDispatcher = Dispatchers.IO
         )
 
@@ -1472,6 +1497,12 @@ class TransactionRepositorySyncTest {
 
         // Queue item is cleared
         assertEquals(0, qDao.getAllPending(10).size)
+
+        // The void reached the sheet row that holds the expense, in one write
+        val voidWrite = mock.recordedBodies.single { it.contains("'Nov26'!K6") }
+        listOf("'Nov26'!D6", "'Nov26'!G6", "'Nov26'!I6", "'Nov26'!J6", "[Void] Coffee", "\"Void\"").forEach {
+            assertTrue("the void write must contain $it", voidWrite.contains(it))
+        }
 
         // Local DB remains void and synced
         val finalTxn = tDao.getById(txnId)
@@ -1568,12 +1599,14 @@ class TransactionRepositorySyncTest {
         val mock = CountingSheetsMock()
         val sheets = mock.createClient()
 
+        val testClock: () -> Long = { 1796120000000L } // Dec 1, 2026 IST
         val executor = AccountingSyncExecutor(
             googleSheetsClient = sheets,
             googleDriveClient = GoogleDriveClient(okHttpClient = OkHttpClient(), tokenProvider = mock.fakeTokenProvider),
             syncQueueDao = qDao,
             lineageDao = lineageDao,
-            transactionDao = tDao
+            transactionDao = tDao,
+            clock = testClock
         )
 
         val repo = TransactionRepositoryImpl(
@@ -1583,6 +1616,7 @@ class TransactionRepositorySyncTest {
             googleSheetsClient = sheets,
             preferencesRepository = prefs,
             accountingSyncExecutor = executor,
+            clock = testClock,
             ioDispatcher = Dispatchers.IO
         )
 
@@ -2074,6 +2108,7 @@ class TransactionRepositorySyncTest {
         val txnId = "txn_delivered_32col_1234567890abcdef"
         // Row 5 in 32-column tab: UUID is at AD5
         mock.writtenUuids["AD5"] = txnId
+        mock.serveRow(5, """[46338,0.598,"SBI","Dinner Original","","Food & Drink",500,"Personal",500,0,"Personal","Original Note"]""")
 
         val deliveredTxn = Transaction(
             id = txnId,
@@ -2149,6 +2184,7 @@ class TransactionRepositorySyncTest {
         val txnId = "txn_delivered_31col_1234567890abcdef"
         // Row 5 in legacy 31-column tab: UUID is at AC5 (not AD5)
         mock.writtenUuids["AC5"] = txnId
+        mock.serveRow(5, """[46338,0.598,"SBI","Coffee Original","","Food & Drink",100,"Personal",100,0,"Personal","Old Note"]""")
 
         val deliveredTxn = Transaction(
             id = txnId,

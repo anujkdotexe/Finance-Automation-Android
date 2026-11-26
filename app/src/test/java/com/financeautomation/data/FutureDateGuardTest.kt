@@ -28,7 +28,8 @@ class FutureDateGuardTest {
     private fun <T> recordingDao(type: Class<T>): T =
         Proxy.newProxyInstance(type.classLoader, arrayOf(type)) { _, method, _ ->
             calls.add(method.name)
-            when (method.returnType) {
+            // No stored entry: an update reads the row it is made on
+            if (method.name == "getById") null else when (method.returnType) {
                 java.lang.Long.TYPE -> 1L
                 java.lang.Integer.TYPE -> 0
                 java.lang.Boolean.TYPE -> false

@@ -67,6 +67,11 @@ object SheetSchemaConstants {
         "AF" to "Payable Txn UUID"
     )
 
+    const val COL_INDEX_DEBIT_DATE: Int = 0
+    const val COL_INDEX_INFLOW_DATE: Int = 13
+    const val COL_INDEX_PAYABLE_DATE_INCURRED: Int = 22
+    const val COL_INDEX_PAYABLE_DATE_REPAID: Int = 27
+
     // Table 1: Debits / Expenses (Cols A-L, indices 0-11)
     const val TABLE_1_DEBITS_RANGE: String = "A3:L"
     const val TABLE_1_START_COL_INDEX: Int = 0

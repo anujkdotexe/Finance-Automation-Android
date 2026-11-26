@@ -188,5 +188,83 @@ object AccountingUtils {
 
     fun isEqualSplit(debit: LedgerDebit): Boolean =
         isEqualSplit(debit.total, debit.myShare, debit.companions, debit.owed)
+
+    /**
+     * Tolerance for matching legacy entry timestamps: strictly under one second.
+     * 1 second in serial days = 1.0 / 86400.0 (~0.000011574)
+     */
+    const val LEGACY_TIME_SERIAL_TOLERANCE: Double = 1.0 / 86400.0
+
+    /**
+     * Derives the linked payable UUID for an expense UUID if they share a common suffix.
+     * e.g. "txn_abc123" -> "pay_abc123"
+     */
+    fun linkedPayableIdForExpense(expenseId: String): String? {
+        if (expenseId.startsWith("txn_")) {
+            return "pay_" + expenseId.removePrefix("txn_")
+        }
+        return null
+    }
+
+    /**
+     * Derives the linked expense UUID for a payable UUID if they share a common suffix.
+     * e.g. "pay_abc123" -> "txn_abc123"
+     */
+    fun linkedExpenseIdForPayable(payableId: String): String? {
+        if (payableId.startsWith("pay_")) {
+            return "txn_" + payableId.removePrefix("pay_")
+        }
+        return null
+    }
+
+    /**
+     * How an old entry's debt, with an unrelated id, relates to an expense.
+     * AGREES: date, time within one second, description and creditor all agree.
+     * UNVERIFIED: date, time and description agree, and the expense (account "Other" or blank, free text) does not
+     * name a creditor at all. It could be this expense's debt, but cannot be identified safely.
+     * NONE: anything disagrees, or a value is empty.
+     */
+    enum class LegacyDebtMatch { AGREES, UNVERIFIED, NONE }
+
+    fun matchLegacyPayable(
+        dateIncurredSerial: Int?,
+        timeSerial: Double?,
+        paidBy: String,
+        whatFor: String,
+        txDateSerial: Int,
+        txTimeSerial: Double,
+        txMerchant: String,
+        txAccount: String = "",
+        txCategory: String = ""
+    ): LegacyDebtMatch {
+        if (dateIncurredSerial == null || dateIncurredSerial != txDateSerial) return LegacyDebtMatch.NONE
+        if (timeSerial == null || kotlin.math.abs(timeSerial - txTimeSerial) >= LEGACY_TIME_SERIAL_TOLERANCE) {
+            return LegacyDebtMatch.NONE
+        }
+
+        val merchant = txMerchant.removePrefix("[Void] ").trim()
+        val what = whatFor.removePrefix("[Void] ").trim()
+        val creditor = paidBy.trim()
+        val account = txAccount.trim()
+        val category = txCategory.trim()
+        if (creditor.isBlank() || what.isBlank() || merchant.isBlank()) return LegacyDebtMatch.NONE
+
+        // Description: the whole text, or the text with a suffix the app writes. Never a prefix or a part of it.
+        val suffixes = listOf("Other", "via Split", creditor, category).filter { it.isNotBlank() }
+        val namesCreditor = eq(merchant, "Paid by $creditor")
+        val descriptionAgrees = eq(what, merchant) ||
+            suffixes.any { eq(what, "$merchant ($it)") } ||
+            // Logged without a description: the debt holds only the category
+            (namesCreditor && category.isNotBlank() && eq(what, category))
+        if (!descriptionAgrees) return LegacyDebtMatch.NONE
+
+        return when {
+            namesCreditor -> LegacyDebtMatch.AGREES
+            merchant.startsWith("Paid by ", ignoreCase = true) -> LegacyDebtMatch.NONE
+            eq(creditor, account) -> LegacyDebtMatch.AGREES
+            account.isBlank() || eq(account, "Other") -> LegacyDebtMatch.UNVERIFIED
+            else -> LegacyDebtMatch.NONE
+        }
+    }
 }
 

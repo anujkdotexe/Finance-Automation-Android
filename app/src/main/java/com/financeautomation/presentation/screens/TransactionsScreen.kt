@@ -53,6 +53,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,6 +94,7 @@ import com.financeautomation.presentation.components.OutlinedButton
 import com.financeautomation.presentation.components.StatusChip
 import com.financeautomation.presentation.components.SyncStatusLine
 import com.financeautomation.presentation.components.TransactionRow
+import com.financeautomation.presentation.components.VoidDialogUtils
 import com.financeautomation.presentation.theme.FinanceAutomationTheme
 import com.financeautomation.presentation.theme.FinanceShapes
 import com.financeautomation.presentation.theme.FinanceTheme
@@ -135,6 +137,16 @@ fun TransactionsScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // A void the sheet refused during sync puts the entry back, which changes the list; say why
+    LaunchedEffect(state.groupedTransactions) {
+        viewModel.takeVoidBlockedNotice()?.let { reason ->
+            snackbarHostState.showSnackbar(
+                message = context.getString(VoidDialogUtils.blockMessageResId(reason)),
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface,
@@ -165,16 +177,29 @@ fun TransactionsScreen(
                 onNavigateToSync = onNavigateToSync,
                 onNavigateToNeedsReview = onNavigateToNeedsReview,
                 onVoidTransaction = { targetTxn ->
-                    viewModel.voidTransaction(targetTxn)
-                    coroutineScope.launch {
-                        val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
-                        val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.txns_voided_named_msg, cleanName),
-                            actionLabel = context.getString(R.string.action_undo),
-                            duration = SnackbarDuration.Short
-                        )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            viewModel.undoVoid()
+                    viewModel.voidTransaction(targetTxn) { outcome ->
+                        coroutineScope.launch {
+                            val cleanName = stripVoidPrefix(targetTxn.merchant.ifBlank { targetTxn.category })
+                            val blockReason = viewModel.consumeLastVoidBlockReason()
+                            if (blockReason != null) {
+                                snackbarHostState.showSnackbar(
+                                    message = context.getString(VoidDialogUtils.blockMessageResId(blockReason)),
+                                    duration = SnackbarDuration.Long
+                                )
+                            } else if (outcome is com.financeautomation.core.model.Result.Error) {
+                                snackbarHostState.showSnackbar(context.getString(R.string.err_void_failed_generic))
+                            } else {
+                                // Undo restores the expense only, so it is not offered once a debt was voided with it
+                                val debtVoided = viewModel.consumeLastVoidIncludedDebt()
+                                val result = snackbarHostState.showSnackbar(
+                                    message = context.getString(R.string.txns_voided_named_msg, cleanName),
+                                    actionLabel = if (debtVoided) null else context.getString(R.string.action_undo),
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.undoVoid()
+                                }
+                            }
                         }
                     }
                 },
@@ -870,7 +895,7 @@ fun IncomeDetailSheet(
                         verticalArrangement = Arrangement.spacedBy(FinanceTheme.spacing.s)
                     ) {
                         Text(
-                            text = stringResource(R.string.txn_void_entry_confirm),
+                            text = stringResource(if (deleteSheetRow) R.string.confirm_void_delete_message else R.string.txn_void_entry_confirm),
                             style = FinanceTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

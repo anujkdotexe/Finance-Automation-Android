@@ -50,6 +50,9 @@
     <string name="health_status_format">Status: %s</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_discard_anyway">Discard anyway</string>
+    <string name="discard_partly_sent_title">Discard this item?</string>
+    <string name="discard_partly_sent_message">Part of this entry may already be recorded in your Google Sheet. Discarding will stop future sync attempts, but will not undo changes already written to the sheet. Please check your sheet.</string>
     <string name="action_confirm">Confirm</string>
     <string name="action_void">Void</string>
     <string name="action_edit">Edit</string>
@@ -1111,7 +1114,17 @@
     <string name="confirm_void_title">Void %1$s?</string>
     <string name="confirm_void_title_generic">Void entry?</string>
     <string name="confirm_void_message">Are you sure you want to void this entry? It will be struck through in your ledger.</string>
+    <string name="confirm_void_delete_message">Are you sure you want to void this entry? It will be removed from the sheet and the app.</string>
     <string name="confirm_void_delete_sheet_row">Also delete this entry from the sheet</string>
+    <string name="void_linked_debt_unchanged">Linked debt was left unchanged.</string>
+    <string name="txns_voided_with_debt_unchanged_msg">Voided %1$s. Linked debt was left unchanged.</string>
+    <string name="void_blocked_debt_repaid">Cannot void this expense because the linked debt was already partly or fully repaid, or offset against what your friend owed.</string>
+    <string name="void_blocked_debt_offset">Cannot void this expense because the linked debt was offset against what your friend owed.</string>
+    <string name="void_blocked_ambiguous">Cannot void this expense because a debt that may belong to it cannot be identified safely.</string>
+    <string name="void_blocked_debt_carried">Cannot void this expense because its debt was carried forward and the carried entry cannot be matched without doubt.</string>
+    <string name="edit_blocked_debt_carried">Edit not saved. This debt was carried forward, so its amount, split, date and description cannot be changed here.</string>
+    <string name="edit_blocked_sheet_changed">Edit not saved. This entry changed in the sheet. The values in the sheet are kept; check them and edit again if needed.</string>
+    <string name="void_blocked_sheet_error">Cannot void this expense because the sheet could not be verified. Please retry.</string>
     <string name="confirm_sign_out_title">Sign out?</string>
     <string name="confirm_sign_out_message">Are you sure you want to sign out? You will need to link your Google account again to sync.</string>
     <string name="confirm_archive_account_title">Archive %1$s?</string>

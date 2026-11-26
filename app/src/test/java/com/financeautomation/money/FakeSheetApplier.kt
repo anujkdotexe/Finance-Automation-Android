@@ -40,6 +40,35 @@ class FakeSheetApplier(
         isLenient = true
     }
 
+    var forceFindRowError: Boolean = false
+
+    /** When true, every read of a single range fails; reads of many ranges at once still work. */
+    var failSingleRangeReads: Boolean = false
+
+    /** When true, cell formatting requests fail and change nothing. */
+    var failFormatting: Boolean = false
+
+    /** How many formatting requests failed because of [failFormatting]. */
+    var failedFormattings: Int = 0
+
+    /** When set, every value write and clear answers with this HTTP status and changes nothing. */
+    var forceValueWriteStatus: Int? = null
+
+    private var writesUntilFault = 0
+    private var faultAfterApplying = false
+
+    /**
+     * Makes one coming value write fail with HTTP 500: the [number]th from now, counting every values:batchUpdate
+     * call. With [applied] the write reaches the sheet first, as when only the reply is lost.
+     */
+    fun failValueWrite(number: Int, applied: Boolean) {
+        writesUntilFault = number
+        faultAfterApplying = applied
+    }
+
+    /** True once the write chosen with [failValueWrite] has failed. */
+    fun faultWasHit(): Boolean = writesUntilFault == 0
+
     private val tokenProvider = object : TokenProvider {
         override fun getAccessToken(): String = "fake_test_token"
         override fun refreshAccessToken(): String = "fake_test_token"
@@ -131,6 +160,9 @@ class FakeSheetApplier(
         return GoogleSheetsClient(builder.addInterceptor(interceptor).build(), tokenProvider)
     }
 
+    /** Answers one request, for a test that routes several workbooks through one client. */
+    fun serve(request: Request): Response = respond(request)
+
     private fun bodyOf(request: Request): String {
         val b = request.body ?: return ""
         val buf = okio.Buffer()
@@ -156,6 +188,34 @@ class FakeSheetApplier(
         val method = call.method
         val url = call.url
         val body = call.body
+
+        if (forceFindRowError && method == "GET" && (url.contains("AF") || url.contains("AE"))) {
+            return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
+        }
+
+        if (failSingleRangeReads && method == "GET" && url.contains("/values/")) {
+            return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
+        }
+
+        if (failFormatting && method == "POST" && body.contains("\"repeatCell\"")) {
+            failedFormattings++
+            return 500 to """{"error":{"code":500,"message":"Simulated formatting error"}}"""
+        }
+
+        if (writesUntilFault > 0 && method == "POST" && url.contains("values:batchUpdate")) {
+            writesUntilFault--
+            if (writesUntilFault == 0) {
+                if (faultAfterApplying) handleValuesBatchUpdate(body)
+                return 500 to """{"error":{"code":500,"message":"Simulated write fault"}}"""
+            }
+        }
+
+        if (forceValueWriteStatus != null && method == "POST" &&
+            (url.contains("values:batchUpdate") || url.contains("values:batchClear"))
+        ) {
+            val status = forceValueWriteStatus!!
+            return status to """{"error":{"code":$status,"message":"Simulated write error"}}"""
+        }
 
         return when {
             method == "GET" && url.contains("values:batchGet") -> {

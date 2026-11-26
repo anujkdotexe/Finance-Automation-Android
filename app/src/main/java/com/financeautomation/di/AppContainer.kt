@@ -602,6 +602,18 @@ class DefaultAppContainer(
                     if (!found.isNullOrBlank()) preferencesRepository.setSpreadsheetIdForYear(year, found)
                     found
                 }
+            },
+            nextWorkbookIdProvider = { year ->
+                val stored = preferencesRepository.getSpreadsheetIdForYearSync(year)
+                if (!stored.isNullOrBlank()) {
+                    stored
+                } else {
+                    val lookup = googleDriveClient.findWorkbookForYear(year)
+                    if (lookup is com.financeautomation.core.model.Result.Error) throw lookup.exception
+                    val found = (lookup as? com.financeautomation.core.model.Result.Success)?.data
+                    if (!found.isNullOrBlank()) preferencesRepository.setSpreadsheetIdForYear(year, found)
+                    found
+                }
             }
         )
     }

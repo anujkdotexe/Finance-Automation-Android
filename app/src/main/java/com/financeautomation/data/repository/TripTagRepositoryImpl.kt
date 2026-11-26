@@ -108,7 +108,8 @@ class TripTagRepositoryImpl(
             return@withContext existing.toDomain()
         }
         val id = "tag_${UUID.randomUUID().toString().take(8)}"
-        val now = System.currentTimeMillis()
+        val now = clock.millis()
+        val todayEpochDay = java.time.LocalDate.now(clock.withZone(com.financeautomation.core.utils.DateSerialUtils.SHEET_ZONE)).toEpochDay()
         val entity = TripTagEntity(
             id = id,
             name = trimmed,
@@ -116,6 +117,7 @@ class TripTagRepositoryImpl(
             isArchived = false,
             createdAt = now,
             updatedAt = now,
+            startDateEpochDay = todayEpochDay,
             dirty = 1
         )
         dao.insert(entity)

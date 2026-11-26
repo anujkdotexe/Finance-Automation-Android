@@ -41,6 +41,7 @@ object AccountingPlanJsonAdapter {
             put("excess", JsonPrimitive(plan.excess))
             put("unmatched", JsonPrimitive(plan.unmatched))
             put("message", JsonPrimitive(plan.message))
+            plan.workbookId?.let { put("workbook", JsonPrimitive(it)) }
 
             put("edits", buildJsonArray {
                 plan.edits.forEach { edit ->
@@ -50,6 +51,7 @@ object AccountingPlanJsonAdapter {
                         put("column", JsonPrimitive(edit.column))
                         put("value", edit.value.toJsonPrimitive())
                         edit.uuid?.let { put("uuid", JsonPrimitive(it)) }
+                        edit.before?.let { put("before", it.toJsonPrimitive()) }
                     })
                 }
             })
@@ -105,7 +107,13 @@ object AccountingPlanJsonAdapter {
                 else -> valPrim.content
             }
             val editUuid = obj["uuid"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-            edits.add(CellEdit(tab = tab, row = row, column = column, value = rawVal, uuid = editUuid))
+            val beforePrim = obj["before"]?.jsonPrimitive
+            val before: Any? = when {
+                beforePrim == null || beforePrim is JsonNull -> null
+                beforePrim.isString -> beforePrim.content
+                else -> beforePrim.doubleOrNull ?: beforePrim.content
+            }
+            edits.add(CellEdit(tab = tab, row = row, column = column, value = rawVal, uuid = editUuid, before = before))
         }
 
         val appends = mutableListOf<NewRow>()
@@ -151,7 +159,8 @@ object AccountingPlanJsonAdapter {
             settled = settled,
             excess = excess,
             unmatched = unmatched,
-            message = message
+            message = message,
+            workbookId = root["workbook"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
         )
     }
 }

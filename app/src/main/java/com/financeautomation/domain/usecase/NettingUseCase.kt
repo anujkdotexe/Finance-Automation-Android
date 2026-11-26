@@ -54,7 +54,7 @@ class NettingUseCase {
         val edits = mutableListOf<CellEdit>()
 
         // Create a working mutable copy of payables to reflect in-memory partial applications
-        val workingPayables = payables.map { it.copy() }.toMutableList()
+        val workingPayables = payables.map { it.copy() }.sortedWith(RepaymentOrder.payables).toMutableList()
 
         for ((companionIndex, companion) in list.withIndex()) {
             // The last companion takes the rounding remainder so the caps add up to the owed amount
@@ -115,7 +115,7 @@ class NettingUseCase {
         var offsetTotal = 0.0
         val edits = mutableListOf<CellEdit>()
 
-        for (debit in debits) {
+        for (debit in debits.sortedWith(RepaymentOrder.debits)) {
             if (remaining <= Tolerances.MONEY_LEFT) break
             if (debit.status != "Pending" || debit.owed <= 0.0) continue
             val companionTokens = AccountingUtils.tokens(debit.companions)

@@ -28,7 +28,7 @@ data class SettlementStepResult(
  */
 class SettlementWaterfallUseCase {
 
-    private val ROW_REF_PATTERN = Pattern.compile("^(?:'([^']+)'|([^'!]+))!(?:Row)?(\\d+)$", Pattern.CASE_INSENSITIVE)
+    private val ROW_REF_PATTERN = Pattern.compile("^(?:'([^']+)'|([^'!]+))!(?:Row)?(\\d+)(?:\\s*[\\[\\(]([^\\]\\)]+)[\\]\\)])?$", Pattern.CASE_INSENSITIVE)
 
     /**
      * Executes the settlement waterfall against available debits.
@@ -146,7 +146,7 @@ class SettlementWaterfallUseCase {
 
         // 4. Inflow credit row in Table 2
         val infUuid = "inf_" + UUID.randomUUID().toString().replace("-", "").take(12)
-        val linkedDebitRefs = settled.joinToString(", ") { it.uuid ?: "${it.tab}!Row${it.row}" }
+        val linkedDebitRefs = settled.joinToString(", ") { "${it.tab}!Row${it.row}" }
         val inflowCells = listOf(
             creditDateSerial,
             creditTimeSerial,
@@ -251,9 +251,14 @@ class SettlementWaterfallUseCase {
         val byUuid = debits.find { it.uuid != null && AccountingUtils.eq(it.uuid, trimmed) }
         if (byUuid != null) return byUuid
 
-        // 2. Tab!RowN or 'Tab'!RowN format
+        // 2. Tab!RowN or 'Tab'!RowN format (with optional UUID suffix)
         val matcher = ROW_REF_PATTERN.matcher(trimmed)
         if (matcher.matches()) {
+            val embeddedUuid = matcher.group(4)?.trim()
+            if (!embeddedUuid.isNullOrBlank()) {
+                val byEmbedded = debits.find { it.uuid != null && AccountingUtils.eq(it.uuid, embeddedUuid) }
+                if (byEmbedded != null) return byEmbedded
+            }
             val tabName = (matcher.group(1) ?: matcher.group(2) ?: "").trim()
             val rowNum = matcher.group(3)?.toIntOrNull() ?: 0
             return debits.find { AccountingUtils.eq(it.tab, tabName) && it.row == rowNum }

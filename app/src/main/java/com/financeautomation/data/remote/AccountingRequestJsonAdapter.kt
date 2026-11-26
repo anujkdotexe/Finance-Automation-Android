@@ -79,21 +79,59 @@ object AccountingRequestJsonAdapter {
         return buildJsonObject {
             put("id", JsonPrimitive(req.id))
             put("deleteSheetRow", JsonPrimitive(req.deleteSheetRow))
+            req.linkedPayableId?.let { put("linkedPayableId", JsonPrimitive(it)) }
+            req.prior?.let { prior ->
+                put("prior", buildJsonObject {
+                    put("totalAmount", JsonPrimitive(prior.totalAmount))
+                    put("myShare", JsonPrimitive(prior.myShare))
+                    put("owedToMe", JsonPrimitive(prior.owedToMe))
+                    put("status", JsonPrimitive(prior.status))
+                    put("merchant", JsonPrimitive(prior.merchant))
+                    put("syncState", JsonPrimitive(prior.syncState))
+                    put("reviewState", JsonPrimitive(prior.reviewState))
+                    prior.debtId?.let { put("debtId", JsonPrimitive(it)) }
+                    put("debtAmount", JsonPrimitive(prior.debtAmount))
+                    put("debtStatus", JsonPrimitive(prior.debtStatus))
+                    put("debtWhatFor", JsonPrimitive(prior.debtWhatFor))
+                })
+            }
         }.toString()
+    }
+
+    private fun voidPriorStateFromJson(obj: kotlinx.serialization.json.JsonObject): com.financeautomation.domain.model.VoidPriorState {
+        fun text(key: String) = obj[key]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
+        fun number(key: String) = obj[key]?.jsonPrimitive?.doubleOrNull ?: 0.0
+        return com.financeautomation.domain.model.VoidPriorState(
+            totalAmount = number("totalAmount"),
+            myShare = number("myShare"),
+            owedToMe = number("owedToMe"),
+            status = text("status").orEmpty(),
+            merchant = text("merchant").orEmpty(),
+            syncState = text("syncState").orEmpty(),
+            reviewState = text("reviewState").orEmpty(),
+            debtId = text("debtId"),
+            debtAmount = number("debtAmount"),
+            debtStatus = text("debtStatus").orEmpty(),
+            debtWhatFor = text("debtWhatFor").orEmpty()
+        )
     }
 
     fun voidExpenseRequestFromJson(payload: String): VoidExpenseRequest {
         val trimmed = payload.trim()
         if (trimmed.startsWith("{")) {
             val obj = json.parseToJsonElement(trimmed).jsonObject
+            val linkedPayId = obj["linkedPayableId"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
             return VoidExpenseRequest(
                 id = obj["id"]?.jsonPrimitive?.content.orEmpty(),
-                deleteSheetRow = obj["deleteSheetRow"]?.jsonPrimitive?.booleanOrNull ?: false
+                deleteSheetRow = obj["deleteSheetRow"]?.jsonPrimitive?.booleanOrNull ?: false,
+                linkedPayableId = linkedPayId,
+                prior = (obj["prior"] as? kotlinx.serialization.json.JsonObject)?.let { voidPriorStateFromJson(it) }
             )
         }
         return VoidExpenseRequest(
             id = trimmed,
-            deleteSheetRow = false
+            deleteSheetRow = false,
+            linkedPayableId = null
         )
     }
 

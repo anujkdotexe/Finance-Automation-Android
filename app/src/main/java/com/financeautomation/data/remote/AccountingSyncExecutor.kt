@@ -3,6 +3,7 @@ package com.financeautomation.data.remote
 import com.financeautomation.core.constants.SheetSchemaConstants
 import com.financeautomation.core.model.Result
 import com.financeautomation.core.utils.DateSerialUtils
+import com.financeautomation.core.utils.Diagnostics
 import com.financeautomation.data.local.dao.InflowDao
 import com.financeautomation.data.local.dao.LineageDao
 import com.financeautomation.data.local.dao.PayableDao
@@ -25,6 +26,8 @@ import com.financeautomation.domain.usecase.CarryForwardUseCase
 import com.financeautomation.domain.usecase.NettingUseCase
 import com.financeautomation.domain.usecase.RepaymentWaterfallUseCase
 import com.financeautomation.domain.usecase.SettlementWaterfallUseCase
+import com.financeautomation.domain.usecase.ChainRow
+import com.financeautomation.domain.usecase.StoredPlanReplay
 import com.financeautomation.domain.usecase.VoidTransactionUseCase
 import com.financeautomation.domain.usecase.YearCloseUseCase
 import com.financeautomation.domain.utils.AccountingUtils
@@ -65,7 +68,9 @@ open class AccountingSyncExecutor(
     private val nettingUseCase: NettingUseCase = NettingUseCase(),
     private val yearCloseUseCase: YearCloseUseCase = YearCloseUseCase(),
     private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
-    private val previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null
+    private val previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null,
+    private val nextWorkbookIdProvider: (suspend (year: Int) -> String?)? = null,
+    private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
     constructor(
         googleSheetsClient: GoogleSheetsClient,
@@ -76,7 +81,9 @@ open class AccountingSyncExecutor(
         repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
         carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
         nettingUseCase: NettingUseCase = NettingUseCase(),
-        yearCloseUseCase: YearCloseUseCase = YearCloseUseCase()
+        yearCloseUseCase: YearCloseUseCase = YearCloseUseCase(),
+        previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null,
+        nextWorkbookIdProvider: (suspend (year: Int) -> String?)? = null
     ) : this(
         googleSheetsClient = googleSheetsClient,
         googleDriveClient = googleDriveClient,
@@ -96,7 +103,9 @@ open class AccountingSyncExecutor(
         repaymentWaterfallUseCase = repaymentWaterfallUseCase,
         carryForwardUseCase = carryForwardUseCase,
         nettingUseCase = nettingUseCase,
-        yearCloseUseCase = yearCloseUseCase
+        yearCloseUseCase = yearCloseUseCase,
+        previousWorkbookIdProvider = previousWorkbookIdProvider,
+        nextWorkbookIdProvider = nextWorkbookIdProvider
     )
 
     private suspend fun resolveSyncQueueDao(): SyncQueueDao =
@@ -153,12 +162,14 @@ open class AccountingSyncExecutor(
                 allDebits = allDebits,
                 resolveCarriedFn = resolveCarriedFn
             ).withInflowUuid(item.transactionId)
+                .let { StoredPlanReplay.withExpectedValues(it, allDebits, emptyList()) }
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
             resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
-        return applyAccountingPlan(spreadsheetId, plan)
+        return if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
+        else applyAccountingPlan(spreadsheetId, plan)
     }
 
     /**
@@ -324,12 +335,16 @@ open class AccountingSyncExecutor(
                 )
             )
 
-            plan = AccountingPlan(
-                edits = nettingRes.edits,
-                appends = appends,
-                excess = 0.0,
-                unmatched = false,
-                message = "Payable logged (₹${nettingRes.offsetTotal} offset against existing debits)"
+            plan = StoredPlanReplay.withExpectedValues(
+                AccountingPlan(
+                    edits = nettingRes.edits,
+                    appends = appends,
+                    excess = 0.0,
+                    unmatched = false,
+                    message = "Payable logged (₹${nettingRes.offsetTotal} offset against existing debits)"
+                ),
+                allDebits,
+                emptyList()
             )
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
@@ -341,7 +356,8 @@ open class AccountingSyncExecutor(
             )
         }
 
-        val applyResult = applyAccountingPlan(spreadsheetId, plan)
+        val applyResult = if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
+        else applyAccountingPlan(spreadsheetId, plan)
         return when (applyResult) {
             is Result.Success -> Result.Success(outcome)
             is Result.Error -> Result.Error(applyResult.exception)
@@ -354,43 +370,279 @@ open class AccountingSyncExecutor(
         spreadsheetId: String,
         tabName: String
     ): Result<Unit> {
-        val plan: AccountingPlan
-        if (item.planJson != null) {
-            plan = AccountingPlanJsonAdapter.fromJson(item.planJson)
-        } else {
-            val req = AccountingRequestJsonAdapter.repaymentRequestFromJson(item.payloadJson)
-            val dateSerial = DateSerialUtils.toDateSerial(req.timestamp)
-            val timeSerial = DateSerialUtils.toTimeSerial(req.timestamp)
+        // An older build could save a plan with nothing in it. Nothing of it was written, so it is planned again.
+        val saved = item.planJson?.let { AccountingPlanJsonAdapter.fromJson(it) }
+            ?.takeUnless { it.edits.isEmpty() && it.appends.isEmpty() }
+        if (saved != null) return replayStoredPlan(item.id, spreadsheetId, saved)
 
-            val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
-            if (snapRes is Result.Error) {
-                return Result.Error(snapRes.exception)
-            }
-            val allPayables = mapPayablesFromSnapshot((snapRes as Result.Success).data)
+        val req = AccountingRequestJsonAdapter.repaymentRequestFromJson(item.payloadJson)
+        val dateSerial = DateSerialUtils.toDateSerial(req.timestamp)
 
-            val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
-            val resolveCarriedFn: (LedgerPayable) -> LedgerPayable? = { carriedRow ->
-                carryForwardUseCase.resolveCarriedPayable(carriedRow, allPayables, lineageRecords)
-            }
+        val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
+        if (snapRes is Result.Error) {
+            return Result.Error(snapRes.exception)
+        }
+        val snapshot = (snapRes as Result.Success).data
 
-            plan = repaymentWaterfallUseCase(
-                creditor = req.creditor,
-                amount = req.amount,
-                explicitRef = req.explicitRef,
-                dateSerial = dateSerial,
-                timeSerial = timeSerial,
-                tabName = tabName,
-                allPayables = allPayables,
-                resolveCarriedFn = resolveCarriedFn,
-                account = req.account,
-                note = req.note
+        var plan = planRepayment(req, tabName, mapPayablesFromSnapshot(snapshot))
+        var nextSnapshot: LedgerWorkbookSnapshot? = null
+        if (plan.edits.isEmpty() && plan.appends.isEmpty()) {
+            val next = repaymentInNextWorkbook(req, dateSerial)
+            if (next is Result.Error) return Result.Error(next.exception)
+            val found = (next as Result.Success).data
+                ?: return Result.Error(com.financeautomation.core.utils.NoOpenDebtException())
+            plan = found.first
+            nextSnapshot = found.second
+        }
+        resolveSyncQueueDao().updatePlanJson(item.id, AccountingPlanJsonAdapter.toJson(plan))
+
+        val applied = applyAccountingPlan(plan.workbookId ?: spreadsheetId, plan)
+        if (applied is Result.Success && nextSnapshot != null) {
+            // The local debts of both workbooks follow: the old rows are carried and the copies now hold the debt
+            alignLocalAfterReplay(
+                snapshot.copy(monthTabs = snapshot.monthTabs + nextSnapshot.monthTabs), plan, emptyList()
             )
+        }
+        return applied
+    }
 
-            val planJson = AccountingPlanJsonAdapter.toJson(plan)
-            resolveSyncQueueDao().updatePlanJson(item.id, planJson)
+    private suspend fun planRepayment(
+        req: com.financeautomation.domain.model.LogRepaymentRequest,
+        tabName: String,
+        payables: List<LedgerPayable>
+    ): AccountingPlan {
+        val lineageRecords = resolveLineageDao().getAll().map { it.toDomain() }
+        return repaymentWaterfallUseCase(
+            creditor = req.creditor,
+            amount = req.amount,
+            explicitRef = req.explicitRef,
+            dateSerial = DateSerialUtils.toDateSerial(req.timestamp),
+            timeSerial = DateSerialUtils.toTimeSerial(req.timestamp),
+            tabName = tabName,
+            allPayables = payables,
+            resolveCarriedFn = { carriedRow ->
+                carryForwardUseCase.resolveCarriedPayable(carriedRow, payables, lineageRecords)
+            },
+            account = req.account,
+            note = req.note
+        ).let { StoredPlanReplay.withExpectedValues(it, emptyList(), payables) }
+    }
+
+    /**
+     * A repayment dated last year can arrive after the new year's carry moved its debt to the next workbook. Only
+     * debts carried over from before the payment count there: a carried copy keeps the date the money was first owed,
+     * so a debt that is new in that year is never touched. Success with null means there is no such debt; an error
+     * means it could not be looked up, and the entry is retried.
+     */
+    private suspend fun repaymentInNextWorkbook(
+        req: com.financeautomation.domain.model.LogRepaymentRequest,
+        paidSerial: Int
+    ): Result<Pair<AccountingPlan, LedgerWorkbookSnapshot>?> {
+        val nextYear = DateSerialUtils.fromDateSerial(paidSerial).year + 1
+        val currentYear = java.time.Instant.ofEpochMilli(clock()).atZone(java.time.ZoneId.of("Asia/Kolkata")).year
+        val provider = nextWorkbookIdProvider
+        if (nextYear > currentYear || provider == null) return Result.Success(null)
+
+        val workbookId = try {
+            provider(nextYear)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            return Result.Error(e)
+        }
+        if (workbookId.isNullOrBlank()) return Result.Success(null)
+
+        val read = googleSheetsClient.readLedgerSnapshot(workbookId)
+        if (read is Result.Error) return Result.Error(read.exception)
+        val snapshot = (read as Result.Success).data
+        if (!snapshot.isComplete) {
+            return Result.Error(java.io.IOException("The next year's sheet read was incomplete"))
+        }
+        val carriedOver = mapPayablesFromSnapshot(snapshot).filter { row ->
+            val owedSince = row.dateIncurredSerial
+            row.whatFor.startsWith("[Carried from", ignoreCase = true) && owedSince != null && owedSince <= paidSerial
+        }
+        // Money left over after the debts is recorded in the latest month that holds one of them
+        val tab = carriedOver
+            .filter { row ->
+                (row.status == "Pending" || row.status == "Partial") &&
+                    AccountingUtils.tokens(row.paidBy).any { AccountingUtils.eq(it, req.creditor) }
+            }
+            .maxByOrNull { parseMonthKey(it.tab) ?: 0 }?.tab
+            ?: return Result.Success(null)
+
+        val plan = planRepayment(req, tab, carriedOver)
+        if (plan.edits.isEmpty()) return Result.Success(null)
+        return Result.Success(plan.copy(workbookId = workbookId) to snapshot)
+    }
+
+    /**
+     * Sends a saved plan again, after checking it against the sheet. Whatever the earlier attempt reached, each
+     * change is applied once: edits already there are not written again, edits of a debt that has since been carried
+     * go to its live row, and when what was saved cannot be proven nothing is written at all. A row that says
+     * "Carried Fwd" is never set open again. Appended rows are found by their ids and are never added twice.
+     */
+    suspend fun replayStoredPlan(itemId: Long, spreadsheetId: String, plan: AccountingPlan): Result<Unit> {
+        val targetId = plan.workbookId ?: spreadsheetId
+        // Without edits there is nothing another change could have moved
+        if (plan.edits.isEmpty()) return applyAccountingPlan(targetId, plan)
+
+        val snapRes = googleSheetsClient.readLedgerSnapshot(targetId)
+        if (snapRes is Result.Error) return Result.Error(snapRes.exception)
+        val snapshot = (snapRes as Result.Success).data
+        if (!snapshot.isComplete) {
+            return Result.Error(java.io.IOException("The sheet read was incomplete; the saved entry was not sent"))
+        }
+        val debits = snapshot.monthTabs.flatMap { month -> month.debits.map { it.toChainRow(month.tabName) } }
+        val payables = snapshot.monthTabs.flatMap { month -> month.payables.map { it.toChainRow(month.tabName) } }
+
+        return when (val outcome = StoredPlanReplay.check(plan, debits, payables)) {
+            StoredPlanReplay.Outcome.Unprovable ->
+                Result.Error(com.financeautomation.core.utils.UnprovableReplayException())
+            is StoredPlanReplay.Outcome.AlreadyWritten -> {
+                // The new rows are sent before the edits. Amounts that read as written prove nothing about them:
+                // something else may have set the same amounts before this entry's own rows were ever sent.
+                val added = allAppendsOnSheet(targetId, snapshot, plan.appends)
+                if (added is Result.Error) return Result.Error(added.exception)
+                if (!(added as Result.Success).data) {
+                    return Result.Error(com.financeautomation.core.utils.UnprovableReplayException())
+                }
+                applyPlanToLocalDatabase(outcome.local)
+                alignLocalAfterReplay(snapshot, outcome.local, emptyList())
+                Result.Success(Unit)
+            }
+            is StoredPlanReplay.Outcome.Send -> {
+                if (outcome.movedFrom.isNotEmpty()) {
+                    // Saved before the write: if the reply is lost, the next attempt must look at the rows written now
+                    resolveSyncQueueDao().updatePlanJson(itemId, AccountingPlanJsonAdapter.toJson(outcome.plan))
+                }
+                // A row that has since been moved to another month is not added a second time
+                val unsent = outcome.plan.appends.filterNot { isInSnapshot(snapshot, it) }
+                val written = applyAccountingPlan(targetId, outcome.plan.copy(appends = unsent))
+                if (written is Result.Success) alignLocalAfterReplay(snapshot, outcome.plan, outcome.movedFrom)
+                written
+            }
+        }
+    }
+
+    /** Whether the row an append adds is in any month tab that was read, wherever it has been moved or sorted to. */
+    private fun isInSnapshot(snapshot: LedgerWorkbookSnapshot, append: com.financeautomation.domain.model.NewRow): Boolean =
+        snapshot.monthTabs.any { month ->
+            val ids = when (append.table) {
+                TableType.DEBIT -> month.debits.map { it.uuid }
+                TableType.INFLOW -> month.inflows.map { it.uuid }
+                TableType.PAYABLE -> month.payables.map { it.uuid }
+            }
+            ids.any { it != null && it.equals(append.uuid, ignoreCase = true) }
         }
 
-        return applyAccountingPlan(spreadsheetId, plan)
+    /**
+     * True only when every row the plan adds is on the sheet. One that the snapshot does not show is looked for in
+     * both id columns of its own tab. An error means the ids could not be read, which says nothing either way.
+     */
+    private suspend fun allAppendsOnSheet(
+        spreadsheetId: String,
+        snapshot: LedgerWorkbookSnapshot,
+        appends: List<com.financeautomation.domain.model.NewRow>
+    ): Result<Boolean> {
+        for (append in appends) {
+            if (isInSnapshot(snapshot, append)) continue
+            val (column, olderColumn) = when (append.table) {
+                TableType.DEBIT -> SheetSchemaConstants.COL_LETTER_DEBIT_UUID to SheetSchemaConstants.COL_LETTER_DEBIT_UUID_V1
+                TableType.INFLOW -> SheetSchemaConstants.COL_LETTER_INFLOW_UUID to SheetSchemaConstants.COL_LETTER_INFLOW_UUID_V1
+                TableType.PAYABLE -> SheetSchemaConstants.COL_LETTER_PAYABLE_UUID to SheetSchemaConstants.COL_LETTER_PAYABLE_UUID_V1
+            }
+            var found = googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, column, append.uuid)
+            // A tab of the older layout can end before the newer id column
+            val columnIsBeyondTheTab = found is Result.Error &&
+                found.exception.message?.contains("exceeds grid limits", ignoreCase = true) == true
+            if (columnIsBeyondTheTab || (found is Result.Success && found.data == null)) {
+                found = googleSheetsClient.findRowByUuid(spreadsheetId, append.tab, olderColumn, append.uuid)
+            }
+            if (found is Result.Error) {
+                val error = found.exception
+                // A reply that cannot be parsed is an incomplete read, to be tried again
+                return Result.Error(
+                    if (error is MalformedResponseException) java.io.IOException("The id read was incomplete", error)
+                    else error
+                )
+            }
+            if ((found as Result.Success).data == null) return Result.Success(false)
+        }
+        return Result.Success(true)
+    }
+
+    private fun LedgerDebitRow.toChainRow(tab: String) = ChainRow(
+        uuid = uuid.orEmpty(), tab = tab, row = rowNumber, text = description, party = companions,
+        dateSerial = dateSerial, timeSerial = timeSerial, amount = owedToMe, status = status
+    )
+
+    private fun LedgerPayableRow.toChainRow(tab: String) = ChainRow(
+        uuid = uuid.orEmpty(), tab = tab, row = rowNumber, text = whatFor, party = paidBy,
+        dateSerial = dateIncurredSerial, timeSerial = timeSerial, amount = amountIOwe, status = repaymentStatus,
+        repaidDateSerial = dateRepaidSerial
+    )
+
+    /**
+     * Keeps the device in step with what a replay found or wrote, also when a carry made elsewhere moved the debts.
+     * [snapshot] is the sheet as read before the replay wrote [written].
+     */
+    private suspend fun alignLocalAfterReplay(
+        snapshot: LedgerWorkbookSnapshot,
+        written: AccountingPlan,
+        movedFrom: List<ChainRow>
+    ) {
+        try {
+            syncCarriedPayables(snapshot.monthTabs, emptyList(), emptyList())
+            val carriedDebits = (
+                movedFrom.map { it.uuid } +
+                    snapshot.monthTabs.flatMap { it.debits }
+                        .filter { it.status.equals("Carried Fwd", ignoreCase = true) }
+                        .mapNotNull { it.uuid }
+                        .filter { uuid -> written.edits.any { uuid.equals(it.uuid, ignoreCase = true) } }
+                ).filter { it.isNotBlank() }
+            val tDao = resolveTransactionDao()
+            carriedDebits.forEach { uuid ->
+                val local = tDao?.getById(uuid)
+                if (local != null && local.status.equals("Pending", ignoreCase = true)) {
+                    tDao?.update(local.copy(status = "Carried Fwd"))
+                }
+            }
+
+            val pDao = resolvePayableDao() ?: return
+            movedFrom.forEach { row ->
+                val local = pDao.getByUuid(row.uuid)
+                if (local != null && !local.repaymentStatus.equals("Carried Fwd", ignoreCase = true)) {
+                    pDao.upsert(local.copy(repaymentStatus = "Carried Fwd", amountIOwe = row.amount))
+                }
+            }
+            val onSheet = snapshot.monthTabs.flatMap { it.payables }
+            written.edits.filter { StoredPlanReplay.isPayableColumn(it.column) && !it.uuid.isNullOrBlank() }
+                .groupBy { it.uuid.orEmpty() }
+                .forEach { (uuid, edits) ->
+                    var debt = pDao.getByUuid(uuid) ?: return@forEach
+                    for (edit in edits) {
+                        debt = when (edit.column.uppercase()) {
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_AMOUNT_I_OWE ->
+                                debt.copy(amountIOwe = (edit.value as? Number)?.toDouble() ?: debt.amountIOwe)
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_PAID_BY ->
+                                debt.copy(paidBy = edit.value?.toString() ?: debt.paidBy)
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS ->
+                                debt.copy(repaymentStatus = edit.value?.toString() ?: debt.repaymentStatus)
+                            SheetSchemaConstants.COL_LETTER_PAYABLE_DATE_REPAID ->
+                                debt.copy(dateRepaidSerial = (edit.value as? Number)?.toInt() ?: debt.dateRepaidSerial)
+                            else -> debt
+                        }
+                    }
+                    val carriedOnSheet = onSheet.any {
+                        uuid.equals(it.uuid, ignoreCase = true) &&
+                            it.repaymentStatus.equals("Carried Fwd", ignoreCase = true)
+                    }
+                    pDao.upsert(if (carriedOnSheet) debt.copy(repaymentStatus = "Carried Fwd") else debt)
+                }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Diagnostics.record("AccountingSyncExecutor", "alignLocalAfterReplay failed: ${e.javaClass.simpleName}")
+        }
     }
 
     suspend fun executeCarryForward(
@@ -408,6 +660,17 @@ open class AccountingSyncExecutor(
             return Result.Error(tabEnsureRes.exception)
         }
 
+        // 1b. Guard: move debts only AFTER the new month starts in Asia/Kolkata.
+        // If targetTab is in a future month, the tab is ensured above, but debts stay open in the current month.
+        val targetKey = parseMonthKey(targetTab)
+        if (targetKey != null) {
+            val currentKolkata = java.time.Instant.ofEpochMilli(clock()).atZone(java.time.ZoneId.of("Asia/Kolkata"))
+            val currentKey = currentKolkata.year * 12 + (currentKolkata.monthValue - 1)
+            if (targetKey > currentKey) {
+                return Result.Success(Unit)
+            }
+        }
+
         // 2. Read snapshot of workbook
         val snapRes = googleSheetsClient.readLedgerSnapshot(spreadsheetId)
         if (snapRes is Result.Error) return Result.Error(snapRes.exception)
@@ -417,7 +680,6 @@ open class AccountingSyncExecutor(
         var sourceSnapshot: LedgerWorkbookSnapshot = snapshot
         var sourceSpreadsheetId: String = spreadsheetId
 
-        val targetKey = parseMonthKey(targetTab)
         val sourceKey = sourceTab?.let { parseMonthKey(it) }
 
         // If source tab is in the previous year (e.g. Dec26 -> Jan27), source snapshot must come from previous year's workbook
@@ -436,60 +698,153 @@ open class AccountingSyncExecutor(
             }
             val prevSnap = (prevSnapRes as Result.Success).data
             val prevDecTab = "Dec${(prevYear % 100).toString().padStart(2, '0')}"
-            val foundDecTab = if (sourceTab != null) {
-                prevSnap.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
-            } else {
-                prevSnap.monthTabs.find { it.tabName.equals(prevDecTab, ignoreCase = true) }
-                    ?: prevSnap.monthTabs.maxByOrNull { parseMonthKey(it.tabName) ?: 0 }
-            }
-            if (foundDecTab != null) {
-                sourceTab = foundDecTab.tabName
-                sourceSnapshot = prevSnap
-                sourceSpreadsheetId = prevSpreadsheetId
-            } else {
+            if (prevSnap.monthTabs.isEmpty()) {
                 return Result.Error(IllegalStateException("No source month tab found in previous year ($prevYear) workbook for carry forward"))
             }
+            sourceTab = prevSnap.monthTabs.find { it.tabName.equals(sourceTab ?: prevDecTab, ignoreCase = true) }?.tabName
+            sourceSnapshot = prevSnap
+            sourceSpreadsheetId = prevSpreadsheetId
         }
 
-        if (sourceTab == null) {
-            return Result.Error(IllegalStateException("Could not resolve source tab for carry forward into $targetTab"))
+        // Every month before the target can still hold open rows when carries were missed for one or more whole
+        // months, so each of them is a source, oldest first. This uses the snapshot already read.
+        val sourceMonths = sourceSnapshot.monthTabs
+            .filter { month ->
+                if (month.tabName.equals(targetTab, ignoreCase = true)) return@filter false
+                if (month.tabName.equals(sourceTab, ignoreCase = true)) return@filter true
+                val key = parseMonthKey(month.tabName)
+                targetKey != null && key != null && key < targetKey
+            }
+            .sortedBy { parseMonthKey(it.tabName) ?: 0 }
+
+        val existingLineage = resolveLineageDao().getAll().map { it.toDomain() }
+        val appends = mutableListOf<com.financeautomation.domain.model.NewRow>()
+        val edits = mutableListOf<com.financeautomation.domain.model.CellEdit>()
+        val newLineage = mutableListOf<com.financeautomation.domain.model.LineageRecord>()
+        for (sourceMonth in sourceMonths) {
+            // A copy of one of this month's rows can only sit in a later month, up to the target
+            val sourceMonthKey = parseMonthKey(sourceMonth.tabName) ?: 0
+            val copyMonths = (snapshot.monthTabs + sourceSnapshot.monthTabs)
+                .distinctBy { it.tabName.lowercase(Locale.US) }
+                .filter { month ->
+                    val key = parseMonthKey(month.tabName)
+                    key != null && key > sourceMonthKey && (targetKey == null || key <= targetKey)
+                }
+            val result = carryForwardUseCase(
+                targetTab = targetTab,
+                sourceTab = sourceMonth.tabName,
+                targetDebits = copyMonths.flatMap { m -> m.debits.map { it.toDomain(m.tabName) } },
+                targetPayables = copyMonths.flatMap { m -> m.payables.map { it.toDomain(m.tabName) } },
+                sourceDebits = sourceMonth.debits.map { it.toDomain(sourceMonth.tabName) },
+                sourcePayables = sourceMonth.payables.map { it.toDomain(sourceMonth.tabName) },
+                existingLineage = existingLineage
+            )
+            if (result.conflicts > 0) {
+                return Result.Error(com.financeautomation.core.utils.CarryConflictException())
+            }
+            appends.addAll(result.plan.appends)
+            edits.addAll(result.plan.edits)
+            newLineage.addAll(result.lineageRecords)
         }
 
-        val targetMonth = snapshot.monthTabs.find { it.tabName.equals(targetTab, ignoreCase = true) }
-        val sourceMonth = sourceSnapshot.monthTabs.find { it.tabName.equals(sourceTab, ignoreCase = true) }
-
-        val targetDebits = targetMonth?.debits?.map { it.toDomain(targetTab) }.orEmpty()
-        val targetPayables = targetMonth?.payables?.map { it.toDomain(targetTab) }.orEmpty()
-        val sourceDebits = sourceMonth?.debits?.map { it.toDomain(sourceTab) }.orEmpty()
-        val sourcePayables = sourceMonth?.payables?.map { it.toDomain(sourceTab) }.orEmpty()
-
-        val rolloverResult = carryForwardUseCase(
-            targetTab = targetTab,
-            sourceTab = sourceTab,
-            targetDebits = targetDebits,
-            targetPayables = targetPayables,
-            sourceDebits = sourceDebits,
-            sourcePayables = sourcePayables,
-            existingLineage = resolveLineageDao().getAll().map { it.toDomain() }
-        )
-
-        if (rolloverResult.plan.appends.isEmpty() && rolloverResult.plan.edits.isEmpty()) {
+        val sheetMonths = snapshot.monthTabs +
+            (if (sourceSnapshot !== snapshot) sourceSnapshot.monthTabs else emptyList())
+        if (appends.isEmpty() && edits.isEmpty()) {
+            syncCarriedPayables(sheetMonths, emptyList(), emptyList())
             return Result.Success(Unit)
         }
 
         // Apply plan: appends to target, source status edits to source (or target) workbook
         val applyResult = applyAccountingPlan(
             spreadsheetId = spreadsheetId,
-            plan = rolloverResult.plan,
+            plan = AccountingPlan(edits = edits, appends = appends),
             sourceSpreadsheetId = sourceSpreadsheetId
         )
         if (applyResult is Result.Success) {
             // Persist lineage records into Room in one transaction
-            if (rolloverResult.lineageRecords.isNotEmpty()) {
-                resolveLineageDao().insertAll(rolloverResult.lineageRecords.map { LineageEntity.fromDomain(it) })
+            if (newLineage.isNotEmpty()) {
+                resolveLineageDao().insertAll(newLineage.map { LineageEntity.fromDomain(it) })
             }
+            syncCarriedPayables(sheetMonths, appends, edits)
         }
         return applyResult
+    }
+
+    /**
+     * Brings the local debts in line with a carry. A local debt that is still open, but whose own sheet row (same id)
+     * says "Carried Fwd" or was just marked so, becomes "Carried Fwd", and the open copies the sheet holds, or just
+     * received, are added when this device does not have them. Rows are matched by id only, and the evidence is what
+     * the sheet says, so this also repairs debts an earlier build left open next to their copies.
+     */
+    private suspend fun syncCarriedPayables(
+        sheetMonths: List<MonthTabSnapshot>,
+        appends: List<com.financeautomation.domain.model.NewRow>,
+        edits: List<com.financeautomation.domain.model.CellEdit>
+    ) {
+        try {
+            val pDao = resolvePayableDao() ?: return
+            fun key(uuid: String) = uuid.trim().lowercase()
+            val carried = mutableSetOf<String>()
+            sheetMonths.forEach { month ->
+                month.payables.filter { it.repaymentStatus.equals("Carried Fwd", ignoreCase = true) }
+                    .forEach { row -> row.uuid?.let { carried.add(key(it)) } }
+            }
+            edits.filter { it.column == SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS && it.value == "Carried Fwd" }
+                .forEach { edit -> edit.uuid?.let { carried.add(key(it)) } }
+
+            val local = pDao.getAll().associateBy { key(it.uuid) }
+            local.values.filter { debt ->
+                key(debt.uuid) in carried && (
+                    debt.repaymentStatus.equals("Pending", ignoreCase = true) ||
+                        debt.repaymentStatus.equals("Partial", ignoreCase = true)
+                    )
+            }.forEach { pDao.upsert(it.copy(repaymentStatus = "Carried Fwd")) }
+
+            sheetMonths.forEach { month ->
+                month.payables.forEach { row ->
+                    val uuid = row.uuid
+                    val open = row.repaymentStatus.equals("Pending", ignoreCase = true) ||
+                        row.repaymentStatus.equals("Partial", ignoreCase = true)
+                    if (open && !uuid.isNullOrBlank() && key(uuid) !in local && key(uuid) !in carried &&
+                        row.whatFor.startsWith("[Carried from", ignoreCase = true)
+                    ) {
+                        pDao.upsert(
+                            com.financeautomation.data.local.entity.PayableEntity(
+                                uuid = uuid,
+                                dateIncurredSerial = row.dateIncurredSerial,
+                                timeSerial = row.timeSerial,
+                                paidBy = row.paidBy,
+                                whatFor = row.whatFor,
+                                amountIOwe = row.amountIOwe,
+                                dateRepaidSerial = row.dateRepaidSerial,
+                                repaymentStatus = row.repaymentStatus,
+                                tabName = month.tabName,
+                                sheetRowIndex = row.rowNumber
+                            )
+                        )
+                    }
+                }
+            }
+            appends.filter { it.table == TableType.PAYABLE && key(it.uuid) !in local }.forEach { append ->
+                pDao.upsert(
+                    com.financeautomation.data.local.entity.PayableEntity(
+                        uuid = append.uuid,
+                        dateIncurredSerial = (append.cells.getOrNull(0) as? Number)?.toInt(),
+                        timeSerial = (append.cells.getOrNull(1) as? Number)?.toDouble(),
+                        paidBy = append.cells.getOrNull(2)?.toString().orEmpty(),
+                        whatFor = append.cells.getOrNull(3)?.toString().orEmpty(),
+                        amountIOwe = (append.cells.getOrNull(4) as? Number)?.toDouble() ?: 0.0,
+                        dateRepaidSerial = null,
+                        repaymentStatus = "Pending",
+                        tabName = append.tab,
+                        sheetRowIndex = null
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Diagnostics.record("AccountingSyncExecutor", "syncCarriedPayables failed: ${e.javaClass.simpleName}")
+        }
     }
 
     suspend fun executeYearClose(
@@ -644,8 +999,18 @@ open class AccountingSyncExecutor(
             }
             val columnCache = mutableMapOf<Triple<String, String, String>, UuidColumn>()
 
+            val dateCols: Map<String, Int> = mapOf(
+                "A" to SheetSchemaConstants.COL_INDEX_DEBIT_DATE,
+                "N" to SheetSchemaConstants.COL_INDEX_INFLOW_DATE,
+                "W" to SheetSchemaConstants.COL_INDEX_PAYABLE_DATE_INCURRED,
+                "AB" to SheetSchemaConstants.COL_INDEX_PAYABLE_DATE_REPAID
+            )
+
             for ((targetId, edits) in editsByTarget) {
                 val rangesWithValues = LinkedHashMap<String, List<List<Any?>>>()
+                val formatReqs = mutableListOf<Map<String, Any?>>()
+                var tabIdsMap: Map<String, Int>? = null
+
                 for (edit in edits) {
                     val expectedUuid = edit.uuid?.takeIf { it.isNotBlank() }
                         ?: settledUuidByRow[Pair(edit.tab, edit.row)]?.takeIf { isDebitColumn(edit.column) }
@@ -669,9 +1034,38 @@ open class AccountingSyncExecutor(
                         found ?: return Result.Error(IllegalStateException("Sheet row moved or removed in ${edit.tab}; edit not applied"))
                     }
                     rangesWithValues["'${edit.tab}'!${edit.column}$actualRow"] = listOf(listOf(edit.value))
+
+                    val colIdx = dateCols[edit.column.uppercase()]
+                    if (colIdx != null && actualRow > 0) {
+                        if (tabIdsMap == null) {
+                            val tabsRes = googleSheetsClient.getSheetTabsWithIds(targetId)
+                            tabIdsMap = if (tabsRes is Result.Success) tabsRes.data else emptyMap()
+                        }
+                        val tabSheetId = tabIdsMap[edit.tab]
+                        if (tabSheetId != null) {
+                            formatReqs.add(
+                                SheetProvisioner.createNumberFormatRequest(
+                                    sheetId = tabSheetId,
+                                    startCol = colIdx,
+                                    endCol = colIdx + 1,
+                                    formatType = "DATE",
+                                    pattern = "dd/mm/yyyy",
+                                    align = "CENTER",
+                                    startRow = actualRow - 1,
+                                    endRow = actualRow
+                                )
+                            )
+                        }
+                    }
                 }
                 val editRes = googleSheetsClient.batchUpdateValues(targetId, rangesWithValues)
                 if (editRes is Result.Error) return Result.Error(editRes.exception)
+                if (formatReqs.isNotEmpty()) {
+                    val formatRes = googleSheetsClient.batchUpdate(targetId, formatReqs)
+                    if (formatRes is Result.Error) {
+                        Diagnostics.record("AccountingSyncExecutor", "Format cell date error: ${formatRes.exception.javaClass.simpleName}")
+                    }
+                }
             }
         }
 
@@ -690,8 +1084,12 @@ open class AccountingSyncExecutor(
 
             for ((tab, rowNum) in allTargetTabRows) {
                 val settledRef = settledByTabAndRow[Pair(tab, rowNum)]?.firstOrNull()
-                val existingTxn = (settledRef?.uuid?.let { tDao.getById(it) })
-                    ?: tDao.getByTabAndSheetRowIndex(tab, rowNum)
+                // The row's own id decides which local row this is. Tab and row number only serve a row without an
+                // id: the tab is derived from the date there, which is wrong for a carried copy.
+                val knownId = settledRef?.uuid?.takeIf { it.isNotBlank() }
+                    ?: editsByTabAndRow[Pair(tab, rowNum)].orEmpty()
+                        .firstOrNull { isDebitColumn(it.column) && !it.uuid.isNullOrBlank() }?.uuid
+                val existingTxn = if (knownId != null) tDao.getById(knownId) else tDao.getByTabAndSheetRowIndex(tab, rowNum)
 
                 if (existingTxn != null) {
                     var updated: com.financeautomation.data.local.entity.TransactionEntity = existingTxn
@@ -786,26 +1184,28 @@ open class AccountingSyncExecutor(
         )
     }
 
-    fun parseMonthKey(tabName: String): Int? {
-        val match = MONTH_TAB_REGEX.find(tabName.trim()) ?: return null
-        val mmm = match.groupValues[1].lowercase(Locale.US)
-        val yy = match.groupValues[2].toIntOrNull() ?: return null
-        val monthIdx = when (mmm) {
-            "jan" -> 0
-            "feb" -> 1
-            "mar" -> 2
-            "apr" -> 3
-            "may" -> 4
-            "jun" -> 5
-            "jul" -> 6
-            "aug" -> 7
-            "sep" -> 8
-            "oct" -> 9
-            "nov" -> 10
-            "dec" -> 11
-            else -> return null
+    companion object {
+        fun parseMonthKey(tabName: String): Int? {
+            val match = MONTH_TAB_REGEX.find(tabName.trim()) ?: return null
+            val mmm = match.groupValues[1].lowercase(Locale.US)
+            val yy = match.groupValues[2].toIntOrNull() ?: return null
+            val monthIdx = when (mmm) {
+                "jan" -> 0
+                "feb" -> 1
+                "mar" -> 2
+                "apr" -> 3
+                "may" -> 4
+                "jun" -> 5
+                "jul" -> 6
+                "aug" -> 7
+                "sep" -> 8
+                "oct" -> 9
+                "nov" -> 10
+                "dec" -> 11
+                else -> return null
+            }
+            return (2000 + yy) * 12 + monthIdx
         }
-        return (2000 + yy) * 12 + monthIdx
     }
 
     fun findPrecedingTab(targetTab: String, availableTabs: List<String>): String? {

@@ -620,6 +620,15 @@ class DashboardViewModel(
         )
     }
 
+    /** Shows, once, why a void was refused during a sync that put the entry back. */
+    fun showVoidBlockedNotice() {
+        viewModelScope.launch(ioDispatcher) {
+            val reason = transactionRepository.takeVoidBlockedNotice() ?: return@launch
+            val message = UiText.res(com.financeautomation.presentation.components.VoidDialogUtils.blockMessageResId(reason))
+            _uiState.update { it.copy(errorMessage = message) }
+        }
+    }
+
     /**
      * Forces immediate synchronization of pending queue items to Google Sheets.
      */

@@ -20,10 +20,20 @@ class MonthlyRolloverWorkerTest {
 
     private class FakeTestTransactionRepository : TransactionRepository {
         var carryForwardCalledWith: String? = null
+        var carryForwardSourceTab: String? = null
         var carryForwardResult: Result<Unit> = Result.Success(Unit)
+        val carries = mutableListOf<Pair<String, String?>>()
+
+        /** Planning is the production repository's; only the queueing is recorded here. */
+        val planner = com.financeautomation.testutil.SyncHarness()
+
+        override suspend fun planMonthlyCarry(now: ZonedDateTime): List<Pair<String, String>> =
+            planner.repo.planMonthlyCarry(now)
 
         override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> {
+            carries.add(targetTab to sourceTab)
             carryForwardCalledWith = targetTab
+            carryForwardSourceTab = sourceTab
             return carryForwardResult
         }
 
@@ -48,24 +58,33 @@ class MonthlyRolloverWorkerTest {
     private val kolkataZone = ZoneId.of("Asia/Kolkata")
 
     @Test
-    fun testDayBefore25_doesNotTriggerRollover() = runBlocking {
+    fun aRunQueuesTheUnfinishedYearStepFirstAndThenThisMonth() = runBlocking {
         val repo = FakeTestTransactionRepository()
-        var syncCalled = false
-        val syncUseCase: suspend () -> Result<Int> = {
-            syncCalled = true
-            Result.Success(0)
-        }
 
-        val dateBefore25 = ZonedDateTime.of(2026, 11, 24, 23, 59, 0, 0, kolkataZone)
-        val result = MonthlyRolloverWorker.executeRollover(dateBefore25, repo, syncUseCase)
+        MonthlyRolloverWorker.executeRollover(
+            ZonedDateTime.of(2026, 11, 25, 9, 0, 0, 0, kolkataZone), repo, { Result.Success(1) }
+        )
 
-        assertEquals(ListenableWorker.Result.success(), result)
-        assertEquals(null, repo.carryForwardCalledWith)
-        assertFalse("Sync must not be called when rollover is skipped", syncCalled)
+        assertEquals(listOf<Pair<String, String?>>("Jan26" to "Dec25", "Nov26" to "Oct26"), repo.carries)
     }
 
     @Test
-    fun testDay25_triggersRolloverForNextMonth() = runBlocking {
+    fun onceThisMonthsCarryReachedTheSheetARunQueuesAndSyncsNothing() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        repo.planner.preferences[com.financeautomation.domain.repository.PreferencesRepository.KEY_CARRY_DONE_MONTH] = "2026-11"
+        var syncCalled = false
+
+        val result = MonthlyRolloverWorker.executeRollover(
+            ZonedDateTime.of(2026, 11, 25, 9, 0, 0, 0, kolkataZone), repo, { syncCalled = true; Result.Success(0) }
+        )
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertTrue(repo.carries.isEmpty())
+        assertFalse(syncCalled)
+    }
+
+    @Test
+    fun testDay25_doesNotCarryToNextMonth_carriesPreviousIntoCurrent() = runBlocking {
         val repo = FakeTestTransactionRepository()
         var syncCalled = false
         val syncUseCase: suspend () -> Result<Int> = {
@@ -77,38 +96,79 @@ class MonthlyRolloverWorkerTest {
         val result = MonthlyRolloverWorker.executeRollover(dateDay25, repo, syncUseCase)
 
         assertEquals(ListenableWorker.Result.success(), result)
-        assertEquals("Dec26", repo.carryForwardCalledWith)
-        assertTrue("Sync must be triggered after enqueuing carry forward", syncCalled)
+        assertEquals("Nov26", repo.carryForwardCalledWith)
+        assertEquals("Oct26", repo.carryForwardSourceTab)
+        assertTrue("Sync must be triggered", syncCalled)
     }
 
     @Test
-    fun testDay2_carriesLastMonthIntoThisMonthForDebtsLoggedAfterTheLastRun() = runBlocking {
+    fun testLastDayMonth_2359IST_doesNotCarryToNextMonth() = runBlocking {
         val repo = FakeTestTransactionRepository()
         var syncCalled = false
         val syncUseCase: suspend () -> Result<Int> = {
             syncCalled = true
             Result.Success(1)
         }
-        val result = MonthlyRolloverWorker.executeRollover(ZonedDateTime.of(2026, 12, 2, 9, 0, 0, 0, kolkataZone), repo, syncUseCase)
+
+        val dateNov30 = ZonedDateTime.of(2026, 11, 30, 23, 59, 0, 0, kolkataZone)
+        val result = MonthlyRolloverWorker.executeRollover(dateNov30, repo, syncUseCase)
+
         assertEquals(ListenableWorker.Result.success(), result)
-        assertEquals("Dec26", repo.carryForwardCalledWith)
+        assertEquals("Nov26", repo.carryForwardCalledWith)
+        assertEquals("Oct26", repo.carryForwardSourceTab)
         assertTrue(syncCalled)
     }
 
     @Test
-    fun testDay4_doesNothing() = runBlocking {
+    fun testDay1_0000IST_carriesIntoNewMonth() = runBlocking {
         val repo = FakeTestTransactionRepository()
-        val result = MonthlyRolloverWorker.executeRollover(
-            ZonedDateTime.of(2026, 12, 4, 9, 0, 0, 0, kolkataZone),
-            repo,
-            { Result.Success(0) }
-        )
+        var syncCalled = false
+        val syncUseCase: suspend () -> Result<Int> = {
+            syncCalled = true
+            Result.Success(1)
+        }
+        val dateDec1 = ZonedDateTime.of(2026, 12, 1, 0, 0, 0, 0, kolkataZone)
+        val result = MonthlyRolloverWorker.executeRollover(dateDec1, repo, syncUseCase)
         assertEquals(ListenableWorker.Result.success(), result)
-        assertEquals(null, repo.carryForwardCalledWith)
+        assertEquals("Dec26", repo.carryForwardCalledWith)
+        assertEquals("Nov26", repo.carryForwardSourceTab)
+        assertTrue(syncCalled)
     }
 
     @Test
-    fun testDay31December_triggersRolloverForJanuaryNextYear() = runBlocking {
+    fun testMissedDay1_firstRunOnDay5_carriesIntoNewMonth() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        var syncCalled = false
+        val syncUseCase: suspend () -> Result<Int> = {
+            syncCalled = true
+            Result.Success(1)
+        }
+        val dateDec5 = ZonedDateTime.of(2026, 12, 5, 9, 0, 0, 0, kolkataZone)
+        val result = MonthlyRolloverWorker.executeRollover(dateDec5, repo, syncUseCase)
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals("Dec26", repo.carryForwardCalledWith)
+        assertEquals("Nov26", repo.carryForwardSourceTab)
+        assertTrue(syncCalled)
+    }
+
+    @Test
+    fun testMissedDay1_firstRunOnDay20_carriesIntoNewMonth() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        var syncCalled = false
+        val syncUseCase: suspend () -> Result<Int> = {
+            syncCalled = true
+            Result.Success(1)
+        }
+        val dateDec20 = ZonedDateTime.of(2026, 12, 20, 14, 0, 0, 0, kolkataZone)
+        val result = MonthlyRolloverWorker.executeRollover(dateDec20, repo, syncUseCase)
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals("Dec26", repo.carryForwardCalledWith)
+        assertEquals("Nov26", repo.carryForwardSourceTab)
+        assertTrue(syncCalled)
+    }
+
+    @Test
+    fun testDecember31_doesNotCarryToJanuary_targetIsDecember() = runBlocking {
         val repo = FakeTestTransactionRepository()
         var syncCalled = false
         val syncUseCase: suspend () -> Result<Int> = {
@@ -116,12 +176,31 @@ class MonthlyRolloverWorkerTest {
             Result.Success(1)
         }
 
-        val dateDec31 = ZonedDateTime.of(2026, 12, 31, 15, 30, 0, 0, kolkataZone)
+        val dateDec31 = ZonedDateTime.of(2026, 12, 31, 23, 59, 0, 0, kolkataZone)
         val result = MonthlyRolloverWorker.executeRollover(dateDec31, repo, syncUseCase)
 
         assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals("Dec26", repo.carryForwardCalledWith)
+        assertEquals("Nov26", repo.carryForwardSourceTab)
+        assertTrue(syncCalled)
+    }
+
+    @Test
+    fun testJanuary1_carriesDecemberIntoJanuaryNewWorkbook() = runBlocking {
+        val repo = FakeTestTransactionRepository()
+        var syncCalled = false
+        val syncUseCase: suspend () -> Result<Int> = {
+            syncCalled = true
+            Result.Success(1)
+        }
+
+        val dateJan1 = ZonedDateTime.of(2027, 1, 1, 0, 0, 0, 0, kolkataZone)
+        val result = MonthlyRolloverWorker.executeRollover(dateJan1, repo, syncUseCase)
+
+        assertEquals(ListenableWorker.Result.success(), result)
         assertEquals("Jan27", repo.carryForwardCalledWith)
-        assertTrue("Sync must be triggered", syncCalled)
+        assertEquals("Dec26", repo.carryForwardSourceTab)
+        assertTrue(syncCalled)
     }
 
     @Test
@@ -152,7 +231,7 @@ class MonthlyRolloverWorkerTest {
         val result = MonthlyRolloverWorker.executeRollover(dateDay25, repo, syncUseCase)
 
         assertEquals(ListenableWorker.Result.retry(), result)
-        assertEquals("Dec26", repo.carryForwardCalledWith)
+        assertEquals("Nov26", repo.carryForwardCalledWith)
     }
 
     @Test

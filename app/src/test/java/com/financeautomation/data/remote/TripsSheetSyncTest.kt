@@ -198,6 +198,237 @@ class TripsSheetSyncTest {
         assertNull(updated.endDateEpochDay)
     }
 
+    @Test
+    fun testStage3a_sheetEndedTrip_clearsActiveTagAndPreferencesAndGuaranteesAgreement() = runBlocking {
+        // Goa trip was previously active in Room and in preferences
+        val goa = TripTag(
+            id = "trip_goa",
+            name = "Goa",
+            isActive = true,
+            isArchived = false,
+            startDateEpochDay = LocalDate.parse("2026-11-20").toEpochDay(),
+            endDateEpochDay = null,
+            createdAt = 1000L,
+            updatedAt = 1000L
+        )
+        fakeTripRepository.upsertTripTag(goa)
+        fakeTripRepository.setActiveTag("trip_goa")
+        fakePrefsRepository.setActiveTrip("Goa")
+
+        assertEquals("Goa", fakePrefsRepository.getPreference("activeTrip"))
+        assertEquals("trip_goa", fakeTripRepository.getActiveTagSync()?.id)
+
+        // Sheet Trips tab now says Goa is Ended with an end date (22 Nov 2026)
+        fakeSheetsClient.sheetRows.add(
+            SheetTripRow(
+                rowNumber = 4,
+                name = "Goa",
+                startDateString = "2026-11-20",
+                endDateString = "2026-11-22",
+                status = "Ended",
+                id = "trip_goa"
+            )
+        )
+
+        // Synchronize Trips tab
+        val res = coordinator.syncTripsTab("sheet_123")
+        assertTrue(res is Result.Success)
+
+        // 1. In Room: isActive is false
+        val updatedGoa = fakeTripRepository.getTagById("trip_goa")
+        assertNotNull(updatedGoa)
+        assertFalse("Room trip must be marked inactive", updatedGoa!!.isActive)
+        assertNotNull("End date must be recorded", updatedGoa.endDateEpochDay)
+
+        // 2. Room active tag is cleared
+        assertNull("Active trip tag in repo must be null", fakeTripRepository.getActiveTagSync())
+
+        // 3. Preferences active trip is cleared
+        assertNull("Active trip in preferences must be cleared", fakePrefsRepository.getPreference("activeTrip"))
+
+        // 4. Agreement verification across UI header and card:
+        val allTrips = fakeTripRepository.getAllTripTags()
+        val headerActiveCount = allTrips.count { it.isActive }
+        assertEquals("Header must show 0 active", 0, headerActiveCount)
+
+        val cardIsActive = updatedGoa.isActive
+        assertFalse("Trip card must evaluate to inactive/ended, agreeing with header and sheet", cardIsActive)
+    }
+
+    @Test
+    fun testStage3b_midnightIstRollover_parsesMultipleDateFormatsWithoutShift() = runBlocking {
+        // Date formats used in sheet: ISO, dd/MM/yyyy, d MMM yyyy, and date serial
+        val testDates = listOf(
+            "2026-11-22" to LocalDate.of(2026, 11, 22).toEpochDay(),
+            "22 Nov 2026" to LocalDate.of(2026, 11, 22).toEpochDay(),
+            "22/11/2026" to LocalDate.of(2026, 11, 22).toEpochDay(),
+            "46348" to LocalDate.of(2026, 11, 22).toEpochDay()
+        )
+
+        for ((inputStr, expectedEpoch) in testDates) {
+            fakeSheetsClient.sheetRows.clear()
+            fakeSheetsClient.sheetRows.add(
+                SheetTripRow(
+                    rowNumber = 4,
+                    name = "Trip_$inputStr",
+                    startDateString = inputStr,
+                    endDateString = "",
+                    status = "Active",
+                    id = null
+                )
+            )
+            val res = coordinator.syncTripsTab("sheet_123")
+            assertTrue(res is Result.Success)
+
+            val created = fakeTripRepository.getAllTripTags().firstOrNull { it.name == "Trip_$inputStr" }
+            assertNotNull("Trip must be created for input $inputStr", created)
+            assertEquals("Start date epoch day must match expected for $inputStr", expectedEpoch, created?.startDateEpochDay)
+
+            // Verify TripDateRangeFormatter produces exact matching 'Started' string
+            val formatted = com.financeautomation.domain.usecase.TripDateRangeFormatter.format(
+                transactions = emptyList(),
+                isActive = true,
+                startDateEpochDay = created?.startDateEpochDay
+            )
+            assertEquals("App 'Started' date must match sheet date 22 Nov 2026", "Started 22 Nov 2026", formatted)
+        }
+    }
+
+    @Test
+    fun testStage3b_keepsAStartDateOneDayBeforeAnEarlyMorningFirstExpense() = runBlocking {
+        // 21 Nov could be a chosen date or a time zone slip; the two look the same, so the date is kept
+        val shiftedTrip = TripTag(
+            id = "trip_utc_bug",
+            name = "Goa",
+            isActive = false,
+            isArchived = false,
+            startDateEpochDay = LocalDate.of(2026, 11, 21).toEpochDay(), // 1 day earlier
+            endDateEpochDay = LocalDate.of(2026, 11, 23).toEpochDay(),
+            createdAt = 1000L,
+            updatedAt = 1000L
+        )
+        fakeTripRepository.upsertTripTag(shiftedTrip)
+
+        // The transaction occurred at 04:31 AM IST on 22 Nov 2026
+        val txInstant = java.time.ZonedDateTime.of(2026, 11, 22, 4, 31, 0, 0, java.time.ZoneId.of("Asia/Kolkata")).toInstant()
+        val tx = com.financeautomation.domain.model.Transaction(
+            id = "tx_goa_1",
+            timestamp = txInstant.toEpochMilli(),
+            dateSerial = com.financeautomation.core.utils.DateSerialUtils.toDateSerial(txInstant.toEpochMilli()),
+            timeSerial = 0.2,
+            totalAmount = 500.0,
+            myShare = 500.0,
+            owedToMe = 0.0,
+            merchant = "Cafe",
+            category = "Food & Drink",
+            account = "UPI",
+            tripTag = "Goa",
+            companions = "Personal",
+            status = com.financeautomation.core.model.TransactionStatus.PERSONAL
+        )
+
+        val res = coordinatorWithExpense(tx).mirrorToSheet("sheet_123")
+        assertTrue(res is Result.Success)
+
+        val kept = fakeTripRepository.getTagById("trip_utc_bug")
+        assertNotNull(kept)
+        assertEquals(LocalDate.of(2026, 11, 21).toEpochDay(), kept!!.startDateEpochDay)
+    }
+
+    private fun tripExpense(day: Int) = com.financeautomation.domain.model.Transaction(
+        id = "tx_goa_$day",
+        timestamp = java.time.ZonedDateTime.of(2026, 11, day, 12, 0, 0, 0, java.time.ZoneId.of("Asia/Kolkata"))
+            .toInstant().toEpochMilli(),
+        dateSerial = 46348,
+        timeSerial = 0.5,
+        totalAmount = 500.0,
+        myShare = 500.0,
+        owedToMe = 0.0,
+        merchant = "Cafe",
+        category = "Food & Drink",
+        account = "UPI",
+        tripTag = "Goa",
+        companions = "Personal",
+        status = com.financeautomation.core.model.TransactionStatus.PERSONAL
+    )
+
+    private fun endedTrip(startDay: Long?) = TripTag(
+        id = "trip_goa",
+        name = "Goa",
+        isActive = false,
+        isArchived = false,
+        startDateEpochDay = startDay,
+        endDateEpochDay = LocalDate.of(2026, 11, 23).toEpochDay(),
+        createdAt = 1000L,
+        updatedAt = 1000L
+    )
+
+    @Test
+    fun mirroringKeepsAChosenStartDateLongBeforeTheFirstExpense() = runBlocking {
+        val chosen = LocalDate.of(2026, 11, 1).toEpochDay()
+        fakeTripRepository.upsertTripTag(endedTrip(chosen))
+
+        coordinatorWithExpense(tripExpense(20)).mirrorToSheet("sheet_123")
+
+        assertEquals(chosen, fakeTripRepository.getTagById("trip_goa")!!.startDateEpochDay)
+    }
+
+    @Test
+    fun mirroringFillsAMissingStartDateAndRemembersTheRowAsWritten() = runBlocking {
+        fakeTripRepository.upsertTripTag(endedTrip(null))
+
+        coordinatorWithExpense(tripExpense(20)).mirrorToSheet("sheet_123")
+
+        val firstExpenseDay = LocalDate.of(2026, 11, 20).toEpochDay()
+        assertEquals(firstExpenseDay, fakeTripRepository.getTagById("trip_goa")!!.startDateEpochDay)
+        assertEquals(
+            "Goa|false|$firstExpenseDay|${LocalDate.of(2026, 11, 23).toEpochDay()}",
+            fakePrefsRepository.getPreference(TripsSheetSyncCoordinator.PREFIX_TRIP_BASE_HASH + "trip_goa")
+        )
+    }
+
+    private fun coordinatorWithExpense(tx: com.financeautomation.domain.model.Transaction): TripsSheetSyncCoordinator {
+        val fakeTxRepo = object : com.financeautomation.domain.repository.TransactionRepository {
+            override fun getTransactions(): Flow<List<com.financeautomation.domain.model.Transaction>> = flowOf(listOf(tx))
+            override fun getNeedsReview(): Flow<List<com.financeautomation.domain.model.Transaction>> = flowOf(emptyList())
+            override suspend fun getTransactionById(id: String) = tx
+            override suspend fun insertTransaction(transaction: com.financeautomation.domain.model.Transaction): Result<Unit> = Result.Success(Unit)
+            override suspend fun updateTransaction(transaction: com.financeautomation.domain.model.Transaction): Result<Unit> = Result.Success(Unit)
+            override suspend fun voidTransaction(id: String): Result<Unit> = Result.Success(Unit)
+            override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = Result.Success(Unit)
+            override suspend fun undoRecentSave(id: String): Result<Unit> = Result.Success(Unit)
+            override suspend fun findRecentSimilar(amount: Double, windowMillis: Long): List<com.financeautomation.domain.model.Transaction> = emptyList()
+            override suspend fun syncPendingTransactions(): Result<Int> = Result.Success(0)
+            override suspend fun logCredit(
+                settler: String,
+                amount: Double,
+                explicitRefs: List<String>,
+                account: String,
+                inflowType: String,
+                reason: String,
+                timestamp: Long
+            ): Result<String> = Result.Success("inf_test")
+            override suspend fun logPayable(
+                creditor: String,
+                amount: Double,
+                whatFor: String,
+                timestamp: Long,
+                category: String
+            ): Result<String> = Result.Success("pay_test")
+            override suspend fun carryForward(targetTab: String, sourceTab: String?): Result<Unit> = Result.Success(Unit)
+            override suspend fun closeYear(year: Int): Result<Unit> = Result.Success(Unit)
+            override suspend fun reconcileAllMonths(): Result<Int> = Result.Success(0)
+            override suspend fun requeueYearForNewWorkbook(year: Int) {}
+        }
+
+        return TripsSheetSyncCoordinator(
+            googleSheetsClient = fakeSheetsClient,
+            tripTagRepository = fakeTripRepository,
+            preferencesRepository = fakePrefsRepository,
+            transactionRepository = fakeTxRepo
+        )
+    }
+
     private class FakeTripsGoogleSheetsClient : GoogleSheetsClient(
         okHttpClient = okhttp3.OkHttpClient(),
         tokenProvider = null

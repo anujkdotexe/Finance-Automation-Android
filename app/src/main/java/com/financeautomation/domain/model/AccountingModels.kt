@@ -55,7 +55,9 @@ data class CellEdit(
     val column: String,
     val value: Any?,
     /** Id of the sheet row this edit was planned for. Lets the executor find the row again if the sheet changed. */
-    val uuid: String? = null
+    val uuid: String? = null,
+    /** The value this edit expects to replace; it proves later whether a saved plan was already written. */
+    val before: Any? = null
 )
 
 /**
@@ -98,7 +100,9 @@ data class AccountingPlan(
     val settled: List<SettledRef> = emptyList(),
     val excess: Double = 0.0,
     val unmatched: Boolean = false,
-    val message: String = ""
+    val message: String = "",
+    /** The workbook the rows are in, when that is not the workbook of the entry's own date. Kept on this device. */
+    val workbookId: String? = null
 )
 
 /**

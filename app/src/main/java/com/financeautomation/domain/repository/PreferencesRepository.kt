@@ -297,10 +297,18 @@ interface PreferencesRepository {
         const val KEY_SHEET_PRUNED_PENDING_COUNT: String = "key_sheet_pruned_pending_count"
         /** "1" while a reconcile held back a bulk removal because many entries are missing from the sheet. */
         const val KEY_SHEET_MANY_MISSING_FLAG: String = "key_sheet_many_missing_flag"
+        /** Month (yyyy-MM) whose own debt carry last reached the sheet. Local to this device. */
+        const val KEY_CARRY_DONE_MONTH: String = "key_carry_done_month"
+        /** Year whose January carry, from the previous year's workbook, reached the sheet. Local to this device. */
+        const val KEY_CARRY_YEAR_OPENED: String = "key_carry_year_opened"
+        /** Reason (enum name) of a void the sheet refused during sync, not yet shown to the user. */
+        const val KEY_VOID_BLOCKED_NOTICE: String = "key_void_blocked_notice"
         const val KEY_SPREADSHEET_ID: String = "key_spreadsheet_id"
         fun keySpreadsheetIdForYear(year: Int): String = "key_spreadsheet_id_$year"
         const val KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX: String = "last_workbook_verified_date_"
         fun keyLastWorkbookVerifiedDate(year: Int): String = "$KEY_LAST_WORKBOOK_VERIFIED_DATE_PREFIX$year"
+        /** Set while a workbook that was found has not yet given this device its Config. */
+        fun keyConfigPullPending(spreadsheetId: String): String = "config_pull_pending_$spreadsheetId"
         const val KEY_SPREADSHEET_TITLE: String = "key_spreadsheet_title"
         const val KEY_DEFAULT_ACCOUNT: String = "key_default_account"
         const val KEY_ACTIVE_TRIP: String = "key_active_trip"

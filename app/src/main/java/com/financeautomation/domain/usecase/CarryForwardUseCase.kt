@@ -14,7 +14,9 @@ import java.util.UUID
 data class CarryForwardResult(
     val plan: AccountingPlan,
     val lineageRecords: List<LineageRecord>,
-    val skippedAlreadyCarried: Boolean = false
+    val skippedAlreadyCarried: Boolean = false,
+    /** Open rows whose copy shows another amount; with any, nothing of this carry may be written. */
+    val conflicts: Int = 0
 )
 
 /**
@@ -110,6 +112,8 @@ class CarryForwardUseCase {
 
     /**
      * Carries forward all open debits and open payables from [sourceTab] into [targetTab].
+     * [targetDebits] and [targetPayables] are the rows that may already hold copies: the target tab and any tab
+     * between the source and the target.
      */
     operator fun invoke(
         targetTab: String,
@@ -121,25 +125,63 @@ class CarryForwardUseCase {
         existingLineage: List<LineageRecord> = emptyList()
     ): CarryForwardResult {
         val prefix = "[Carried from $sourceTab]"
-        // Idempotent per source row, not per tab: a row is skipped when it already has a lineage record, or when
-        // the target already holds its copy (same text and amount). Everything else that is open is carried,
-        // so a debt logged after the first run is still picked up.
+        // Idempotent per source row, not per tab: a row is skipped when it already has a lineage record. A copy
+        // (same text and amount) belongs to exactly one source row, so two identical debts are not mistaken for one.
+        // An open row whose copy exists is only marked, which finishes a run that wrote the copy but not the mark.
+        // Everything else that is open is carried, so a debt logged after the first run is still picked up.
         val carriedFrom = existingLineage.mapNotNull { it.carriedFromUuid }.map { it.trim().lowercase() }.toSet()
-        fun debitAlreadyCarried(d: LedgerDebit): Boolean {
-            val key = (d.uuid ?: "${d.tab}!Row${d.row}").trim().lowercase()
-            if (key in carriedFrom) return true
+        val freeDebitCopies = targetDebits.toMutableList()
+        val freePayableCopies = targetPayables.toMutableList()
+        fun hasLineage(sourceKey: String): Boolean = sourceKey.trim().lowercase() in carriedFrom
+        fun claimDebitCopy(d: LedgerDebit): LedgerDebit? {
             val text = "$prefix ${CarriedCopies.stripPrefixes(d.item)}"
-            return targetDebits.any {
+            val index = freeDebitCopies.indexOfFirst {
                 it.item.equals(text, ignoreCase = true) && Math.abs(it.owed - d.owed) < 0.005
             }
+            return if (index >= 0) freeDebitCopies.removeAt(index) else null
         }
-        fun payableAlreadyCarried(p: LedgerPayable): Boolean {
-            val key = (p.uuid ?: "${p.tab}!Row${p.row}").trim().lowercase()
-            if (key in carriedFrom) return true
+        fun claimPayableCopy(p: LedgerPayable): LedgerPayable? {
             val text = "$prefix ${CarriedCopies.stripPrefixes(p.whatFor)}"
-            return targetPayables.any {
+            val index = freePayableCopies.indexOfFirst {
                 it.whatFor.equals(text, ignoreCase = true) && Math.abs(it.amountOwed - p.amountOwed) < 0.005
             }
+            return if (index >= 0) freePayableCopies.removeAt(index) else null
+        }
+        fun openDebit(d: LedgerDebit): Boolean =
+            d.status == "Pending" && d.owed > 0.0 && !hasLineage(d.uuid ?: "${d.tab}!Row${d.row}")
+        fun openPayable(p: LedgerPayable): Boolean =
+            (p.status == "Pending" || p.status == "Partial") && p.amountOwed > 0.0 &&
+                !hasLineage(p.uuid ?: "${p.tab}!Row${p.row}")
+        fun sameDebitEntry(copy: LedgerDebit, d: LedgerDebit): Boolean =
+            copy.item.equals("$prefix ${CarriedCopies.stripPrefixes(d.item)}", ignoreCase = true) &&
+                copy.dateSerial == d.dateSerial && sameTime(copy.timeSerial, d.timeSerial)
+        fun samePayableEntry(copy: LedgerPayable, p: LedgerPayable): Boolean =
+            copy.whatFor.equals("$prefix ${CarriedCopies.stripPrefixes(p.whatFor)}", ignoreCase = true) &&
+                copy.dateIncurredSerial == p.dateIncurredSerial && sameTime(copy.timeSerial, p.timeSerial)
+
+        // Rows already marked as carried take their own copies first, then open rows whose copy is already there.
+        // A marked row whose copy has changed since (repaid in part) still keeps that copy for itself.
+        val unmatchedDebits = sourceDebits.filter { it.status == "Carried Fwd" && claimDebitCopy(it) == null }
+        val unmatchedPayables = sourcePayables.filter { it.status == "Carried Fwd" && claimPayableCopy(it) == null }
+        val writtenDebits = sourceDebits.filter { openDebit(it) }
+            .mapNotNull { source -> claimDebitCopy(source)?.let { source.row to it } }.toMap()
+        val writtenPayables = sourcePayables.filter { openPayable(it) }
+            .mapNotNull { source -> claimPayableCopy(source)?.let { source.row to it } }.toMap()
+        unmatchedDebits.forEach { source ->
+            val index = freeDebitCopies.indexOfFirst { sameDebitEntry(it, source) }
+            if (index >= 0) freeDebitCopies.removeAt(index)
+        }
+        unmatchedPayables.forEach { source ->
+            val index = freePayableCopies.indexOfFirst { samePayableEntry(it, source) }
+            if (index >= 0) freePayableCopies.removeAt(index)
+        }
+        // An open row whose only copy shows another amount: one of the two was changed after a half written carry.
+        // Which one is right cannot be proven, so a second copy is never added.
+        val conflicts = sourceDebits.count { source ->
+            openDebit(source) && source.row !in writtenDebits && freeDebitCopies.any { sameDebitEntry(it, source) }
+        } + sourcePayables.count { source ->
+            openPayable(source) && source.row !in writtenPayables &&
+                freePayableCopies.any { samePayableEntry(it, source) }
         }
 
         val appends = mutableListOf<NewRow>()
@@ -149,7 +191,14 @@ class CarryForwardUseCase {
 
         // 1. Rollover open debits (status == Pending and owed > 0)
         for (debit in sourceDebits) {
-            if (debit.status == "Pending" && debit.owed > 0.0 && !debitAlreadyCarried(debit)) {
+            if (openDebit(debit)) {
+                val existingCopy = writtenDebits[debit.row]
+                if (existingCopy != null) {
+                    edits.add(CellEdit(debit.tab, debit.row, "K", "Carried Fwd", debit.uuid))
+                    val sourceKey = debit.uuid ?: "${debit.tab}!Row${debit.row}"
+                    existingCopy.uuid?.let { lineage.add(LineageRecord(it, sourceKey, sourceKey, now)) }
+                    continue
+                }
                 val newUuid = "txn_" + UUID.randomUUID().toString().replace("-", "").take(12)
                 val sourceUuid = debit.uuid ?: "${debit.tab}!Row${debit.row}"
 
@@ -164,7 +213,8 @@ class CarryForwardUseCase {
                     debit.companions,
                     0.0,
                     AccountingUtils.round2(debit.owed),
-                    "Pending"
+                    "Pending",
+                    ""
                 )
 
                 appends.add(NewRow(TableType.DEBIT, targetTab, newUuid, newCells))
@@ -183,7 +233,16 @@ class CarryForwardUseCase {
 
         // 2. Rollover open payables (status in (Pending, Partial) and amountOwed > 0)
         for (payable in sourcePayables) {
-            if ((payable.status == "Pending" || payable.status == "Partial") && payable.amountOwed > 0.0 && !payableAlreadyCarried(payable)) {
+            if (openPayable(payable)) {
+                val existingCopy = writtenPayables[payable.row]
+                if (existingCopy != null) {
+                    edits.add(
+                        CellEdit(payable.tab, payable.row, SheetSchemaConstants.COL_LETTER_PAYABLE_STATUS, "Carried Fwd", payable.uuid)
+                    )
+                    val sourceKey = payable.uuid ?: "${payable.tab}!Row${payable.row}"
+                    existingCopy.uuid?.let { lineage.add(LineageRecord(it, sourceKey, sourceKey, now)) }
+                    continue
+                }
                 val newUuid = "pay_" + UUID.randomUUID().toString().replace("-", "").take(12)
                 val sourceUuid = payable.uuid ?: "${payable.tab}!Row${payable.row}"
 
@@ -223,8 +282,13 @@ class CarryForwardUseCase {
         return CarryForwardResult(
             plan = plan,
             lineageRecords = lineage,
-            skippedAlreadyCarried = false
+            skippedAlreadyCarried = false,
+            conflicts = conflicts
         )
     }
+
+    private fun sameTime(a: Double?, b: Double?): Boolean =
+        if (a == null || b == null) a == b
+        else Math.abs(a - b) < AccountingUtils.LEGACY_TIME_SERIAL_TOLERANCE
 }
 

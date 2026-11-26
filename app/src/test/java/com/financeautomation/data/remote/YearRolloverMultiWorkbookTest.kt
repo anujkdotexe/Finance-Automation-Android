@@ -214,7 +214,8 @@ class YearRolloverMultiWorkbookTest {
             syncQueueDao = queueDao,
             lineageDao = lineageDao,
             transactionDao = txnDao,
-            previousWorkbookIdProvider = { year -> prefsRepo.getSpreadsheetIdForYearSync(year) }
+            previousWorkbookIdProvider = { year -> prefsRepo.getSpreadsheetIdForYearSync(year) },
+            clock = { clock.millis() }
         )
 
         val cfReq = CarryForwardRequest(

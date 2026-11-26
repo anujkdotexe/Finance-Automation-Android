@@ -86,6 +86,10 @@ fun DashboardScreen(
         }
     }
 
+    LaunchedEffect(state.recentTransactions) {
+        viewModel.showVoidBlockedNotice()
+    }
+
     LaunchedEffect(state.syncMessage, state.errorMessage) {
         state.syncMessage?.let {
             snackbarHostState.showSnackbar(it.asString(context))

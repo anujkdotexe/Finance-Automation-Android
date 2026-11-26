@@ -585,7 +585,7 @@ fun QuickLogSheet(
                 }
                 ConfirmActionDialog(
                     title = title,
-                    message = stringResource(R.string.confirm_void_message),
+                    message = stringResource(VoidDialogUtils.voidConfirmMessageResId(deleteSheetRow)),
                     confirmLabel = stringResource(R.string.action_void),
                     onConfirm = {
                         val del = deleteSheetRow

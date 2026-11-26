@@ -41,7 +41,8 @@ class RepaymentWaterfallUseCase(
         val allEdits = mutableListOf<CellEdit>()
         val handledKeys = mutableSetOf<RowKey>()
 
-        val workingPayables = allPayables.map { it.copy() }.toMutableList()
+        // The snapshot arrives in tab and row order; repayment goes oldest first, the same order the app uses
+        val workingPayables = allPayables.map { it.copy() }.sortedWith(RepaymentOrder.payables).toMutableList()
 
         // 1. Process explicit reference if provided
         if (!explicitRef.isNullOrBlank()) {

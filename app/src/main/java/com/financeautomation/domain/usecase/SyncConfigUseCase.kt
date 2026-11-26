@@ -55,7 +55,21 @@ open class SyncConfigUseCase(
      * Pulls configuration from the remote Config tab and reconciles with local Room SQLite.
      * Uses timestamp-based last-write-wins conflict resolution.
      */
-    suspend fun pull(targetSpreadsheetId: String? = null): Result<Unit> = withContext(ioDispatcher) {
+    suspend fun pull(targetSpreadsheetId: String? = null): Result<Unit> {
+        val result = pullFromSheet(targetSpreadsheetId)
+        if (result is Result.Success) {
+            val pulledId = targetSpreadsheetId ?: preferencesRepository.getSpreadsheetIdSync()
+            if (!pulledId.isNullOrBlank()) {
+                val pending = PreferencesRepository.keyConfigPullPending(pulledId)
+                if (preferencesRepository.getPreference(pending) != null) {
+                    preferencesRepository.setPreference(pending, null, isDirty = false)
+                }
+            }
+        }
+        return result
+    }
+
+    private suspend fun pullFromSheet(targetSpreadsheetId: String?): Result<Unit> = withContext(ioDispatcher) {
         safeCall {
             val spreadsheetId = targetSpreadsheetId ?: preferencesRepository.getSpreadsheetIdSync()
             if (spreadsheetId.isNullOrBlank()) {

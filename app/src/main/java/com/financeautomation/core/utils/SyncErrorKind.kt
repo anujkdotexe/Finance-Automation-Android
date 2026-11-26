@@ -1,10 +1,23 @@
 package com.financeautomation.core.utils
 
 import com.financeautomation.data.remote.GoogleSheetsApiException
+import com.financeautomation.domain.model.EditBlockReason
+import com.financeautomation.domain.model.EditBlockedException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeoutException
+
+/** A partly sent entry whose saved part cannot be proven from the sheet, so nothing more may be written. */
+class UnprovableReplayException :
+    IllegalStateException("The sheet changed after this entry was first sent, so what was saved cannot be proven")
+
+/** A repayment that matches no open debt. The message names no one and states no amount. */
+class NoOpenDebtException : IllegalStateException("No open debt was found for this repayment")
+
+/** A carried copy that no longer matches its still open original, so what is owed cannot be proven. */
+class CarryConflictException :
+    IllegalStateException("A carried copy no longer matches its open original, so nothing was carried")
 
 enum class SyncErrorKind {
     RATE_LIMITED,
@@ -12,6 +25,11 @@ enum class SyncErrorKind {
     NO_NETWORK,
     SERVER_BUSY,
     SHEET_CHANGED,
+    PARTLY_SENT,
+    CARRY_CONFLICT,
+    EDIT_CARRIED,
+    EDIT_SHEET_CHANGED,
+    NO_OPEN_DEBT,
     UNKNOWN;
 
     fun plainMessage(): String = when (this) {
@@ -20,6 +38,14 @@ enum class SyncErrorKind {
         NO_NETWORK -> "No internet. This will sync when you are back online."
         SERVER_BUSY -> "Google had a problem. This will retry on its own."
         SHEET_CHANGED -> "The sheet was changed. Open Sync and Backup to repair."
+        PARTLY_SENT -> "The sheet changed after this was first sent, so what was saved cannot be confirmed. Nothing " +
+            "more was written. Check the sheet, then discard this item and enter only what is missing."
+        CARRY_CONFLICT -> "A carried debt does not match its old row. In the sheet, correct the copy or mark the old " +
+            "row Carried Fwd, then retry."
+        EDIT_CARRIED -> "Edit not saved: this debt was carried forward. The phone shows the sheet's values."
+        EDIT_SHEET_CHANGED -> "Edit not saved: this entry changed in the sheet. The phone shows the sheet's values."
+        NO_OPEN_DEBT -> "No open debt in the sheet for this repayment, so nothing was written. Check the sheet, " +
+            "then retry or discard this item."
         UNKNOWN -> "Something went wrong. Tap Details."
     }
 
@@ -37,6 +63,12 @@ enum class SyncErrorKind {
 
         fun fromThrowable(throwable: Throwable?): SyncErrorKind {
             if (throwable == null) return UNKNOWN
+            if (throwable is UnprovableReplayException) return PARTLY_SENT
+            if (throwable is CarryConflictException) return CARRY_CONFLICT
+            if (throwable is NoOpenDebtException) return NO_OPEN_DEBT
+            if (throwable is EditBlockedException) {
+                return if (throwable.reason == EditBlockReason.DEBT_CARRIED) EDIT_CARRIED else EDIT_SHEET_CHANGED
+            }
 
             val msg = throwable.message?.lowercase() ?: ""
 

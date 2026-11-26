@@ -420,10 +420,18 @@ class ReviewInboxViewModel(
             val other = otherId?.let { transactionRepository.getTransactionById(it) }
 
             if (other == null) {
-                transactionRepository.voidTransaction(target.id)
+                val voided = transactionRepository.voidTransaction(target.id)
+                if (voided is Result.Error) {
+                    showVoidFailure(voided)
+                    return@launch
+                }
             } else {
                 val (newer, older) = if (target.timestamp >= other.timestamp) Pair(target, other) else Pair(other, target)
-                transactionRepository.voidTransaction(newer.id)
+                val voided = transactionRepository.voidTransaction(newer.id)
+                if (voided is Result.Error) {
+                    showVoidFailure(voided)
+                    return@launch
+                }
                 val updatedOlder = older.copy(
                     isPossibleDuplicate = false,
                     duplicateOfId = null,
@@ -524,7 +532,10 @@ class ReviewInboxViewModel(
                 is Result.Error -> {
                     Diagnostics.record("ReviewInboxViewModel", "confirm_failed: ${SyncErrorKind.safeCode("review confirm", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
                     _uiState.update {
-                        it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("review confirm", result.throwable)))
+                        it.copy(
+                            errorMessage = EditBlockText.of(result.throwable)
+                                ?: UiText.dynamic(SyncErrorKind.formatUserMessage("review confirm", result.throwable))
+                        )
                     }
                 }
                 is Result.Loading -> {}
@@ -543,15 +554,22 @@ class ReviewInboxViewModel(
                         it.copy(userMessage = UiText.res(R.string.review_msg_transaction_voided))
                     }
                 }
-                is Result.Error -> {
-                    Diagnostics.record("ReviewInboxViewModel", "void_failed: ${SyncErrorKind.safeCode("review void", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
-                    _uiState.update {
-                        it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("review void", result.throwable)))
-                    }
-                }
+                is Result.Error -> showVoidFailure(result)
                 is Result.Loading -> {}
             }
         }
+    }
+
+    /** A refused void says why; any other failure keeps the general message. */
+    private fun showVoidFailure(result: Result.Error) {
+        Diagnostics.record("ReviewInboxViewModel", "void_failed: ${SyncErrorKind.safeCode("review void", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
+        val blocked = result.throwable as? com.financeautomation.domain.model.VoidBlockedException
+        val message = if (blocked != null) {
+            UiText.res(com.financeautomation.presentation.components.VoidDialogUtils.blockMessageResId(blocked.reason))
+        } else {
+            UiText.dynamic(SyncErrorKind.formatUserMessage("review void", result.throwable))
+        }
+        _uiState.update { it.copy(errorMessage = message) }
     }
 
     /**

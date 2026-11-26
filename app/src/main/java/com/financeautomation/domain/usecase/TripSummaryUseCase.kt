@@ -73,12 +73,15 @@ class TripSummaryUseCase {
         val copies = all.filter { isCarriedCopy(it) }
         val rows = all - copies.toSet()
 
-        /** What others still owe on [row]; a carried forward original is judged by its copy. */
-        fun stillOwed(row: Transaction): Double = when (row.status) {
-            TransactionStatus.PENDING -> row.owedToMe
-            TransactionStatus.CARRIED_FWD ->
-                copies.firstOrNull { copyTextOf(it).equals(CarriedCopies.stripPrefixes(row.merchant), ignoreCase = true) }?.owedToMe ?: row.owedToMe
-            else -> 0.0
+        val chains = CarriedCopies.chains(rows.filter { it.status == TransactionStatus.CARRIED_FWD }, copies)
+
+        /** What others still owe on [row]; a carried forward original is judged by where its debt is now. */
+        fun stillOwed(row: Transaction): Double {
+            val live = chains[row.id]?.lastOrNull() ?: row
+            return when (live.status) {
+                TransactionStatus.PENDING, TransactionStatus.CARRIED_FWD -> live.owedToMe
+                else -> 0.0
+            }
         }
 
         fun isRefund(cat: String): Boolean =
@@ -185,8 +188,6 @@ class TripSummaryUseCase {
     }
 
     private fun isCarriedCopy(t: Transaction): Boolean = CarriedCopies.isCopy(t)
-
-    private fun copyTextOf(t: Transaction): String = CarriedCopies.stripPrefixes(t.merchant)
 
     /** One summary per distinct trip name found on the rows, keyed by the lower case name. */
     fun byTrip(

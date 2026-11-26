@@ -53,13 +53,26 @@ open class TripsSheetSyncCoordinator(
         preferencesRepository.setPreference("$PREFIX_TRIP_BASE_HASH$id", hash, isDirty = false)
     }
 
+    private val dateFormats = listOf(
+        java.time.format.DateTimeFormatter.ISO_LOCAL_DATE,
+        java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.ENGLISH),
+        java.time.format.DateTimeFormatter.ofPattern("dd-MMM-yyyy", java.util.Locale.ENGLISH),
+        java.time.format.DateTimeFormatter.ofPattern("d-MMM-yyyy", java.util.Locale.ENGLISH),
+        java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy", java.util.Locale.ENGLISH),
+        java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy", java.util.Locale.ENGLISH)
+    )
+
     private fun parseDateToEpochDay(dateStr: String): Long? {
         if (dateStr.isBlank()) return null
         val serial = dateStr.toDoubleOrNull()?.toInt()
         if (serial != null && serial > 30000) {
             return runCatching { com.financeautomation.core.utils.DateSerialUtils.fromDateSerial(serial).toEpochDay() }.getOrNull()
         }
-        return runCatching { LocalDate.parse(dateStr).toEpochDay() }.getOrNull()
+        for (fmt in dateFormats) {
+            val parsed = runCatching { LocalDate.parse(dateStr, fmt).toEpochDay() }.getOrNull()
+            if (parsed != null) return parsed
+        }
+        return null
     }
 
     private fun computeTripHash(name: String, isActive: Boolean, startEpochDay: Long?, endEpochDay: Long?): String =
@@ -145,6 +158,12 @@ open class TripsSheetSyncCoordinator(
                     tripTagRepository.upsertTripTag(newTrip)
                     if (isStatusActive) {
                         tripTagRepository.setActiveTag(newId)
+                    } else {
+                        val activeTag = tripTagRepository.getActiveTagSync()
+                        if (activeTag?.name?.trim().equals(row.name.trim(), ignoreCase = true)) {
+                            tripTagRepository.setActiveTag(null)
+                            preferencesRepository.setActiveTrip(null)
+                        }
                     }
                     processedTripIds.add(newId)
                     roomModified = true
@@ -235,15 +254,19 @@ open class TripsSheetSyncCoordinator(
                                 val updatedTrip = existing.copy(
                                     name = row.name,
                                     isActive = isStatusActive,
-                                    startDateEpochDay = startEpochDay,
+                                    startDateEpochDay = startEpochDay ?: existing.startDateEpochDay,
                                     endDateEpochDay = resolvedEndEpochDay,
                                     updatedAt = nowMillis
                                 )
                                 tripTagRepository.upsertTripTag(updatedTrip)
                                 if (isStatusActive) {
                                     tripTagRepository.setActiveTag(updatedTrip.id)
-                                } else if (existing.isActive && !isStatusActive) {
-                                    tripTagRepository.setActiveTag(null)
+                                } else {
+                                    val activeTag = tripTagRepository.getActiveTagSync()
+                                    if (existing.isActive || activeTag?.id == updatedTrip.id || activeTag?.name?.trim().equals(updatedTrip.name.trim(), ignoreCase = true)) {
+                                        tripTagRepository.setActiveTag(null)
+                                        preferencesRepository.setActiveTrip(null)
+                                    }
                                 }
                                 roomModified = true
                             }
@@ -277,7 +300,7 @@ open class TripsSheetSyncCoordinator(
             val repaidMap = mutableMapOf<String, Double>()
             val topCategoryMap = mutableMapOf<String, String>()
 
-            if (transactionRepository != null) {
+            val effectiveTrips = if (transactionRepository != null) {
                 val transactions = transactionRepository.getTransactions().first()
                 val summaries = tripSummaryUseCase.byTrip(transactions)
                 for (trip in allTrips) {
@@ -287,11 +310,33 @@ open class TripsSheetSyncCoordinator(
                         topCategoryMap[trip.id] = summary.categoryBreakdown.firstOrNull()?.category.orEmpty()
                     }
                 }
+                allTrips.map { trip ->
+                    val tripTxs = transactions.filter {
+                        it.status != com.financeautomation.core.model.TransactionStatus.VOID &&
+                            it.tripTag.trim().equals(trip.name.trim(), ignoreCase = true)
+                    }
+                    // A start date that is set is the user's choice and stays, also when it is before the first
+                    // expense: a date off by one day cannot be told apart from a chosen one. Only a missing date
+                    // is filled.
+                    if (trip.startDateEpochDay == null && tripTxs.isNotEmpty()) {
+                        val firstExpenseDay = tripTxs.minOf {
+                            com.financeautomation.core.utils.DateSerialUtils.toLocalDate(it.timestamp).toEpochDay()
+                        }
+                        val filled = trip.copy(startDateEpochDay = firstExpenseDay)
+                        tripTagRepository.upsertTripTag(filled)
+                        filled
+                    } else {
+                        trip
+                    }
+                }
+            } else {
+                allTrips
             }
 
-            val res = googleSheetsClient.writeTripsTab(spreadsheetId, allTrips, repaidMap, topCategoryMap)
+            val res = googleSheetsClient.writeTripsTab(spreadsheetId, effectiveTrips, repaidMap, topCategoryMap)
             if (res is Result.Success) {
-                for (trip in allTrips) {
+                // From the rows as written, or the next pull would read its own write as a sheet edit
+                for (trip in effectiveTrips) {
                     saveBaseHash(trip.id, computeTripTagHash(trip))
                 }
             }

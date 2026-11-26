@@ -16,7 +16,27 @@ data class VoidInflowRequest(
 
 data class VoidExpenseRequest(
     val id: String,
-    val deleteSheetRow: Boolean = false
+    val deleteSheetRow: Boolean = false,
+    val linkedPayableId: String? = null,
+    val prior: VoidPriorState? = null
+)
+
+/**
+ * The local entry, and its local debt, as they were before a void was queued. The void is checked against these
+ * values when the sheet row no longer holds them, and they are put back if the void never reaches the sheet.
+ */
+data class VoidPriorState(
+    val totalAmount: Double,
+    val myShare: Double,
+    val owedToMe: Double,
+    val status: String,
+    val merchant: String,
+    val syncState: String,
+    val reviewState: String,
+    val debtId: String? = null,
+    val debtAmount: Double = 0.0,
+    val debtStatus: String = "",
+    val debtWhatFor: String = ""
 )
 
 data class LogCreditRequest(

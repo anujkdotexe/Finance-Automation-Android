@@ -6,7 +6,9 @@ package com.financeautomation.data.remote
  */
 data class LedgerWorkbookSnapshot(
     val spreadsheetId: String,
-    val monthTabs: List<MonthTabSnapshot>
+    val monthTabs: List<MonthTabSnapshot>,
+    /** False when the API did not answer every requested range, so a missing row may only be unread. */
+    val isComplete: Boolean = true
 )
 
 /**
