@@ -1073,33 +1073,31 @@ class TransactionRepositoryImpl(
                 )
             }
 
-            val sortedOpenPayables = openPayables.sortedWith(
-                compareBy<PayableEntity> {
-                    if (!explicitRef.isNullOrBlank() && it.uuid == explicitRef) 0 else 1
-                }.thenBy {
-                    it.dateIncurredSerial ?: 0
-                }.thenBy {
-                    it.timeSerial ?: 0.0
-                }
+            fun PayableEntity.toLedger() = com.financeautomation.domain.model.LedgerPayable(
+                tab = tabName,
+                row = sheetRowIndex ?: 0,
+                uuid = uuid,
+                dateIncurredSerial = dateIncurredSerial,
+                timeSerial = timeSerial,
+                paidBy = paidBy,
+                whatFor = whatFor,
+                amountOwed = amountIOwe,
+                dateRepaidSerial = dateRepaidSerial,
+                status = repaymentStatus
             )
+            // The debt the user picked comes first, then the order the sheet repays in
+            val sortedOpenPayables = openPayables
+                .sortedWith(Comparator { a, b ->
+                    com.financeautomation.domain.usecase.RepaymentOrder.payables.compare(a.toLedger(), b.toLedger())
+                })
+                .sortedBy { if (!explicitRef.isNullOrBlank() && it.uuid.equals(explicitRef.trim(), ignoreCase = true)) 0 else 1 }
 
             var remainingRepayment = amount
             val dateSerial = DateSerialUtils.toDateSerial(timestamp)
             for (openPayable in sortedOpenPayables) {
                 if (remainingRepayment <= com.financeautomation.domain.utils.Tolerances.MONEY_LEFT) break
                 val repRes = nettingUseCase.applyRepaymentToPayable(
-                    com.financeautomation.domain.model.LedgerPayable(
-                        tab = openPayable.tabName,
-                        row = openPayable.sheetRowIndex ?: 0,
-                        uuid = openPayable.uuid,
-                        dateIncurredSerial = openPayable.dateIncurredSerial,
-                        timeSerial = openPayable.timeSerial,
-                        paidBy = openPayable.paidBy,
-                        whatFor = openPayable.whatFor,
-                        amountOwed = openPayable.amountIOwe,
-                        dateRepaidSerial = openPayable.dateRepaidSerial,
-                        status = openPayable.repaymentStatus
-                    ),
+                    openPayable.toLedger(),
                     creditor,
                     remainingRepayment,
                     dateSerial
