@@ -148,6 +148,21 @@ class DashboardFormulaUpgradeTest {
     }
 
     @Test
+    fun aWorkbookWhoseConfigWasNeverPulledIsNotUpgraded() = runBlocking {
+        val pending = PreferencesRepository.keyConfigPullPending("test_sheet_id")
+        preferences[pending] = "1"
+
+        assertTrue(resolver.resolveForYear(2026) is Result.Success)
+
+        assertTrue("this device's own categories are not written", posts.isEmpty())
+        assertNull(preferences[version])
+
+        preferences[pending] = null
+        resolver.resolveForYear(2026)
+        assertEquals(1, posts.size)
+    }
+
+    @Test
     fun aFailedUpgradeRecordsNothingAndIsTriedAgainAfterAPause() = runBlocking {
         writeStatus = 500
 

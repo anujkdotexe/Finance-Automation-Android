@@ -120,6 +120,7 @@ open class WorkbookResolver(
      */
     private suspend fun upgradeDashboardFormulas(spreadsheetId: String) {
         val useCase = regenerateDashboardUseCase ?: return
+        if (preferencesRepository.getPreference(PreferencesRepository.keyConfigPullPending(spreadsheetId)) != null) return
         val now = clock.millis()
         val last = lastFormulaUpgradeAttempt[spreadsheetId]
         if (last != null && now - last < FORMULA_UPGRADE_RETRY_MS) return
@@ -329,6 +330,13 @@ open class WorkbookResolver(
                             return@withContext Result.Error(repairRes.exception)
                         }
 
+                        // Noted before the id is stored: if the pull below fails, later resolves use the stored id without
+                        // pulling, and this device's own categories must not be written over the workbook's
+                        if (syncConfigUseCase != null) {
+                            preferencesRepository.setPreference(
+                                PreferencesRepository.keyConfigPullPending(foundId), "1", isDirty = false
+                            )
+                        }
                         preferencesRepository.setSpreadsheetIdForYear(year, foundId)
                         preferencesRepository.setPreference(PreferencesRepository.keyLastWorkbookVerifiedDate(year), today, isDirty = false)
                         val currentYear = ZonedDateTime.now(clock).year
@@ -361,6 +369,9 @@ open class WorkbookResolver(
                                 is Result.Error -> {
                                     if (restoreRes.exception is EmptyOrMissingConfigTabException) {
                                         // Config tab is empty or absent: push local defaults once, then regenerate
+                                        preferencesRepository.setPreference(
+                                            PreferencesRepository.keyConfigPullPending(foundId), null, isDirty = false
+                                        )
                                         syncConfigUseCase.mirrorToCloud(foundId)
                                         try {
                                             subscriptionsSheetSyncCoordinatorProvider?.invoke()?.mirrorToSheet(foundId)
