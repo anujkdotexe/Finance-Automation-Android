@@ -1053,6 +1053,19 @@ class TransactionRepositoryImpl(
             if (isFuture(transaction.timestamp, nowMillis = clock())) return@withSyncLock Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
+            val existing = tDao.getById(transaction.id)
+            if (existing != null && existing.status.equals("Carried Fwd", ignoreCase = true)) {
+                val amountChanged = kotlin.math.abs(transaction.totalAmount - existing.totalAmount) >= 0.01
+                val splitChanged = kotlin.math.abs(transaction.myShare - existing.myShare) >= 0.01
+                val companionsChanged = !transaction.companions.trim().equals(existing.companions.trim(), ignoreCase = true)
+                val dateChanged = transaction.dateSerial != existing.dateSerial
+                val timeChanged = existing.timeSerial != null && transaction.timeSerial != null &&
+                    kotlin.math.abs(transaction.timeSerial!! - existing.timeSerial!!) >= com.financeautomation.domain.utils.AccountingUtils.LEGACY_TIME_SERIAL_TOLERANCE
+                val descChanged = !transaction.merchant.trim().equals(existing.merchant.trim(), ignoreCase = true)
+                if (amountChanged || splitChanged || companionsChanged || dateChanged || timeChanged || descChanged) {
+                    return@withSyncLock Result.Error("Cannot change amount, split, date or description because this debt was carried forward.")
+                }
+            }
             val entity = TransactionEntity.fromDomain(transaction)
             runInDbTransaction {
                 tDao.update(entity)
@@ -2555,10 +2568,109 @@ class TransactionRepositoryImpl(
                             continue
                         }
 
-                        val payload = SheetPayloadMapper.mapTransactionToTable1(txn)
+                        // Read the existing sheet row before writing to avoid reopening carried or repaid debts
+                        val readRange = "'$updateTab'!A$targetRow:L$targetRow"
+                        val sheetRowRes = googleSheetsClient.getRangeValuesRaw(spreadsheetId, readRange)
+                        if (sheetRowRes is Result.Error) {
+                            if (failItem(item, txn, sheetRowRes.exception, st)) break else continue
+                        }
+                        val sheetRowValues = (sheetRowRes as Result.Success).data.firstOrNull() ?: emptyList()
+
+                        val sheetDateSerial = sheetRowValues.getOrNull(0)?.toString()?.trim()?.toIntOrNull()
+                        val sheetTimeSerial = sheetRowValues.getOrNull(1)?.toString()?.trim()?.toDoubleOrNull()
+                        val sheetMerchant = sheetRowValues.getOrNull(3)?.toString()?.trim().orEmpty()
+                        val sheetTotal = sheetRowValues.getOrNull(6)?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
+                        val sheetCompanions = sheetRowValues.getOrNull(7)?.toString()?.trim().orEmpty()
+                        val sheetMyShare = sheetRowValues.getOrNull(8)?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
+                        val sheetOwed = sheetRowValues.getOrNull(9)?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
+                        val sheetStatus = sheetRowValues.getOrNull(10)?.toString()?.trim().orEmpty()
+
+                        val isCarried = sheetStatus.equals("Carried Fwd", ignoreCase = true)
+                        val amountChanged = kotlin.math.abs(txn.totalAmount - sheetTotal) >= 0.01
+                        val splitChanged = kotlin.math.abs(txn.myShare - sheetMyShare) >= 0.01
+                        val companionsChanged = !txn.companions.trim().equals(sheetCompanions, ignoreCase = true)
+                        val dateChanged = sheetDateSerial != null && txn.dateSerial != sheetDateSerial
+                        val timeChanged = sheetTimeSerial != null && txn.timeSerial != null &&
+                            kotlin.math.abs(txn.timeSerial!! - sheetTimeSerial) >= com.financeautomation.domain.utils.AccountingUtils.LEGACY_TIME_SERIAL_TOLERANCE
+                        val descChanged = !txn.merchant.trim().equals(sheetMerchant, ignoreCase = true)
+
+                        if (isCarried && (amountChanged || splitChanged || companionsChanged || dateChanged || timeChanged || descChanged)) {
+                            val reason = "Cannot change amount, split, date or description because this debt was carried forward."
+                            markPermanentFailure(item, IllegalStateException(reason), reason)
+                            val currentEntity = transactionDao.getById(txn.id)
+                            if (currentEntity != null) {
+                                transactionDao.update(
+                                    currentEntity.copy(
+                                        status = TransactionStatus.CARRIED_FWD.value,
+                                        owedToMe = sheetOwed
+                                    )
+                                )
+                            }
+                            continue
+                        }
+
+                        // Never set Carried Fwd, a repaid status or a reduced owed amount back from older local data
+                        val isSheetRepaid = sheetStatus.equals("Settled", ignoreCase = true) ||
+                            sheetStatus.equals("Void", ignoreCase = true) ||
+                            sheetStatus.equals("Partial", ignoreCase = true)
+
+                        val effectiveStatus = when {
+                            isCarried -> sheetStatus
+                            isSheetRepaid -> sheetStatus
+                            else -> txn.status.value
+                        }
+
+                        val effectiveOwed = when {
+                            isCarried -> sheetOwed
+                            isSheetRepaid -> sheetOwed
+                            sheetOwed < txn.owedToMe -> sheetOwed
+                            else -> txn.owedToMe
+                        }
+
+                        val effectiveTotal = if (isCarried) sheetTotal else txn.totalAmount
+                        val effectiveCompanions = if (isCarried) sheetCompanions else txn.companions
+                        val effectiveMyShare = if (isCarried) sheetMyShare else txn.myShare
+                        val effectiveDate = if (isCarried && sheetDateSerial != null) sheetDateSerial else txn.dateSerial
+                        val effectiveTime = if (isCarried && sheetTimeSerial != null) sheetTimeSerial else txn.timeSerial
+                        val effectiveDesc = if (isCarried) sheetMerchant else txn.merchant
+
+                        val safeNote = if (txn.note.trimStart().startsWith("=")) "'${txn.note}" else txn.note
+                        val payload = listOf(
+                            effectiveDate,
+                            effectiveTime,
+                            txn.account,
+                            effectiveDesc,
+                            txn.tripTag,
+                            com.financeautomation.core.constants.CategoryConstants.normalizeCategory(txn.category),
+                            effectiveTotal,
+                            effectiveCompanions,
+                            effectiveMyShare,
+                            effectiveOwed,
+                            effectiveStatus,
+                            safeNote
+                        )
+
                         val updateResult = googleSheetsClient.updateRow(spreadsheetId, updateTab, targetRow, payload)
                         if (updateResult is Result.Success) {
-                            transactionDao.updateSyncState(txn.id, SyncState.SYNCED.name, targetRow)
+                            val currentEntity = transactionDao.getById(txn.id)
+                            if (currentEntity != null) {
+                                val targetStatusVal = when {
+                                    effectiveStatus.equals("Carried Fwd", ignoreCase = true) -> TransactionStatus.CARRIED_FWD.value
+                                    effectiveStatus.equals("Settled", ignoreCase = true) -> TransactionStatus.SETTLED.value
+                                    effectiveStatus.equals("Void", ignoreCase = true) -> TransactionStatus.VOID.value
+                                    else -> currentEntity.status
+                                }
+                                transactionDao.update(
+                                    currentEntity.copy(
+                                        status = targetStatusVal,
+                                        owedToMe = effectiveOwed,
+                                        sheetRowIndex = targetRow,
+                                        syncState = SyncState.SYNCED.name
+                                    )
+                                )
+                            } else {
+                                transactionDao.updateSyncState(txn.id, SyncState.SYNCED.name, targetRow)
+                            }
                             syncQueueDao.delete(item)
                             syncedCount++
                         } else {

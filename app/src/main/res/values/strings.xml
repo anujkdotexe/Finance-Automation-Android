@@ -1119,6 +1119,7 @@
     <string name="void_blocked_debt_offset">Cannot void this expense because the linked debt was offset against what your friend owed.</string>
     <string name="void_blocked_ambiguous">Cannot void this expense because a debt that may belong to it cannot be identified safely.</string>
     <string name="void_blocked_debt_carried">Cannot void this expense because its debt was carried forward and the carried entry cannot be matched without doubt.</string>
+    <string name="edit_blocked_debt_carried">Cannot change amount, split, date or description because this debt was carried forward.</string>
     <string name="void_blocked_sheet_error">Cannot void this expense because the sheet could not be verified. Please retry.</string>
     <string name="confirm_sign_out_title">Sign out?</string>
     <string name="confirm_sign_out_message">Are you sure you want to sign out? You will need to link your Google account again to sync.</string>
