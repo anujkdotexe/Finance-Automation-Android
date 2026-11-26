@@ -42,6 +42,12 @@ class FakeSheetApplier(
 
     var forceFindRowError: Boolean = false
 
+    /** When true, cell formatting requests fail and change nothing. */
+    var failFormatting: Boolean = false
+
+    /** How many formatting requests failed because of [failFormatting]. */
+    var failedFormattings: Int = 0
+
     /** When set, every value write and clear answers with this HTTP status and changes nothing. */
     var forceValueWriteStatus: Int? = null
 
@@ -182,6 +188,11 @@ class FakeSheetApplier(
 
         if (forceFindRowError && method == "GET" && (url.contains("AF") || url.contains("AE"))) {
             return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
+        }
+
+        if (failFormatting && method == "POST" && body.contains("\"repeatCell\"")) {
+            failedFormattings++
+            return 500 to """{"error":{"code":500,"message":"Simulated formatting error"}}"""
         }
 
         if (writesUntilFault > 0 && method == "POST" && url.contains("values:batchUpdate")) {

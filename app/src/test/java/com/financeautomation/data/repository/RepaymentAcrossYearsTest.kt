@@ -236,6 +236,27 @@ class RepaymentAcrossYearsTest {
     }
 
     @Test
+    fun aSavedDecemberPlanWhoseDebtThenMovedToTheNewYearWritesNothing() = runBlocking {
+        old.seedPayable("Dec26", 4, "pay_dec", "Tickets", 500.0, "Pending")
+        localDebt("pay_dec", "Tickets", 500.0, "Dec26")
+        repo.logRepayment("Riya", 200.0, null, paid)
+        old.failValueWrite(1, applied = false)
+        sync()
+        assertTrue(old.faultWasHit())
+        // The new year's carry then runs elsewhere
+        old.setCell("Dec26", 4, column("AC"), "Carried Fwd")
+        new.seedPayable("Jan27", 4, "pay_jan", "[Carried from Dec26] Tickets", 500.0, "Pending")
+        val oldBefore = old.contents()
+        val newBefore = new.contents()
+
+        sync()
+
+        assertEquals(oldBefore, old.contents())
+        assertEquals(newBefore, new.contents())
+        assertEquals(SyncErrorKind.PARTLY_SENT.name, queue().single().lastErrorKind)
+    }
+
+    @Test
     fun anEmptyPlanSavedByAnOlderBuildIsPlannedAgain() = runBlocking {
         old.seedPayable("Dec26", 4, "pay_dec", "Tickets", 500.0, "Pending")
         localDebt("pay_dec", "Tickets", 500.0, "Dec26")
