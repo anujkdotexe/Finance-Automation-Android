@@ -261,7 +261,7 @@ fun ReviewInboxContent(
                                 itemDetail = state.failedQueueDetails[queueItem.id],
                                 onRetry = { onRetryQueueItem(queueItem.id) },
                                 onDiscard = {
-                                    if (queueItem.planJson != null) {
+                                    if (com.financeautomation.presentation.viewmodel.DiscardWarning.isNeeded(queueItem)) {
                                         partlySentItemToDiscard = queueItem
                                     } else {
                                         onDiscardQueueItem(queueItem.id)

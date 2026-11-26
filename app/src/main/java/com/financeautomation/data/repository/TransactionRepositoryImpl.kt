@@ -1804,6 +1804,7 @@ class TransactionRepositoryImpl(
                 if (resolveTransactionDao().getById(item.transactionId) != null || resolveInflowDao()?.getById(item.transactionId) != null) {
                     discardLocalOnly(item.transactionId, voidIt = item.operationType == SyncQueueEntity.OP_INSERT)
                 }
+                if (item.operationType == SyncQueueEntity.OP_LOG_PAYABLE) discardUndeliveredFriendPaid(item)
                 Result.Success(Unit)
             } catch (e: CancellationException) {
                 throw e
@@ -1811,6 +1812,18 @@ class TransactionRepositoryImpl(
                 Result.Error(e)
             }
         }
+    }
+
+    /**
+     * A discarded friend paid entry would leave its expense waiting forever, counted but never sent, and its debt open.
+     * Both are taken out here, like a discarded expense. A row that did reach the sheet comes back with the next read.
+     */
+    private suspend fun discardUndeliveredFriendPaid(item: SyncQueueEntity) {
+        val expenseId = AccountingRequestJsonAdapter.payableRequestFromJson(item.payloadJson).transactionId ?: return
+        val expense = resolveTransactionDao().getById(expenseId) ?: return
+        if (expense.sheetRowIndex != null) return
+        discardLocalOnly(expenseId, voidIt = true)
+        resolvePayableDao()?.deleteByUuid(item.transactionId)
     }
 
     override suspend fun discardLocalOnly(id: String, voidIt: Boolean): Result<Unit> = withContext(ioDispatcher) {

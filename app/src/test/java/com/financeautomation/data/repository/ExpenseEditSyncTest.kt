@@ -15,6 +15,7 @@ import com.financeautomation.domain.model.EditBlockedException
 import com.financeautomation.domain.model.Transaction
 import com.financeautomation.domain.repository.PreferencesRepository
 import com.financeautomation.money.FakeSheetApplier
+import com.financeautomation.presentation.viewmodel.DiscardWarning
 import com.financeautomation.testutil.InMemoryInflowDao
 import com.financeautomation.testutil.InMemoryLineageDao
 import com.financeautomation.testutil.InMemoryPayableDao
@@ -42,6 +43,7 @@ class ExpenseEditSyncTest {
     private val sheet = FakeSheetApplier(mutableListOf("Nov26", "Config", "Subscriptions", "Trips"))
     private val tDao = InMemoryTransactionDao()
     private val qDao = InMemoryQueueDao()
+    private val pDao = InMemoryPayableDao()
     private val repo: TransactionRepositoryImpl
 
     init {
@@ -65,7 +67,6 @@ class ExpenseEditSyncTest {
 
         val sheets = sheet.client()
         val lDao = InMemoryLineageDao()
-        val pDao = InMemoryPayableDao()
         repo = TransactionRepositoryImpl(
             transactionDao = tDao,
             syncQueueDao = qDao,
@@ -415,6 +416,33 @@ class ExpenseEditSyncTest {
 
         assertEquals(before, cells())
         assertEquals(SyncQueueEntity.STATUS_PENDING, queue().single().status)
+    }
+
+    // ---- Discarding
+
+    @Test
+    fun discardingAFriendPaidEntryTakesOutItsExpenseAndDebt() = runBlocking {
+        val payId = (repo.logFriendPaid("Riya", 500.0, "Dinner", then) as Result.Success).data
+        val expenseId = tDao.rows.keys.single()
+
+        repo.discardQueueItem(queue().single().id)
+
+        assertEquals("Void", tDao.rows.getValue(expenseId).status)
+        assertEquals(null, pDao.getByUuid(payId))
+        assertDelivered()
+    }
+
+    @Test
+    fun discardingAnEntryThatMayBePartlyWrittenIsConfirmedFirst() {
+        fun item(type: String, planJson: String? = null) =
+            SyncQueueEntity(transactionId = "x", operationType = type, payloadJson = "x", planJson = planJson)
+        val empty = """{"edits":[],"appends":[],"settled":[]}"""
+        val written = """{"edits":[{"tab":"Nov26","row":4,"column":"J","value":1.0}],"appends":[]}"""
+
+        assertTrue(DiscardWarning.isNeeded(item(SyncQueueEntity.OP_CARRY_FORWARD)))
+        assertTrue(DiscardWarning.isNeeded(item(SyncQueueEntity.OP_LOG_REPAYMENT, written)))
+        assertEquals(false, DiscardWarning.isNeeded(item(SyncQueueEntity.OP_LOG_REPAYMENT, empty)))
+        assertEquals(false, DiscardWarning.isNeeded(item(SyncQueueEntity.OP_UPDATE)))
     }
 
     // ---- Other things that queue an update
