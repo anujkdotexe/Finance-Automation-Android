@@ -69,6 +69,7 @@ open class AccountingSyncExecutor(
     private val yearCloseUseCase: YearCloseUseCase = YearCloseUseCase(),
     private val voidTransactionUseCase: VoidTransactionUseCase = VoidTransactionUseCase(),
     private val previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null,
+    private val nextWorkbookIdProvider: (suspend (year: Int) -> String?)? = null,
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
     constructor(
@@ -80,7 +81,9 @@ open class AccountingSyncExecutor(
         repaymentWaterfallUseCase: RepaymentWaterfallUseCase = RepaymentWaterfallUseCase(),
         carryForwardUseCase: CarryForwardUseCase = CarryForwardUseCase(),
         nettingUseCase: NettingUseCase = NettingUseCase(),
-        yearCloseUseCase: YearCloseUseCase = YearCloseUseCase()
+        yearCloseUseCase: YearCloseUseCase = YearCloseUseCase(),
+        previousWorkbookIdProvider: (suspend (year: Int) -> String?)? = null,
+        nextWorkbookIdProvider: (suspend (year: Int) -> String?)? = null
     ) : this(
         googleSheetsClient = googleSheetsClient,
         googleDriveClient = googleDriveClient,
@@ -100,7 +103,9 @@ open class AccountingSyncExecutor(
         repaymentWaterfallUseCase = repaymentWaterfallUseCase,
         carryForwardUseCase = carryForwardUseCase,
         nettingUseCase = nettingUseCase,
-        yearCloseUseCase = yearCloseUseCase
+        yearCloseUseCase = yearCloseUseCase,
+        previousWorkbookIdProvider = previousWorkbookIdProvider,
+        nextWorkbookIdProvider = nextWorkbookIdProvider
     )
 
     private suspend fun resolveSyncQueueDao(): SyncQueueDao =
@@ -161,6 +166,10 @@ open class AccountingSyncExecutor(
 
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
             resolveSyncQueueDao().updatePlanJson(item.id, planJson)
+        }
+
+        if (plan.edits.isEmpty() && plan.appends.isEmpty()) {
+            return Result.Error(IllegalStateException("Settlement plan has no edits or appends to apply"))
         }
 
         return if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
@@ -351,6 +360,10 @@ open class AccountingSyncExecutor(
             )
         }
 
+        if (plan.edits.isEmpty() && plan.appends.isEmpty()) {
+            return Result.Error(IllegalStateException("Payable plan has no edits or appends to apply"))
+        }
+
         val applyResult = if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
         else applyAccountingPlan(spreadsheetId, plan)
         return when (applyResult) {
@@ -366,8 +379,18 @@ open class AccountingSyncExecutor(
         tabName: String
     ): Result<Unit> {
         val plan: AccountingPlan
+        var targetSpreadsheetId = spreadsheetId
         if (item.planJson != null) {
             plan = AccountingPlanJsonAdapter.fromJson(item.planJson)
+            if (plan.edits.isEmpty() && plan.appends.isEmpty()) {
+                return Result.Error(IllegalStateException("Saved repayment plan has no edits or appends to apply"))
+            }
+            val planTab = plan.edits.firstOrNull()?.tab ?: plan.appends.firstOrNull()?.tab
+            val planYear = planTab?.let { parseMonthKey(it)?.let { k -> k / 12 } }
+            val opYear = parseMonthKey(tabName)?.let { it / 12 }
+            if (planYear != null && opYear != null && planYear > opYear) {
+                targetSpreadsheetId = nextWorkbookIdProvider?.invoke(planYear) ?: spreadsheetId
+            }
         } else {
             val req = AccountingRequestJsonAdapter.repaymentRequestFromJson(item.payloadJson)
             val dateSerial = DateSerialUtils.toDateSerial(req.timestamp)
@@ -384,7 +407,7 @@ open class AccountingSyncExecutor(
                 carryForwardUseCase.resolveCarriedPayable(carriedRow, allPayables, lineageRecords)
             }
 
-            plan = repaymentWaterfallUseCase(
+            var resolvedPlan = repaymentWaterfallUseCase(
                 creditor = req.creditor,
                 amount = req.amount,
                 explicitRef = req.explicitRef,
@@ -397,12 +420,50 @@ open class AccountingSyncExecutor(
                 note = req.note
             ).let { StoredPlanReplay.withExpectedValues(it, emptyList(), allPayables) }
 
+            if (resolvedPlan.edits.isEmpty() && resolvedPlan.appends.isEmpty()) {
+                val opYear = parseMonthKey(tabName)?.let { it / 12 } ?: DateSerialUtils.fromDateSerial(dateSerial).year
+                val nextYear = opYear + 1
+                val nextSpreadsheetId = nextWorkbookIdProvider?.invoke(nextYear)
+                if (!nextSpreadsheetId.isNullOrBlank()) {
+                    val nextSnapRes = googleSheetsClient.readLedgerSnapshot(nextSpreadsheetId)
+                    if (nextSnapRes is Result.Success) {
+                        val nextPayables = mapPayablesFromSnapshot(nextSnapRes.data)
+                        val nextResolveCarriedFn: (LedgerPayable) -> LedgerPayable? = { carriedRow ->
+                            carryForwardUseCase.resolveCarriedPayable(carriedRow, nextPayables, lineageRecords)
+                        }
+                        val nextTargetTab = nextSnapRes.data.monthTabs.firstOrNull()?.tabName ?: "Jan${nextYear % 100}"
+                        val nextPlan = repaymentWaterfallUseCase(
+                            creditor = req.creditor,
+                            amount = req.amount,
+                            explicitRef = req.explicitRef,
+                            dateSerial = dateSerial,
+                            timeSerial = timeSerial,
+                            tabName = nextTargetTab,
+                            allPayables = nextPayables,
+                            resolveCarriedFn = nextResolveCarriedFn,
+                            account = req.account,
+                            note = req.note
+                        ).let { StoredPlanReplay.withExpectedValues(it, emptyList(), nextPayables) }
+
+                        if (nextPlan.edits.isNotEmpty() || nextPlan.appends.isNotEmpty()) {
+                            resolvedPlan = nextPlan
+                            targetSpreadsheetId = nextSpreadsheetId
+                        }
+                    }
+                }
+            }
+
+            if (resolvedPlan.edits.isEmpty() && resolvedPlan.appends.isEmpty()) {
+                return Result.Error(IllegalStateException("No open debt found for ${req.creditor}"))
+            }
+
+            plan = resolvedPlan
             val planJson = AccountingPlanJsonAdapter.toJson(plan)
             resolveSyncQueueDao().updatePlanJson(item.id, planJson)
         }
 
-        return if (item.planJson != null) replayStoredPlan(item.id, spreadsheetId, plan)
-        else applyAccountingPlan(spreadsheetId, plan)
+        return if (item.planJson != null) replayStoredPlan(item.id, targetSpreadsheetId, plan)
+        else applyAccountingPlan(targetSpreadsheetId, plan)
     }
 
     /**
@@ -824,6 +885,9 @@ open class AccountingSyncExecutor(
         plan: AccountingPlan,
         sourceSpreadsheetId: String? = null
     ): Result<Unit> {
+        if (plan.edits.isEmpty() && plan.appends.isEmpty()) {
+            return Result.Error(IllegalStateException("Accounting plan has no edits or appends to apply"))
+        }
         // Appends first
         for (append in plan.appends) {
             val (colUuid, colUuidV1) = when (append.table) {
