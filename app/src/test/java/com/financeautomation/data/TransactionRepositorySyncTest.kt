@@ -327,6 +327,13 @@ class TransactionRepositorySyncTest {
             }
         }
 
+        /** Answers the read of the cells A to L of one expense row. */
+        fun serveRow(row: Int, cells: String) {
+            customGetHandler = { url ->
+                if (url.contains("A$row%3AL$row") || url.contains("A$row:L$row")) """{"values":[$cells]}""" else null
+            }
+        }
+
         val fakeTokenProvider = object : TokenProvider {
             override fun getAccessToken(): String = "test_token"
             override fun refreshAccessToken(): String = "test_token"
@@ -2101,6 +2108,7 @@ class TransactionRepositorySyncTest {
         val txnId = "txn_delivered_32col_1234567890abcdef"
         // Row 5 in 32-column tab: UUID is at AD5
         mock.writtenUuids["AD5"] = txnId
+        mock.serveRow(5, """[46338,0.598,"SBI","Dinner Original","","Food & Drink",500,"Personal",500,0,"Personal","Original Note"]""")
 
         val deliveredTxn = Transaction(
             id = txnId,
@@ -2176,6 +2184,7 @@ class TransactionRepositorySyncTest {
         val txnId = "txn_delivered_31col_1234567890abcdef"
         // Row 5 in legacy 31-column tab: UUID is at AC5 (not AD5)
         mock.writtenUuids["AC5"] = txnId
+        mock.serveRow(5, """[46338,0.598,"SBI","Coffee Original","","Food & Drink",100,"Personal",100,0,"Personal","Old Note"]""")
 
         val deliveredTxn = Transaction(
             id = txnId,

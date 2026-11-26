@@ -199,7 +199,8 @@ object QuickLogTransactionHelper {
         }
         return when (val res = transactionRepository.updateTransaction(updated)) {
             is Result.Success -> Result.Success(Unit)
-            is Result.Error -> Result.Error(res.message ?: "Failed to update")
+            // Passed on as it is: a refused edit is told apart by its type
+            is Result.Error -> res
             is Result.Loading -> Result.Loading
         }
     }

@@ -1,6 +1,8 @@
 package com.financeautomation.core.utils
 
 import com.financeautomation.data.remote.GoogleSheetsApiException
+import com.financeautomation.domain.model.EditBlockReason
+import com.financeautomation.domain.model.EditBlockedException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -22,6 +24,8 @@ enum class SyncErrorKind {
     SHEET_CHANGED,
     PARTLY_SENT,
     CARRY_CONFLICT,
+    EDIT_CARRIED,
+    EDIT_SHEET_CHANGED,
     UNKNOWN;
 
     fun plainMessage(): String = when (this) {
@@ -34,6 +38,8 @@ enum class SyncErrorKind {
             "then discard this item and enter only what is missing."
         CARRY_CONFLICT -> "A carried debt does not match its old row. In the sheet, correct the copy or mark the old " +
             "row Carried Fwd, then retry."
+        EDIT_CARRIED -> "Edit not saved: this debt was carried forward. The phone shows the sheet's values."
+        EDIT_SHEET_CHANGED -> "Edit not saved: this entry changed in the sheet. The phone shows the sheet's values."
         UNKNOWN -> "Something went wrong. Tap Details."
     }
 
@@ -53,6 +59,9 @@ enum class SyncErrorKind {
             if (throwable == null) return UNKNOWN
             if (throwable is UnprovableReplayException) return PARTLY_SENT
             if (throwable is CarryConflictException) return CARRY_CONFLICT
+            if (throwable is EditBlockedException) {
+                return if (throwable.reason == EditBlockReason.DEBT_CARRIED) EDIT_CARRIED else EDIT_SHEET_CHANGED
+            }
 
             val msg = throwable.message?.lowercase() ?: ""
 

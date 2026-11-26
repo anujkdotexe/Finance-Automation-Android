@@ -402,9 +402,14 @@ fun FailedQueueItemCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            val errorText = try {
-                item.lastErrorKind?.let { com.financeautomation.core.utils.SyncErrorKind.valueOf(it).plainMessage() }
-            } catch (_: Exception) { null } ?: item.lastErrorDetail ?: item.lastErrorKind
+            val editBlockedRes = com.financeautomation.presentation.viewmodel.EditBlockText.resIdFor(item.lastErrorKind)
+            val errorText = if (editBlockedRes != null) {
+                stringResource(editBlockedRes)
+            } else {
+                try {
+                    item.lastErrorKind?.let { com.financeautomation.core.utils.SyncErrorKind.valueOf(it).plainMessage() }
+                } catch (_: Exception) { null } ?: item.lastErrorDetail ?: item.lastErrorKind
+            }
             if (!errorText.isNullOrBlank()) {
                 Text(
                     text = "Reason: $errorText",

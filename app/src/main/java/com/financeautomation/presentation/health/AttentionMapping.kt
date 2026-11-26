@@ -118,7 +118,8 @@ fun issueFor(kind: SyncErrorKind): AttentionIssue = when (kind) {
     SyncErrorKind.RATE_LIMITED -> AttentionIssue.RATE_LIMITED
     SyncErrorKind.SHEET_CHANGED -> AttentionIssue.WORKBOOK
     SyncErrorKind.NO_NETWORK, SyncErrorKind.SERVER_BUSY, SyncErrorKind.UNKNOWN,
-    SyncErrorKind.PARTLY_SENT, SyncErrorKind.CARRY_CONFLICT -> AttentionIssue.SYNC_FAILING
+    SyncErrorKind.PARTLY_SENT, SyncErrorKind.CARRY_CONFLICT,
+    SyncErrorKind.EDIT_CARRIED, SyncErrorKind.EDIT_SHEET_CHANGED -> AttentionIssue.SYNC_FAILING
 }
 
 /** Continue is offered only when every required issue is OK. */

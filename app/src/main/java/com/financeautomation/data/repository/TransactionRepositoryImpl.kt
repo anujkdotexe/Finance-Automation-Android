@@ -21,6 +21,12 @@ import androidx.room.withTransaction
 import com.financeautomation.data.local.entity.InflowEntity
 import com.financeautomation.data.local.entity.PayableEntity
 import com.financeautomation.data.local.entity.SyncQueueEntity
+import com.financeautomation.data.remote.PendingExpenseEditJsonAdapter
+import com.financeautomation.domain.model.EditBlockReason
+import com.financeautomation.domain.model.EditBlockedException
+import com.financeautomation.domain.usecase.ExpenseRow
+import com.financeautomation.domain.usecase.ExpenseUpdateMerge
+import com.financeautomation.domain.usecase.PendingExpenseEdit
 import com.financeautomation.data.local.entity.TransactionEntity
 import com.financeautomation.data.remote.AccountingPlanJsonAdapter
 import com.financeautomation.data.remote.AccountingRequestJsonAdapter
@@ -1053,36 +1059,17 @@ class TransactionRepositoryImpl(
             if (isFuture(transaction.timestamp, nowMillis = clock())) return@withSyncLock Result.Error(TimeGuardConstants.FUTURE_DATE_MESSAGE)
             val tDao = resolveTransactionDao()
             val qDao = resolveSyncQueueDao()
-            val existing = runCatching { tDao.getById(transaction.id) }.getOrNull()
-            if (existing != null && existing.status.equals("Carried Fwd", ignoreCase = true)) {
-                val amountChanged = kotlin.math.abs(transaction.totalAmount - existing.totalAmount) >= 0.01
-                val splitChanged = kotlin.math.abs(transaction.myShare - existing.myShare) >= 0.01
-                val companionsChanged = !transaction.companions.trim().equals(existing.companions.trim(), ignoreCase = true)
-                val dateChanged = transaction.dateSerial != existing.dateSerial
-                val timeChanged = existing.timeSerial != null && transaction.timeSerial != null &&
-                    kotlin.math.abs(transaction.timeSerial!! - existing.timeSerial!!) >= com.financeautomation.domain.utils.AccountingUtils.LEGACY_TIME_SERIAL_TOLERANCE
-                val descChanged = !transaction.merchant.trim().equals(existing.merchant.trim(), ignoreCase = true)
-                if (amountChanged || splitChanged || companionsChanged || dateChanged || timeChanged || descChanged) {
-                    return@withSyncLock Result.Error("Cannot change amount, split, date or description because this debt was carried forward.")
+            val existing = tDao.getById(transaction.id)
+            val entity = TransactionEntity.fromDomain(transaction)
+            if (existing != null && existing.status.equals(TransactionStatus.CARRIED_FWD.value, ignoreCase = true)) {
+                val changed = ExpenseUpdateMerge.changedColumns(ExpenseRow.of(existing.toDomain()), ExpenseRow.of(transaction))
+                if (changed.any { it in ExpenseUpdateMerge.MONEY_COLUMNS || it in ExpenseUpdateMerge.MATCHING_COLUMNS }) {
+                    return@withSyncLock Result.Error(EditBlockedException(EditBlockReason.DEBT_CARRIED))
                 }
             }
-            val entity = TransactionEntity.fromDomain(transaction)
             runInDbTransaction {
                 tDao.update(entity)
-
-                // The insert reads the row when it runs, so a change made before it ran needs no second item
-                val insertWaiting = qDao.getAllQueueFlow().first().any {
-                    it.transactionId == transaction.id && it.operationType == SyncQueueEntity.OP_INSERT && it.planJson == null
-                }
-                if (!insertWaiting) {
-                    qDao.insert(
-                        SyncQueueEntity(
-                            transactionId = transaction.id,
-                            operationType = SyncQueueEntity.OP_UPDATE,
-                            payloadJson = transaction.id
-                        )
-                    )
-                }
+                queueExpenseUpdate(qDao, transaction.id, existing, entity)
             }
             requestSync()
             Result.Success(Unit)
@@ -1926,17 +1913,9 @@ class TransactionRepositoryImpl(
             val syncedTxns = matching.filter { it.sheetRowIndex != null && it.sheetRowIndex >= 4 }
             if (syncedTxns.isNotEmpty()) {
                 val qDao = resolveSyncQueueDao()
-                val waiting = qDao.getAllQueueFlow().first().map { it.transactionId to it.operationType }.toSet()
                 for (txn in syncedTxns) {
-                    if (!waiting.contains(txn.id to SyncQueueEntity.OP_INSERT) && !waiting.contains(txn.id to SyncQueueEntity.OP_UPDATE)) {
-                        qDao.insert(
-                            SyncQueueEntity(
-                                transactionId = txn.id,
-                                operationType = SyncQueueEntity.OP_UPDATE,
-                                payloadJson = txn.id
-                            )
-                        )
-                    }
+                    val after = dao.getById(txn.id) ?: continue
+                    queueExpenseUpdate(qDao, txn.id, txn, after)
                 }
                 requestSync()
             }
@@ -1954,17 +1933,9 @@ class TransactionRepositoryImpl(
             val syncedTxns = matching.filter { it.sheetRowIndex != null && it.sheetRowIndex >= 4 }
             if (syncedTxns.isNotEmpty()) {
                 val qDao = resolveSyncQueueDao()
-                val waiting = qDao.getAllQueueFlow().first().map { it.transactionId to it.operationType }.toSet()
                 for (txn in syncedTxns) {
-                    if (!waiting.contains(txn.id to SyncQueueEntity.OP_INSERT) && !waiting.contains(txn.id to SyncQueueEntity.OP_UPDATE)) {
-                        qDao.insert(
-                            SyncQueueEntity(
-                                transactionId = txn.id,
-                                operationType = SyncQueueEntity.OP_UPDATE,
-                                payloadJson = txn.id
-                            )
-                        )
-                    }
+                    val after = dao.getById(txn.id) ?: continue
+                    queueExpenseUpdate(qDao, txn.id, txn, after)
                 }
                 requestSync()
             }
@@ -2568,114 +2539,16 @@ class TransactionRepositoryImpl(
                             continue
                         }
 
-                        // Read the existing sheet row before writing to avoid reopening carried or repaid debts
-                        val readRange = "'$updateTab'!A$targetRow:L$targetRow"
-                        val sheetRowRes = googleSheetsClient.getRangeValuesRaw(spreadsheetId, readRange)
-                        if (sheetRowRes is Result.Error) {
-                            if (failItem(item, txn, sheetRowRes.exception, st)) break else continue
-                        }
-                        val sheetRowValues = (sheetRowRes as Result.Success).data.firstOrNull() ?: emptyList()
-
-                        val sheetDateSerial = sheetRowValues.getOrNull(0)?.toString()?.trim()?.toIntOrNull()
-                        val sheetTimeSerial = sheetRowValues.getOrNull(1)?.toString()?.trim()?.toDoubleOrNull()
-                        val sheetMerchant = sheetRowValues.getOrNull(3)?.toString()?.trim().orEmpty()
-                        val sheetTotal = sheetRowValues.getOrNull(6)?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
-                        val sheetCompanions = sheetRowValues.getOrNull(7)?.toString()?.trim().orEmpty()
-                        val sheetMyShare = sheetRowValues.getOrNull(8)?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
-                        val sheetOwed = sheetRowValues.getOrNull(9)?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
-                        val sheetStatus = sheetRowValues.getOrNull(10)?.toString()?.trim().orEmpty()
-
-                        val isCarried = sheetStatus.equals("Carried Fwd", ignoreCase = true)
-                        val amountChanged = kotlin.math.abs(txn.totalAmount - sheetTotal) >= 0.01
-                        val splitChanged = kotlin.math.abs(txn.myShare - sheetMyShare) >= 0.01
-                        val companionsChanged = !txn.companions.trim().equals(sheetCompanions, ignoreCase = true)
-                        val dateChanged = sheetDateSerial != null && txn.dateSerial != sheetDateSerial
-                        val timeChanged = sheetTimeSerial != null && txn.timeSerial != null &&
-                            kotlin.math.abs(txn.timeSerial!! - sheetTimeSerial) >= com.financeautomation.domain.utils.AccountingUtils.LEGACY_TIME_SERIAL_TOLERANCE
-                        val descChanged = !txn.merchant.trim().equals(sheetMerchant, ignoreCase = true)
-
-                        if (isCarried && (amountChanged || splitChanged || companionsChanged || dateChanged || timeChanged || descChanged)) {
-                            val reason = "Cannot change amount, split, date or description because this debt was carried forward."
-                            markPermanentFailure(item, IllegalStateException(reason), reason)
-                            val currentEntity = transactionDao.getById(txn.id)
-                            if (currentEntity != null) {
-                                transactionDao.update(
-                                    currentEntity.copy(
-                                        status = TransactionStatus.CARRIED_FWD.value,
-                                        owedToMe = sheetOwed
-                                    )
-                                )
+                        when (val delivery = deliverExpenseUpdate(spreadsheetId, updateTab, targetRow, item, txn)) {
+                            is UpdateDelivery.Done -> {
+                                applyDeliveredUpdate(txn.id, targetRow, delivery)
+                                syncQueueDao.delete(item)
+                                syncedCount++
                             }
-                            continue
-                        }
-
-                        // Never set Carried Fwd, a repaid status or a reduced owed amount back from older local data
-                        val isSheetRepaid = sheetStatus.equals("Settled", ignoreCase = true) ||
-                            sheetStatus.equals("Void", ignoreCase = true) ||
-                            sheetStatus.equals("Partial", ignoreCase = true)
-
-                        val effectiveStatus = when {
-                            isCarried -> sheetStatus
-                            isSheetRepaid -> sheetStatus
-                            else -> txn.status.value
-                        }
-
-                        val effectiveOwed = when {
-                            isCarried -> sheetOwed
-                            isSheetRepaid -> sheetOwed
-                            sheetOwed < txn.owedToMe -> sheetOwed
-                            else -> txn.owedToMe
-                        }
-
-                        val effectiveTotal = if (isCarried) sheetTotal else txn.totalAmount
-                        val effectiveCompanions = if (isCarried) sheetCompanions else txn.companions
-                        val effectiveMyShare = if (isCarried) sheetMyShare else txn.myShare
-                        val effectiveDate = if (isCarried && sheetDateSerial != null) sheetDateSerial else txn.dateSerial
-                        val effectiveTime = if (isCarried && sheetTimeSerial != null) sheetTimeSerial else txn.timeSerial
-                        val effectiveDesc = if (isCarried) sheetMerchant else txn.merchant
-
-                        val safeNote = if (txn.note.trimStart().startsWith("=")) "'${txn.note}" else txn.note
-                        val payload = listOf(
-                            effectiveDate,
-                            effectiveTime,
-                            txn.account,
-                            effectiveDesc,
-                            txn.tripTag,
-                            com.financeautomation.core.constants.CategoryConstants.normalizeCategory(txn.category),
-                            effectiveTotal,
-                            effectiveCompanions,
-                            effectiveMyShare,
-                            effectiveOwed,
-                            effectiveStatus,
-                            safeNote
-                        )
-
-                        val updateResult = googleSheetsClient.updateRow(spreadsheetId, updateTab, targetRow, payload)
-                        if (updateResult is Result.Success) {
-                            val currentEntity = transactionDao.getById(txn.id)
-                            if (currentEntity != null) {
-                                val targetStatusVal = when {
-                                    effectiveStatus.equals("Carried Fwd", ignoreCase = true) -> TransactionStatus.CARRIED_FWD.value
-                                    effectiveStatus.equals("Settled", ignoreCase = true) -> TransactionStatus.SETTLED.value
-                                    effectiveStatus.equals("Void", ignoreCase = true) -> TransactionStatus.VOID.value
-                                    else -> currentEntity.status
-                                }
-                                transactionDao.update(
-                                    currentEntity.copy(
-                                        status = targetStatusVal,
-                                        owedToMe = effectiveOwed,
-                                        sheetRowIndex = targetRow,
-                                        syncState = SyncState.SYNCED.name
-                                    )
-                                )
-                            } else {
-                                transactionDao.updateSyncState(txn.id, SyncState.SYNCED.name, targetRow)
+                            is UpdateDelivery.Refused -> refuseExpenseUpdate(item, txn.id, targetRow, delivery)
+                            is UpdateDelivery.Failed -> {
+                                if (failItem(item, txn, delivery.error, st)) break else continue
                             }
-                            syncQueueDao.delete(item)
-                            syncedCount++
-                        } else {
-                            val err = (updateResult as Result.Error).exception
-                            if (failItem(item, txn, err, st)) break else continue
                         }
                     }
                     SyncQueueEntity.OP_VOID -> {
@@ -3342,6 +3215,187 @@ class TransactionRepositoryImpl(
     }
 
     /**
+     * Queues the update that takes one edit to the sheet. [before] is the local row the edit was made on. Edits that
+     * are still waiting are folded into one item, which remembers every state the sheet may still show and every cell
+     * the user changed. A refused edit is replaced and not remembered. An insert that has not run reads the local row
+     * itself, so it needs no update.
+     */
+    private suspend fun queueExpenseUpdate(
+        qDao: SyncQueueDao,
+        entryId: String,
+        before: TransactionEntity?,
+        after: TransactionEntity
+    ) {
+        val queued = qDao.getAllQueueFlow().first().filter { it.transactionId == entryId }
+        val inserts = queued.filter { it.operationType == SyncQueueEntity.OP_INSERT }
+        if (inserts.any { it.planJson == null }) return
+
+        val updates = queued.filter { it.operationType == SyncQueueEntity.OP_UPDATE }
+        val waiting = updates.filterNot { isRefusedEdit(it) }
+        val payload = if (before == null) {
+            entryId
+        } else {
+            val want = ExpenseRow.of(after.toDomain())
+            val was = ExpenseRow.of(before.toDomain())
+            val earlier = waiting.mapNotNull { PendingExpenseEditJsonAdapter.fromJson(it.payloadJson) }
+            // A waiting item of an older build says nothing about what it changed, so all but the amounts count
+            val unknown = if (earlier.size < waiting.size) {
+                (0..ExpenseUpdateMerge.NOTE_COLUMN).toSet() - ExpenseUpdateMerge.MONEY_COLUMNS
+            } else {
+                emptySet()
+            }
+            // An insert already tried may leave the row exactly as it planned it
+            val planned = inserts.mapNotNull { plannedExpenseRow(it, entryId) }
+            PendingExpenseEditJsonAdapter.toJson(
+                entryId,
+                PendingExpenseEdit(
+                    seen = (earlier.flatMap { it.seen } + planned + was).distinct(),
+                    want = want,
+                    changed = earlier.flatMap { it.changed }.toSet() + unknown +
+                        ExpenseUpdateMerge.changedColumns(was, want)
+                )
+            )
+        }
+        updates.forEach { qDao.deleteById(it.id) }
+        qDao.insert(
+            SyncQueueEntity(transactionId = entryId, operationType = SyncQueueEntity.OP_UPDATE, payloadJson = payload)
+        )
+    }
+
+    private fun isRefusedEdit(item: SyncQueueEntity): Boolean =
+        item.lastErrorKind == SyncErrorKind.EDIT_CARRIED.name ||
+            item.lastErrorKind == SyncErrorKind.EDIT_SHEET_CHANGED.name
+
+    private fun plannedExpenseRow(insert: SyncQueueEntity, entryId: String): ExpenseRow? {
+        val planJson = insert.planJson ?: return null
+        val cells = runCatching { AccountingPlanJsonAdapter.fromJson(planJson) }.getOrNull()
+            ?.appends?.firstOrNull { it.table == TableType.DEBIT && it.uuid == entryId }?.cells
+            ?: return null
+        return ExpenseRow.fromCells(cells)
+    }
+
+    private sealed interface UpdateDelivery {
+        /** [sheet] is the row as read, [written] the columns sent. */
+        data class Done(val sheet: ExpenseRow, val written: Set<Int>) : UpdateDelivery
+        data class Refused(val reason: EditBlockReason, val sheet: ExpenseRow) : UpdateDelivery
+        data class Failed(val error: Throwable) : UpdateDelivery
+    }
+
+    /** Reads the row, decides what the waiting edit may still write, and writes only those cells. */
+    private suspend fun deliverExpenseUpdate(
+        spreadsheetId: String,
+        tab: String,
+        row: Int,
+        item: SyncQueueEntity,
+        local: Transaction
+    ): UpdateDelivery {
+        val sheets = googleSheetsClient ?: return UpdateDelivery.Failed(IllegalStateException("Sheets unavailable"))
+        val read = sheets.getRangeValuesRaw(spreadsheetId, "'$tab'!A$row:L$row")
+        if (read is Result.Error) return UpdateDelivery.Failed(read.exception)
+        val sheetRow = ExpenseRow.fromCells((read as Result.Success).data.firstOrNull().orEmpty())
+            ?: return UpdateDelivery.Failed(java.io.IOException("The expense row could not be read in full; nothing was written"))
+
+        val edit = PendingExpenseEditJsonAdapter.fromJson(item.payloadJson)
+        val want = edit?.want ?: ExpenseRow.of(local)
+        val decision = if (edit != null) ExpenseUpdateMerge.decide(edit, sheetRow)
+        else ExpenseUpdateMerge.decideWithoutHistory(want, sheetRow)
+
+        return when (decision) {
+            is ExpenseUpdateMerge.Outcome.Refused -> UpdateDelivery.Refused(decision.reason, sheetRow)
+            is ExpenseUpdateMerge.Outcome.Write -> {
+                var columns = decision.columns
+                // An older item rewrites the note only when it differs, so an older layout is not changed for nothing
+                if (edit == null && sheetRow.note == want.note) columns = columns - ExpenseUpdateMerge.NOTE_COLUMN
+                if (ExpenseUpdateMerge.NOTE_COLUMN in columns) {
+                    // A tab of the older layout has no Note column yet; it is added before a note is written
+                    val ready = sheets.ensureMonthTabReady(spreadsheetId, tab)
+                    if (ready is Result.Error) return UpdateDelivery.Failed(ready.exception)
+                }
+                if (columns.isNotEmpty()) {
+                    val values = columns.sorted().associate { column ->
+                        "'$tab'!${SheetSchemaConstants.columnLetter(column)}$row" to listOf(listOf<Any?>(want.cell(column)))
+                    }
+                    val written = sheets.batchUpdateValues(spreadsheetId, values)
+                    if (written is Result.Error) return UpdateDelivery.Failed(written.exception)
+                }
+                UpdateDelivery.Done(sheetRow, columns)
+            }
+        }
+    }
+
+    /** After an update, the local row shows the sheet's amounts and status wherever the edit did not write them. */
+    private suspend fun applyDeliveredUpdate(id: String, row: Int, done: UpdateDelivery.Done) {
+        val dao = resolveTransactionDao()
+        val current = dao.getById(id)
+        if (current == null) {
+            dao.updateSyncState(id, SyncState.SYNCED.name, row)
+            return
+        }
+        val local = ExpenseRow.of(current.toDomain())
+        val keepsSheetMoney = done.written.none { it in ExpenseUpdateMerge.MONEY_COLUMNS } &&
+            !ExpenseUpdateMerge.sameMoney(local, done.sheet)
+        val aligned = if (keepsSheetMoney) withSheetMoney(current, done.sheet) else current
+        dao.update(aligned.copy(syncState = SyncState.SYNCED.name, sheetRowIndex = row))
+    }
+
+    private fun withSheetMoney(entity: TransactionEntity, sheet: ExpenseRow): TransactionEntity = entity.copy(
+        totalAmount = sheet.total,
+        companions = sheet.companions,
+        myShare = sheet.myShare,
+        owedToMe = sheet.owed,
+        status = sheet.status.ifBlank { entity.status }
+    )
+
+    /**
+     * Nothing was written. The local row takes the sheet's values, so the screen shows what is really there and the
+     * next edit starts from it, and the item stays in the queue with the reason. Retrying it changes nothing.
+     */
+    private suspend fun refuseExpenseUpdate(
+        item: SyncQueueEntity,
+        id: String,
+        row: Int,
+        refused: UpdateDelivery.Refused
+    ) {
+        val dao = resolveTransactionDao()
+        val qDao = resolveSyncQueueDao()
+        val current = dao.getById(id)
+        if (current != null) {
+            val sheet = refused.sheet
+            val date = sheet.dateSerial ?: current.dateSerial
+            val time = sheet.timeSerial ?: current.timeSerial
+            val moved = date != current.dateSerial ||
+                kotlin.math.abs(time - current.timeSerial) >= AccountingUtils.LEGACY_TIME_SERIAL_TOLERANCE
+            val mirrored = withSheetMoney(current, sheet).copy(
+                timestamp = if (moved) {
+                    java.time.LocalDateTime.of(DateSerialUtils.fromDateSerial(date), DateSerialUtils.fromTimeSerial(time))
+                        .atZone(sheetTimeZone).toInstant().toEpochMilli()
+                } else {
+                    current.timestamp
+                },
+                dateSerial = date,
+                timeSerial = time,
+                account = sheet.account,
+                merchant = sheet.description,
+                tripTag = sheet.tripTag,
+                category = sheet.category,
+                note = sheet.note,
+                syncState = SyncState.SYNCED.name,
+                sheetRowIndex = row
+            )
+            dao.update(mirrored)
+            val shown = ExpenseRow.of(mirrored.toDomain())
+            qDao.update(
+                item.copy(
+                    payloadJson = PendingExpenseEditJsonAdapter.toJson(
+                        id, PendingExpenseEdit(seen = listOf(shown), want = shown, changed = emptySet())
+                    )
+                )
+            )
+        }
+        markPermanentFailure(item, EditBlockedException(refused.reason))
+    }
+
+    /**
      * True when [item] would change debts while an earlier entry that changes debts has a saved plan not yet finished,
      * whether it is waiting to retry or failed. Writing or carrying those debts first could make what the earlier
      * entry already saved impossible to prove, so [item] waits until that entry is sent or discarded. Waiting costs
@@ -3357,6 +3411,9 @@ class TransactionRepositoryImpl(
                 val companions = resolveTransactionDao().getById(item.transactionId)?.companions
                 AccountingUtils.tokens(companions).isNotEmpty() && !companions.equals("Personal", ignoreCase = true)
             }
+            // An edit of amounts can change what an unfinished entry expects to find
+            SyncQueueEntity.OP_UPDATE -> PendingExpenseEditJsonAdapter.fromJson(item.payloadJson)
+                ?.changed?.any { it in ExpenseUpdateMerge.MONEY_COLUMNS } == true
             else -> false
         }
         if (!changesDebts) return false

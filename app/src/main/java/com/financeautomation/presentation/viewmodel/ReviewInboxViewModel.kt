@@ -532,7 +532,10 @@ class ReviewInboxViewModel(
                 is Result.Error -> {
                     Diagnostics.record("ReviewInboxViewModel", "confirm_failed: ${SyncErrorKind.safeCode("review confirm", result.throwable)} ${PrivacyScrubber.scrub(result.message.orEmpty())}")
                     _uiState.update {
-                        it.copy(errorMessage = UiText.dynamic(SyncErrorKind.formatUserMessage("review confirm", result.throwable)))
+                        it.copy(
+                            errorMessage = EditBlockText.of(result.throwable)
+                                ?: UiText.dynamic(SyncErrorKind.formatUserMessage("review confirm", result.throwable))
+                        )
                     }
                 }
                 is Result.Loading -> {}

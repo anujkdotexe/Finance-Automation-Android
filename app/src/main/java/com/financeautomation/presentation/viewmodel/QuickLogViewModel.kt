@@ -408,7 +408,8 @@ class QuickLogViewModel(
                         }
                         is Result.Error -> {
                             Diagnostics.record("QuickLogViewModel", "update_error: ${SyncErrorKind.safeCode("quicklog update", res.throwable)} ${PrivacyScrubber.scrub(res.message.orEmpty())}")
-                            val errMsg = UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", res.throwable))
+                            val errMsg = EditBlockText.of(res.throwable)
+                                ?: UiText.dynamic(SyncErrorKind.formatUserMessage("quicklog update", res.throwable))
                             _uiState.update { it.copy(isSaving = false, errorMessage = errMsg) }
                             withContext(mainDispatcher) { onError?.invoke(errMsg) }
                         }
