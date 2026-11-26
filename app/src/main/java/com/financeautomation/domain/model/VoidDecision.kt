@@ -15,7 +15,9 @@ sealed interface VoidDecision {
     data class VoidBoth(
         val payableId: String,
         val sheetRowIndex: Int? = null,
-        val tabName: String? = null
+        val tabName: String? = null,
+        /** The later rows a carried debt moved to; they are voided together with it. */
+        val carriedCopies: List<com.financeautomation.domain.usecase.ChainRow> = emptyList()
     ) : VoidDecision
 
     /**

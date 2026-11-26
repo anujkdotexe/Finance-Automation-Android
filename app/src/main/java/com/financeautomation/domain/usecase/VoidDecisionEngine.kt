@@ -48,14 +48,15 @@ object VoidDecisionEngine {
         allPayableCandidates: List<PayableCandidate>,
         category: String = "",
         queuedPayableId: String? = null,
-        queuedDeliveryNets: Boolean = false
+        queuedDeliveryNets: Boolean = false,
+        carried: (PayableCandidate) -> CarriedResolution = { CarriedResolution.Unknown }
     ): VoidDecision {
         // 0. A planned delivery that nets the debt has settled, or is about to settle, the friend's own debts
         if (queuedDeliveryNets) return VoidDecision.Block(VoidDecision.BlockReason.DEBT_OFFSET)
 
         // 1. If an exact linked payable exists by UUID match
         if (exactLinkedPayable != null) {
-            return evaluateCandidate(exactLinkedPayable, expenseTotal)
+            return evaluateCandidate(exactLinkedPayable, expenseTotal, carried)
         }
 
         // 2. The debt is still on its way to the sheet
@@ -85,19 +86,32 @@ object VoidDecisionEngine {
             // No linked debt or candidate: an ordinary expense, which is never blocked
             matches.isEmpty() -> VoidDecision.OrdinaryVoid
             matches.size == 1 && matches.first().second == LegacyDebtMatch.AGREES ->
-                evaluateCandidate(matches.first().first, expenseTotal)
+                evaluateCandidate(matches.first().first, expenseTotal, carried)
             // Several candidates, or one whose creditor cannot be confirmed
             else -> VoidDecision.Block(VoidDecision.BlockReason.AMBIGUOUS_DEBT_MATCH)
         }
     }
 
-    private fun evaluateCandidate(candidate: PayableCandidate, expenseTotal: Double): VoidDecision {
+    private fun evaluateCandidate(
+        candidate: PayableCandidate,
+        expenseTotal: Double,
+        carried: (PayableCandidate) -> CarriedResolution
+    ): VoidDecision {
         // Already voided: nothing is owed, so only the expense is left to void (also what a retry finds)
         if (candidate.repaymentStatus.equals("Void", ignoreCase = true)) return VoidDecision.OrdinaryVoid
 
-        // The open amount lives on a later copy, which cannot be voided together with this entry safely
+        // The open amount lives on a later copy: void only when every row of it is known and untouched
         if (candidate.repaymentStatus.equals("Carried Fwd", ignoreCase = true)) {
-            return VoidDecision.Block(VoidDecision.BlockReason.DEBT_CARRIED_FORWARD)
+            return when (val resolution = carried(candidate)) {
+                is CarriedResolution.Untouched -> VoidDecision.VoidBoth(
+                    payableId = candidate.uuid,
+                    sheetRowIndex = candidate.sheetRowIndex,
+                    tabName = candidate.tabName,
+                    carriedCopies = resolution.copies
+                )
+                CarriedResolution.Touched -> VoidDecision.Block(VoidDecision.BlockReason.DEBT_PARTIALLY_OR_FULLY_REPAID)
+                CarriedResolution.Unknown -> VoidDecision.Block(VoidDecision.BlockReason.DEBT_CARRIED_FORWARD)
+            }
         }
 
         val isPending = candidate.repaymentStatus.equals("Pending", ignoreCase = true)
