@@ -45,6 +45,21 @@ class FakeSheetApplier(
     /** When set, every value write and clear answers with this HTTP status and changes nothing. */
     var forceValueWriteStatus: Int? = null
 
+    private var writesUntilFault = 0
+    private var faultAfterApplying = false
+
+    /**
+     * Makes one coming value write fail with HTTP 500: the [number]th from now, counting every values:batchUpdate
+     * call. With [applied] the write reaches the sheet first, as when only the reply is lost.
+     */
+    fun failValueWrite(number: Int, applied: Boolean) {
+        writesUntilFault = number
+        faultAfterApplying = applied
+    }
+
+    /** True once the write chosen with [failValueWrite] has failed. */
+    fun faultWasHit(): Boolean = writesUntilFault == 0
+
     private val tokenProvider = object : TokenProvider {
         override fun getAccessToken(): String = "fake_test_token"
         override fun refreshAccessToken(): String = "fake_test_token"
@@ -167,6 +182,14 @@ class FakeSheetApplier(
 
         if (forceFindRowError && method == "GET" && (url.contains("AF") || url.contains("AE"))) {
             return 500 to """{"error":{"code":500,"message":"Simulated 500 read error"}}"""
+        }
+
+        if (writesUntilFault > 0 && method == "POST" && url.contains("values:batchUpdate")) {
+            writesUntilFault--
+            if (writesUntilFault == 0) {
+                if (faultAfterApplying) handleValuesBatchUpdate(body)
+                return 500 to """{"error":{"code":500,"message":"Simulated write fault"}}"""
+            }
         }
 
         if (forceValueWriteStatus != null && method == "POST" &&
