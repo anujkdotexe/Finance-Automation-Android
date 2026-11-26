@@ -729,7 +729,7 @@ open class AccountingSyncExecutor(
                 if (formatReqs.isNotEmpty()) {
                     val formatRes = googleSheetsClient.batchUpdate(targetId, formatReqs)
                     if (formatRes is Result.Error) {
-                        Diagnostics.record("AccountingSyncExecutor", "Format cell date error: ${formatRes.exception.message}")
+                        Diagnostics.record("AccountingSyncExecutor", "Format cell date error: ${formatRes.exception.javaClass.simpleName}")
                     }
                 }
             }

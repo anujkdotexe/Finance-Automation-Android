@@ -2863,9 +2863,6 @@ class TransactionRepositoryImpl(
                 val current = tDao.getById(candidate.id) ?: continue
                 // Changed or queued since the read began: it is no longer a settled row
                 if (current != candidate || current.id in queuedNow) continue
-                if (current.owedToMe > 0.0) {
-                    Diagnostics.record("TransactionRepository", "prune_receivable_removed amount=${current.owedToMe} dateSerial=${current.dateSerial}")
-                }
                 tDao.deleteById(current.id)
                 qDao.deleteByTransactionId(current.id)
                 removedTxnIds.add(current.id)
@@ -2883,7 +2880,6 @@ class TransactionRepositoryImpl(
                 for (candidate in missingPayables) {
                     val current = pDao.getByUuid(candidate.uuid) ?: continue
                     if (current != candidate || current.uuid in queuedNow) continue
-                    Diagnostics.record("TransactionRepository", "prune_debt_removed amount=${current.amountIOwe} dateSerial=${current.dateIncurredSerial}")
                     pDao.deleteByUuid(current.uuid)
                     removedPayables++
                 }
